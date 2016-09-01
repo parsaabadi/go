@@ -1,0 +1,347 @@
+// Copyright (c) 2016 OpenM++
+// This code is licensed under the MIT license (see LICENSE.txt for details)
+
+/*
+Package db to support openM++ model database operations.
+
+Database may contain multiple openM++ models and consists of two parts:
+(a) metadata to describe models: data types, input parameters, output tables, etc.
+(b) actual modeling data itself: database tables for input parameters and output tables.
+
+To run the model we need to have a set of model input parameters, called "input working set" or "workset".
+User can "open" workset in read-write mode and modify model input parameters.
+To use that set as model run input user must "close" it by marking workset as read-only.
+After model run user can again open workset as read-write and continue input editing.
+Each workset has a name (unique inside of the model) and set id (database unique positive int).
+
+Result of model run stored in output tables and also include copy of all input parameters used to run the model.
+That pair of input and output data called "run" and identified by run id (database unique positive int).
+*/
+package db
+
+import (
+	"bytes"
+	"container/list"
+	"database/sql"
+	"errors"
+	"os"
+	"strconv"
+	"strings"
+
+	_ "github.com/alexbrainman/odbc"
+	_ "github.com/mattn/go-sqlite3"
+	"go.openmpp.org/ompp/helper"
+	omppLog "go.openmpp.org/ompp/log"
+)
+
+// Database connection values
+const (
+	SQLiteDbDriver  = "SQLite"  // default db driver name
+	SQLiteTimeout   = 86400     // default SQLite busy timeout
+	Sqlite3DbDriver = "sqlite3" // SQLite db driver name
+	OdbcDbDriver    = "odbc"    // ODBC db driver name
+)
+
+// Open database connection.
+//
+// Default driver name: "SQLite" and connection string is compatible with model connection, ie:
+//     Database=C:\My Model\m1.sqlite; Timeout=86400; OpenMode=ReadWrite;
+// Otherwise it is expected to be driver-specific connection string, ie:
+//     DSN=ms2014; UID=sa; PWD=secret;
+//     file:m1.sqlite?mode=rw&_busy_timeout=86400000
+// If isFacetRequired is true then database facet determined
+func Open(dbConnStr, dbDriver string, isFacetRequired bool) (*sql.DB, Facet, error) {
+
+	// convert default SQLite connection string into sqlite3 format
+	// delete existing sqlite file if required
+	facet := EmptyFacet
+	if dbDriver == "" || dbDriver == SQLiteDbDriver {
+		var err error
+		if dbConnStr, dbDriver, err = prepareSqlite(dbConnStr); err != nil {
+			return nil, EmptyFacet, err
+		}
+		facet = SqliteFacet
+	}
+
+	// open database connection
+	omppLog.LogSql("Connect to " + dbDriver)
+
+	dbConn, err := sql.Open(dbDriver, dbConnStr)
+	if err != nil {
+		return nil, EmptyFacet, err
+	}
+
+	return dbConn, facet, nil
+}
+
+// DefaultConnectionSettings return SQLite connection string and driver name based on model name:
+//   Database=modelName.sqlite; Timeout=86400; OpenMode=ReadOnly;
+func IfEmptyMakeDefault(modelName, dbConnStr, dbDriver string) (string, string) {
+	if dbDriver == "" {
+		dbDriver = SQLiteDbDriver
+	}
+	if dbDriver == SQLiteDbDriver && (dbConnStr == "" && modelName != "") {
+		dbConnStr = "Database=" + modelName + ".sqlite; Timeout=86400; OpenMode=ReadOnly;"
+	}
+	return dbConnStr, dbDriver
+}
+
+// Convert SQLite connection string into "sqlite3" format and delete existing db.slite file if required.
+//
+// Following parameters allowed for SQLite database connection:
+//   Database - (required) database file path or URI
+//   Timeout - (optional) table lock "busy" timeout in seconds, default=0
+//   OpenMode - (optional) database file open mode: ReadOnly, ReadWrite, Create, default=ReadOnly
+//   DeleteExisting - (optional) if true then delete existing database file, default: false
+func prepareSqlite(dbConnStr string) (string, string, error) {
+
+	// parse SQLite connection string
+	kv, err := helper.ParseKeyValue(dbConnStr)
+	if err != nil {
+		return "", "", err
+	}
+
+	// check SQLite connection string parts
+	dbPath := kv["Database"]
+	if dbPath == "" {
+		return "", "", errors.New("SQLIte database file path cannot be empty")
+	}
+
+	m := kv["OpenMode"]
+	switch strings.ToLower(m) {
+	case "", "readonly":
+		m = "ro"
+	case "readwrite":
+		m = "rw"
+	case "create":
+		m = "rwc"
+	default:
+		return "", "", errors.New("SQLIte invalid OpenMode=" + m)
+	}
+
+	// check if file exist:
+	// sqlite3 driver does create new file if not exist, it should return an error
+	if m == "ro" || m == "rw" {
+		if _, err := os.Stat(dbPath); err != nil {
+			return "", "", errors.New("SQLIte file not exist (or not accessible) " + dbPath)
+		}
+	}
+
+	s := kv["Timeout"]
+	var t int
+	if s != "" {
+		if t, err = strconv.Atoi(s); err != nil {
+			return "", "", err
+		}
+	}
+
+	// if required delete source file
+	s = kv["DeleteExisting"]
+	if s != "" {
+		var isDel bool
+		if isDel, err = strconv.ParseBool(s); err != nil {
+			return "", "", err
+		}
+		if isDel {
+			_ = os.Remove(dbPath) // ignore file delete errors, assume file not exist
+		}
+	}
+
+	// make sqlite3 connection string
+	s3Conn := dbPath + "?mode=" + m
+	if t != 0 {
+		s3Conn += "&_busy_timeout=" + strconv.Itoa(1000*t)
+	}
+
+	return s3Conn, Sqlite3DbDriver, nil
+}
+
+// make sql quoted string, ie: 'O''Brien'
+func toQuoted(src string) string {
+	var bt bytes.Buffer
+	bt.WriteRune('\'')
+	bt.WriteString(strings.Replace(src, "'", "''", -1))
+	bt.WriteRune('\'')
+	return bt.String()
+}
+
+// return "NULL" if string '' empty or return sql quoted string, ie: 'O''Brien'
+func toQuotedOrNull(src string) string {
+	if src == "" {
+		return "NULL"
+	}
+	return toQuoted(src)
+}
+
+// convert boolean to sql value: true=1, false=0
+func toBoolStr(isValue bool) string {
+	if isValue {
+		return "1"
+	}
+	return "0"
+}
+
+// SelectFirst select first db row and pass it to cvt() for row.Scan()
+func SelectFirst(dbConn *sql.DB, query string, cvt func(row *sql.Row) error) error {
+	if dbConn == nil {
+		return errors.New("invalid database connection")
+	}
+	omppLog.LogSql(query)
+	return cvt(dbConn.QueryRow(query))
+}
+
+// TrxSelectFirst select first db row in transaction scope and pass it to cvt() for row.Scan()
+func TrxSelectFirst(dbTrx *sql.Tx, query string, cvt func(row *sql.Row) error) error {
+	if dbTrx == nil {
+		return errors.New("invalid database transaction")
+	}
+	omppLog.LogSql(query)
+	return cvt(dbTrx.QueryRow(query))
+}
+
+// SelectRows select db rows and pass each to cvt() for rows.Scan()
+func SelectRows(dbConn *sql.DB, query string, cvt func(rows *sql.Rows) error) error {
+
+	if dbConn == nil {
+		return errors.New("invalid database transaction")
+	}
+	omppLog.LogSql(query)
+
+	rows, err := dbConn.Query(query) // query db rows
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	// process each row
+	for rows.Next() {
+		if err = cvt(rows); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
+// TrxSelectRows select db rows in transaction scope and pass each to cvt() for rows.Scan()
+func TrxSelectRows(dbTrx *sql.Tx, query string, cvt func(rows *sql.Rows) error) error {
+
+	if dbTrx == nil {
+		return errors.New("invalid database transaction")
+	}
+	omppLog.LogSql(query)
+
+	rows, err := dbTrx.Query(query) // query db rows
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	// process each row
+	for rows.Next() {
+		if err = cvt(rows); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
+// SelectToList select db rows into list using cvt to convert (scan) each db row into struct.
+// It selects "page size" number of rows starting from row number == offset (zero based).
+// If page size <= 0 then all rows returned.
+func SelectToList(
+	dbConn *sql.DB, query string, offset, size int64, cvt func(rows *sql.Rows) (interface{}, error)) (*list.List, error) {
+
+	if dbConn == nil {
+		return nil, errors.New("invalid database connection")
+	}
+
+	// query db rows
+	omppLog.LogSql(query)
+
+	rows, err := dbConn.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	// convert each row and append to the result list
+	var nRow int64
+	if offset < 0 {
+		offset = 0
+	}
+
+	rs := list.New()
+	for rows.Next() {
+		nRow++
+		if nRow <= offset {
+			continue
+		}
+		if size > 0 && nRow > offset+size {
+			break
+		}
+		r, err := cvt(rows)
+		if err != nil {
+			return nil, err
+		}
+		rs.PushBack(r)
+	}
+	err = rows.Err()
+	if err != nil {
+		return nil, err
+	}
+	return rs, nil
+}
+
+// Update execute sql query outside of transaction scope (on different connection)
+func Update(dbConn *sql.DB, query string) error {
+	if dbConn == nil {
+		return errors.New("invalid database connection")
+	}
+	omppLog.LogSql(query)
+
+	_, err := dbConn.Exec(query)
+	return err
+}
+
+// TrxUpdate execute sql query in transaction scope
+func TrxUpdate(dbTrx *sql.Tx, query string) error {
+	if dbTrx == nil {
+		return errors.New("invalid database transaction")
+	}
+	omppLog.LogSql(query)
+
+	_, err := dbTrx.Exec(query)
+	return err
+}
+
+// TrxUpdateStatement execute sql statement in transaction scope until put() return true
+func TrxUpdateStatement(dbTrx *sql.Tx, query string, put func() (bool, []interface{}, error)) error {
+
+	if dbTrx == nil {
+		return errors.New("invalid database transaction")
+	}
+	omppLog.LogSql(query)
+
+	// prepare statement in transaction scope
+	stmt, err := dbTrx.Prepare(query)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	// until put() return next row values execute statement
+	for {
+		isNext, r, err := put()
+		if err != nil {
+			return err
+		}
+		if !isNext {
+			break
+		}
+		_, err = stmt.Exec(r...)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}

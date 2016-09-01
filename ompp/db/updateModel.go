@@ -1,0 +1,654 @@
+// Copyright (c) 2016 OpenM++
+// This code is licensed under the MIT license (see LICENSE.txt for details)
+
+package db
+
+import (
+	"database/sql"
+	"errors"
+	"strconv"
+)
+
+// UpdateModel insert new or update existing model metadata in database.
+// If new model inserted then modelDef updated with actual id's (model id, parameter Hid...)
+func UpdateModel(dbConn *sql.DB, dbFacet Facet, modelDef *ModelMeta) error {
+
+	// validate parameters
+	if modelDef == nil {
+		return errors.New("invalid (empty) model metadata")
+	}
+	if modelDef.Model.Name == "" || modelDef.Model.Digest == "" {
+		return errors.New("invalid (empty) model name or model digest")
+	}
+
+	// do update in transaction scope
+	trx, err := dbConn.Begin()
+	if err != nil {
+		return err
+	}
+	if err = doUpdateModel(trx, dbFacet, modelDef); err != nil {
+		trx.Rollback()
+		return err
+	}
+	trx.Commit()
+	return nil
+}
+
+// doUpdateModel insert new or update existing model metadata in database.
+// It does update as part of transaction
+// If new model inserted then modelDef updated with actual id's (model id, parameter Hid...)
+func doUpdateModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
+
+	// make next model id if model not exists
+	// UPDATE id_lst
+	// SET id_value =
+	//   CASE
+	//     WHEN 0 = (SELECT COUNT(*) FROM model_dic WHERE model_digest = '1234abcd')
+	//       THEN id_value + 1
+	//     ELSE id_value
+	//   END
+	// WHERE id_key = 'model_id';
+	err := TrxUpdate(trx,
+		"UPDATE id_lst SET id_value ="+
+			" CASE"+
+			" WHEN 0 = (SELECT COUNT(*) FROM model_dic WHERE model_digest = "+toQuoted(modelDef.Model.Digest)+")"+
+			" THEN id_value + 1"+
+			" ELSE id_value"+
+			" END"+
+			" WHERE id_key = 'model_id'")
+	if err != nil {
+		return err
+	}
+
+	// check if this model already exist
+	modelDef.Model.ModelId = 0
+	var mn string
+	err = TrxSelectFirst(trx,
+		"SELECT model_id, model_name FROM model_dic WHERE model_digest = "+toQuoted(modelDef.Model.Digest),
+		func(row *sql.Row) error {
+			return row.Scan(&modelDef.Model.ModelId, &mn)
+		})
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+
+	// model already exist: nothing to do, exit
+	if modelDef.Model.ModelId > 0 {
+		if modelDef.Model.Name != mn {
+			return errors.New("model: " + modelDef.Model.Name + " " + modelDef.Model.Digest + " already exist with different name: " + mn)
+		}
+		if err = trx.Commit(); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	// get new model id
+	err = TrxSelectFirst(trx,
+		"SELECT id_value FROM id_lst WHERE id_key = 'model_id'",
+		func(row *sql.Row) error {
+			return row.Scan(&modelDef.Model.ModelId)
+		})
+	switch {
+	case err == sql.ErrNoRows:
+		return errors.New("invalid destination database, likely not an openM++ database")
+	case err != nil:
+		return err
+	}
+	smId := strconv.Itoa(modelDef.Model.ModelId)
+
+	// insert model_dic row with new model id
+	// INSERT INTO model_dic
+	//   (model_id, model_name, model_digest, model_type, model_ver, create_dt)
+	// VALUES
+	//   (1234, 'modelOne', '1234abcd', 0, '1.0.0.0', '2012-08-17 16:04:59.0148')
+	err = TrxUpdate(trx,
+		"INSERT INTO model_dic"+
+			" (model_id, model_name, model_digest, model_type, model_ver, create_dt)"+
+			" VALUES ("+
+			smId+", "+
+			toQuoted(modelDef.Model.Name)+", "+
+			toQuoted(modelDef.Model.Digest)+", "+
+			strconv.Itoa(modelDef.Model.Type)+", "+
+			toQuoted(modelDef.Model.Version)+", "+
+			toQuoted(modelDef.Model.CreateDateTime)+")")
+	if err != nil {
+		return err
+	}
+
+	// for each type:
+	// if type not exist then insert into type_dic, type_enum_lst
+	// update type Hid with actual db value
+	// insert into model_type_dic to append this type to the model
+	for idx := range modelDef.Type {
+
+		modelDef.Type[idx].ModelId = modelDef.Model.ModelId // update model id with db value
+
+		// get new type Hid
+		// UPDATE id_lst SET id_value =
+		//   CASE
+		//     WHEN 0 = (SELECT COUNT(*) FROM type_dic WHERE type_digest = 'abcdef')
+		//       THEN id_value + 1
+		//     ELSE id_value
+		//   END
+		// WHERE id_key = 'type_hid'
+		err = TrxUpdate(trx,
+			"UPDATE id_lst SET id_value ="+
+				" CASE"+
+				" WHEN 0 = (SELECT COUNT(*) FROM type_dic WHERE type_digest = "+toQuoted(modelDef.Type[idx].Digest)+")"+
+				" THEN id_value + 1"+
+				" ELSE id_value"+
+				" END"+
+				" WHERE id_key = 'type_hid'")
+		if err != nil {
+			return err
+		}
+
+		// check if this type already exist
+		modelDef.Type[idx].TypeHid = 0
+		err = TrxSelectFirst(trx,
+			"SELECT type_hid FROM type_dic WHERE type_digest = "+toQuoted(modelDef.Type[idx].Digest),
+			func(row *sql.Row) error {
+				return row.Scan(&modelDef.Type[idx].TypeHid)
+			})
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+
+		// if type not exists then insert into type_dic and type_enum_lst
+		if modelDef.Type[idx].TypeHid <= 0 {
+
+			// get new type Hid
+			err = TrxSelectFirst(trx,
+				"SELECT id_value FROM id_lst WHERE id_key = 'type_hid'",
+				func(row *sql.Row) error {
+					return row.Scan(&modelDef.Type[idx].TypeHid)
+				})
+			switch {
+			case err == sql.ErrNoRows:
+				return errors.New("invalid destination database, likely not an openM++ database")
+			case err != nil:
+				return err
+			}
+
+			// INSERT INTO type_dic
+			//   (type_hid, type_name, type_digest, dic_id, total_enum_id)
+			// VALUES
+			//   (26, 'age', '20128171604590121', 2, 4)
+			err = TrxUpdate(trx,
+				"INSERT INTO type_dic (type_hid, type_name, type_digest, dic_id, total_enum_id)"+
+					" VALUES ("+
+					strconv.Itoa(modelDef.Type[idx].TypeHid)+", "+
+					toQuoted(modelDef.Type[idx].Name)+", "+
+					toQuoted(modelDef.Type[idx].Digest)+", "+
+					strconv.Itoa(modelDef.Type[idx].DicId)+", "+
+					strconv.Itoa(modelDef.Type[idx].TotalEnumId)+")")
+			if err != nil {
+				return err
+			}
+
+			// INSERT INTO type_enum_lst (type_hid, enum_id, enum_name) VALUES (26, 0, '10')
+			for j := range modelDef.Type[idx].Enum {
+
+				modelDef.Type[idx].Enum[j].ModelId = modelDef.Model.ModelId // update model id with db value
+
+				err = TrxUpdate(trx,
+					"INSERT INTO type_enum_lst (type_hid, enum_id, enum_name) VALUES ("+
+						strconv.Itoa(modelDef.Type[idx].TypeHid)+", "+
+						strconv.Itoa(modelDef.Type[idx].Enum[j].EnumId)+", "+
+						toQuoted(modelDef.Type[idx].Enum[j].Name)+")")
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		// append type into model type list, if not in the list
+		//
+		// INSERT INTO model_type_dic (model_id, model_type_id, type_hid)
+		// SELECT 1234, 31, D.type_hid
+		// FROM type_dic D
+		// WHERE D.type_digest = '20128171604590121'
+		// AND NOT EXISTS
+		// (
+		//   SELECT * FROM model_type_dic E WHERE E.model_id = 1234 AND E.model_type_id = 31
+		// )
+		err = TrxUpdate(trx,
+			"INSERT INTO model_type_dic (model_id, model_type_id, type_hid)"+
+				" SELECT "+
+				smId+", "+
+				strconv.Itoa(modelDef.Type[idx].TypeId)+", "+
+				" D.type_hid"+
+				" FROM type_dic D"+
+				" WHERE D.type_digest = "+toQuoted(modelDef.Type[idx].Digest)+
+				" AND NOT EXISTS"+
+				" (SELECT * FROM model_type_dic E"+
+				" WHERE E.model_id = "+smId+
+				" AND E.model_type_id = "+strconv.Itoa(modelDef.Type[idx].TypeId)+
+				" )")
+		if err != nil {
+			return err
+		}
+	}
+
+	// for each parameter:
+	// if parameter not exist then insert into parameter_dic, parameter_dims
+	// update parameter Hid with actual db value
+	// insert into model_parameter_dic to append this parameter to the model
+	for idx := range modelDef.Param {
+
+		modelDef.Param[idx].ModelId = modelDef.Model.ModelId // update model id with db value
+
+		// get new parameter Hid
+		// UPDATE id_lst SET id_value =
+		//   CASE
+		//     WHEN 0 = (SELECT COUNT(*) FROM parameter_dic WHERE parameter_digest = '978abf5')
+		//       THEN id_value + 1
+		//     ELSE id_value
+		//   END
+		// WHERE id_key = 'parameter_hid'
+		err = TrxUpdate(trx,
+			"UPDATE id_lst SET id_value ="+
+				" CASE"+
+				" WHEN 0 = (SELECT COUNT(*) FROM parameter_dic WHERE parameter_digest = "+toQuoted(modelDef.Param[idx].Digest)+")"+
+				" THEN id_value + 1"+
+				" ELSE id_value"+
+				" END"+
+				" WHERE id_key = 'parameter_hid'")
+		if err != nil {
+			return err
+		}
+
+		// check if this parameter already exist
+		modelDef.Param[idx].ParamHid = 0
+		err = TrxSelectFirst(trx,
+			"SELECT parameter_hid FROM parameter_dic WHERE parameter_digest = "+toQuoted(modelDef.Param[idx].Digest),
+			func(row *sql.Row) error {
+				return row.Scan(&modelDef.Param[idx].ParamHid)
+			})
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+
+		// if parameter not exists then insert into parameter_dic and parameter_dims
+		if modelDef.Param[idx].ParamHid <= 0 {
+
+			// get new parameter Hid
+			err = TrxSelectFirst(trx,
+				"SELECT id_value FROM id_lst WHERE id_key = 'parameter_hid'",
+				func(row *sql.Row) error {
+					return row.Scan(&modelDef.Param[idx].ParamHid)
+				})
+			switch {
+			case err == sql.ErrNoRows:
+				return errors.New("invalid destination database, likely not an openM++ database")
+			case err != nil:
+				return err
+			}
+
+			// INSERT INTO parameter_dic
+			//   (parameter_hid, parameter_name, parameter_digest, db_run_table,
+			//   db_set_table, parameter_rank, type_hid, num_cumulated)
+			// VALUES
+			//   (4, 'ageSex', '978abf5', 'ageSex', '2012817', 2, 14, 0)
+			err = TrxUpdate(trx,
+				"INSERT INTO parameter_dic"+
+					" (parameter_hid, parameter_name, parameter_digest, db_run_table,"+
+					" db_set_table, parameter_rank, type_hid, num_cumulated)"+
+					" VALUES ("+
+					strconv.Itoa(modelDef.Param[idx].ParamHid)+", "+
+					toQuoted(modelDef.Param[idx].Name)+", "+
+					toQuoted(modelDef.Param[idx].Digest)+", "+
+					toQuoted(modelDef.Param[idx].DbRunTable)+", "+
+					toQuoted(modelDef.Param[idx].DbSetTable)+", "+
+					strconv.Itoa(modelDef.Param[idx].Rank)+", "+
+					strconv.Itoa(modelDef.Param[idx].typeOf.TypeHid)+", "+
+					strconv.Itoa(modelDef.Param[idx].NumCumulated)+")")
+			if err != nil {
+				return err
+			}
+
+			// INSERT INTO parameter_dims (parameter_hid, dim_id, dim_name, type_hid) VALUES (4, 0, 'dim0', 26)
+			for j := range modelDef.Param[idx].Dim {
+
+				modelDef.Param[idx].Dim[j].ModelId = modelDef.Model.ModelId // update model id with db value
+
+				err = TrxUpdate(trx,
+					"INSERT INTO parameter_dims (parameter_hid, dim_id, dim_name, type_hid) VALUES ("+
+						strconv.Itoa(modelDef.Param[idx].ParamHid)+", "+
+						strconv.Itoa(modelDef.Param[idx].Dim[j].DimId)+", "+
+						toQuoted(modelDef.Param[idx].Dim[j].Name)+", "+
+						strconv.Itoa(modelDef.Param[idx].Dim[j].typeOf.TypeHid)+")")
+				if err != nil {
+					return err
+				}
+			}
+
+			// create parameter tables: parameter run values and parameter workset values
+			rSql, wSql, err := paramCreateTable(dbFacet, &modelDef.Param[idx])
+			if err != nil {
+				return err
+			}
+			err = TrxUpdate(trx, rSql)
+			if err != nil {
+				return err
+			}
+			err = TrxUpdate(trx, wSql)
+			if err != nil {
+				return err
+			}
+		}
+
+		// append type into model parameter list, if not in the list
+		//
+		// INSERT INTO model_parameter_dic (model_id, model_parameter_id, parameter_hid, is_hidden)
+		// SELECT 1234, 0, D.parameter_hid, 1
+		// FROM parameter_dic D
+		// WHERE D.parameter_digest = '978abf5'
+		// AND NOT EXISTS
+		// (
+		//   SELECT * FROM model_parameter_dic E WHERE E.model_id = 1234 AND E.model_parameter_id = 0
+		// )
+		err = TrxUpdate(trx,
+			"INSERT INTO model_parameter_dic (model_id, model_parameter_id, parameter_hid, is_hidden)"+
+				" SELECT "+
+				smId+", "+
+				strconv.Itoa(modelDef.Param[idx].ParamId)+", "+
+				" D.parameter_hid, "+
+				toBoolStr(modelDef.Param[idx].IsHidden)+
+				" FROM parameter_dic D"+
+				" WHERE D.parameter_digest = "+toQuoted(modelDef.Param[idx].Digest)+
+				" AND NOT EXISTS"+
+				" (SELECT * FROM model_parameter_dic E"+
+				" WHERE E.model_id = "+smId+
+				" AND E.model_parameter_id = "+strconv.Itoa(modelDef.Param[idx].ParamId)+
+				" )")
+		if err != nil {
+			return err
+		}
+	}
+
+	// for each output table:
+	// if output table not exist then insert into table_dic, table_dims, table_acc, table_expr
+	// update table Hid with actual db value
+	// insert into model_table_dic to append this output table to the model
+	for idx := range modelDef.Table {
+
+		modelDef.Table[idx].ModelId = modelDef.Model.ModelId // update model id with db value
+
+		// get new output table Hid
+		// UPDATE id_lst SET id_value =
+		//   CASE
+		//     WHEN 0 = (SELECT COUNT(*) FROM table_dic WHERE table_digest = '0887a6494df')
+		//      THEN id_value + 1
+		//     ELSE id_value
+		//   END
+		// WHERE id_key = 'table_hid'
+		err = TrxUpdate(trx,
+			"UPDATE id_lst SET id_value ="+
+				" CASE"+
+				" WHEN 0 = (SELECT COUNT(*) FROM table_dic WHERE table_digest = "+toQuoted(modelDef.Table[idx].Digest)+")"+
+				" THEN id_value + 1"+
+				" ELSE id_value"+
+				" END"+
+				" WHERE id_key = 'table_hid'")
+		if err != nil {
+			return err
+		}
+
+		// check if this output table already exist
+		modelDef.Table[idx].TableHid = 0
+		err = TrxSelectFirst(trx,
+			"SELECT table_hid FROM table_dic WHERE table_digest = "+toQuoted(modelDef.Table[idx].Digest),
+			func(row *sql.Row) error {
+				return row.Scan(&modelDef.Table[idx].TableHid)
+			})
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+
+		// if output table not exists then insert into table_dic, table_dims, table_acc, table_expr
+		if modelDef.Table[idx].TableHid <= 0 {
+
+			// get new table Hid
+			err = TrxSelectFirst(trx,
+				"SELECT id_value FROM id_lst WHERE id_key = 'table_hid'",
+				func(row *sql.Row) error {
+					return row.Scan(&modelDef.Table[idx].TableHid)
+				})
+			switch {
+			case err == sql.ErrNoRows:
+				return errors.New("invalid destination database, likely not an openM++ database")
+			case err != nil:
+				return err
+			}
+
+			// INSERT INTO table_dic
+			//   (table_hid, table_name, table_digest, db_expr_table, db_acc_table, table_rank, is_sparse)
+			// VALUES
+			//   (2, 'salarySex', '0887a6494df', 'salarySex', '2012820', 2, 1)
+			err = TrxUpdate(trx,
+				"INSERT INTO table_dic"+
+					" (table_hid, table_name, table_digest, db_expr_table, db_acc_table, table_rank, is_sparse)"+
+					" VALUES ("+
+					strconv.Itoa(modelDef.Table[idx].TableHid)+", "+
+					toQuoted(modelDef.Table[idx].Name)+", "+
+					toQuoted(modelDef.Table[idx].Digest)+", "+
+					toQuoted(modelDef.Table[idx].DbExprTable)+", "+
+					toQuoted(modelDef.Table[idx].DbAccTable)+", "+
+					strconv.Itoa(modelDef.Table[idx].Rank)+", "+
+					toBoolStr(modelDef.Table[idx].IsSparse)+")")
+			if err != nil {
+				return err
+			}
+
+			// INSERT INTO table_dims
+			//   (table_hid, dim_id, dim_name, type_hid, is_total, dim_size)
+			// VALUES
+			//   (2, 0, 'dim0', 28, 0, 3)
+			for j := range modelDef.Table[idx].Dim {
+
+				modelDef.Table[idx].Dim[j].ModelId = modelDef.Model.ModelId // update model id with db value
+
+				err = TrxUpdate(trx,
+					"INSERT INTO table_dims (table_hid, dim_id, dim_name, type_hid, is_total, dim_size)"+
+						" VALUES ("+
+						strconv.Itoa(modelDef.Table[idx].TableHid)+", "+
+						strconv.Itoa(modelDef.Table[idx].Dim[j].DimId)+", "+
+						toQuoted(modelDef.Table[idx].Dim[j].Name)+", "+
+						strconv.Itoa(modelDef.Table[idx].Dim[j].typeOf.TypeHid)+", "+
+						toBoolStr(modelDef.Table[idx].Dim[j].IsTotal)+", "+
+						strconv.Itoa(modelDef.Table[idx].Dim[j].DimSize)+")")
+				if err != nil {
+					return err
+				}
+			}
+
+			// INSERT INTO table_acc (table_hid, acc_id, acc_name, acc_expr) VALUES (2, 0, 'acc0', 'value_sum()')
+			for j := range modelDef.Table[idx].Acc {
+
+				modelDef.Table[idx].Acc[j].ModelId = modelDef.Model.ModelId // update model id with db value
+
+				err = TrxUpdate(trx,
+					"INSERT INTO table_acc (table_hid, acc_id, acc_name, acc_expr)"+
+						" VALUES ("+
+						strconv.Itoa(modelDef.Table[idx].TableHid)+", "+
+						strconv.Itoa(modelDef.Table[idx].Acc[j].AccId)+", "+
+						toQuoted(modelDef.Table[idx].Acc[j].Name)+", "+
+						toQuoted(modelDef.Table[idx].Acc[j].AccExpr)+")")
+				if err != nil {
+					return err
+				}
+			}
+
+			// INSERT INTO table_expr
+			//   (table_hid, expr_id, expr_name, expr_decimals, expr_src, expr_sql)
+			// VALUES
+			//   (2, 0, 'expr0', 4, 'OM_AVG(acc0)', '....sql....')
+			for j := range modelDef.Table[idx].Expr {
+
+				modelDef.Table[idx].Expr[j].ModelId = modelDef.Model.ModelId // update model id with db value
+
+				err = TrxUpdate(trx,
+					"INSERT INTO table_expr (table_hid, expr_id, expr_name, expr_decimals, expr_src, expr_sql)"+
+						" VALUES ("+
+						strconv.Itoa(modelDef.Table[idx].TableHid)+", "+
+						strconv.Itoa(modelDef.Table[idx].Expr[j].ExprId)+", "+
+						toQuoted(modelDef.Table[idx].Expr[j].Name)+", "+
+						strconv.Itoa(modelDef.Table[idx].Expr[j].Decimals)+", "+
+						toQuoted(modelDef.Table[idx].Expr[j].SrcExpr)+", "+
+						toQuoted(modelDef.Table[idx].Expr[j].ExprSql)+")")
+				if err != nil {
+					return err
+				}
+			}
+
+			// create db tables: output table expression(s) values and accumulator(s) values
+			eSql, aSql, err := outTableCreateTable(dbFacet, &modelDef.Table[idx])
+			if err != nil {
+				return err
+			}
+			err = TrxUpdate(trx, eSql)
+			if err != nil {
+				return err
+			}
+			err = TrxUpdate(trx, aSql)
+			if err != nil {
+				return err
+			}
+		}
+
+		// append type into model output table list, if not in the list
+		//
+		// INSERT INTO model_table_dic (model_id, model_table_id, table_hid, is_user, expr_dim_pos)
+		// SELECT 1234, 0, D.table_hid, 0, 1
+		// FROM table_dic D
+		// WHERE D.table_digest = '0887a6494df'
+		// AND NOT EXISTS
+		// (
+		//   SELECT * FROM model_table_dic E WHERE E.model_id = 1234 AND E.model_table_id = 0
+		// )
+		err = TrxUpdate(trx,
+			"INSERT INTO model_table_dic (model_id, model_table_id, table_hid, is_user, expr_dim_pos)"+
+				" SELECT "+
+				smId+", "+
+				strconv.Itoa(modelDef.Table[idx].TableId)+", "+
+				" D.table_hid, "+
+				toBoolStr(modelDef.Table[idx].IsUser)+", "+
+				strconv.Itoa(modelDef.Table[idx].ExprPos)+
+				" FROM table_dic D"+
+				" WHERE D.table_digest = "+toQuoted(modelDef.Table[idx].Digest)+
+				" AND NOT EXISTS"+
+				" (SELECT * FROM model_table_dic E"+
+				" WHERE E.model_id = "+smId+
+				" AND E.model_table_id = "+strconv.Itoa(modelDef.Table[idx].TableId)+
+				" )")
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// paramCreateTable return create table for parameter run values and workset values:
+//
+// CREATE TABLE ageSex_p20120817
+// (
+//  run_id      INT   NOT NULL,
+//  dim0        INT   NOT NULL,
+//  dim1        INT   NOT NULL,
+//  param_value FLOAT NOT NULL,
+//  PRIMARY KEY (run_id, dim0, dim1)
+// )
+//
+// CREATE TABLE ageSex_w20120817
+// (
+//  set_id      INT   NOT NULL,
+//  dim0        INT   NOT NULL,
+//  dim1        INT   NOT NULL,
+//  param_value FLOAT NOT NULL,
+//  PRIMARY KEY (set_id, dim0, dim1)
+// )
+func paramCreateTable(dbFacet Facet, param *ParamMeta) (string, string, error) {
+
+	colPart := ""
+	for k := range param.Dim {
+		colPart += param.Dim[k].Name + " INT NOT NULL, "
+	}
+
+	tname, err := param.typeOf.sqlColumnType(dbFacet)
+	if err != nil {
+		return "", "", nil
+	}
+	colPart += "param_value " + tname + " NOT NULL, "
+
+	keyPart := ""
+	for k := range param.Dim {
+		keyPart += ", " + param.Dim[k].Name
+	}
+
+	rSql := dbFacet.createTableIfNotExist(param.DbRunTable, "("+
+		"run_id INT NOT NULL, "+
+		colPart+
+		"PRIMARY KEY (run_id"+keyPart+")"+
+		")")
+	wSql := dbFacet.createTableIfNotExist(param.DbSetTable, "("+
+		"set_id INT NOT NULL, "+
+		colPart+
+		"PRIMARY KEY (set_id"+keyPart+")"+
+		")")
+	return rSql, wSql, nil
+}
+
+// outTableCreateTable return create table for output table expressions and accumulators:
+//
+// CREATE TABLE salarySex_v20120820
+// (
+//  run_id     INT   NOT NULL,
+//  dim0       INT   NOT NULL,
+//  dim1       INT   NOT NULL,
+//  expr_id    INT   NOT NULL,
+//  expr_value FLOAT NULL,
+//  PRIMARY KEY (run_id, dim0, dim1, expr_id)
+// )
+//
+// CREATE TABLE salarySex_a20120820
+// (
+//  run_id    INT   NOT NULL,
+//  dim0      INT   NOT NULL,
+//  dim1      INT   NOT NULL,
+//  acc_id    INT   NOT NULL,
+//  sub_id    INT   NOT NULL,
+//  acc_value FLOAT NULL,
+//  PRIMARY KEY (run_id, dim0, dim1, acc_id, sub_id)
+// )
+func outTableCreateTable(dbFacet Facet, meta *TableMeta) (string, string, error) {
+
+	colPart := ""
+	for k := range meta.Dim {
+		colPart += meta.Dim[k].Name + " INT NOT NULL, "
+	}
+
+	keyPart := ""
+	for k := range meta.Dim {
+		keyPart += ", " + meta.Dim[k].Name
+	}
+
+	eSql := dbFacet.createTableIfNotExist(meta.DbExprTable, "("+
+		"run_id INT NOT NULL, "+
+		colPart+
+		"expr_id INT NOT NULL, "+
+		"expr_value "+dbFacet.floatType()+" NULL, "+
+		"PRIMARY KEY (run_id"+keyPart+", expr_id)"+
+		")")
+	aSql := dbFacet.createTableIfNotExist(meta.DbAccTable, "("+
+		"run_id INT NOT NULL, "+
+		colPart+
+		"acc_id INT NOT NULL, "+
+		"sub_id INT NOT NULL, "+
+		"acc_value "+dbFacet.floatType()+" NULL, "+
+		"PRIMARY KEY (run_id"+keyPart+", acc_id, sub_id)"+
+		")")
+	return eSql, aSql, nil
+}
