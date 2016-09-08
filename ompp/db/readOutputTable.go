@@ -81,33 +81,42 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadLayout) (*
 	}
 
 	// make sql to select output table expression(s) from model run:
-	//   SELECT dim0, dim1, expr_id, expr_value
+	//
+	//   SELECT expr_id, dim0, dim1, expr_value
 	//   FROM salarySex_v2012_820
 	//   WHERE run_id =
 	//   (
 	//     SELECT base_run_id FROM run_table WHERE run_id = 2 AND table_hid = 12345
 	//   )
 	//   AND expr_id = 3
-	//   AND dim1 IN (1, 2, 3, 4)
+	//   AND dim1 IN (10, 20, 30, 40)
 	//   ORDER BY 1, 2, 3
+	//
 	// or accumulator(s):
-	//   SELECT dim0, dim1, acc_id, sub_id, acc_value
+	//
+	//   SELECT acc_id, sub_id, dim0, dim1, acc_value
 	//   FROM salarySex_a2012_820
 	//   WHERE run_id =
 	//   (
 	//     SELECT base_run_id FROM run_table WHERE run_id = 2 AND table_hid = 12345
 	//   )
 	//   AND acc_id = 4
-	//   AND dim1 IN (1, 2, 3, 4)
+	//   AND dim1 IN (10, 20, 30, 40)
 	//   ORDER BY 1, 2, 3, 4
-	q := "SELECT "
+	//
+	q := "SELECT"
+	if layout.IsAccum {
+		q += " acc_id, sub_id, "
+	} else {
+		q += " expr_id, "
+	}
 	for k := range table.Dim {
 		q += table.Dim[k].Name + ", "
 	}
 	if layout.IsAccum {
-		q += " acc_id, sub_id, acc_value FROM " + table.DbAccTable
+		q += " acc_value FROM " + table.DbAccTable
 	} else {
-		q += " expr_id, expr_value FROM " + table.DbExprTable
+		q += " expr_value FROM " + table.DbExprTable
 	}
 	q += " WHERE run_id =" +
 		" (SELECT base_run_id FROM run_table" +
@@ -150,21 +159,22 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadLayout) (*
 	q += makeOrderBy(table.Rank, layout.OrderBy, nExtraCol)
 
 	// prepare db-row conversion buffer
-	d := make([]int, table.Rank)
 	var nv, ns int
+	d := make([]int, table.Rank)
 	var vf sql.NullFloat64
-
 	var scanBuf []interface{}
-	for k := 0; k < table.Rank; k++ {
-		scanBuf = append(scanBuf, &d[k])
-	}
+
 	scanBuf = append(scanBuf, &nv)
 	if layout.IsAccum {
 		scanBuf = append(scanBuf, &ns)
 	}
+	for k := 0; k < table.Rank; k++ {
+		scanBuf = append(scanBuf, &d[k])
+	}
 	scanBuf = append(scanBuf, &vf)
 
-	// select cells: dimension(s) enum ids, expr_id or acc_id and sub_id, value and null status
+	// select cells:
+	// expr_id or acc_id and sub_id, dimension(s) enum ids, value and null status
 	cLst, err := SelectToList(dbConn, q, layout.Offset, layout.Size,
 		func(rows *sql.Rows) (interface{}, error) {
 			if err := rows.Scan(scanBuf...); err != nil {
@@ -173,9 +183,9 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadLayout) (*
 			// make new cell from conversion buffer
 			if layout.IsAccum {
 				var ca = CellAcc{Cell: Cell{DimIds: make([]int, table.Rank)}}
-				copy(ca.DimIds, d)
 				ca.AccId = nv
 				ca.SubId = ns
+				copy(ca.DimIds, d)
 				ca.IsNull = !vf.Valid
 				ca.Value = 0.0
 				if !ca.IsNull {
@@ -185,8 +195,8 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadLayout) (*
 			}
 			// else
 			var ce = CellExpr{Cell: Cell{DimIds: make([]int, table.Rank)}}
-			copy(ce.DimIds, d)
 			ce.ExprId = nv
+			copy(ce.DimIds, d)
 			ce.IsNull = !vf.Valid
 			ce.Value = 0.0
 			if !ce.IsNull {

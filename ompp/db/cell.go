@@ -222,16 +222,16 @@ func (CellExpr) CsvHeader(modelDef *ModelMeta, name string) ([]string, error) {
 	// make first line columns
 	h := make([]string, table.Rank+2)
 
+	h[0] = "expr_id"
 	for k := range table.Dim {
-		h[k] = table.Dim[k].Name
+		h[k+1] = table.Dim[k].Name
 	}
-	h[table.Rank] = "expr_id"
 	h[table.Rank+1] = "expr_value"
 
 	return h, nil
 }
 
-// CsvToRow return converter from output table cell (dimensions, expr_id, value) to csv row []string
+// CsvToRow return converter from output table cell (expr_id, dimensions, value) to csv row []string
 // Converter will retrun error if len(row) not equal to number of fields in csv record.
 func (CellExpr) CsvToRow() (func(interface{}, []string) error, error) {
 
@@ -247,11 +247,11 @@ func (CellExpr) CsvToRow() (func(interface{}, []string) error, error) {
 			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2))
 		}
 
-		for k, e := range cell.DimIds {
-			row[k] = fmt.Sprint(e)
-		}
+		row[0] = fmt.Sprint(cell.ExprId)
 
-		row[n] = fmt.Sprint(cell.ExprId)
+		for k, e := range cell.DimIds {
+			row[k+1] = fmt.Sprint(e)
+		}
 
 		if cell.IsNull {
 			row[n+1] = ""
@@ -294,21 +294,21 @@ func (CellExpr) CsvToCell(modelDef *ModelMeta, name string) (func(row []string) 
 			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(n+2))
 		}
 
+		// expression id
+		i, err := strconv.Atoi(row[0])
+		if err != nil {
+			return nil, err
+		}
+		cell.ExprId = i
+
 		// dimensions: integer expected, enum ids or integer value for simple type dimension
 		for k := range cell.DimIds {
-			i, err := strconv.Atoi(row[k])
+			i, err := strconv.Atoi(row[k+1])
 			if err != nil {
 				return nil, err
 			}
 			cell.DimIds[k] = i
 		}
-
-		// expression id
-		i, err := strconv.Atoi(row[n])
-		if err != nil {
-			return nil, err
-		}
-		cell.ExprId = i
 
 		// value conversion
 		cell.IsNull = row[n+1] == "" || row[n+1] == "null"
@@ -369,17 +369,17 @@ func (CellAcc) CsvHeader(modelDef *ModelMeta, name string) ([]string, error) {
 	// make first line columns
 	h := make([]string, table.Rank+3)
 
+	h[0] = "acc_id"
+	h[1] = "sub_id"
 	for k := range table.Dim {
-		h[k] = table.Dim[k].Name
+		h[k+2] = table.Dim[k].Name
 	}
-	h[table.Rank] = "acc_id"
-	h[table.Rank+1] = "sub_id"
 	h[table.Rank+2] = "acc_value"
 
 	return h, nil
 }
 
-// CsvToRow return converter from output table cell (dimensions, acc_id, sub_id, value) to csv row []string
+// CsvToRow return converter from output table cell (acc_id, sub_id, dimensions, value) to csv row []string
 // Converter will retrun error if len(row) not equal to number of fields in csv record.
 func (CellAcc) CsvToRow() (func(interface{}, []string) error, error) {
 
@@ -395,12 +395,12 @@ func (CellAcc) CsvToRow() (func(interface{}, []string) error, error) {
 			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+3))
 		}
 
-		for k, e := range cell.DimIds {
-			row[k] = fmt.Sprint(e)
-		}
+		row[0] = fmt.Sprint(cell.AccId)
+		row[1] = fmt.Sprint(cell.SubId)
 
-		row[n] = fmt.Sprint(cell.AccId)
-		row[n+1] = fmt.Sprint(cell.SubId)
+		for k, e := range cell.DimIds {
+			row[k+2] = fmt.Sprint(e)
+		}
 
 		if cell.IsNull {
 			row[n+2] = ""
@@ -443,27 +443,27 @@ func (CellAcc) CsvToCell(modelDef *ModelMeta, name string) (func(row []string) (
 			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(n+3))
 		}
 
-		// dimensions: integer expected, enum ids or integer value for simple type dimension
-		for k := range cell.DimIds {
-			i, err := strconv.Atoi(row[k])
-			if err != nil {
-				return nil, err
-			}
-			cell.DimIds[k] = i
-		}
-
 		// accumulator id and subsample number
-		i, err := strconv.Atoi(row[n])
+		i, err := strconv.Atoi(row[0])
 		if err != nil {
 			return nil, err
 		}
 		cell.AccId = i
 
-		i, err = strconv.Atoi(row[n+1])
+		i, err = strconv.Atoi(row[1])
 		if err != nil {
 			return nil, err
 		}
 		cell.SubId = i
+
+		// dimensions: integer expected, enum ids or integer value for simple type dimension
+		for k := range cell.DimIds {
+			i, err := strconv.Atoi(row[k+2])
+			if err != nil {
+				return nil, err
+			}
+			cell.DimIds[k] = i
+		}
 
 		// value conversion
 		cell.IsNull = row[n+2] == "" || row[n+2] == "null"

@@ -606,22 +606,22 @@ func paramCreateTable(dbFacet Facet, param *ParamMeta) (string, string, error) {
 // CREATE TABLE salarySex_v20120820
 // (
 //  run_id     INT   NOT NULL,
+//  expr_id    INT   NOT NULL,
 //  dim0       INT   NOT NULL,
 //  dim1       INT   NOT NULL,
-//  expr_id    INT   NOT NULL,
 //  expr_value FLOAT NULL,
-//  PRIMARY KEY (run_id, dim0, dim1, expr_id)
+//  PRIMARY KEY (run_id, expr_id, dim0, dim1)
 // )
 //
 // CREATE TABLE salarySex_a20120820
 // (
 //  run_id    INT   NOT NULL,
-//  dim0      INT   NOT NULL,
-//  dim1      INT   NOT NULL,
 //  acc_id    INT   NOT NULL,
 //  sub_id    INT   NOT NULL,
+//  dim0      INT   NOT NULL,
+//  dim1      INT   NOT NULL,
 //  acc_value FLOAT NULL,
-//  PRIMARY KEY (run_id, dim0, dim1, acc_id, sub_id)
+//  PRIMARY KEY (run_id, acc_id, sub_id, dim0, dim1)
 // )
 func outTableCreateTable(dbFacet Facet, meta *TableMeta) (string, string, error) {
 
@@ -636,19 +636,19 @@ func outTableCreateTable(dbFacet Facet, meta *TableMeta) (string, string, error)
 	}
 
 	eSql := dbFacet.createTableIfNotExist(meta.DbExprTable, "("+
-		"run_id INT NOT NULL, "+
-		colPart+
+		"run_id  INT NOT NULL, "+
 		"expr_id INT NOT NULL, "+
+		colPart+
 		"expr_value "+dbFacet.floatType()+" NULL, "+
-		"PRIMARY KEY (run_id"+keyPart+", expr_id)"+
+		"PRIMARY KEY (run_id, expr_id"+keyPart+")"+
 		")")
 	aSql := dbFacet.createTableIfNotExist(meta.DbAccTable, "("+
 		"run_id INT NOT NULL, "+
-		colPart+
 		"acc_id INT NOT NULL, "+
 		"sub_id INT NOT NULL, "+
+		colPart+
 		"acc_value "+dbFacet.floatType()+" NULL, "+
-		"PRIMARY KEY (run_id"+keyPart+", acc_id, sub_id)"+
+		"PRIMARY KEY (run_id, acc_id, sub_id"+keyPart+")"+
 		")")
 	return eSql, aSql, nil
 }

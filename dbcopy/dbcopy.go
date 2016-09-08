@@ -16,14 +16,14 @@ import (
 	omppLog "go.openmpp.org/ompp/log"
 )
 
-// DbCopy config keys to get values from ini-file or command line arguments.
+// dbcopy config keys to get values from ini-file or command line arguments.
 const (
-	copyToArgKey      = "DbCopy.To"             // copy to: text=db-to-text, db=text-to-db, db2db=db-to-db
-	zipArgKey         = "DbCopy.Zip"            // create output or use as input model.zip
-	inputDirArgKey    = "DbCopy.InputDir"       // input dir to read model .json and .csv files
-	outputDirArgKey   = "DbCopy.OutputDir"      // output dir to write model .json and .csv files
-	toDbConnectionStr = "DbCopy.Database"       // output db connection string
-	toDbDriverName    = "DbCopy.DatabaseDriver" // output db driver name, ie: SQLite, odbc, sqlite3
+	copyToArgKey      = "dbcopy.To"               // copy to: text=db-to-text, db=text-to-db, db2db=db-to-db
+	zipArgKey         = "dbcopy.Zip"              // create output or use as input model.zip
+	inputDirArgKey    = "dbcopy.InputDir"         // input dir to read model .json and .csv files
+	outputDirArgKey   = "dbcopy.OutputDir"        // output dir to write model .json and .csv files
+	toDbConnectionStr = "dbcopy.ToDatabase"       // output db connection string
+	toDbDriverName    = "dbcopy.ToDatabaseDriver" // output db driver name, ie: SQLite, odbc, sqlite3
 )
 
 func main() {
@@ -160,8 +160,21 @@ func dbToText(modelName string, modelDigest string, runOpts *config.RunOptions) 
 // copy model from text json and csv files into database
 func textToDb(modelName string, runOpts *config.RunOptions) error {
 
+	// get connection string and driver name
+	// use OpenM options if DBCopy ouput database not defined
+	cs := runOpts.String(toDbConnectionStr)
+	if cs == "" && runOpts.IsExist(config.DbConnectionStr) {
+		cs = runOpts.String(config.DbConnectionStr)
+	}
+
+	dn := runOpts.String(toDbDriverName)
+	if dn == "" && runOpts.IsExist(config.DbDriverName) {
+		dn = runOpts.String(config.DbDriverName)
+	}
+
+	cs, dn = db.IfEmptyMakeDefault(modelName, cs, dn)
+
 	// open destination database and check is it valid
-	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(config.DbConnectionStr), runOpts.String(config.DbDriverName))
 	dstDb, dbFacet, err := db.Open(cs, dn, true)
 	if err != nil {
 		return err

@@ -56,7 +56,8 @@ type OrderByColumn struct {
 }
 
 // makeOrderBy return ORDER BY clause either from explicitly specified column list
-// or default: 1,...rank+1 or empty if rank zero
+// or default: 1,...rank+1
+// or empty if rank zero
 func makeOrderBy(rank int, orderBy []OrderByColumn, extraIdColumns int) string {
 
 	if len(orderBy) > 0 { // if order by excplicitly specified
@@ -73,20 +74,20 @@ func makeOrderBy(rank int, orderBy []OrderByColumn, extraIdColumns int) string {
 		}
 		return q
 	} // else
-	if rank > 0 || extraIdColumns > 0 { // default: order by dimensions, expr_id, sub_id
+	if rank > 0 || extraIdColumns > 0 { // default: order by  acc_id, sub_id, dimensions
 
 		q := " ORDER BY "
-		for k := 1; k <= rank; k++ {
+		for k := 1; k <= extraIdColumns; k++ {
 			if k > 1 {
 				q += ", "
 			}
 			q += strconv.Itoa(k)
 		}
-		for k := 1; k <= extraIdColumns; k++ {
-			if k > 1 || rank > 0 {
+		for k := 1; k <= rank; k++ {
+			if k > 1 || extraIdColumns > 0 {
 				q += ", "
 			}
-			q += strconv.Itoa(rank + k)
+			q += strconv.Itoa(extraIdColumns + k)
 		}
 		return q
 	}

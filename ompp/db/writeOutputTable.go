@@ -151,20 +151,20 @@ func doWriteOutputTable(trx *sql.Tx, meta *TableMeta, isAcc bool, runId int, cel
 func makeSqlExprValueInsert(meta *TableMeta, runId int) string {
 
 	// INSERT INTO salarySex_v2012820
-	//   (run_id, dim0, dim1, expr_id, expr_value)
+	//   (run_id, expr_id, dim0, dim1, expr_value)
 	// VALUES
 	//   (2, ?, ?, ?, ?)
-	q := "INSERT INTO " + meta.DbExprTable + " (run_id, "
+	q := "INSERT INTO " + meta.DbExprTable + " (run_id, expr_id, "
 	for k := range meta.Dim {
 		q += meta.Dim[k].Name + ", "
 	}
 
-	q += "expr_id, expr_value) VALUES (" + strconv.Itoa(runId) + ", "
+	q += "expr_value) VALUES (" + strconv.Itoa(runId) + ", ?, "
 
 	for k := 0; k < len(meta.Dim); k++ {
 		q += "?, "
 	}
-	q += "?, ?)"
+	q += "?)"
 
 	return q
 }
@@ -193,12 +193,12 @@ func makePutExprValueInsert(meta *TableMeta, cellLst *list.List) func() (bool, [
 			return false, nil, errors.New("invalid size of row buffer, expected: " + strconv.Itoa(n+3))
 		}
 
-		// set sql statement parameter values: dimensions enum
-		for k, e := range cell.DimIds {
-			row[k] = e
-		}
+		// set sql statement parameter values: expression id, dimensions enum
+		row[0] = cell.ExprId
 
-		row[n] = cell.ExprId // expression id
+		for k, e := range cell.DimIds {
+			row[k+1] = e
+		}
 
 		// cell value is nullable
 		row[n+1] = sql.NullFloat64{Float64: cell.Value.(float64), Valid: !cell.IsNull}
@@ -215,20 +215,20 @@ func makePutExprValueInsert(meta *TableMeta, cellLst *list.List) func() (bool, [
 func makeSqlAccValueInsert(meta *TableMeta, runId int) string {
 
 	// INSERT INTO salarySex_a2012820
-	//   (run_id, dim0, dim1, acc_id, sub_id, acc_value)
+	//   (run_id, acc_id, sub_id, dim0, dim1, acc_value)
 	// VALUES
 	//   (2, ?, ?, ?, ?, ?)
-	q := "INSERT INTO " + meta.DbAccTable + " (run_id, "
+	q := "INSERT INTO " + meta.DbAccTable + " (run_id, acc_id, sub_id, "
 	for k := range meta.Dim {
 		q += meta.Dim[k].Name + ", "
 	}
 
-	q += "acc_id, sub_id, acc_value) VALUES (" + strconv.Itoa(runId) + ", "
+	q += "acc_value) VALUES (" + strconv.Itoa(runId) + ", ?, ?, "
 
 	for k := 0; k < len(meta.Dim); k++ {
 		q += "?, "
 	}
-	q += "?, ?, ?)"
+	q += "?)"
 
 	return q
 }
@@ -257,14 +257,13 @@ func makePutAccValueInsert(meta *TableMeta, cellLst *list.List) func() (bool, []
 			return false, nil, errors.New("invalid size of row buffer, expected: " + strconv.Itoa(n+3))
 		}
 
-		// set sql statement parameter values: dimensions enum
-		for k, e := range cell.DimIds {
-			row[k] = e
-		}
+		// set sql statement parameter values: accumulator id and subsample number, dimensions enum
+		row[0] = cell.AccId
+		row[1] = cell.SubId
 
-		// accumulator id and subsample number
-		row[n] = cell.AccId
-		row[n+1] = cell.SubId
+		for k, e := range cell.DimIds {
+			row[k+2] = e
+		}
 
 		// cell value is nullable
 		row[n+2] = sql.NullFloat64{Float64: cell.Value.(float64), Valid: !cell.IsNull}
