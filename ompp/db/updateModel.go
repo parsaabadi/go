@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"hash/crc32"
 	"strconv"
+
+	"go.openmpp.org/ompp/helper"
 )
 
 // UpdateModel insert new or update existing model metadata in database.
@@ -26,7 +28,17 @@ func UpdateModel(dbConn *sql.DB, dbFacet Facet, modelDef *ModelMeta) error {
 		return errors.New("invalid (empty) model name or model digest")
 	}
 
-	// do update in transaction scope
+	// check if model already exist
+	isExist, mId, err := GetModelId(dbConn, "", modelDef.Model.Digest)
+	if err != nil {
+		return err
+	}
+	if isExist {
+		modelDef, err = GetModelById(dbConn, mId)
+		return err
+	}
+	// else
+	// model not exist: do insert and update in transaction scope
 	trx, err := dbConn.Begin()
 	if err != nil {
 		return err
@@ -47,113 +59,12 @@ func UpdateModel(dbConn *sql.DB, dbFacet Facet, modelDef *ModelMeta) error {
 // If db table names is "" empty then make db table names for parameter values (output table values)
 func doUpdateModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 
-	// for each parameter:
-	// if parameter exists then update Hid and db table names with actual values
-	isParamExist := make([]bool, len(modelDef.Param))
-
-	err := TrxSelectRows(trx,
-		"SELECT"+
-			" parameter_hid, parameter_name, parameter_digest, db_run_table, db_set_table"+
-			" FROM parameter_dic",
-		func(rows *sql.Rows) error {
-
-			hId := 0
-			var name, dg, rtbl, stbl string
-			if err := rows.Scan(&hId, &name, &dg, &rtbl, &stbl); err != nil {
-				return err
-			}
-
-			for k := range modelDef.Param {
-				if modelDef.Param[k].Digest == dg {
-					modelDef.Param[k].ParamHid = hId
-					modelDef.Param[k].DbRunTable = rtbl
-					modelDef.Param[k].DbSetTable = stbl
-					isParamExist[k] = true
-					return nil
-				}
-			}
-			return nil
-		})
-	if err != nil && err != sql.ErrNoRows {
-		return err
-	}
-
-	// for each output table:
-	// if output table exists then update Hid and db table names with actual values
-	isTblExist := make([]bool, len(modelDef.Table))
-
-	err = TrxSelectRows(trx,
-		"SELECT"+
-			" table_hid, table_name, table_digest, db_expr_table, db_acc_table"+
-			" FROM table_dic",
-		func(rows *sql.Rows) error {
-
-			hId := 0
-			var name, dg, etbl, atbl string
-			if err := rows.Scan(&hId, &name, &dg, &etbl, &atbl); err != nil {
-				return err
-			}
-
-			for k := range modelDef.Table {
-				if modelDef.Table[k].Digest == dg {
-					modelDef.Table[k].TableHid = hId
-					modelDef.Table[k].DbExprTable = etbl
-					modelDef.Table[k].DbAccTable = atbl
-					isTblExist[k] = true
-					return nil
-				}
-			}
-			return nil
-		})
-	if err != nil && err != sql.ErrNoRows {
-		return err
-	}
-
-	// make next model id if model not exists
-	// UPDATE id_lst
-	// SET id_value =
-	//   CASE
-	//     WHEN 0 = (SELECT COUNT(*) FROM model_dic WHERE model_digest = '1234abcd')
-	//       THEN id_value + 1
-	//     ELSE id_value
-	//   END
-	// WHERE id_key = 'model_id';
-	err = TrxUpdate(trx,
-		"UPDATE id_lst SET id_value ="+
-			" CASE"+
-			" WHEN 0 = (SELECT COUNT(*) FROM model_dic WHERE model_digest = "+toQuoted(modelDef.Model.Digest)+")"+
-			" THEN id_value + 1"+
-			" ELSE id_value"+
-			" END"+
-			" WHERE id_key = 'model_id'")
+	// get new model id
+	err := TrxUpdate(trx,
+		"UPDATE id_lst SET id_value = id_value + 1 WHERE id_key = 'model_id'")
 	if err != nil {
 		return err
 	}
-
-	// check if this model already exist
-	modelDef.Model.ModelId = 0
-	var mn string
-	err = TrxSelectFirst(trx,
-		"SELECT model_id, model_name FROM model_dic WHERE model_digest = "+toQuoted(modelDef.Model.Digest),
-		func(row *sql.Row) error {
-			return row.Scan(&modelDef.Model.ModelId, &mn)
-		})
-	if err != nil && err != sql.ErrNoRows {
-		return err
-	}
-
-	// model already exist: nothing to do, exit
-	if modelDef.Model.ModelId > 0 {
-		if modelDef.Model.Name != mn {
-			return errors.New("model: " + modelDef.Model.Name + " " + modelDef.Model.Digest + " already exist with different name: " + mn)
-		}
-		if err = trx.Commit(); err != nil {
-			return err
-		}
-		return nil
-	}
-
-	// get new model id
 	err = TrxSelectFirst(trx,
 		"SELECT id_value FROM id_lst WHERE id_key = 'model_id'",
 		func(row *sql.Row) error {
@@ -311,10 +222,41 @@ func doUpdateModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 
 		modelDef.Param[idx].ModelId = modelDef.Model.ModelId // update model id with db value
 
+		// get new parameter Hid
+		// UPDATE id_lst SET id_value =
+		//   CASE
+		//     WHEN 0 = (SELECT COUNT(*) FROM parameter_dic WHERE parameter_digest = '978abf5')
+		//       THEN id_value + 1
+		//     ELSE id_value
+		//   END
+		// WHERE id_key = 'parameter_hid'
+		err = TrxUpdate(trx,
+			"UPDATE id_lst SET id_value ="+
+				" CASE"+
+				" WHEN 0 = (SELECT COUNT(*) FROM parameter_dic WHERE parameter_digest = "+toQuoted(modelDef.Param[idx].Digest)+")"+
+				" THEN id_value + 1"+
+				" ELSE id_value"+
+				" END"+
+				" WHERE id_key = 'parameter_hid'")
+		if err != nil {
+			return err
+		}
+
+		// check if this parameter already exist
+		modelDef.Param[idx].ParamHid = 0
+		err = TrxSelectFirst(trx,
+			"SELECT parameter_hid FROM parameter_dic WHERE parameter_digest = "+toQuoted(modelDef.Param[idx].Digest),
+			func(row *sql.Row) error {
+				return row.Scan(&modelDef.Param[idx].ParamHid)
+			})
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+
 		// if parameter not exists then insert into parameter_dic and parameter_dims
 		// if db table names is "" empty then make db table names for parameter values
 		// if parameter not exist then create db tables for parameter values
-		if !isParamExist[idx] {
+		if modelDef.Param[idx].ParamHid <= 0 {
 
 			// get new parameter Hid
 			err = TrxUpdate(trx,
@@ -439,10 +381,41 @@ func doUpdateModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 
 		modelDef.Table[idx].ModelId = modelDef.Model.ModelId // update model id with db value
 
+		// get new output table Hid
+		// UPDATE id_lst SET id_value =
+		//   CASE
+		//     WHEN 0 = (SELECT COUNT(*) FROM table_dic WHERE table_digest = '0887a6494df')
+		//      THEN id_value + 1
+		//     ELSE id_value
+		//   END
+		// WHERE id_key = 'table_hid'
+		err = TrxUpdate(trx,
+			"UPDATE id_lst SET id_value ="+
+				" CASE"+
+				" WHEN 0 = (SELECT COUNT(*) FROM table_dic WHERE table_digest = "+toQuoted(modelDef.Table[idx].Digest)+")"+
+				" THEN id_value + 1"+
+				" ELSE id_value"+
+				" END"+
+				" WHERE id_key = 'table_hid'")
+		if err != nil {
+			return err
+		}
+
+		// check if this output table already exist
+		modelDef.Table[idx].TableHid = 0
+		err = TrxSelectFirst(trx,
+			"SELECT table_hid FROM table_dic WHERE table_digest = "+toQuoted(modelDef.Table[idx].Digest),
+			func(row *sql.Row) error {
+				return row.Scan(&modelDef.Table[idx].TableHid)
+			})
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+
 		// if output table not exists then insert into table_dic, table_dims, table_acc, table_expr
 		// if output table not exist then create db tables for output table values
 		// if db table names is "" empty then make db table names for output table values
-		if !isTblExist[idx] {
+		if modelDef.Table[idx].TableHid <= 0 {
 
 			// get new output table Hid
 			err = TrxUpdate(trx,
@@ -727,7 +700,7 @@ func makeDbTablePrefixSuffix(dbFacet Facet, name string, digest string) (string,
 
 	// make prefix part of db table name by shorten source name, ie: ageSexProvince => ageSexPr
 	// in db table name use only [A-Z,a-z,0-9] and _ underscore
-	prefix := toAlphaNumeric(name)
+	prefix := helper.ToAlphaNumeric(name)
 	if len(prefix) > dbPrefixSize {
 		prefix = prefix[:dbPrefixSize]
 	}

@@ -181,27 +181,6 @@ func toBoolStr(isValue bool) string {
 	return "0"
 }
 
-// toAlphaNumeric replace all non [A-Z,a-z,0-9] by _ underscore and remove repetitive underscores
-func toAlphaNumeric(src string) string {
-
-	var bt bytes.Buffer
-	isPrevUnder := false
-
-	for _, r := range src {
-		if '0' <= r && r <= '9' || 'A' <= r && r <= 'Z' || 'a' <= r && r <= 'z' {
-			bt.WriteRune(r)
-			isPrevUnder = false
-		} else {
-			if isPrevUnder {
-				continue // skip repetitive underscore
-			}
-			bt.WriteRune('_')
-			isPrevUnder = true
-		}
-	}
-	return bt.String()
-}
-
 // SelectFirst select first db row and pass it to cvt() for row.Scan()
 func SelectFirst(dbConn *sql.DB, query string, cvt func(row *sql.Row) error) error {
 	if dbConn == nil {

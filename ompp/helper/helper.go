@@ -34,6 +34,27 @@ func MakeDateTime(t time.Time) string {
 	return fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d.%04d", y, mm, dd, h, mi, s, ms)
 }
 
+// ToAlphaNumeric replace all non [A-Z,a-z,0-9] by _ underscore and remove repetitive underscores
+func ToAlphaNumeric(src string) string {
+
+	var bt bytes.Buffer
+	isPrevUnder := false
+
+	for _, r := range src {
+		if '0' <= r && r <= '9' || 'A' <= r && r <= 'Z' || 'a' <= r && r <= 'z' {
+			bt.WriteRune(r)
+			isPrevUnder = false
+		} else {
+			if isPrevUnder {
+				continue // skip repetitive underscore
+			}
+			bt.WriteRune('_')
+			isPrevUnder = true
+		}
+	}
+	return bt.String()
+}
+
 // DeepCopy using gob to make a deep copy from src into dst, both src and dst expected to be a pointers
 func DeepCopy(src interface{}, dst interface{}) error {
 	var bt bytes.Buffer

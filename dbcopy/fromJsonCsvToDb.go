@@ -9,6 +9,7 @@ import (
 	"encoding/csv"
 	"errors"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -21,9 +22,14 @@ import (
 // fromModelJsonToDb reads model metadata from json file and insert it into database.
 func fromModelJsonToDb(dbConn *sql.DB, dbFacet db.Facet, inpDir string, modelName string) (*db.ModelMeta, error) {
 
-	// restore model metadta
-	var modelDef db.ModelMeta
-	isExist, err := helper.FromJsonFile(filepath.Join(inpDir, modelName+".model.json"), &modelDef)
+	// restore  model metadta from json
+	js, err := ioutil.ReadFile(filepath.Join(inpDir, modelName+".model.json"))
+	if err != nil {
+		return nil, err
+	}
+	modelDef := &db.ModelMeta{}
+
+	isExist, err := modelDef.FromJson(js)
 	if err != nil {
 		return nil, err
 	}
@@ -33,12 +39,43 @@ func fromModelJsonToDb(dbConn *sql.DB, dbFacet db.Facet, inpDir string, modelNam
 	if modelDef.Model.Name != modelName {
 		return nil, errors.New("model name: " + modelName + " not found in .json file")
 	}
-	if err = modelDef.Setup(); err != nil {
-		return nil, err
-	}
+	/*
+		var modelDef db.ModelMeta
+		isExist, err := helper.FromJsonFile(filepath.Join(inpDir, modelName+".model.json"), &modelDef)
+		if err != nil {
+			return nil, err
+		}
+		if !isExist {
+			return nil, errors.New("model not found: " + modelName)
+		}
+		if modelDef.Model.Name != modelName {
+			return nil, errors.New("model name: " + modelName + " not found in .json file")
+		}
+		if err = modelDef.Setup(); err != nil {
+			return nil, err
+		}
+	*/
+	/*
+
+		langJson, err := ioutil.ReadFile(filepath.Join(inpDir, modelDef.Model.Name+".lang.json"))
+		if err != nil {
+			return nil, err
+		}
+		langDef := &db.LangList{}
+
+		isExist, err := langDef.FromJson(langJson)
+		if err != nil {
+			return nil, err
+		}
+		if isExist {
+			if err = db.UpdateLanguage(dbConn, langDef); err != nil {
+				return nil, err
+			}
+		}
+	*/
 
 	// insert model metadata into destination database if not exists
-	if err = db.UpdateModel(dbConn, dbFacet, &modelDef); err != nil {
+	if err = db.UpdateModel(dbConn, dbFacet, modelDef); err != nil {
 		return nil, err
 	}
 
@@ -54,20 +91,24 @@ func fromModelJsonToDb(dbConn *sql.DB, dbFacet db.Facet, inpDir string, modelNam
 		}
 	}
 
-	return &modelDef, nil
+	return modelDef, nil
 }
 
 // fromLangTextJsonToDb reads languages, model text and model groups from json file and insert it into database.
 func fromLangTextJsonToDb(dbConn *sql.DB, modelDef *db.ModelMeta, inpDir string) (*db.LangList, error) {
 
 	// restore language list from json and if exist then update db tables
+	js, err := ioutil.ReadFile(filepath.Join(inpDir, modelDef.Model.Name+".lang.json"))
+	if err != nil {
+		return nil, err
+	}
 	langDef := &db.LangList{}
-	isExist, err := helper.FromJsonFile(filepath.Join(inpDir, modelDef.Model.Name+".lang.json"), langDef)
+
+	isExist, err := langDef.FromJson(js)
 	if err != nil {
 		return nil, err
 	}
 	if isExist {
-		langDef.Setup()
 		if err = db.UpdateLanguage(dbConn, langDef); err != nil {
 			return nil, err
 		}

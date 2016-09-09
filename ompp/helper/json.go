@@ -10,19 +10,6 @@ import (
 	"os"
 )
 
-// ToJsonFile convert source to json and write into jsonPath file.
-func ToJsonFile(jsonPath string, src interface{}) error {
-
-	f, err := os.OpenFile(jsonPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	enc := json.NewEncoder(f)
-	return enc.Encode(src)
-}
-
 // FromJsonFile reads read from json file and convert to destination pointer.
 func FromJsonFile(jsonPath string, dst interface{}) (bool, error) {
 
@@ -41,6 +28,30 @@ func FromJsonFile(jsonPath string, dst interface{}) (bool, error) {
 		return false, nil // return "not exist" if json file empty
 	}
 	return true, err
+}
+
+// FromJson restore from json string bytes and convert to destination pointer.
+func FromJson(srcJson []byte, dst interface{}) (bool, error) {
+
+	dec := json.NewDecoder(bytes.NewReader(srcJson))
+	err := dec.Decode(dst)
+	if err == io.EOF {
+		return false, nil // return "not exist" if json empty
+	}
+	return true, err
+}
+
+// ToJsonFile convert source to json and write into jsonPath file.
+func ToJsonFile(jsonPath string, src interface{}) error {
+
+	f, err := os.OpenFile(jsonPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	enc := json.NewEncoder(f)
+	return enc.Encode(src)
 }
 
 // ToJsonIndent return source conveted to json indeneted string.

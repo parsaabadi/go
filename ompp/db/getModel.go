@@ -34,23 +34,19 @@ func GetModelList(dbConn *sql.DB) ([]ModelDicRow, error) {
 	return modelRs, nil
 }
 
-// GetModelByName return model metadata: parameters and output tables definition.
+// GetModelId return model id if exists.
 // Model selected by name and/or digest, i.e.: ("modelOne", "20120817_1604590148")
 // if digest is empty then first model with min(model_id) is used
-func GetModel(dbConn *sql.DB, name, digest string) (*ModelMeta, error) {
+func GetModelId(dbConn *sql.DB, name, digest string) (bool, int, error) {
 
-	var modelRow = ModelDicRow{ModelId: -1}
-
-	// select model_dic row
-	// model selected by name and digest
-	// if digest is empty then first model with min(model_id) is used
+	// model not found: model name and digest empty
 	if name == "" && digest == "" {
-		return nil, errors.New("invalid (empty) model name and model digest")
+		return false, 0, nil
 	}
 
-	q := "SELECT" +
-		" M.model_id, M.model_name, M.model_digest, M.model_type, M.model_ver, M.create_dt" +
-		" FROM model_dic M"
+	// select model_id by name and/or digest
+	// if digest is empty then first model with min(model_id) is used
+	q := "SELECT M.model_id FROM model_dic M"
 	if name != "" && digest != "" {
 		q += " WHERE M.model_name = " + toQuoted(name) +
 			" AND M.model_digest = " + toQuoted(digest)
@@ -64,19 +60,40 @@ func GetModel(dbConn *sql.DB, name, digest string) (*ModelMeta, error) {
 	}
 	q += " ORDER BY 1"
 
+	mId := 0
 	err := SelectFirst(dbConn, q,
 		func(row *sql.Row) error {
-			return row.Scan(
-				&modelRow.ModelId, &modelRow.Name, &modelRow.Digest, &modelRow.Type, &modelRow.Version, &modelRow.CreateDateTime)
+			return row.Scan(&mId)
 		})
 	switch {
 	case err == sql.ErrNoRows:
-		return nil, errors.New("model " + name + " " + digest + " not found")
+		return false, 0, nil
 	case err != nil:
-		return nil, err
+		return false, 0, err
 	}
 
-	return getModel(dbConn, &modelRow)
+	return true, mId, nil
+}
+
+// GetModel return model metadata: parameters and output tables definition.
+// Model selected by name and/or digest, i.e.: ("modelOne", "20120817_1604590148")
+// if digest is empty then first model with min(model_id) is used
+func GetModel(dbConn *sql.DB, name, digest string) (*ModelMeta, error) {
+
+	if name == "" && digest == "" {
+		return nil, errors.New("invalid (empty) model name and model digest")
+	}
+
+	// find model id
+	isExist, mId, err := GetModelId(dbConn, name, digest)
+	if err != nil {
+		return nil, err
+	}
+	if !isExist {
+		return nil, errors.New("model " + name + " " + digest + " not found")
+	}
+
+	return GetModelById(dbConn, mId)
 }
 
 // GetModelById return model metadata: parameters and output tables definition.
@@ -176,7 +193,7 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 			" T.model_type_id, M.is_hidden, D.num_cumulated"+
 			" FROM parameter_dic D"+
 			" INNER JOIN model_parameter_dic M ON (M.parameter_hid = D.parameter_hid)"+
-			" INNER JOIN model_type_dic T ON (T.type_hid = D.type_hid)"+
+			" INNER JOIN model_type_dic T ON (T.type_hid = D.type_hid AND T.model_id = M.model_id)"+
 			" WHERE M.model_id = "+smId+
 			" ORDER BY 1, 2",
 		func(rows *sql.Rows) error {
@@ -206,7 +223,7 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 			" M.model_id, M.model_parameter_id, D.dim_id, D.dim_name, T.model_type_id"+
 			" FROM parameter_dims D"+
 			" INNER JOIN model_parameter_dic M ON (M.parameter_hid = D.parameter_hid)"+
-			" INNER JOIN model_type_dic T ON (T.type_hid = D.type_hid)"+
+			" INNER JOIN model_type_dic T ON (T.type_hid = D.type_hid AND T.model_id = M.model_id)"+
 			" WHERE M.model_id = "+smId+
 			" ORDER BY 1, 2, 3",
 		func(rows *sql.Rows) error {
@@ -268,7 +285,7 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 			" M.model_id, M.model_table_id, D.dim_id, D.dim_name, T.model_type_id, D.is_total, D.dim_size"+
 			" FROM table_dims D"+
 			" INNER JOIN model_table_dic M ON (M.table_hid = D.table_hid)"+
-			" INNER JOIN model_type_dic T ON (T.type_hid = D.type_hid)"+
+			" INNER JOIN model_type_dic T ON (T.type_hid = D.type_hid AND T.model_id = M.model_id)"+
 			" WHERE M.model_id = "+smId+
 			" ORDER BY 1, 2, 3",
 		func(rows *sql.Rows) error {
@@ -351,7 +368,7 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 
 	// update internal members used to link arrays to each other and simplify search:
 	// type indexes, dimension indexes, type size, parameter and output table size
-	if err := meta.Setup(); err != nil {
+	if err := meta.updateInternals(); err != nil {
 		return nil, err
 	}
 	return meta, nil

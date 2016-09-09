@@ -63,23 +63,19 @@ func copyDbToDb(
 	// because during db writing metadata structs updated with destination database id's,
 	// for example, in source db model id can be 11 and in destination it will be 200,
 	// same for all other id's: type Hid, parameter Hid, table Hid, run id, set id, task id, etc.
-
-	// destination: make a deep copy of model metadata
-	var dstModel db.ModelMeta
-	helper.DeepCopy(srcModel, &dstModel)
-	if err = dstModel.Setup(); err != nil {
+	dstModel, err := srcModel.Clone()
+	if err != nil {
+		return err
+	}
+	dstLang, err := srcLang.Clone()
+	if err != nil {
 		return err
 	}
 
 	// destination: insert model metadata into destination database if not exists
-	if err = db.UpdateModel(dstDb, dbFacet, &dstModel); err != nil {
+	if err = db.UpdateModel(dstDb, dbFacet, dstModel); err != nil {
 		return err
 	}
-
-	// destination: make a deep of languages
-	dstLang := &db.LangList{}
-	helper.DeepCopy(srcLang, dstLang)
-	dstLang.Setup()
 
 	// destination: insert or update language list
 	if err = db.UpdateLanguage(dstDb, dstLang); err != nil {
@@ -98,23 +94,23 @@ func copyDbToDb(
 	}
 
 	// destination: insert or update model text data (description and notes)
-	if err = db.UpdateModelText(dstDb, &dstModel, dstLang, modelTxt); err != nil {
+	if err = db.UpdateModelText(dstDb, dstModel, dstLang, modelTxt); err != nil {
 		return err
 	}
 
 	// destination: insert or update model groups and groups text (description, notes)
-	if err = db.UpdateModelGroup(dstDb, &dstModel, dstLang, modelGroup); err != nil {
+	if err = db.UpdateModelGroup(dstDb, dstModel, dstLang, modelGroup); err != nil {
 		return err
 	}
 
 	// source to destination: copy model runs: parameters, output expressions and accumulators
-	runIdMap, err := copyRunDbToDb(srcDb, dstDb, srcModel, &dstModel, dstLang)
+	runIdMap, err := copyRunDbToDb(srcDb, dstDb, srcModel, dstModel, dstLang)
 	if err != nil {
 		return err
 	}
 
 	// source to destination: copy all readonly worksets parameters
-	setIdMap, err := copyWorksetDbToDb(srcDb, dstDb, srcModel, &dstModel, dstLang, runIdMap)
+	setIdMap, err := copyWorksetDbToDb(srcDb, dstDb, srcModel, dstModel, dstLang, runIdMap)
 	if err != nil {
 		return err
 	}
@@ -123,7 +119,7 @@ func copyDbToDb(
 	if len(tl.Lst) > 0 {
 		omppLog.Log("Modeling tasks: ", len(tl.Lst))
 
-		if err = db.UpdateTaskList(dstDb, &dstModel, dstLang, tl, runIdMap, setIdMap); err != nil {
+		if err = db.UpdateTaskList(dstDb, dstModel, dstLang, tl, runIdMap, setIdMap); err != nil {
 			return err
 		}
 	}
@@ -145,6 +141,7 @@ func copyRunDbToDb(
 	}
 
 	// destination: make a deep of run list
+	// deep copy is required because during db writing source run id's updated with destination database id's
 	var dstRl db.RunList
 	helper.DeepCopy(srcRl, &dstRl)
 
@@ -243,6 +240,7 @@ func copyWorksetDbToDb(
 	}
 
 	// destination: make a deep of run list
+	// deep copy is required because during db writing source set id's and base run id's updated with destination database id's
 	var dstWl db.WorksetList
 	helper.DeepCopy(srcWl, &dstWl)
 

@@ -8,10 +8,67 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+
+	"go.openmpp.org/ompp/helper"
 )
 
-// Setup language metadata internal members, it must be called after restoring from json.
-func (meta *LangList) Setup() {
+// Clone return deep copy of source model metadata
+func (src *ModelMeta) Clone() (*ModelMeta, error) {
+
+	var dstModel ModelMeta
+
+	if err := helper.DeepCopy(src, &dstModel); err != nil {
+		return nil, err
+	}
+	if err := dstModel.updateInternals(); err != nil {
+		return nil, err
+	}
+	return &dstModel, nil
+}
+
+// Clone return deep copy of source language metadata
+func (src *LangList) Clone() (*LangList, error) {
+
+	dstLang := &LangList{}
+
+	if err := helper.DeepCopy(src, dstLang); err != nil {
+		return nil, err
+	}
+	dstLang.updateInternals()
+
+	return dstLang, nil
+}
+
+// FromJson restore model metadata list from json string bytes
+func (dst *ModelMeta) FromJson(srcJson []byte) (bool, error) {
+
+	isExist, err := helper.FromJson(srcJson, dst)
+	if err != nil {
+		return false, err
+	}
+	if !isExist {
+		return false, nil
+	}
+	dst.updateInternals()
+	return true, nil
+}
+
+// FromJson restore language list from json string bytes
+func (dst *LangList) FromJson(srcJson []byte) (bool, error) {
+
+	isExist, err := helper.FromJson(srcJson, dst)
+	if err != nil {
+		return false, err
+	}
+	if !isExist {
+		return false, nil
+	}
+	dst.updateInternals()
+	return true, nil
+}
+
+// updateInternals language metadata internal members, it must be called after restoring from json.
+func (meta *LangList) updateInternals() {
 
 	meta.idIndex = make(map[int]int, len(meta.LangWord))
 	meta.codeIndex = make(map[string]int, len(meta.LangWord))
@@ -22,9 +79,9 @@ func (meta *LangList) Setup() {
 	}
 }
 
-// Setup model metadata internal members, it must be called after restoring from json.
+// updateInternals model metadata internal members, it must be called after restoring from json.
 // It is also recalculate digest of type, parameter, output table, model if digest is "" empty.
-func (meta *ModelMeta) Setup() error {
+func (meta *ModelMeta) updateInternals() error {
 
 	hMd5 := md5.New()
 

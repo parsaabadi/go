@@ -26,6 +26,11 @@ const (
 	toDbDriverName    = "dbcopy.ToDatabaseDriver" // output db driver name, ie: SQLite, odbc, sqlite3
 )
 
+type nameDigest struct {
+	Name   string
+	Digest string
+}
+
 func main() {
 	defer exitOnPanic() // fatal error handler: log and exit
 

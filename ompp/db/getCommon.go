@@ -94,7 +94,7 @@ func GetLanguages(dbConn *sql.DB) (*LangList, error) {
 	if len(langDef.LangWord) <= 0 {
 		return nil, errors.New("invalid database: no language(s) found")
 	}
-	langDef.Setup() // update internal maps from id and code to index of language
+	langDef.updateInternals() // update internal maps from id and code to index of language
 
 	// select lang_word rows into list
 	err = SelectRows(dbConn,
