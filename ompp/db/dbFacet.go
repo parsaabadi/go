@@ -49,6 +49,17 @@ func (facet Facet) textType(len int) string {
 	return "VARCHAR(" + strconv.Itoa(len) + ")"
 }
 
+// maxTableNameSize return max length of db table or view name.
+func (facet Facet) maxTableNameSize() int {
+	switch facet {
+	case PgSqlFacet:
+		return 63
+	case OracleFacet:
+		return 30
+	}
+	return 64
+}
+
 // createTableIfNotExist return sql statement to create table if not exists
 func (facet Facet) createTableIfNotExist(tableName string, bodySql string) string {
 

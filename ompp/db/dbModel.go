@@ -153,7 +153,7 @@ type TypeDicRow struct {
 }
 
 // maxBuiltInTypeId is max type id for openM++ built-in types, ie: int, double, logical
-const maxBuiltInTypeId = 30
+const maxBuiltInTypeId = 100
 
 // TypeTxtRow is db row of type_dic_txt join to model_type_dic table
 type TypeTxtRow struct {
@@ -378,8 +378,8 @@ func (meta *ModelMeta) ParamByKey(paramId int) (int, bool) {
 // ParamByName return index of parameter by name
 func (meta *ModelMeta) ParamByName(name string) (int, bool) {
 
-	for k, r := range meta.Param {
-		if r.Name == name {
+	for k := range meta.Param {
+		if meta.Param[k].Name == name {
 			return k, true
 		}
 	}
@@ -389,8 +389,8 @@ func (meta *ModelMeta) ParamByName(name string) (int, bool) {
 // ParamByHid return index of parameter by parameter Hid
 func (meta *ModelMeta) ParamByHid(paramHid int) (int, bool) {
 
-	for k, r := range meta.Param {
-		if r.ParamHid == paramHid {
+	for k := range meta.Param {
+		if meta.Param[k].ParamHid == paramHid {
 			return k, true
 		}
 	}
@@ -438,8 +438,8 @@ func (meta *ModelMeta) OutTableByKey(tableId int) (int, bool) {
 // OutTableByName return index of output table by name
 func (meta *ModelMeta) OutTableByName(name string) (int, bool) {
 
-	for k, r := range meta.Table {
-		if r.Name == name {
+	for k := range meta.Table {
+		if meta.Table[k].Name == name {
 			return k, true
 		}
 	}
@@ -449,8 +449,8 @@ func (meta *ModelMeta) OutTableByName(name string) (int, bool) {
 // OutTableByHid return index of output table by table Hid
 func (meta *ModelMeta) OutTableByHid(tableHid int) (int, bool) {
 
-	for k, r := range meta.Table {
-		if r.TableHid == tableHid {
+	for k := range meta.Table {
+		if meta.Table[k].TableHid == tableHid {
 			return k, true
 		}
 	}

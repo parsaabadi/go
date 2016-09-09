@@ -151,7 +151,7 @@ func dbToText(modelName string, modelDigest string, runOpts *config.RunOptions) 
 		if err != nil {
 			return err
 		}
-		omppLog.Log("Packed " + zipPath)
+		omppLog.Log("Packed ", zipPath)
 	}
 
 	return nil
@@ -196,7 +196,7 @@ func textToDb(modelName string, runOpts *config.RunOptions) error {
 	if !runOpts.Bool(zipArgKey) {
 		inpDir = filepath.Join(inpDir, modelName) // json and csv files located in modelName subdir
 	} else {
-		omppLog.Log("Unpack " + modelName + ".zip")
+		omppLog.Log("Unpack ", modelName, ".zip")
 
 		err = helper.UnpackZip(filepath.Join(inpDir, modelName+".zip"), outDir)
 		if err != nil {

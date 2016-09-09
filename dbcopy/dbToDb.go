@@ -161,7 +161,7 @@ func copyRunDbToDb(
 		// source and destination run id's
 		srcId := srcRl.Lst[k].Run.RunId
 		dstId := runIdMap[srcId]
-		omppLog.Log("Model run ", dstId, " from ", srcId)
+		omppLog.Log("Model run from ", srcId, " to ", dstId)
 
 		srcLt := &db.ReadLayout{FromId: srcId}
 		dstLt := db.WriteLayout{ToId: dstId, IsToRun: true}
@@ -260,7 +260,7 @@ func copyWorksetDbToDb(
 		// source and destination workset id's
 		srcId := srcWl.Lst[k].Set.SetId
 		dstId := setIdMap[srcId]
-		omppLog.Log("Workset ", dstId, " from ", srcId)
+		omppLog.Log("Workset from ", srcId, " to ", dstId)
 
 		srcLt := &db.ReadLayout{FromId: srcId, IsFromSet: true}
 		dstLt := db.WriteLayout{ToId: dstId}

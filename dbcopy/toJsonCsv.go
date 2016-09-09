@@ -98,7 +98,7 @@ func toCsvRunFile(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 	for k := range rl.Lst {
 
 		// create run subdir under model dir
-		omppLog.Log("Model run " + strconv.Itoa(rl.Lst[k].Run.RunId))
+		omppLog.Log("Model run ", rl.Lst[k].Run.RunId)
 
 		csvDir := filepath.Join(outDir, "run_"+strconv.Itoa(rl.Lst[k].Run.RunId))
 		err = os.MkdirAll(csvDir, 0750)
@@ -184,7 +184,7 @@ func toCsvWorksetFile(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) err
 
 		// create workset subdir under model dir
 		setId := wl.Lst[k].Set.SetId
-		omppLog.Log("Workset " + strconv.Itoa(setId))
+		omppLog.Log("Workset ", setId)
 
 		csvDir := filepath.Join(outDir, "set_"+strconv.Itoa(setId))
 		err = os.MkdirAll(csvDir, 0750)

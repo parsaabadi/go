@@ -151,7 +151,7 @@ func fromCsvRunToDb(dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangList
 
 		// check if run subdir exist
 		srcId := idKeyByValue(rl.Lst[k].Run.RunId, runIdMap)
-		omppLog.Log("Model run " + strconv.Itoa(rl.Lst[k].Run.RunId) + " from " + strconv.Itoa(srcId))
+		omppLog.Log("Model run from ", srcId, " to ", rl.Lst[k].Run.RunId)
 
 		csvDir := filepath.Join(inpDir, "run_"+strconv.Itoa(srcId))
 		if _, err := os.Stat(csvDir); err != nil {
@@ -246,7 +246,7 @@ func fromCsvWorksetToDb(dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.Lang
 
 		// check if workset subdir exist
 		srcId := idKeyByValue(wl.Lst[k].Set.SetId, setIdMap)
-		omppLog.Log("Workset " + strconv.Itoa(wl.Lst[k].Set.SetId) + " from " + strconv.Itoa(srcId))
+		omppLog.Log("Workset from ", srcId, " to ", wl.Lst[k].Set.SetId)
 
 		csvDir := filepath.Join(inpDir, "set_"+strconv.Itoa(srcId))
 		if _, err := os.Stat(csvDir); err != nil {
