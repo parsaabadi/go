@@ -86,7 +86,7 @@ func doUpdateRunList(
 
 		// update run name if empty
 		if runLst[idx].Run.Name == "" {
-			runLst[idx].Run.Name = "run " + helper.MakeDateTime(time.Now()) + " " + srId
+			runLst[idx].Run.Name = helper.ToAlphaNumeric(modelDef.Model.Name + "_" + helper.MakeDateTime(time.Now()) + "_" + srId)
 		}
 
 		// INSERT INTO run_lst (task_id, model_id, task_name) VALUES (88, 11, 'modelOne task')
