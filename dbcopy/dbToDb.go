@@ -20,7 +20,7 @@ import (
 // For example, in source db model id can be 11 and in destination it will be 200,
 // same for all other id's: type Hid, parameter Hid, table Hid, run id, set id, task id, etc.
 func copyDbToDb(
-	srcDb *sql.DB, dstDb *sql.DB, dbFacet db.Facet, modelName string, modelDigest string) error {
+	srcDb *sql.DB, dstDb *sql.DB, dbFacet db.Facet, modelName string, modelDigest string, doubleFmt string) error {
 
 	// source: get model metadata
 	srcModel, err := db.GetModel(srcDb, modelName, modelDigest)
@@ -104,7 +104,7 @@ func copyDbToDb(
 	}
 
 	// source to destination: copy model runs: parameters, output expressions and accumulators
-	runIdMap, err := copyRunDbToDb(srcDb, dstDb, srcModel, dstModel, dstLang)
+	runIdMap, err := copyRunDbToDb(srcDb, dstDb, srcModel, dstModel, dstLang, doubleFmt)
 	if err != nil {
 		return err
 	}
@@ -128,8 +128,9 @@ func copyDbToDb(
 }
 
 // copyRunDbToDb do copy model runs parameters and output tables from source to destination database
+// Double format is used for float model types digest calculation, if non-empty format supplied
 func copyRunDbToDb(
-	srcDb *sql.DB, dstDb *sql.DB, srcModel *db.ModelMeta, dstModel *db.ModelMeta, dstLang *db.LangList) (map[int]int, error) {
+	srcDb *sql.DB, dstDb *sql.DB, srcModel *db.ModelMeta, dstModel *db.ModelMeta, dstLang *db.LangList, doubleFmt string) (map[int]int, error) {
 
 	// source: get all successfully completed model runs in all languages
 	srcRl, err := db.GetRunList(srcDb, srcModel, true, "")
@@ -160,7 +161,7 @@ func copyRunDbToDb(
 		dstId := runIdMap[srcId]
 		omppLog.Log("Model run from ", srcId, " to ", dstId)
 
-		srcLt := &db.ReadLayout{FromId: srcId}
+		srcLt := db.ReadLayout{FromId: srcId}
 		dstLt := db.WriteLayout{ToId: dstId, IsToRun: true}
 
 		// copy all parameters values for that modrel run
@@ -169,7 +170,7 @@ func copyRunDbToDb(
 			// source: read parameter values
 			srcLt.Name = srcModel.Param[j].Name
 
-			cLst, err := db.ReadParameter(srcDb, srcModel, srcLt)
+			cLst, err := db.ReadParameter(srcDb, srcModel, &srcLt)
 			if err != nil {
 				return nil, err
 			}
@@ -180,10 +181,9 @@ func copyRunDbToDb(
 			// destination: insert parameter values in model run
 			dstLt.Name = dstModel.Param[j].Name
 
-			if err = db.WriteParameter(dstDb, dstModel, &dstLt, cLst); err != nil {
+			if err = db.WriteParameter(dstDb, dstModel, &dstLt, cLst, doubleFmt); err != nil {
 				return nil, err
 			}
-
 		}
 
 		// copy all output tables values for that modrel run
@@ -193,31 +193,22 @@ func copyRunDbToDb(
 			srcLt.Name = srcModel.Table[j].Name
 			srcLt.IsAccum = true
 
-			cLst, err := db.ReadOutputTable(srcDb, srcModel, srcLt)
+			acLst, err := db.ReadOutputTable(srcDb, srcModel, &srcLt)
 			if err != nil {
-				return nil, err
-			}
-
-			// destination: insert accumulator(s) values in model run
-			dstLt.Name = dstModel.Table[j].Name
-			dstLt.IsAccum = true
-
-			if err = db.WriteOutputTable(dstDb, dstModel, &dstLt, cLst); err != nil {
 				return nil, err
 			}
 
 			// source: read output table expression values
 			srcLt.IsAccum = false
 
-			cLst, err = db.ReadOutputTable(srcDb, srcModel, srcLt)
+			ecLst, err := db.ReadOutputTable(srcDb, srcModel, &srcLt)
 			if err != nil {
 				return nil, err
 			}
 
-			// destination: insert expression(s) values in model run
-			dstLt.IsAccum = false
-
-			if err = db.WriteOutputTable(dstDb, dstModel, &dstLt, cLst); err != nil {
+			// insert output table values (accumulators and expressions) in model run
+			dstLt.Name = dstModel.Table[j].Name
+			if err = db.WriteOutputTable(dstDb, dstModel, &dstLt, acLst, ecLst, doubleFmt); err != nil {
 				return nil, err
 			}
 		}
@@ -280,7 +271,7 @@ func copyWorksetDbToDb(
 			// destination: insert or update parameter values in workset
 			dstLt.Name = dstWl.Lst[k].Param[j].Name
 
-			err = db.WriteParameter(dstDb, dstModel, &dstLt, cLst)
+			err = db.WriteParameter(dstDb, dstModel, &dstLt, cLst, "")
 			if err != nil {
 				return nil, err
 			}

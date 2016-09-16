@@ -34,7 +34,11 @@ func UpdateModel(dbConn *sql.DB, dbFacet Facet, modelDef *ModelMeta) error {
 		return err
 	}
 	if isExist {
-		modelDef, err = GetModelById(dbConn, mId)
+		md, err := GetModelById(dbConn, mId) // read existing model definition
+		if err != nil {
+			return err
+		}
+		*modelDef = *md
 		return err
 	}
 	// else
@@ -56,7 +60,7 @@ func UpdateModel(dbConn *sql.DB, dbFacet Facet, modelDef *ModelMeta) error {
 // Parameters and output tables Hid's and db table names updated with actual database values
 // If new model inserted then modelDef updated with actual id's (model id, parameter Hid...)
 // If parameter (output table) not exist then create db tables for parameter values (output table values)
-// If db table names is "" empty then make db table names for parameter values (output table values)
+// If db table names is "" empty or too long then make db table names for parameter values (output table values)
 func doUpdateModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 
 	// get new model id
@@ -259,11 +263,6 @@ func doUpdateModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 		if modelDef.Param[idx].ParamHid <= 0 {
 
 			// get new parameter Hid
-			err = TrxUpdate(trx,
-				"UPDATE id_lst SET id_value = id_value + 1 WHERE id_key = 'parameter_hid'")
-			if err != nil {
-				return err
-			}
 			err = TrxSelectFirst(trx,
 				"SELECT id_value FROM id_lst WHERE id_key = 'parameter_hid'",
 				func(row *sql.Row) error {
@@ -276,17 +275,15 @@ func doUpdateModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 				return err
 			}
 
-			// update parameter values db table names, if empty
-			if modelDef.Param[idx].DbRunTable == "" || modelDef.Param[idx].DbSetTable == "" {
+			// update parameter values db table names, if empty or too long for current database
+			if modelDef.Param[idx].DbRunTable == "" ||
+				len(modelDef.Param[idx].DbRunTable) > dbFacet.maxTableNameSize() ||
+				modelDef.Param[idx].DbSetTable == "" ||
+				len(modelDef.Param[idx].DbSetTable) > dbFacet.maxTableNameSize() {
 
 				p, s := makeDbTablePrefixSuffix(dbFacet, modelDef.Param[idx].Name, modelDef.Param[idx].Digest)
-
-				if modelDef.Param[idx].DbRunTable == "" {
-					modelDef.Param[idx].DbRunTable = p + "_p" + s
-				}
-				if modelDef.Param[idx].DbSetTable == "" {
-					modelDef.Param[idx].DbSetTable = p + "_w" + s
-				}
+				modelDef.Param[idx].DbRunTable = p + "_p" + s
+				modelDef.Param[idx].DbSetTable = p + "_w" + s
 			}
 
 			// INSERT INTO parameter_dic
@@ -418,11 +415,6 @@ func doUpdateModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 		if modelDef.Table[idx].TableHid <= 0 {
 
 			// get new output table Hid
-			err = TrxUpdate(trx,
-				"UPDATE id_lst SET id_value = id_value + 1 WHERE id_key = 'table_hid'")
-			if err != nil {
-				return err
-			}
 			err = TrxSelectFirst(trx,
 				"SELECT id_value FROM id_lst WHERE id_key = 'table_hid'",
 				func(row *sql.Row) error {
@@ -435,17 +427,15 @@ func doUpdateModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 				return err
 			}
 
-			// update output table values db table names, if empty
-			if modelDef.Table[idx].DbAccTable == "" || modelDef.Table[idx].DbExprTable == "" {
+			// update output table values db table names, if empty or too long for current database
+			if modelDef.Table[idx].DbExprTable == "" ||
+				len(modelDef.Table[idx].DbExprTable) > dbFacet.maxTableNameSize() ||
+				modelDef.Table[idx].DbAccTable == "" ||
+				len(modelDef.Table[idx].DbAccTable) > dbFacet.maxTableNameSize() {
 
 				p, s := makeDbTablePrefixSuffix(dbFacet, modelDef.Table[idx].Name, modelDef.Table[idx].Digest)
-
-				if modelDef.Table[idx].DbExprTable == "" {
-					modelDef.Table[idx].DbExprTable = p + "_v" + s
-				}
-				if modelDef.Table[idx].DbAccTable == "" {
-					modelDef.Table[idx].DbAccTable = p + "_a" + s
-				}
+				modelDef.Table[idx].DbExprTable = p + "_v" + s
+				modelDef.Table[idx].DbAccTable = p + "_a" + s
 			}
 
 			// INSERT INTO table_dic
@@ -686,7 +676,8 @@ func outTableCreateTable(dbFacet Facet, meta *TableMeta) (string, string, error)
 func makeDbTablePrefixSuffix(dbFacet Facet, name string, digest string) (string, string) {
 
 	// if max size of db table name is too short then use crc32(md5) digest
-	isCrc32Name := dbFacet.maxTableNameSize() < 50
+	// isCrc32Name := dbFacet.maxTableNameSize() < 50
+	isCrc32Name := true // always use short crc32 name suffix
 
 	dbSuffixSize := 32
 	if isCrc32Name {
@@ -698,8 +689,8 @@ func makeDbTablePrefixSuffix(dbFacet Facet, name string, digest string) (string,
 		dbPrefixSize = 2
 	}
 
-	// make prefix part of db table name by shorten source name, ie: ageSexProvince => ageSexPr
-	// in db table name use only [A-Z,a-z,0-9] and _ underscore
+	// make prefix part of db table name by using only [A-Z,a-z,0-9] and _ underscore
+	// also shorten source name, ie: ageSexProvince => ageSexPr
 	prefix := helper.ToAlphaNumeric(name)
 	if len(prefix) > dbPrefixSize {
 		prefix = prefix[:dbPrefixSize]
@@ -709,9 +700,8 @@ func makeDbTablePrefixSuffix(dbFacet Facet, name string, digest string) (string,
 	suffix := digest
 	if isCrc32Name {
 		hCrc32 := crc32.NewIEEE()
-		if _, err := hCrc32.Write([]byte(digest)); err != nil {
-			suffix = fmt.Sprintf("%x", hCrc32.Sum(nil))
-		}
+		hCrc32.Write([]byte(digest))
+		suffix = fmt.Sprintf("%x", hCrc32.Sum(nil))
 	}
 
 	return prefix, suffix

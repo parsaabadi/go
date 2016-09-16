@@ -5,8 +5,10 @@ package db
 
 import (
 	"container/list"
+	"crypto/md5"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -22,7 +24,9 @@ import (
 // IsEditSet means write parameter called during parameter "edit" when user changing parameter values and required is_readonly = false.
 // If IsEditSet = false then is_readonly must be true and WriteParameter() assume it is called from bulk load utility (db copy).
 // If workset already contain parameter values then values updated else inserted.
-func WriteParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *WriteLayout, cellLst *list.List) error {
+//
+// Double format is used for float model types digest calculation, if non-empty format supplied
+func WriteParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *WriteLayout, cellLst *list.List, doubleFmt string) error {
 
 	// validate parameters
 	if modelDef == nil {
@@ -58,7 +62,7 @@ func WriteParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *WriteLayout, ce
 		return err
 	}
 	if layout.IsToRun {
-		if err = doWriteRunParameter(trx, param, layout.ToId, cellLst); err != nil {
+		if err = doWriteRunParameter(trx, modelDef, param, layout.ToId, cellLst, doubleFmt); err != nil {
 			trx.Rollback()
 			return err
 		}
@@ -77,7 +81,8 @@ func WriteParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *WriteLayout, ce
 // It does insert as part of transaction
 // Model run must exist and be in completed state (i.e. success or error state).
 // Model run should not already contain parameter values: parameter can be inserted only once in model run and cannot be updated after.
-func doWriteRunParameter(trx *sql.Tx, param *ParamMeta, runId int, cellLst *list.List) error {
+// Double format is used for float model types digest calculation, if non-empty format supplied
+func doWriteRunParameter(trx *sql.Tx, modelDef *ModelMeta, param *ParamMeta, runId int, cellLst *list.List, doubleFmt string) error {
 
 	// start run update
 	srId := strconv.Itoa(runId)
@@ -108,11 +113,10 @@ func doWriteRunParameter(trx *sql.Tx, param *ParamMeta, runId int, cellLst *list
 	}
 
 	// check if parameter values not already exist for that run
+	sHid := strconv.Itoa(param.ParamHid)
 	n := 0
 	err = TrxSelectFirst(trx,
-		"SELECT COUNT(*) FROM run_parameter"+
-			" WHERE run_id = "+srId+
-			" AND parameter_hid = "+strconv.Itoa(param.ParamHid),
+		"SELECT COUNT(*) FROM run_parameter"+" WHERE run_id = "+srId+" AND parameter_hid = "+sHid,
 		func(row *sql.Row) error {
 			if err := row.Scan(&n); err != nil {
 				return err
@@ -120,39 +124,97 @@ func doWriteRunParameter(trx *sql.Tx, param *ParamMeta, runId int, cellLst *list
 			return nil
 		})
 	switch {
-	case err == sql.ErrNoRows: // unknown error: should never be there
-		return errors.New("cannot count parameter " + param.Name + " in model run, id: " + srId)
-	case err != nil:
+	case err != nil && err != sql.ErrNoRows:
 		return err
 	}
 	if n > 0 {
 		return errors.New("model run with id: " + srId + " already contain parameter values " + param.Name)
 	}
 
-	// make sql to insert parameter values into model run
-	// prepare put() closure to convert each cell into insert sql statement parameters
-	q := makeSqlParamValueInsert(param.DbRunTable, "run_id", param.Dim, runId)
-	put := makePutParamValueInsert(param, cellLst)
-
-	// execute sql insert using put() above for each row
-	if err = TrxUpdateStatement(trx, q, put); err != nil {
-		return err
-	}
-
-	// finish adding parameter values into model run: update run_parameter
-	// TODO: base run id and digest
-	err = TrxUpdate(trx,
-		"INSERT INTO run_parameter (run_id, parameter_hid, base_run_id, run_digest)"+
-			" VALUES ("+
-			srId+", "+
-			strconv.Itoa(param.ParamHid)+", "+
-			srId+", "+
-			toQuoted("")+")")
+	// calculate parameter digest
+	digest, err := digestParameter(modelDef, param, cellLst, doubleFmt)
 	if err != nil {
 		return err
 	}
 
+	// insert into run_parameter with digest and current run id as base run id
+	err = TrxUpdate(trx,
+		"INSERT INTO run_parameter (run_id, parameter_hid, base_run_id, run_digest)"+
+			" VALUES ("+
+			srId+", "+sHid+", "+srId+", "+toQuoted(digest)+")")
+	if err != nil {
+		return err
+	}
+
+	// find base run by digest, it must exist
+	nBase := 0
+	err = TrxSelectFirst(trx,
+		"SELECT MIN(run_id) FROM run_parameter"+
+		" WHERE parameter_hid = "+sHid+
+		" AND run_digest = "+toQuoted(digest),
+		func(row *sql.Row) error {
+			if err := row.Scan(&nBase); err != nil {
+				return err
+			}
+			return nil
+		})
+	switch {
+	// case err == sql.ErrNoRows: it must exist
+	case err != nil:
+		return err
+	}
+
+	// if parameter values already exist then update base run id
+	// else insert new parameter values into model run
+	if runId != nBase {
+
+		err = TrxUpdate(trx,
+			"UPDATE run_parameter SET base_run_id = "+strconv.Itoa(nBase)+
+			" WHERE parameter_hid = "+sHid+
+			" AND run_id = "+srId)
+		if err != nil {
+			return err
+		}
+
+	} else { // insert new parameter values into model run
+
+		// make sql to insert parameter values into model run
+		// prepare put() closure to convert each cell into insert sql statement parameters
+		q := makeSqlParamValueInsert(param.DbRunTable, "run_id", param.Dim, runId)
+		put := makePutParamValueInsert(param, cellLst)
+
+		// execute sql insert using put() above for each row
+		if err = TrxUpdateStatement(trx, q, put); err != nil {
+			return err
+		}
+
+	}
+
 	return nil
+}
+
+// digestParameter retrun digest of parameter values.
+// Double format is used for float model types digest calculation, if non-empty format supplied
+func digestParameter(modelDef *ModelMeta, param *ParamMeta, cellLst *list.List, doubleFmt string) (string, error) {
+
+	// start from name and metadata digest
+	hMd5 := md5.New()
+	_, err := hMd5.Write([]byte("parameter_name,parameter_digest\n"))
+	if err != nil {
+		return "", err
+	}
+	_, err = hMd5.Write([]byte(param.Name + "," + param.Digest + "\n"))
+	if err != nil {
+		return "", err
+	}
+
+	// append digest of accumulator(s) cells
+	var pc Cell
+	if err = digestCells(hMd5, modelDef, param.Name, pc, cellLst, doubleFmt); err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%x", hMd5.Sum(nil)), nil // retrun digest as hex string
 }
 
 // doWriteSetParameter insert or update parameter values in workset.
@@ -246,6 +308,7 @@ func makePutParamValueInsert(param *ParamMeta, cellLst *list.List) func() (bool,
 	// for each cell put into row of sql statement parameters
 	row := make([]interface{}, param.Rank+1)
 	c := cellLst.Front()
+
 	put := func() (bool, []interface{}, error) {
 
 		if c == nil {

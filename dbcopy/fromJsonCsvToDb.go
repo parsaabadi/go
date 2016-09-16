@@ -39,40 +39,6 @@ func fromModelJsonToDb(dbConn *sql.DB, dbFacet db.Facet, inpDir string, modelNam
 	if modelDef.Model.Name != modelName {
 		return nil, errors.New("model name: " + modelName + " not found in .json file")
 	}
-	/*
-		var modelDef db.ModelMeta
-		isExist, err := helper.FromJsonFile(filepath.Join(inpDir, modelName+".model.json"), &modelDef)
-		if err != nil {
-			return nil, err
-		}
-		if !isExist {
-			return nil, errors.New("model not found: " + modelName)
-		}
-		if modelDef.Model.Name != modelName {
-			return nil, errors.New("model name: " + modelName + " not found in .json file")
-		}
-		if err = modelDef.Setup(); err != nil {
-			return nil, err
-		}
-	*/
-	/*
-
-		langJson, err := ioutil.ReadFile(filepath.Join(inpDir, modelDef.Model.Name+".lang.json"))
-		if err != nil {
-			return nil, err
-		}
-		langDef := &db.LangList{}
-
-		isExist, err := langDef.FromJson(langJson)
-		if err != nil {
-			return nil, err
-		}
-		if isExist {
-			if err = db.UpdateLanguage(dbConn, langDef); err != nil {
-				return nil, err
-			}
-		}
-	*/
 
 	// insert model metadata into destination database if not exists
 	if err = db.UpdateModel(dbConn, dbFacet, modelDef); err != nil {
@@ -166,9 +132,11 @@ func fromTaskJsonToDb(
 	return nil
 }
 
-// fromCsvRunToDb read all model runs (parameters, output tables, modeling tasks) from csv and json files,
-// convert it to db cells and insert into database
-func fromCsvRunToDb(dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangList, inpDir string) (map[int]int, error) {
+// fromCsvRunToDb read all model runs (parameters, output tables, modeling tasks)
+// from csv and json files, convert it to db cells and insert into database.
+// Double format is used for float model types digest calculation, if non-empty format supplied
+func fromCsvRunToDb(
+	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangList, inpDir string, doubleFmt string) (map[int]int, error) {
 
 	// get model run metadata
 	var rl db.RunList
@@ -217,7 +185,7 @@ func fromCsvRunToDb(dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangList
 			// insert parameter values in model run
 			layout.Name = modelDef.Param[j].Name
 
-			if err = db.WriteParameter(dbConn, modelDef, &layout, cLst); err != nil {
+			if err = db.WriteParameter(dbConn, modelDef, &layout, cLst, doubleFmt); err != nil {
 				return nil, err
 			}
 		}
@@ -232,14 +200,6 @@ func fromCsvRunToDb(dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangList
 				return nil, err
 			}
 
-			// insert accumulator(s) values in model run
-			layout.Name = modelDef.Table[j].Name
-			layout.IsAccum = true
-
-			if err = db.WriteOutputTable(dbConn, modelDef, &layout, acLst); err != nil {
-				return nil, err
-			}
-
 			// read output table expression(s) values from csv file
 			var ce db.CellExpr
 			ecLst, err := fromCsvFile(csvDir, modelDef, modelDef.Table[j].Name, &ce)
@@ -247,10 +207,9 @@ func fromCsvRunToDb(dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangList
 				return nil, err
 			}
 
-			// insert expression(s) values in model run
-			layout.IsAccum = false
-
-			if err = db.WriteOutputTable(dbConn, modelDef, &layout, ecLst); err != nil {
+			// insert output table values (accumulators and expressions) in model run
+			layout.Name = modelDef.Table[j].Name
+			if err = db.WriteOutputTable(dbConn, modelDef, &layout, acLst, ecLst, doubleFmt); err != nil {
 				return nil, err
 			}
 		}
@@ -262,7 +221,8 @@ func fromCsvRunToDb(dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangList
 // fromCsvWorksetToDb read all worksets parameters from csv and json files,
 // convert it to db cells and insert into database
 // update set id's and base run id's with actual id in database
-func fromCsvWorksetToDb(dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangList, inpDir string, runIdMap map[int]int) (map[int]int, error) {
+func fromCsvWorksetToDb(
+	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangList, inpDir string, runIdMap map[int]int) (map[int]int, error) {
 
 	// get workset metadata
 	var wl db.WorksetList
@@ -312,7 +272,7 @@ func fromCsvWorksetToDb(dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.Lang
 			// insert or update parameter values in workset
 			layout.Name = wl.Lst[k].Param[j].Name
 
-			err = db.WriteParameter(dbConn, modelDef, &layout, cLst)
+			err = db.WriteParameter(dbConn, modelDef, &layout, cLst, "")
 			if err != nil {
 				return nil, err
 			}

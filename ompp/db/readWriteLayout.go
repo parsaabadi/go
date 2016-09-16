@@ -15,7 +15,6 @@ type WriteLayout struct {
 	ToId      int    // run id or set id to write parameter or output table values
 	IsToRun   bool   // only for parameter: if true then write into into model run else into workset
 	IsEditSet bool   // only for parameter: if true then workset must be editable (readonly = false) else must be readonly
-	IsAccum   bool   // only for output table: if true then write output table accumulators else expressions
 }
 
 // ReadLayout describes source and size of data page to read input parameters or output tables.

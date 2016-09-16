@@ -86,7 +86,7 @@ func toTaskJsonFile(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error
 }
 
 // toCsvRuns write all model runs parameters and output tables into csv files, each run in separate subdirectory
-func toCsvRunFile(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
+func toCsvRunFile(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleFmt string) error {
 
 	// get all successfully completed model runs
 	rl, err := db.GetRunList(dbConn, modelDef, true, "")
@@ -122,7 +122,7 @@ func toCsvRunFile(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 			}
 
 			var cp db.Cell
-			err = toCsvFile(csvDir, modelDef, modelDef.Param[j].Name, cp, cLst)
+			err = toCsvFile(csvDir, modelDef, modelDef.Param[j].Name, cp, cLst, doubleFmt)
 			if err != nil {
 				return err
 			}
@@ -141,7 +141,7 @@ func toCsvRunFile(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 			}
 
 			var ec db.CellExpr
-			err = toCsvFile(csvDir, modelDef, modelDef.Table[j].Name, ec, cLst)
+			err = toCsvFile(csvDir, modelDef, modelDef.Table[j].Name, ec, cLst, doubleFmt)
 			if err != nil {
 				return err
 			}
@@ -155,7 +155,7 @@ func toCsvRunFile(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 			}
 
 			var ac db.CellAcc
-			err = toCsvFile(csvDir, modelDef, modelDef.Table[j].Name, ac, cLst)
+			err = toCsvFile(csvDir, modelDef, modelDef.Table[j].Name, ac, cLst, doubleFmt)
 			if err != nil {
 				return err
 			}
@@ -171,7 +171,7 @@ func toCsvRunFile(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 }
 
 // toCsvWorksets write all readonly worksets into csv files, each set in separate subdirectory
-func toCsvWorksetFile(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
+func toCsvWorksetFile(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleFmt string) error {
 
 	// get all readonly worksets
 	wl, err := db.GetWorksetList(dbConn, modelDef, true, "")
@@ -208,7 +208,7 @@ func toCsvWorksetFile(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) err
 			}
 
 			var cp db.Cell
-			err = toCsvFile(csvDir, modelDef, modelDef.Param[j].Name, cp, cLst)
+			err = toCsvFile(csvDir, modelDef, modelDef.Param[j].Name, cp, cLst, doubleFmt)
 			if err != nil {
 				return err
 			}
@@ -223,10 +223,11 @@ func toCsvWorksetFile(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) err
 }
 
 // toCsvFile convert parameter or output table values and write into csvDir/fileName.csv file.
-func toCsvFile(csvDir string, modelDef *db.ModelMeta, name string, cell db.CsvConverter, cellLst *list.List) error {
+func toCsvFile(
+	csvDir string, modelDef *db.ModelMeta, name string, cell db.CsvConverter, cellLst *list.List, doubleFmt string) error {
 
 	// converter from db cell to csv row []string
-	cvt, err := cell.CsvToRow()
+	cvt, err := cell.CsvToRow(modelDef, name, doubleFmt)
 	if err != nil {
 		return err
 	}

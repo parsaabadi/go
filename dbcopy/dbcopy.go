@@ -24,6 +24,7 @@ const (
 	outputDirArgKey   = "dbcopy.OutputDir"        // output dir to write model .json and .csv files
 	toDbConnectionStr = "dbcopy.ToDatabase"       // output db connection string
 	toDbDriverName    = "dbcopy.ToDatabaseDriver" // output db driver name, ie: SQLite, odbc, sqlite3
+	doubleFormat      = "OpenM.DoubleFormat"      // convert to string format for float and double
 )
 
 type nameDigest struct {
@@ -46,6 +47,7 @@ func main() {
 	_ = flag.Bool(zipArgKey, false, "create output or use as input model.zip")
 	_ = flag.String(inputDirArgKey, "", "input directory to read model .json and .csv files")
 	_ = flag.String(outputDirArgKey, "", "output directory for model .json and .csv files")
+	_ = flag.String(doubleFormat, "%.15g", "convert to string format for float and double")
 
 	runOpts, logOpts, err := config.New()
 	if err != nil {
@@ -136,12 +138,13 @@ func dbToText(modelName string, modelDigest string, runOpts *config.RunOptions) 
 	}
 
 	// write all model run data into csv files: parameters, output expressions and accumulators
-	if err = toCsvRunFile(srcDb, modelDef, outDir); err != nil {
+	dblFmt := runOpts.String(doubleFormat)
+	if err = toCsvRunFile(srcDb, modelDef, outDir, dblFmt); err != nil {
 		return err
 	}
 
 	// write all readonly workset data into csv files: input parameters
-	if err = toCsvWorksetFile(srcDb, modelDef, outDir); err != nil {
+	if err = toCsvWorksetFile(srcDb, modelDef, outDir, dblFmt); err != nil {
 		return err
 	}
 
@@ -224,7 +227,7 @@ func textToDb(modelName string, runOpts *config.RunOptions) error {
 
 	// insert model runs data from csv into database:
 	// parameters, output expressions and accumulators
-	runIdMap, err := fromCsvRunToDb(dstDb, modelDef, langDef, inpDir)
+	runIdMap, err := fromCsvRunToDb(dstDb, modelDef, langDef, inpDir, runOpts.String(doubleFormat))
 	if err != nil {
 		return err
 	}
@@ -282,7 +285,7 @@ func dbToDb(modelName string, modelDigest string, runOpts *config.RunOptions) er
 	}
 
 	// get source model metadata and languages, make a deep copy to use for destination database writing
-	err = copyDbToDb(srcDb, dstDb, dbFacet, modelName, modelDigest)
+	err = copyDbToDb(srcDb, dstDb, dbFacet, modelName, modelDigest, runOpts.String(doubleFormat))
 	if err != nil {
 		return err
 	}

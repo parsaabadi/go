@@ -4,10 +4,11 @@
 package db
 
 import (
-	"crypto/md5"
 	"errors"
-	"fmt"
+	"sort"
 	"strconv"
+	"strings"
+	"syscall"
 
 	"go.openmpp.org/ompp/helper"
 )
@@ -15,28 +16,28 @@ import (
 // Clone return deep copy of source model metadata
 func (src *ModelMeta) Clone() (*ModelMeta, error) {
 
-	var dstModel ModelMeta
+	var dst ModelMeta
 
-	if err := helper.DeepCopy(src, &dstModel); err != nil {
+	if err := helper.DeepCopy(src, &dst); err != nil {
 		return nil, err
 	}
-	if err := dstModel.updateInternals(); err != nil {
+	if err := dst.updateInternals(); err != nil {
 		return nil, err
 	}
-	return &dstModel, nil
+	return &dst, nil
 }
 
 // Clone return deep copy of source language metadata
 func (src *LangList) Clone() (*LangList, error) {
 
-	dstLang := &LangList{}
+	dst := &LangList{}
 
-	if err := helper.DeepCopy(src, dstLang); err != nil {
+	if err := helper.DeepCopy(src, dst); err != nil {
 		return nil, err
 	}
-	dstLang.updateInternals()
+	dst.updateInternals()
 
-	return dstLang, nil
+	return dst, nil
 }
 
 // FromJson restore model metadata list from json string bytes
@@ -67,7 +68,8 @@ func (dst *LangList) FromJson(srcJson []byte) (bool, error) {
 	return true, nil
 }
 
-// updateInternals language metadata internal members, it must be called after restoring from json.
+// updateInternals language metadata internal members.
+// It must be called after restoring from json.
 func (meta *LangList) updateInternals() {
 
 	meta.idIndex = make(map[int]int, len(meta.LangWord))
@@ -79,255 +81,215 @@ func (meta *LangList) updateInternals() {
 	}
 }
 
-// updateInternals model metadata internal members, it must be called after restoring from json.
-// It is also recalculate digest of type, parameter, output table, model if digest is "" empty.
-func (meta *ModelMeta) updateInternals() error {
+// TypeByKey return index of type by key: typeId
+func (meta *ModelMeta) TypeByKey(typeId int) (int, bool) {
 
-	hMd5 := md5.New()
+	n := len(meta.Type)
+	k := sort.Search(n, func(i int) bool {
+		return meta.Type[i].TypeId >= typeId
+	})
+	return k, (k >= 0 && k < n && meta.Type[k].TypeId == typeId)
+}
 
-	// update type digest, if it is empty
-	for idx := range meta.Type {
+// ParamByKey return index of parameter by key: paramId
+func (meta *ModelMeta) ParamByKey(paramId int) (int, bool) {
 
-		if meta.Type[idx].Digest != "" { // digest already defined, skip
-			continue
-		}
+	n := len(meta.Param)
+	k := sort.Search(n, func(i int) bool {
+		return meta.Param[i].ParamId >= paramId
+	})
+	return k, (k >= 0 && k < n && meta.Param[k].ParamId == paramId)
+}
 
-		// for built-in types use _name_ as digest, ie: _int_ or _Time_
-		if meta.Type[idx].TypeId <= maxBuiltInTypeId {
-			meta.Type[idx].Digest = "_" + meta.Type[idx].Name + "_"
-			continue
-		}
-		// else: model-specific type with empty "" digest
+// ParamByName return index of parameter by name
+func (meta *ModelMeta) ParamByName(name string) (int, bool) {
 
-		// digest type header
-		hMd5.Reset()
-		_, err := hMd5.Write([]byte("type_name,dic_id\n"))
-		if err != nil {
-			return err
-		}
-		_, err = hMd5.Write([]byte(
-			meta.Type[idx].Name + "," + strconv.Itoa(meta.Type[idx].DicId) + "\n"))
-		if err != nil {
-			return err
-		}
-
-		// digest type enums
-		_, err = hMd5.Write([]byte("enum_id,enum_name\n"))
-		if err != nil {
-			return err
-		}
-		for k := range meta.Type[idx].Enum {
-			_, err := hMd5.Write([]byte(
-				strconv.Itoa(meta.Type[idx].Enum[k].EnumId) + "," + meta.Type[idx].Enum[k].Name + "\n"))
-			if err != nil {
-				return err
-			}
-		}
-
-		meta.Type[idx].Digest = fmt.Sprintf("%x", hMd5.Sum(nil)) // set type digest string
-	}
-
-	// update parameter type and size (row count for all dimensions)
-	// update parameter dimensions: type and size (count of all enums)
-	// update parameter digest, if it is empty
-	for idx := range meta.Param {
-
-		// update parameter type
-		k, ok := meta.TypeByKey(meta.Param[idx].TypeId)
-		if !ok {
-			return errors.New("type " + strconv.Itoa(meta.Param[idx].TypeId) + " not found for " + meta.Param[idx].Name)
-		}
-		meta.Param[idx].typeOf = &meta.Type[k]
-
-		if meta.Param[idx].Rank != len(meta.Param[idx].Dim) {
-			return errors.New("incorrect rank of parameter " + meta.Param[idx].Name)
-		}
-
-		// update parameter size: row count for all dimensions
-		// update parameter dimensions: type and size (count of all enums)
-		meta.Param[idx].sizeOf = 1
-		for i := range meta.Param[idx].Dim {
-
-			j, ok := meta.TypeByKey(meta.Param[idx].Dim[i].TypeId)
-			if !ok {
-				return errors.New("type " + strconv.Itoa(meta.Param[idx].Dim[i].TypeId) + " not found for " + meta.Param[idx].Name)
-			}
-			meta.Param[idx].Dim[i].typeOf = &meta.Type[j]
-			meta.Param[idx].Dim[i].sizeOf = len(meta.Param[idx].Dim[i].typeOf.Enum)
-
-			if meta.Param[idx].Dim[i].sizeOf > 0 {
-				meta.Param[idx].sizeOf *= meta.Param[idx].Dim[i].sizeOf
-			}
-		}
-
-		// update parameter digest, if it is empty
-		if meta.Param[idx].Digest == "" {
-
-			// digest parameter header: name, rank, value type digest
-			hMd5.Reset()
-			_, err := hMd5.Write([]byte("parameter_name,parameter_rank,type_digest\n"))
-			if err != nil {
-				return err
-			}
-			_, err = hMd5.Write([]byte(
-				meta.Param[idx].Name + "," + strconv.Itoa(meta.Param[idx].Rank) + "," + meta.Param[idx].typeOf.Digest + "\n"))
-			if err != nil {
-				return err
-			}
-
-			// digest parameter dimensions: id, name, dimension type digest
-			_, err = hMd5.Write([]byte("dim_id,dim_name,type_digest\n"))
-			if err != nil {
-				return err
-			}
-			for k := range meta.Param[idx].Dim {
-				_, err := hMd5.Write([]byte(
-					strconv.Itoa(meta.Param[idx].Dim[k].DimId) + "," + meta.Param[idx].Dim[k].Name + "," + meta.Param[idx].Dim[k].typeOf.Digest + "\n"))
-				if err != nil {
-					return err
-				}
-			}
-
-			meta.Param[idx].Digest = fmt.Sprintf("%x", hMd5.Sum(nil)) // set parameter digest string
+	for k := range meta.Param {
+		if meta.Param[k].Name == name {
+			return k, true
 		}
 	}
+	return len(meta.Param), false
+}
 
-	// update output table size (row count for all dimensions)
-	// update output table dimensions: type and size (count of all enums)
-	// update output table digest, if it is empty
-	for idx := range meta.Table {
+// ParamByHid return index of parameter by parameter Hid
+func (meta *ModelMeta) ParamByHid(paramHid int) (int, bool) {
 
-		if meta.Table[idx].Rank != len(meta.Table[idx].Dim) {
-			return errors.New("incorrect rank of output table " + meta.Table[idx].Name)
-		}
-
-		// update output table size (row count for all dimensions)
-		// update output table dimensions: type and size (count of all enums)
-		meta.Table[idx].sizeOf = 1
-		for i := range meta.Table[idx].Dim {
-
-			j, ok := meta.TypeByKey(meta.Table[idx].Dim[i].TypeId)
-			if !ok {
-				return errors.New("type " + strconv.Itoa(meta.Table[idx].Dim[i].TypeId) + " not found for " + meta.Table[idx].Name)
-			}
-			meta.Table[idx].Dim[i].typeOf = &meta.Type[j]
-
-			if meta.Table[idx].Dim[i].DimSize > 0 {
-				meta.Table[idx].sizeOf *= meta.Table[idx].Dim[i].DimSize
-			}
-		}
-
-		// update output table digest, if it is empty
-		if meta.Table[idx].Digest == "" {
-
-			// digest output table header: name, rank
-			hMd5.Reset()
-			_, err := hMd5.Write([]byte("table_name,table_rank\n"))
-			if err != nil {
-				return err
-			}
-			_, err = hMd5.Write([]byte(
-				meta.Table[idx].Name + "," + strconv.Itoa(meta.Table[idx].Rank) + "\n"))
-			if err != nil {
-				return err
-			}
-
-			// digest output table dimensions: id, name, dimension type digest
-			_, err = hMd5.Write([]byte("dim_id,dim_name,type_digest\n"))
-			if err != nil {
-				return err
-			}
-			for k := range meta.Table[idx].Dim {
-				_, err := hMd5.Write([]byte(
-					strconv.Itoa(meta.Table[idx].Dim[k].DimId) + "," + meta.Table[idx].Dim[k].Name + "," + meta.Table[idx].Dim[k].typeOf.Digest + "\n"))
-				if err != nil {
-					return err
-				}
-			}
-
-			// digest output table accumulators: id, name, expression
-			_, err = hMd5.Write([]byte("acc_id,acc_name,acc_expr\n"))
-			if err != nil {
-				return err
-			}
-			for k := range meta.Table[idx].Acc {
-				_, err := hMd5.Write([]byte(
-					strconv.Itoa(meta.Table[idx].Acc[k].AccId) + "," + meta.Table[idx].Acc[k].Name + "," + meta.Table[idx].Acc[k].AccExpr + "\n"))
-				if err != nil {
-					return err
-				}
-			}
-
-			// digest output table expressions: id, name, source expression
-			_, err = hMd5.Write([]byte("expr_id,expr_name,expr_src\n"))
-			if err != nil {
-				return err
-			}
-			for k := range meta.Table[idx].Expr {
-				_, err := hMd5.Write([]byte(
-					strconv.Itoa(meta.Table[idx].Expr[k].ExprId) + "," + meta.Table[idx].Expr[k].Name + "," + meta.Table[idx].Expr[k].SrcExpr + "\n"))
-				if err != nil {
-					return err
-				}
-			}
-
-			meta.Table[idx].Digest = fmt.Sprintf("%x", hMd5.Sum(nil)) // set output table digest string
+	for k := range meta.Param {
+		if meta.Param[k].ParamHid == paramHid {
+			return k, true
 		}
 	}
+	return len(meta.Param), false
+}
 
-	// update model digest if it is "" empty
-	if meta.Model.Digest == "" {
+// ParamIdByHid return parameter id by Hid or -1 if not found
+func (meta *ModelMeta) ParamIdByHid(paramHid int) int {
 
-		// digest model header: name and model type
-		hMd5.Reset()
-		_, err := hMd5.Write([]byte("model_name,model_type\n"))
-		if err != nil {
-			return err
-		}
-		_, err = hMd5.Write([]byte(
-			meta.Model.Name + "," + strconv.Itoa(meta.Model.Type) + "\n"))
-		if err != nil {
-			return err
-		}
+	if k, ok := meta.ParamByHid(paramHid); ok {
+		return meta.Param[k].ParamId
+	}
+	return -1
+}
 
-		// add digests of all model types
-		_, err = hMd5.Write([]byte("type_digest\n"))
-		if err != nil {
-			return err
-		}
-		for k := range meta.Type {
-			_, err := hMd5.Write([]byte(meta.Type[k].Digest + "\n"))
-			if err != nil {
-				return err
-			}
-		}
+// ParamHidById return parameter Hid by id or -1 if not found
+func (meta *ModelMeta) ParamHidById(paramId int) int {
 
-		// add digests of all model parameters
-		_, err = hMd5.Write([]byte("parameter_digest\n"))
-		if err != nil {
-			return err
-		}
-		for k := range meta.Param {
-			_, err := hMd5.Write([]byte(meta.Param[k].Digest + "\n"))
-			if err != nil {
-				return err
-			}
-		}
+	if k, ok := meta.ParamByKey(paramId); ok {
+		return meta.Param[k].ParamHid
+	}
+	return -1
+}
 
-		// add digests of all model output tables
-		_, err = hMd5.Write([]byte("table_digest\n"))
-		if err != nil {
-			return err
-		}
-		for k := range meta.Table {
-			_, err := hMd5.Write([]byte(meta.Table[k].Digest + "\n"))
-			if err != nil {
-				return err
-			}
-		}
+// DimByKey return index of parameter dimension by key: dimId
+func (param *ParamMeta) DimByKey(dimId int) (int, bool) {
 
-		meta.Model.Digest = fmt.Sprintf("%x", hMd5.Sum(nil)) // set model digest string
+	n := len(param.Dim)
+	k := sort.Search(n, func(i int) bool {
+		return param.Dim[i].DimId >= dimId
+	})
+	return k, (k >= 0 && k < n && param.Dim[k].DimId == dimId)
+}
+
+// OutTableByKey return index of output table by key: tableId
+func (meta *ModelMeta) OutTableByKey(tableId int) (int, bool) {
+
+	n := len(meta.Table)
+	k := sort.Search(n, func(i int) bool {
+		return meta.Table[i].TableId >= tableId
+	})
+	return k, (k >= 0 && k < n && meta.Table[k].TableId == tableId)
+}
+
+// OutTableByName return index of output table by name
+func (meta *ModelMeta) OutTableByName(name string) (int, bool) {
+
+	for k := range meta.Table {
+		if meta.Table[k].Name == name {
+			return k, true
+		}
+	}
+	return len(meta.Table), false
+}
+
+// OutTableByHid return index of output table by table Hid
+func (meta *ModelMeta) OutTableByHid(tableHid int) (int, bool) {
+
+	for k := range meta.Table {
+		if meta.Table[k].TableHid == tableHid {
+			return k, true
+		}
+	}
+	return len(meta.Table), false
+}
+
+// OutTableIdByHid return output table id by Hid or -1 if not found
+func (meta *ModelMeta) OutTableIdByHid(tableHid int) int {
+
+	if k, ok := meta.OutTableByHid(tableHid); ok {
+		return meta.Table[k].TableId
+	}
+	return -1
+}
+
+// OutTableHidById return output table Hid by id or -1 if not found
+func (meta *ModelMeta) OutTableHidById(tableId int) int {
+
+	if k, ok := meta.OutTableByKey(tableId); ok {
+		return meta.Table[k].TableHid
+	}
+	return -1
+}
+
+// DimByKey return index of output table dimension by key: dimId
+func (table *TableMeta) DimByKey(dimId int) (int, bool) {
+
+	n := len(table.Dim)
+	k := sort.Search(n, func(i int) bool {
+		return table.Dim[i].DimId >= dimId
+	})
+	return k, (k >= 0 && k < n && table.Dim[k].DimId == dimId)
+}
+
+// IsBool return true if model type is boolean
+func (typeRow *TypeDicRow) IsBool() bool { return strings.ToLower(typeRow.Name) == "bool" }
+
+// IsString return true if model type is string
+func (typeRow *TypeDicRow) IsString() bool { return strings.ToLower(typeRow.Name) == "file" }
+
+// IsFloat return true if model type is float
+func (typeRow *TypeDicRow) IsFloat() bool {
+	switch strings.ToLower(typeRow.Name) {
+	case "float", "double", "ldouble", "time", "real":
+		return true
+	}
+	return false
+}
+
+// IsInt return true if model type is integer (not float, string or boolean)
+func (typeRow *TypeDicRow) IsInt() bool {
+	return !typeRow.IsBool() && !typeRow.IsString() && !typeRow.IsFloat()
+}
+
+// IsBuiltIn return true if model type is built-in, ie: int, double, logical
+func (typeRow *TypeDicRow) IsBuiltIn() bool { return typeRow.TypeId <= maxBuiltInTypeId }
+
+// sqlColumnType return sql column type, ie: VARCHAR(255)
+func (typeRow *TypeDicRow) sqlColumnType(dbFacet Facet) (string, error) {
+
+	// model specific types: it must be enum
+	if typeRow.TypeId > maxBuiltInTypeId {
+		return "INT", nil
 	}
 
-	return nil
+	// built-in types (ordered as in omc grammar for clarity)
+	switch strings.ToLower(typeRow.Name) {
+
+	// C++ ambiguous integral type
+	// (in C/C++, the signedness of char is not specified)
+	case "char":
+		return "SMALLINT", nil
+
+	// C++ signed integral types
+	case "schar", "short":
+		return "SMALLINT", nil
+
+	// C++ signed integral types
+	case "int":
+		return "INT", nil
+
+	// C++ signed integral types
+	case "long", "llong":
+		return dbFacet.bigintType(), nil
+
+	// C++ unsigned integral types (including bool)
+	case "bool", "uchar":
+		return "SMALLINT", nil
+
+	// C++ unsigned integral types (including bool)
+	case "ushort":
+		return "INT", nil
+
+	// C++ unsigned integral types (including bool)
+	case "uint", "ulong", "ullong":
+		return dbFacet.bigintType(), nil
+
+	// C++ floating point types
+	case "float", "double", "ldouble":
+		return dbFacet.floatType(), nil
+
+	// Changeable numeric types
+	case "time", "real":
+		return dbFacet.floatType(), nil
+
+	// Changeable numeric types
+	case "integer", "counter":
+		return "INT", nil
+
+	// path to a file (a string)
+	case "file":
+		return dbFacet.textType(syscall.MAX_PATH), nil
+	}
+
+	return "", errors.New("invalid type id: " + strconv.Itoa(typeRow.TypeId))
 }
