@@ -4,15 +4,12 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"go.openmpp.org/ompp/config"
 	"go.openmpp.org/ompp/db"
-	"go.openmpp.org/ompp/helper"
 	omppLog "go.openmpp.org/ompp/log"
 )
 
@@ -24,13 +21,8 @@ const (
 	outputDirArgKey   = "dbcopy.OutputDir"        // output dir to write model .json and .csv files
 	toDbConnectionStr = "dbcopy.ToDatabase"       // output db connection string
 	toDbDriverName    = "dbcopy.ToDatabaseDriver" // output db driver name, ie: SQLite, odbc, sqlite3
-	doubleFormat      = "OpenM.DoubleFormat"      // convert to string format for float and double
+	doubleFmtArgKey   = "OpenM.DoubleFormat"      // convert to string format for float and double
 )
-
-type nameDigest struct {
-	Name   string
-	Digest string
-}
 
 func main() {
 	defer exitOnPanic() // fatal error handler: log and exit
@@ -47,7 +39,14 @@ func main() {
 	_ = flag.Bool(zipArgKey, false, "create output or use as input model.zip")
 	_ = flag.String(inputDirArgKey, "", "input directory to read model .json and .csv files")
 	_ = flag.String(outputDirArgKey, "", "output directory for model .json and .csv files")
-	_ = flag.String(doubleFormat, "%.15g", "convert to string format for float and double")
+	_ = flag.String(config.SetName, "", "workset name (set of model input parameters), if specified then copy only this workset")
+	_ = flag.String(config.SetNameShort, "", "workset name (short of "+config.SetName+")")
+	_ = flag.Int(config.SetId, 0, "workset id (set of model input parameters), if specified then copy only this workset")
+	_ = flag.String(config.RunName, "", "model run name, if specified then copy only this run data")
+	_ = flag.Int(config.RunId, 0, "model run id, if specified then copy only this run data")
+	_ = flag.String(config.ParamDir, "", "path to parameters directory (workset directory)")
+	_ = flag.String(config.ParamDirShort, "", "path to parameters directory (short of "+config.ParamDir+")")
+	_ = flag.String(doubleFmtArgKey, "%.15g", "convert to string format for float and double")
 
 	runOpts, logOpts, err := config.New()
 	if err != nil {
@@ -65,16 +64,77 @@ func main() {
 	}
 	omppLog.Log("Model ", modelName, " ", modelDigest)
 
-	// do copy operation
-	switch strings.ToLower(runOpts.String(copyToArgKey)) {
-	case "text":
-		err = dbToText(modelName, modelDigest, runOpts)
-	case "db":
-		err = textToDb(modelName, runOpts)
-	case "db2db":
-		err = dbToDb(modelName, modelDigest, runOpts)
-	default:
-		panic("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
+	// check run options:
+	// copy single run data, single workset, single task
+	// or entire model by default
+	isRun := runOpts.IsExist(config.RunName) || runOpts.IsExist(config.RunId)
+	isWs := runOpts.IsExist(config.SetName) || runOpts.IsExist(config.SetId)
+	isTask := runOpts.IsExist(config.TaskName) || runOpts.IsExist(config.TaskId)
+
+	// do copy operation: entire model by default
+	if !isRun && !isWs && !isTask {
+
+		switch strings.ToLower(runOpts.String(copyToArgKey)) {
+		case "text":
+			err = dbToText(modelName, modelDigest, runOpts)
+		case "db":
+			err = textToDb(modelName, runOpts)
+		case "db2db":
+			err = dbToDb(modelName, modelDigest, runOpts)
+		default:
+			panic("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
+		}
+	}
+
+	// copy single workset
+	if isWs {
+		switch strings.ToLower(runOpts.String(copyToArgKey)) {
+		case "text":
+			err = dbToTextWorkset(modelName, modelDigest, runOpts)
+		case "db":
+			err = textToDbWorkset(modelName, modelDigest, runOpts)
+		case "db2db":
+			err = dbToDbWorkset(modelName, modelDigest, runOpts)
+		default:
+			panic("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
+		}
+	}
+
+	// copy single model run
+	if isRun {
+
+		omppLog.Log("model run copy under construction, coming soon")
+		// TODO: use run digest instead of id
+		/*
+			switch strings.ToLower(runOpts.String(copyToArgKey)) {
+			case "text":
+				err = dbToTextRun(modelName, modelDigest, runOpts)
+			case "db":
+				err = textToDbRun(modelName, modelDigest, runOpts)
+			case "db2db":
+				err = dbToDbRun(modelName, modelDigest, runOpts)
+			default:
+				panic("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
+			}
+		*/
+	}
+
+	// copy single modeling task
+	if isTask {
+		omppLog.Log("modeling tsk copy under construction, coming soon")
+		// TODO: use run digest instead of id
+		/*
+			switch strings.ToLower(runOpts.String(copyToArgKey)) {
+			case "text":
+				err = dbToTextTask(modelName, modelDigest, runOpts)
+			case "db":
+				err = textToDbTask(modelName, modelDigest, runOpts)
+			case "db2db":
+				err = dbToDbTask(modelName, modelDigest, runOpts)
+			default:
+				panic("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
+			}
+		*/
 	}
 	if err != nil {
 		panic(err)
@@ -100,194 +160,4 @@ func exitOnPanic() {
 		omppLog.Log("FAILED")
 	}
 	os.Exit(2) // final exit
-}
-
-// copy model from database into text json and csv files
-func dbToText(modelName string, modelDigest string, runOpts *config.RunOptions) error {
-
-	// open source database connection and check is it valid
-	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(config.DbConnectionStr), runOpts.String(config.DbDriverName))
-	srcDb, _, err := db.Open(cs, dn, false)
-	if err != nil {
-		return err
-	}
-	defer srcDb.Close()
-
-	nv, err := db.OpenmppSchemaVersion(srcDb)
-	if err != nil || nv < db.MinSchemaVersion {
-		return errors.New("invalid database, likely not an openM++ database")
-	}
-
-	// get model metadata
-	modelDef, err := db.GetModel(srcDb, modelName, modelDigest)
-	if err != nil {
-		return err
-	}
-	modelName = modelDef.Model.Name // set model name: it can be empty and only model digest specified
-
-	// create new output directory, use modelName subdirectory
-	outDir := filepath.Join(runOpts.String(outputDirArgKey), modelName)
-	err = os.MkdirAll(outDir, 0750)
-	if err != nil {
-		return err
-	}
-
-	// write model definition to json file
-	if err = toModelJsonFile(srcDb, modelDef, outDir); err != nil {
-		return err
-	}
-
-	// write all model run data into csv files: parameters, output expressions and accumulators
-	dblFmt := runOpts.String(doubleFormat)
-	if err = toCsvRunFile(srcDb, modelDef, outDir, dblFmt); err != nil {
-		return err
-	}
-
-	// write all readonly workset data into csv files: input parameters
-	if err = toCsvWorksetFile(srcDb, modelDef, outDir, dblFmt); err != nil {
-		return err
-	}
-
-	// write all modeling tasks and task run history to json file
-	if err = toTaskJsonFile(srcDb, modelDef, outDir); err != nil {
-		return err
-	}
-
-	// pack model metadata, run results and worksets into zip
-	if runOpts.Bool(zipArgKey) {
-		zipPath, err := helper.PackZip(outDir, "")
-		if err != nil {
-			return err
-		}
-		omppLog.Log("Packed ", zipPath)
-	}
-
-	return nil
-}
-
-// copy model from text json and csv files into database
-func textToDb(modelName string, runOpts *config.RunOptions) error {
-
-	// get connection string and driver name
-	// use OpenM options if DBCopy ouput database not defined
-	cs := runOpts.String(toDbConnectionStr)
-	if cs == "" && runOpts.IsExist(config.DbConnectionStr) {
-		cs = runOpts.String(config.DbConnectionStr)
-	}
-
-	dn := runOpts.String(toDbDriverName)
-	if dn == "" && runOpts.IsExist(config.DbDriverName) {
-		dn = runOpts.String(config.DbDriverName)
-	}
-
-	cs, dn = db.IfEmptyMakeDefault(modelName, cs, dn)
-
-	// open destination database and check is it valid
-	dstDb, dbFacet, err := db.Open(cs, dn, true)
-	if err != nil {
-		return err
-	}
-	defer dstDb.Close()
-
-	nv, err := db.OpenmppSchemaVersion(dstDb)
-	if err != nil || nv < db.MinSchemaVersion {
-		return errors.New("invalid database, likely not an openM++ database")
-	}
-
-	// use modelName as subdirectory inside of input and output directories or as name of model.zip file
-	if modelName == "" {
-		return errors.New("invalid (empty) model name")
-	}
-	inpDir := runOpts.String(inputDirArgKey)
-	outDir := runOpts.String(outputDirArgKey)
-
-	if !runOpts.Bool(zipArgKey) {
-		inpDir = filepath.Join(inpDir, modelName) // json and csv files located in modelName subdir
-	} else {
-		omppLog.Log("Unpack ", modelName, ".zip")
-
-		err = helper.UnpackZip(filepath.Join(inpDir, modelName+".zip"), outDir)
-		if err != nil {
-			return err
-		}
-		inpDir = filepath.Join(outDir, modelName)
-	}
-
-	// insert model metadata from json file into database
-	modelDef, err := fromModelJsonToDb(dstDb, dbFacet, inpDir, modelName)
-	if err != nil {
-		return err
-	}
-
-	// insert languages and model text metadata from json file into database
-	langDef, err := fromLangTextJsonToDb(dstDb, modelDef, inpDir)
-	if err != nil {
-		return err
-	}
-
-	// insert model runs data from csv into database:
-	// parameters, output expressions and accumulators
-	runIdMap, err := fromCsvRunToDb(dstDb, modelDef, langDef, inpDir, runOpts.String(doubleFormat))
-	if err != nil {
-		return err
-	}
-
-	// insert model workset data from csv into database: input parameters
-	setIdMap, err := fromCsvWorksetToDb(dstDb, modelDef, langDef, inpDir, runIdMap)
-	if err != nil {
-		return err
-	}
-
-	// insert modeling tasks and tasks run history from json file into database
-	if err = fromTaskJsonToDb(dstDb, modelDef, langDef, inpDir, runIdMap, setIdMap); err != nil {
-		return err
-	}
-	return nil
-}
-
-// copy model from source database to destination database
-func dbToDb(modelName string, modelDigest string, runOpts *config.RunOptions) error {
-
-	// validate source and destination
-	inpConnStr := runOpts.String(config.DbConnectionStr)
-	inpDriver := runOpts.String(config.DbDriverName)
-	outConnStr := runOpts.String(toDbConnectionStr)
-	outDriver := runOpts.String(toDbDriverName)
-
-	if inpConnStr == outConnStr && inpDriver == outDriver {
-		return errors.New("source same as destination: cannot overwrite model in database")
-	}
-
-	// open source database connection and check is it valid
-	cs, dn := db.IfEmptyMakeDefault(modelName, inpConnStr, inpDriver)
-	srcDb, _, err := db.Open(cs, dn, false)
-	if err != nil {
-		return err
-	}
-	defer srcDb.Close()
-
-	nv, err := db.OpenmppSchemaVersion(srcDb)
-	if err != nil || nv < db.MinSchemaVersion {
-		return errors.New("invalid source database, likely not an openM++ database")
-	}
-
-	// open destination database and check is it valid
-	cs, dn = db.IfEmptyMakeDefault(modelName, outConnStr, outDriver)
-	dstDb, dbFacet, err := db.Open(cs, dn, true)
-	if err != nil {
-		return err
-	}
-	defer dstDb.Close()
-
-	nv, err = db.OpenmppSchemaVersion(dstDb)
-	if err != nil || nv < db.MinSchemaVersion {
-		return errors.New("invalid destination database, likely not an openM++ database")
-	}
-
-	// get source model metadata and languages, make a deep copy to use for destination database writing
-	err = copyDbToDb(srcDb, dstDb, dbFacet, modelName, modelDigest, runOpts.String(doubleFormat))
-	if err != nil {
-		return err
-	}
-	return nil
 }

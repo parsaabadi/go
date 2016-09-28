@@ -185,8 +185,8 @@ type ParamDicRow struct {
 	ParamHid     int    // parameter_hid      INT          NOT NULL, -- unique parameter id
 	Name         string // parameter_name     VARCHAR(255) NOT NULL
 	Digest       string // parameter_digest   VARCHAR(32)  NOT NULL
-	DbRunTable   string // db_run_table      VARCHAR(64)  NOT NULL
-	DbSetTable   string // db_set_table      VARCHAR(64)  NOT NULL
+	DbRunTable   string // db_run_table       VARCHAR(64)  NOT NULL
+	DbSetTable   string // db_set_table       VARCHAR(64)  NOT NULL
 	Rank         int    // parameter_rank     INT          NOT NULL
 	TypeId       int    // model_type_id      INT          NOT NULL
 	IsHidden     bool   // is_hidden          SMALLINT     NOT NULL
@@ -218,7 +218,7 @@ type ParamDimsRow struct {
 type ParamDimsTxtRow struct {
 	ModelId  int    // model_id           INT          NOT NULL
 	ParamId  int    // model_parameter_id INT          NOT NULL
-	DimId    int    // dim_id             INT        NOT NULL
+	DimId    int    // dim_id             INT          NOT NULL
 	LangId   int    // lang_id            INT          NOT NULL
 	LangCode string // lang_code          VARCHAR(32)  NOT NULL
 	Descr    string // descr              VARCHAR(255) NOT NULL

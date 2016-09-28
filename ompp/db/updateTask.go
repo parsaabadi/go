@@ -12,14 +12,14 @@ import (
 	"go.openmpp.org/ompp/helper"
 )
 
-// UpdateTaskList insert new update existing modeling tasks and task run history in database.
+// UpdateTask insert new or update existing modeling task and task run history in database.
 // Model id, task id, run id, set id updated with actual database id's.
 // Remove non-existing worksets and model runs from task
-func UpdateTaskList(
-	dbConn *sql.DB, modelDef *ModelMeta, langDef *LangList, tl *TaskList, runIdMap map[int]int, setIdMap map[int]int) error {
+func UpdateTask(
+	dbConn *sql.DB, modelDef *ModelMeta, langDef *LangList, meta *TaskMeta, runIdMap map[int]int, setIdMap map[int]int) error {
 
 	// validate parameters
-	if tl == nil {
+	if meta == nil {
 		return nil // source is empty: nothing to do, exit
 	}
 	if modelDef == nil {
@@ -28,11 +28,8 @@ func UpdateTaskList(
 	if langDef == nil {
 		return errors.New("invalid (empty) language list")
 	}
-	if tl.ModelName != modelDef.Model.Name || tl.ModelDigest != modelDef.Model.Digest {
-		return errors.New("invalid model name " + tl.ModelName + " or digest " + tl.ModelDigest + " expected: " + modelDef.Model.Name + " " + modelDef.Model.Digest)
-	}
-	if len(tl.Lst) <= 0 {
-		return nil // source is empty: nothing to do, exit
+	if meta.ModelName != modelDef.Model.Name || meta.ModelDigest != modelDef.Model.Digest {
+		return errors.New("invalid model name " + meta.ModelName + " or digest " + meta.ModelDigest + " expected: " + modelDef.Model.Name + " " + modelDef.Model.Digest)
 	}
 
 	// do update in transaction scope
@@ -40,7 +37,7 @@ func UpdateTaskList(
 	if err != nil {
 		return err
 	}
-	if err = doUpdateTaskList(trx, modelDef, langDef, tl.Lst, runIdMap, setIdMap); err != nil {
+	if err = doUpdateOrInsertTask(trx, modelDef, langDef, meta, runIdMap, setIdMap); err != nil {
 		trx.Rollback()
 		return err
 	}
@@ -49,89 +46,86 @@ func UpdateTaskList(
 	return nil
 }
 
-// doUpdateTaskList insert new or update existing tasks and task run history in database.
+// doUpdateOrInsertTask insert new or update existing tasks and task run history in database.
 // It does update as part of transaction
 // Model id, task id, run id, set id updated with actual database id's.
 // Remove non-existing worksets and model runs from task
-func doUpdateTaskList(
-	trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, taskLst []TaskMeta, runIdMap map[int]int, setIdMap map[int]int) error {
+func doUpdateOrInsertTask(
+	trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, meta *TaskMeta, runIdMap map[int]int, setIdMap map[int]int) error {
 
 	smId := strconv.Itoa(modelDef.Model.ModelId)
 
-	for idx := range taskLst {
+	// task name cannot be empty
+	if meta.Task.Name == "" {
+		return errors.New("invalid (empty) task name, id: " + strconv.Itoa(meta.Task.TaskId))
+	}
+	meta.Task.ModelId = modelDef.Model.ModelId // update model id
 
-		// task name cannot be empty
-		if taskLst[idx].Task.Name == "" {
-			return errors.New("invalid (empty) task name, id: " + strconv.Itoa(taskLst[idx].Task.TaskId))
+	// get new task id if task not exist
+	//
+	// UPDATE id_lst SET id_value =
+	//   CASE
+	//     WHEN 0 = (SELECT COUNT(*) FROM task_lst WHERE model_id = 1 AND task_name = 'task_44')
+	//       THEN id_value + 1
+	//     ELSE id_value
+	//   END
+	// WHERE id_key = 'task_id'
+	err := TrxUpdate(trx,
+		"UPDATE id_lst SET id_value ="+
+			" CASE"+
+			" WHEN 0 ="+
+			" (SELECT COUNT(*) FROM task_lst"+
+			" WHERE model_id = "+smId+" AND task_name = "+toQuoted(meta.Task.Name)+
+			" )"+
+			" THEN id_value + 1"+
+			" ELSE id_value"+
+			" END"+
+			" WHERE id_key = 'task_id'")
+	if err != nil {
+		return err
+	}
+
+	// check if this task already exist
+	taskId := 0
+	err = TrxSelectFirst(trx,
+		"SELECT task_id FROM task_lst WHERE model_id = "+smId+" AND task_name = "+toQuoted(meta.Task.Name),
+		func(row *sql.Row) error {
+			return row.Scan(&taskId)
+		})
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+
+	// if task not exist then insert new else update existing
+	if taskId <= 0 {
+
+		// get new task id
+		err = TrxSelectFirst(trx,
+			"SELECT id_value FROM id_lst WHERE id_key = 'task_id'",
+			func(row *sql.Row) error {
+				return row.Scan(&taskId)
+			})
+		switch {
+		case err == sql.ErrNoRows:
+			return errors.New("invalid destination database, likely not an openM++ database")
+		case err != nil:
+			return err
 		}
-		taskLst[idx].Task.ModelId = modelDef.Model.ModelId // update model id
+		meta.Task.TaskId = taskId // update task id with actual value
 
-		// get new task id if task not exist
-		//
-		// UPDATE id_lst SET id_value =
-		//   CASE
-		//     WHEN 0 = (SELECT COUNT(*) FROM task_lst WHERE model_id = 1 AND task_name = 'task_44')
-		//       THEN id_value + 1
-		//     ELSE id_value
-		//   END
-		// WHERE id_key = 'task_id'
-		err := TrxUpdate(trx,
-			"UPDATE id_lst SET id_value ="+
-				" CASE"+
-				" WHEN 0 ="+
-				" (SELECT COUNT(*) FROM task_lst"+
-				" WHERE model_id = "+smId+" AND task_name = "+toQuoted(taskLst[idx].Task.Name)+
-				" )"+
-				" THEN id_value + 1"+
-				" ELSE id_value"+
-				" END"+
-				" WHERE id_key = 'task_id'")
+		// insert new task
+		err = doInsertTask(trx, modelDef, langDef, meta, runIdMap, setIdMap)
 		if err != nil {
 			return err
 		}
 
-		// check if this task already exist
-		taskId := 0
-		err = TrxSelectFirst(trx,
-			"SELECT task_id FROM task_lst WHERE model_id = "+smId+" AND task_name = "+toQuoted(taskLst[idx].Task.Name),
-			func(row *sql.Row) error {
-				return row.Scan(&taskId)
-			})
-		if err != nil && err != sql.ErrNoRows {
+	} else { // update existing task
+
+		meta.Task.TaskId = taskId // update task id with actual value
+
+		err = doUpdateTask(trx, modelDef, langDef, meta, runIdMap, setIdMap)
+		if err != nil {
 			return err
-		}
-
-		// if task not exist then insert new else update existing
-		if taskId <= 0 {
-
-			// get new task id
-			err = TrxSelectFirst(trx,
-				"SELECT id_value FROM id_lst WHERE id_key = 'task_id'",
-				func(row *sql.Row) error {
-					return row.Scan(&taskId)
-				})
-			switch {
-			case err == sql.ErrNoRows:
-				return errors.New("invalid destination database, likely not an openM++ database")
-			case err != nil:
-				return err
-			}
-			taskLst[idx].Task.TaskId = taskId // update task id with actual value
-
-			// insert new task
-			err = doInsertTask(trx, modelDef, langDef, &taskLst[idx], runIdMap, setIdMap)
-			if err != nil {
-				return err
-			}
-
-		} else { // update existing task
-
-			taskLst[idx].Task.TaskId = taskId // update task id with actual value
-
-			err = doUpdateTask(trx, modelDef, langDef, &taskLst[idx], runIdMap, setIdMap)
-			if err != nil {
-				return err
-			}
 		}
 	}
 

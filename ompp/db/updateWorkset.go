@@ -9,140 +9,122 @@ import (
 	"strconv"
 )
 
-// UpdateWorksetList insert new or update existing workset metadata in database.
+// UpdateWorkset insert new or update existing workset metadata in database.
 // Model id, set id, parameter Hid, base run id updated with actual database id's.
-func UpdateWorksetList(
-	dbConn *sql.DB, modelDef *ModelMeta, langDef *LangList, runIdMap map[int]int, wl *WorksetList) (map[int]int, error) {
+func UpdateWorkset(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangList, meta *WorksetMeta) error {
 
 	// validate parameters
-	if wl == nil {
-		return make(map[int]int), nil // source is empty: nothing to do, exit
-	}
-	if len(wl.Lst) <= 0 {
-		return make(map[int]int), nil // source is empty: nothing to do, exit
+	if meta == nil {
+		return nil // source is empty: nothing to do, exit
 	}
 	if modelDef == nil {
-		return nil, errors.New("invalid (empty) model metadata")
+		return errors.New("invalid (empty) model metadata")
 	}
 	if langDef == nil {
-		return nil, errors.New("invalid (empty) language list")
+		return errors.New("invalid (empty) language list")
 	}
-	if wl.ModelName != modelDef.Model.Name || wl.ModelDigest != modelDef.Model.Digest {
-		return nil, errors.New("invalid model name " + wl.ModelName + " or digest " + wl.ModelDigest + " expected: " + modelDef.Model.Name + " " + modelDef.Model.Digest)
+	if meta.ModelName != modelDef.Model.Name || meta.ModelDigest != modelDef.Model.Digest {
+		return errors.New("invalid workset model name " + meta.ModelName + " or digest " + meta.ModelDigest + " expected: " + modelDef.Model.Name + " " + modelDef.Model.Digest)
 	}
 
 	// do update in transaction scope
 	trx, err := dbConn.Begin()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	setIdMap, err := doUpdateWorksetList(trx, modelDef, langDef, runIdMap, wl.Lst)
+	err = doUpdateOrInsertWorkset(trx, modelDef, langDef, meta)
 	if err != nil {
 		trx.Rollback()
-		return nil, err
+		return err
 	}
 	trx.Commit()
 
-	return setIdMap, nil
+	return nil
 }
 
-// doUpdateWorksetList insert new or update existing workset metadata in database.
+// doUpdateOrInsertWorkset insert new or update existing workset metadata in database.
 // It does update as part of transaction
 // Model id, set id, parameter Hid, base run id updated with actual database id's.
-func doUpdateWorksetList(
-	trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, runIdMap map[int]int, setLst []WorksetMeta) (map[int]int, error) {
+func doUpdateOrInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, meta *WorksetMeta) error {
 
 	smId := strconv.Itoa(modelDef.Model.ModelId)
-	setIdMap := make(map[int]int, len(setLst))
 
-	for idx := range setLst {
+	// workset name cannot be empty
+	if meta.Set.Name == "" {
+		return errors.New("invalid (empty) workset name, id: " + strconv.Itoa(meta.Set.SetId))
+	}
+	meta.Set.ModelId = modelDef.Model.ModelId // update model id
 
-		// workset name cannot be empty
-		if setLst[idx].Set.Name == "" {
-			return nil, errors.New("invalid (empty) workset name, id: " + strconv.Itoa(setLst[idx].Set.SetId))
-		}
-		setLst[idx].Set.ModelId = modelDef.Model.ModelId // update model id
+	// get new set id if workset not exist
+	//
+	// UPDATE id_lst SET id_value =
+	//   CASE
+	//     WHEN 0 = (SELECT COUNT(*) FROM workset_lst WHERE model_id = 1 AND set_name = 'set 22')
+	//       THEN id_value + 1
+	//     ELSE id_value
+	//   END
+	// WHERE id_key = 'run_id_set_id'
+	err := TrxUpdate(trx,
+		"UPDATE id_lst SET id_value ="+
+			" CASE"+
+			" WHEN 0 ="+
+			" (SELECT COUNT(*) FROM workset_lst"+
+			" WHERE model_id = "+smId+" AND set_name = "+toQuoted(meta.Set.Name)+
+			" )"+
+			" THEN id_value + 1"+
+			" ELSE id_value"+
+			" END"+
+			" WHERE id_key = 'run_id_set_id'")
+	if err != nil {
+		return err
+	}
 
-		// get new set id if workset not exist
-		//
-		// UPDATE id_lst SET id_value =
-		//   CASE
-		//     WHEN 0 = (SELECT COUNT(*) FROM workset_lst WHERE model_id = 1 AND set_name = 'set 22')
-		//       THEN id_value + 1
-		//     ELSE id_value
-		//   END
-		// WHERE id_key = 'run_id_set_id'
-		err := TrxUpdate(trx,
-			"UPDATE id_lst SET id_value ="+
-				" CASE"+
-				" WHEN 0 ="+
-				" (SELECT COUNT(*) FROM workset_lst"+
-				" WHERE model_id = "+smId+" AND set_name = "+toQuoted(setLst[idx].Set.Name)+
-				" )"+
-				" THEN id_value + 1"+
-				" ELSE id_value"+
-				" END"+
-				" WHERE id_key = 'run_id_set_id'")
-		if err != nil {
-			return nil, err
-		}
+	// check if this workset already exist
+	setId := 0
+	err = TrxSelectFirst(trx,
+		"SELECT set_id FROM workset_lst WHERE model_id = "+smId+" AND set_name = "+toQuoted(meta.Set.Name),
+		func(row *sql.Row) error {
+			return row.Scan(&setId)
+		})
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
 
-		// check if this workset already exist
-		setId := 0
+	// if workset not exist then insert new else update existing
+	if setId <= 0 {
+
+		// get new set id
 		err = TrxSelectFirst(trx,
-			"SELECT set_id FROM workset_lst WHERE model_id = "+smId+" AND set_name = "+toQuoted(setLst[idx].Set.Name),
+			"SELECT id_value FROM id_lst WHERE id_key = 'run_id_set_id'",
 			func(row *sql.Row) error {
 				return row.Scan(&setId)
 			})
-		if err != nil && err != sql.ErrNoRows {
-			return nil, err
+		switch {
+		case err == sql.ErrNoRows:
+			return errors.New("invalid destination database, likely not an openM++ database")
+		case err != nil:
+			return err
 		}
 
-		// if workset not exist then insert new else update existing
-		if setId <= 0 {
+		meta.Set.SetId = setId // update set id with actual value
 
-			// get new set id
-			err = TrxSelectFirst(trx,
-				"SELECT id_value FROM id_lst WHERE id_key = 'run_id_set_id'",
-				func(row *sql.Row) error {
-					return row.Scan(&setId)
-				})
-			switch {
-			case err == sql.ErrNoRows:
-				return nil, errors.New("invalid destination database, likely not an openM++ database")
-			case err != nil:
-				return nil, err
-			}
+		// insert new workset
+		err = doInsertWorkset(trx, modelDef, langDef, meta)
+		if err != nil {
+			return err
+		}
 
-			setIdMap[setLst[idx].Set.SetId] = setId // save map between incoming and actual new set id
-			setLst[idx].Set.SetId = setId
+	} else { // update existing workset
 
-			newRunId, ok := runIdMap[setLst[idx].Set.BaseRunId] // find new value of base run id
-			if ok && newRunId > 0 {
-				setLst[idx].Set.BaseRunId = newRunId
-			} else {
-				setLst[idx].Set.BaseRunId = 0 // no base run id (it should be found if exist)
-			}
+		meta.Set.SetId = setId // workset exist, id may be different
 
-			// insert new workset
-			err = doInsertWorkset(trx, modelDef, langDef, &setLst[idx])
-			if err != nil {
-				return nil, err
-			}
-
-		} else { // update existing workset
-
-			setIdMap[setLst[idx].Set.SetId] = setId // workset already exist
-			setLst[idx].Set.SetId = setId
-
-			err = doUpdateWorkset(trx, modelDef, langDef, &setLst[idx])
-			if err != nil {
-				return nil, err
-			}
+		err = doUpdateWorkset(trx, modelDef, langDef, meta)
+		if err != nil {
+			return err
 		}
 	}
 
-	return setIdMap, nil
+	return nil
 }
 
 // doInsertWorkset insert new workset metadata in database.
@@ -193,7 +175,7 @@ func doUpdateWorkset(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, meta *
 	// WHERE set_id = 22
 	err := TrxUpdate(trx,
 		"UPDATE workset_lst"+
-			" SET is_readonly = "+toBoolStr(meta.Set.IsReadonly)+", update_dt = "+toQuoted(meta.Set.Name)+
+			" SET is_readonly = "+toBoolStr(meta.Set.IsReadonly)+", update_dt = "+toQuoted(meta.Set.UpdateDateTime)+
 			" WHERE set_id ="+sId)
 	if err != nil {
 		return err

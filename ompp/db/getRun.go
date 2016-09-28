@@ -5,6 +5,7 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"strconv"
 )
 
@@ -14,19 +15,18 @@ func GetRun(dbConn *sql.DB, runId int) (*RunRow, error) {
 		"SELECT"+
 			" H.run_id, H.model_id, H.run_name, H.sub_count,"+
 			" H.sub_started, H.sub_completed, H.create_dt, H.status,"+
-			" H.update_dt"+
+			" H.update_dt, H.run_digest"+
 			" FROM run_lst H"+
 			" WHERE H.run_id ="+strconv.Itoa(runId))
 }
 
 // GetFirstRun return first run of the model: run_lst table row.
 func GetFirstRun(dbConn *sql.DB, modelId int) (*RunRow, error) {
-
 	return getRunRow(dbConn,
 		"SELECT"+
 			" H.run_id, H.model_id, H.run_name, H.sub_count,"+
 			" H.sub_started, H.sub_completed, H.create_dt, H.status,"+
-			" H.update_dt"+
+			" H.update_dt, H.run_digest"+
 			" FROM run_lst H"+
 			" WHERE H.run_id ="+
 			" (SELECT MIN(M.run_id) FROM run_lst M WHERE M.model_id = "+strconv.Itoa(modelId)+")")
@@ -34,12 +34,11 @@ func GetFirstRun(dbConn *sql.DB, modelId int) (*RunRow, error) {
 
 // GetLastRun return last run of the model: run_lst table row.
 func GetLastRun(dbConn *sql.DB, modelId int) (*RunRow, error) {
-
 	return getRunRow(dbConn,
 		"SELECT"+
 			" H.run_id, H.model_id, H.run_name, H.sub_count,"+
 			" H.sub_started, H.sub_completed, H.create_dt, H.status,"+
-			" H.update_dt"+
+			" H.update_dt, H.run_digest"+
 			" FROM run_lst H"+
 			" WHERE H.run_id ="+
 			" (SELECT MAX(M.run_id) FROM run_lst M WHERE M.model_id = "+strconv.Itoa(modelId)+")")
@@ -48,18 +47,30 @@ func GetLastRun(dbConn *sql.DB, modelId int) (*RunRow, error) {
 // GetLastCompletedRun return last completed run of the model: run_lst table row.
 // Run completed if run status one of: s=success, x=exit, e=error
 func GetLastCompletedRun(dbConn *sql.DB, modelId int) (*RunRow, error) {
-
 	return getRunRow(dbConn,
 		"SELECT"+
 			" H.run_id, H.model_id, H.run_name, H.sub_count,"+
 			" H.sub_started, H.sub_completed, H.create_dt, H.status,"+
-			" H.update_dt"+
+			" H.update_dt, H.run_digest"+
 			" FROM run_lst H"+
 			" WHERE H.run_id ="+
 			" ("+
 			" SELECT MAX(M.run_id) FROM run_lst M"+
 			" WHERE M.model_id = "+strconv.Itoa(modelId)+" AND M.status IN ('s', 'x', 'e')"+
 			" )")
+}
+
+// GetRunByName return model run row by run name: run_lst table row.
+// If there is multiple runs with this name then run with min(run_id) returned
+func GetRunByName(dbConn *sql.DB, name string) (*RunRow, error) {
+	return getRunRow(dbConn,
+		"SELECT"+
+			" H.run_id, H.model_id, H.run_name, H.sub_count,"+
+			" H.sub_started, H.sub_completed, H.create_dt, H.status,"+
+			" H.update_dt, H.run_digest"+
+			" FROM run_lst H"+
+			" WHERE H.run_id = "+
+			" (SELECT MIN(M.run_id) FROM run_lst M WHERE M.run_name = "+toQuoted(name)+")")
 }
 
 // getRunRow return run_lst table row.
@@ -69,11 +80,15 @@ func getRunRow(dbConn *sql.DB, query string) (*RunRow, error) {
 
 	err := SelectFirst(dbConn, query,
 		func(row *sql.Row) error {
+			var sd sql.NullString
 			if err := row.Scan(
 				&runRow.RunId, &runRow.ModelId, &runRow.Name, &runRow.SubCount,
 				&runRow.SubStarted, &runRow.SubCompleted, &runRow.CreateDateTime, &runRow.Status,
-				&runRow.UpdateDateTime); err != nil {
+				&runRow.UpdateDateTime, &sd); err != nil {
 				return err
+			}
+			if sd.Valid {
+				runRow.Digest = sd.String
 			}
 			return nil
 		})
@@ -95,11 +110,15 @@ func getRunLst(dbConn *sql.DB, query string) ([]RunRow, error) {
 	err := SelectRows(dbConn, query,
 		func(rows *sql.Rows) error {
 			var r RunRow
+			var sd sql.NullString
 			if err := rows.Scan(
 				&r.RunId, &r.ModelId, &r.Name, &r.SubCount,
 				&r.SubStarted, &r.SubCompleted, &r.CreateDateTime, &r.Status,
-				&r.UpdateDateTime); err != nil {
+				&r.UpdateDateTime, &sd); err != nil {
 				return err
+			}
+			if sd.Valid {
+				r.Digest = sd.String
 			}
 			runRs = append(runRs, r)
 			return nil
@@ -110,9 +129,9 @@ func getRunLst(dbConn *sql.DB, query string) ([]RunRow, error) {
 	return runRs, nil
 }
 
-// GetRunByModelId return list of model runs with description and notes: run_lst and run_txt rows.
+// GetRunList return list of model runs with description and notes: run_lst and run_txt rows.
 // If langCode not empty then only specified language selected else all languages
-func GetRunByModelId(dbConn *sql.DB, modelId int, langCode string) ([]RunRow, []RunTxtRow, error) {
+func GetRunList(dbConn *sql.DB, modelId int, langCode string) ([]RunRow, []RunTxtRow, error) {
 
 	// model not found: model id must be positive
 	if modelId <= 0 {
@@ -123,7 +142,7 @@ func GetRunByModelId(dbConn *sql.DB, modelId int, langCode string) ([]RunRow, []
 	q := "SELECT" +
 		" H.run_id, H.model_id, H.run_name, H.sub_count," +
 		" H.sub_started, H.sub_completed, H.create_dt, H.status," +
-		" H.update_dt" +
+		" H.update_dt, H.run_digest" +
 		" FROM run_lst H" +
 		" WHERE H.model_id = " + strconv.Itoa(modelId) +
 		" ORDER BY 1"
@@ -218,9 +237,9 @@ func GetRunParamText(dbConn *sql.DB, modelDef *ModelMeta, runId int, paramId int
 	return getRunParamText(dbConn, modelDef, q)
 }
 
-// GetRunParamTextByRunId return all run parameters value notes: run_parameter_txt table rows.
+// GetRunAllParamText return all run parameters value notes: run_parameter_txt table rows.
 // If langCode not empty then only specified language selected else all languages
-func GetRunParamTextByRunId(dbConn *sql.DB, modelDef *ModelMeta, runId int, langCode string) ([]RunParamTxtRow, error) {
+func GetRunAllParamText(dbConn *sql.DB, modelDef *ModelMeta, runId int, langCode string) ([]RunParamTxtRow, error) {
 
 	// make select using Hid
 	q := "SELECT M.run_id, M.parameter_hid, M.lang_id, L.lang_code, M.note" +
@@ -266,11 +285,89 @@ func getRunParamText(dbConn *sql.DB, modelDef *ModelMeta, query string) ([]RunPa
 	return txtLst, nil
 }
 
-// GetRunList return list of completed model runs: run_lst, run_txt, run_option run_parameter_txt rows.
+// GetRunFull return full metadata for completed model run: run_lst, run_txt, run_option run_parameter_txt rows.
+// It does not return non-completed runs (run in progress).
+// If langCode not empty then only specified language selected else all languages
+func GetRunFull(dbConn *sql.DB, modelDef *ModelMeta, runRow *RunRow, langCode string) (*RunMeta, error) {
+
+	// validate parameters
+	if runRow == nil {
+		return nil, errors.New("invalid (empty) model run row, it may be model run not found")
+	}
+
+	// where filters
+	runFilter := " AND H.run_id = " + strconv.Itoa(runRow.RunId) +
+		" AND H.status IN (" + toQuoted(DoneRunStatus) + ", " + toQuoted(ErrorRunStatus) + ", " + toQuoted(ExitRunStatus) + ")"
+
+	var langFilter string
+	if langCode != "" {
+		langFilter = " AND L.lang_code = " + toQuoted(langCode)
+	}
+
+	// run meta header: run_lst row, model name and digest
+	meta := &RunMeta{
+		ModelName:   modelDef.Model.Name,
+		ModelDigest: modelDef.Model.Digest,
+		Run:         *runRow,
+	}
+	smId := strconv.Itoa(modelDef.Model.ModelId)
+
+	// get run description and notes by run id and language
+	q := "SELECT M.run_id, M.lang_id, L.lang_code, M.descr, M.note" +
+		" FROM run_txt M" +
+		" INNER JOIN run_lst H ON (H.run_id = M.run_id)" +
+		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)" +
+		" WHERE H.model_id = " + smId +
+		runFilter +
+		langFilter +
+		" ORDER BY 1, 2"
+
+	runTxtRs, err := getRunText(dbConn, q)
+	if err != nil {
+		return nil, err
+	}
+	meta.Txt = runTxtRs
+
+	// get run options by run id
+	q = "SELECT" +
+		" M.run_id, M.option_key, M.option_value" +
+		" FROM run_option M" +
+		" INNER JOIN run_lst H ON (H.run_id = M.run_id)" +
+		" WHERE H.model_id = " + smId +
+		runFilter +
+		" ORDER BY 1, 2"
+
+	optRs, err := getRunOpts(dbConn, q)
+	if err != nil {
+		return nil, err
+	}
+	meta.Opts = optRs[runRow.RunId]
+
+	// run_parameter_txt: select using Hid
+	q = "SELECT M.run_id, M.parameter_hid, M.lang_id, L.lang_code, M.note" +
+		" FROM run_parameter_txt M" +
+		" INNER JOIN run_lst H ON (H.run_id = M.run_id)" +
+		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)" +
+		" WHERE H.model_id = " + smId +
+		runFilter +
+		langFilter +
+		" ORDER BY 1, 2, 3"
+
+	// do select and set parameter id in output results
+	paramTxtRs, err := getRunParamText(dbConn, modelDef, q)
+	if err != nil {
+		return nil, err
+	}
+	meta.ParamTxt = paramTxtRs
+
+	return meta, nil
+}
+
+// GetRunFullList return list of full metadata for completed model runs: run_lst, run_txt, run_option run_parameter_txt rows.
 // If isSuccess true then return only successfully completed runs else all completed runs.
 // It does not return non-completed runs (run in progress).
 // If langCode not empty then only specified language selected else all languages
-func GetRunList(dbConn *sql.DB, modelDef *ModelMeta, isSuccess bool, langCode string) (*RunList, error) {
+func GetRunFullList(dbConn *sql.DB, modelDef *ModelMeta, isSuccess bool, langCode string) ([]RunMeta, error) {
 
 	// where filters
 	var statusFilter string
@@ -278,7 +375,7 @@ func GetRunList(dbConn *sql.DB, modelDef *ModelMeta, isSuccess bool, langCode st
 		statusFilter = " AND H.status = " + toQuoted(DoneRunStatus)
 	} else {
 		statusFilter = " AND H.status IN (" +
-			toQuoted(DoneRunStatus) + ", " + toQuoted(ErrorRunStatus) + ", " + toQuoted(ExitRunStatus) + ", " + ")"
+			toQuoted(DoneRunStatus) + ", " + toQuoted(ErrorRunStatus) + ", " + toQuoted(ExitRunStatus) + ")"
 	}
 
 	var langFilter string
@@ -287,12 +384,14 @@ func GetRunList(dbConn *sql.DB, modelDef *ModelMeta, isSuccess bool, langCode st
 	}
 
 	// get list of runs for that model id
+	smId := strconv.Itoa(modelDef.Model.ModelId)
+
 	q := "SELECT" +
 		" H.run_id, H.model_id, H.run_name, H.sub_count," +
 		" H.sub_started, H.sub_completed, H.create_dt, H.status," +
-		" H.update_dt" +
+		" H.update_dt, H.run_digest" +
 		" FROM run_lst H" +
-		" WHERE H.model_id = " + strconv.Itoa(modelDef.Model.ModelId) +
+		" WHERE H.model_id = " + smId +
 		statusFilter +
 		" ORDER BY 1"
 
@@ -306,7 +405,7 @@ func GetRunList(dbConn *sql.DB, modelDef *ModelMeta, isSuccess bool, langCode st
 		" FROM run_txt M" +
 		" INNER JOIN run_lst H ON (H.run_id = M.run_id)" +
 		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)" +
-		" WHERE H.model_id = " + strconv.Itoa(modelDef.Model.ModelId) +
+		" WHERE H.model_id = " + smId +
 		statusFilter +
 		langFilter +
 		" ORDER BY 1, 2"
@@ -321,7 +420,7 @@ func GetRunList(dbConn *sql.DB, modelDef *ModelMeta, isSuccess bool, langCode st
 		" M.run_id, M.option_key, M.option_value" +
 		" FROM run_option M" +
 		" INNER JOIN run_lst H ON (H.run_id = M.run_id)" +
-		" WHERE H.model_id = " + strconv.Itoa(modelDef.Model.ModelId) +
+		" WHERE H.model_id = " + smId +
 		statusFilter +
 		" ORDER BY 1, 2"
 
@@ -335,7 +434,7 @@ func GetRunList(dbConn *sql.DB, modelDef *ModelMeta, isSuccess bool, langCode st
 		" FROM run_parameter_txt M" +
 		" INNER JOIN run_lst H ON (H.run_id = M.run_id)" +
 		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)" +
-		" WHERE H.model_id = " + strconv.Itoa(modelDef.Model.ModelId) +
+		" WHERE H.model_id = " + smId +
 		statusFilter +
 		langFilter +
 		" ORDER BY 1, 2, 3"
@@ -347,26 +446,25 @@ func GetRunList(dbConn *sql.DB, modelDef *ModelMeta, isSuccess bool, langCode st
 	}
 
 	// convert to output result: join run pieces in struct by run id
-	rl := RunList{
-		ModelName:   modelDef.Model.Name,
-		ModelDigest: modelDef.Model.Digest,
-		Lst:         make([]RunMeta, len(runRs))}
-	m := make(map[int]int)
+	rl := make([]RunMeta, len(runRs))
+	m := make(map[int]int) // map[run id] => index of run_lst row
 
 	for k := range runRs {
 		runId := runRs[k].RunId
-		rl.Lst[k].Run = runRs[k]
-		rl.Lst[k].Opts = optRs[runId]
+		rl[k].ModelName = modelDef.Model.Name
+		rl[k].ModelDigest = modelDef.Model.Digest
+		rl[k].Run = runRs[k]
+		rl[k].Opts = optRs[runId]
 		m[runId] = k
 	}
 	for k := range runTxtRs {
 		i := m[runTxtRs[k].RunId]
-		rl.Lst[i].Txt = append(rl.Lst[i].Txt, runTxtRs[k])
+		rl[i].Txt = append(rl[i].Txt, runTxtRs[k])
 	}
 	for k := range paramTxtRs {
 		i := m[paramTxtRs[k].RunId]
-		rl.Lst[i].ParamTxt = append(rl.Lst[i].ParamTxt, paramTxtRs[k])
+		rl[i].ParamTxt = append(rl[i].ParamTxt, paramTxtRs[k])
 	}
 
-	return &rl, nil
+	return rl, nil
 }

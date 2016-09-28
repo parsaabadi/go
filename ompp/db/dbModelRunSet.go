@@ -19,19 +19,14 @@ const (
 	ErrorRunStatus    = "e" // e = error failure
 )
 
-// RunList is list of model runs
-type RunList struct {
-	ModelName   string    // model name for that run list
-	ModelDigest string    // model digest for that run list
-	Lst         []RunMeta // run list for that model
-}
-
 // RunMeta struct is meta data for model run: name, status, run options, description, notes.
 type RunMeta struct {
-	Run      RunRow            // model run rows: run_lst
-	Txt      []RunTxtRow       // run text rows: run_txt
-	Opts     map[string]string // options used to run the model: run_option
-	ParamTxt []RunParamTxtRow  // parameter text rows: run_parameter_txt
+	ModelName   string            // model name for that run list
+	ModelDigest string            // model digest for that run list
+	Run         RunRow            // model run rows: run_lst
+	Txt         []RunTxtRow       // run text rows: run_txt
+	Opts        map[string]string // options used to run the model: run_option
+	ParamTxt    []RunParamTxtRow  // parameter text rows: run_parameter_txt
 }
 
 // RunRow is model run row: run_lst table row.
@@ -47,6 +42,7 @@ type RunRow struct {
 	CreateDateTime string // create_dt     VARCHAR(32)  NOT NULL, -- start date-time
 	Status         string // status        VARCHAR(1)   NOT NULL, -- run status: i=init p=progress s=success x=exit e=error(failed)
 	UpdateDateTime string // update_dt     VARCHAR(32)  NOT NULL, -- last update date-time
+	Digest         string // run_digest    VARCHAR(32)  NULL,     -- digest of the run
 }
 
 // RunTxtRow is db row of run_txt
@@ -67,6 +63,62 @@ type RunParamTxtRow struct {
 	Note     string // note               VARCHAR(32000)
 }
 
+// WorksetMeta is model workset metadata: name, parameters, decription, notes.
+//
+// Workset (working set of model input parameters):
+// it can be a full set, which include all model parameters
+// or subset and include only some parameters.
+//
+// Each model must have "default" workset.
+// Default workset must include ALL model parameters (it is a full set).
+// Default workset is a first workset of the model: set_id = min(set_id).
+// If workset is a subset (does not include all model parameters)
+// then it must be based on model run results, specified by run_id (not NULL).
+//
+// Workset can be editable or read-only.
+// If workset is editable then you can modify input parameters or workset description, notes, etc.
+// If workset is read-only then you can run the model using that workset as input.
+//
+// Important: working set_id must be different from run_id (use id_lst to get it)
+// Important: always update parameter values inside of transaction scope
+// Important: before parameter update do is_readonly = is_readonly + 1 to "lock" workset
+type WorksetMeta struct {
+	ModelName   string               // model name for that workset
+	ModelDigest string               // model digest for that workset
+	Set         WorksetRow           // model workset rows: workset_lst
+	Txt         []WorksetTxtRow      // workset text rows: workset_txt
+	Param       []ParamDicRow        // workset parameter rows: parameter_dic join to model_parameter_dic
+	ParamTxt    []WorksetParamTxtRow // parameter text rows: workset_parameter_txt
+}
+
+// WorksetRow is workset_lst table row.
+type WorksetRow struct {
+	SetId          int    // unique working set id
+	BaseRunId      int    // if not NULL and positive then base run id (source run id)
+	ModelId        int    // model_id     INT          NOT NULL
+	Name           string // set_name     VARCHAR(255) NOT NULL
+	IsReadonly     bool   // is_readonly  SMALLINT     NOT NULL
+	UpdateDateTime string // update_dt    VARCHAR(32)  NOT NULL, -- last update date-time
+}
+
+// WorksetTxtRow is db row of workset_txt
+type WorksetTxtRow struct {
+	SetId    int    // set_id    INT          NOT NULL
+	LangId   int    // lang_id   INT          NOT NULL
+	LangCode string // lang_code VARCHAR(32)  NOT NULL
+	Descr    string // descr     VARCHAR(255) NOT NULL
+	Note     string // note      VARCHAR(32000)
+}
+
+// WorksetParamTxtRow is db row of workset_parameter_txt
+type WorksetParamTxtRow struct {
+	SetId    int    // set_id             INT          NOT NULL
+	ParamId  int    // model_parameter_id INT          NOT NULL
+	LangId   int    // lang_id            INT          NOT NULL
+	LangCode string // lang_code          VARCHAR(32)  NOT NULL
+	Note     string // note               VARCHAR(32000)
+}
+
 // TaskMeta struct is meta data for modeling task: name, status, description, notes, task run history.
 //
 // Modeling task is a named set of input model inputs (of workset ids) to run the model.
@@ -83,18 +135,13 @@ type RunParamTxtRow struct {
 // or contain same input parameter values as it was at the time of task run.
 // To find actual input for any particular model run and/or task run we must use run_id.
 type TaskMeta struct {
-	Task       TaskRow         // modeling task row: task_lst
-	Txt        []TaskTxtRow    // task text rows: task_txt
-	Set        []int           // task body (current list of workset id's): task_set
-	TaskRun    []TaskRunRow    // task run history rows: task_run_lst
-	TaskRunSet []TaskRunSetRow // task run history body: task_run_set
-}
-
-// TaskList is list of modeling task metadata and task run history.
-type TaskList struct {
-	ModelName   string     // model name for that task list
-	ModelDigest string     // model digest for that task list
-	Lst         []TaskMeta // list of modeling task and task rrun history
+	ModelName   string          // model name for that task list
+	ModelDigest string          // model digest for that task list
+	Task        TaskRow         // modeling task row: task_lst
+	Txt         []TaskTxtRow    // task text rows: task_txt
+	Set         []int           // task body (current list of workset id's): task_set
+	TaskRun     []TaskRunRow    // task run history rows: task_run_lst
+	TaskRunSet  []TaskRunSetRow // task run history body: task_run_set
 }
 
 // TaskRow is db row of task_lst.
@@ -136,65 +183,4 @@ type TaskRunSetRow struct {
 	RunId     int // run_id      INT NOT NULL, -- if > 0 then result run id
 	SetId     int // set_id      INT NOT NULL, -- if > 0 then input working set id
 	TaskId    int // task_id     INT NOT NULL
-}
-
-// WorksetMeta is model workset metadata: name, parameters, decription, notes.
-//
-// Workset (working set of model input parameters):
-// it can be a full set, which include all model parameters
-// or subset and include only some parameters.
-//
-// Each model must have "default" workset.
-// Default workset must include ALL model parameters (it is a full set).
-// Default workset is a first workset of the model: set_id = min(set_id).
-// If workset is a subset (does not include all model parameters)
-// then it must be based on model run results, specified by run_id (not NULL).
-//
-// Workset can be editable or read-only.
-// If workset is editable then you can modify input parameters or workset description, notes, etc.
-// If workset is read-only then you can run the model using that workset as input.
-//
-// Important: working set_id must be different from run_id (use id_lst to get it)
-// Important: always update parameter values inside of transaction scope
-// Important: before parameter update do is_readonly = is_readonly + 1 to "lock" workset
-type WorksetMeta struct {
-	Set      WorksetRow           // model workset rows: workset_lst
-	Txt      []WorksetTxtRow      // workset text rows: workset_txt
-	Param    []ParamDicRow        // workset parameter rows: parameter_dic join to model_parameter_dic
-	ParamTxt []WorksetParamTxtRow // parameter text rows: workset_parameter_txt
-}
-
-// WorksetList is list of model working sets metadata
-type WorksetList struct {
-	ModelName   string        // model name for that workset list
-	ModelDigest string        // model digest for that workset list
-	Lst         []WorksetMeta // list of model worksets
-}
-
-// WorksetRow is workset_lst table row.
-type WorksetRow struct {
-	SetId          int    // unique working set id
-	BaseRunId      int    // if not NULL and positive then base run id (source run id)
-	ModelId        int    // model_id     INT          NOT NULL
-	Name           string // set_name     VARCHAR(255) NOT NULL
-	IsReadonly     bool   // is_readonly  SMALLINT     NOT NULL
-	UpdateDateTime string // update_dt    VARCHAR(32)  NOT NULL, -- last update date-time
-}
-
-// WorksetTxtRow is db row of workset_txt
-type WorksetTxtRow struct {
-	SetId    int    // set_id    INT          NOT NULL
-	LangId   int    // lang_id   INT          NOT NULL
-	LangCode string // lang_code VARCHAR(32)  NOT NULL
-	Descr    string // descr     VARCHAR(255) NOT NULL
-	Note     string // note      VARCHAR(32000)
-}
-
-// WorksetParamTxtRow is db row of workset_parameter_txt
-type WorksetParamTxtRow struct {
-	SetId    int    // set_id             INT          NOT NULL
-	ParamId  int    // model_parameter_id INT          NOT NULL
-	LangId   int    // lang_id            INT          NOT NULL
-	LangCode string // lang_code          VARCHAR(32)  NOT NULL
-	Note     string // note               VARCHAR(32000)
 }

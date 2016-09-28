@@ -27,6 +27,15 @@ const (
 	ModelName        = "OpenM.ModelName"      // model name
 	ModelNameShort   = "m"                    // model name (short form)
 	ModelDigest      = "OpenM.ModelDigest"    // model hash digest
+	SetName          = "OpenM.SetName"        // workset name
+	SetNameShort     = "s"                    // workset name (short form)
+	SetId            = "OpenM.SetId"          // workset id, workset is a set of model input parameters
+	RunName          = "OpenM.RunName"        // model run name
+	RunId            = "OpenM.RunId"          // model run id
+	TaskName         = "OpenM.TaskName"       // modeling task name
+	TaskId           = "OpenM.TaskId"         // modeling task id
+	ParamDir         = "OpenM.ParamDir"       // path to workset parameters directory
+	ParamDirShort    = "p"                    // path to workset parameters directory (short form)
 )
 
 /* Log config keys.
@@ -65,6 +74,18 @@ type LogOptions struct {
 	TimeStamp   string // log timestamp string, ie: 20120817_160459_0148
 }
 
+// fullShort is pair of full option name and short option name
+type fullShort struct {
+	full  string // full option name
+	short string // short option name
+}
+
+// standard pairs of full and short names
+var optFs = []fullShort{
+	fullShort{ModelName, ModelNameShort},
+	fullShort{SetName, SetNameShort},
+	fullShort{ParamDir, ParamDirShort}}
+
 // New process command-line arguments and ini-file options.
 func New() (*RunOptions, *LogOptions, error) {
 
@@ -100,9 +121,11 @@ func New() (*RunOptions, *LogOptions, error) {
 			runOpts.KeyValue[LogToConsole] = strconv.FormatBool(logOpts.IsConsole)
 			return
 		}
-		if f.Name == ModelName || f.Name == ModelNameShort {
-			runOpts.KeyValue[ModelName] = f.Value.String()
-			return
+		for _, fs := range optFs {
+			if f.Name == fs.full || f.Name == fs.short {
+				runOpts.KeyValue[fs.full] = f.Value.String()
+				return
+			}
 		}
 		runOpts.KeyValue[f.Name] = f.Value.String()
 	})
@@ -119,8 +142,10 @@ func New() (*RunOptions, *LogOptions, error) {
 		if n == LogToConsoleShort {
 			n = LogToConsole
 		}
-		if n == ModelNameShort {
-			n = ModelName
+		for _, fs := range optFs {
+			if n == fs.short {
+				n = fs.full
+			}
 		}
 		if runOpts.DefaultKeyValue[n] == "" {
 			runOpts.DefaultKeyValue[n] = f.DefValue
