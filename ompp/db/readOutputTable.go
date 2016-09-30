@@ -11,6 +11,7 @@ import (
 )
 
 // ReadOutputTable read ouput table page (dimensions and values) from model run results.
+//
 // If layout.IsAccum true then select accumulator(s) else output expression value(s)
 // If layout.ValueName not empty then select only that expression (accumulator) else all expressions (accumulators)
 func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadLayout) (*list.List, error) {

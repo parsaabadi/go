@@ -14,6 +14,7 @@ import (
 )
 
 // UpdateModel insert new or update existing model metadata in database.
+//
 // Parameters and output tables Hid's and db table names updated with actual database values
 // If new model inserted then modelDef updated with actual id's (model id, parameter Hid...)
 // If parameter (output table) not exist then create db tables for parameter values (output table values)

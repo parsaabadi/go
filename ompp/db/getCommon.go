@@ -31,7 +31,7 @@ func OpenmppSchemaVersion(dbConn *sql.DB) (int, error) {
 	return nVer, nil
 }
 
-// DefaultLanguage return first model language: select min(lang_id) from model_dic_txt
+// DefaultLanguage return first model language: select min(lang_id) from model_dic_txt.
 func DefaultLanguage(dbConn *sql.DB, modelId int) (*LangLstRow, error) {
 
 	// get first language from model text
@@ -73,7 +73,7 @@ func DefaultLanguage(dbConn *sql.DB, modelId int) (*LangLstRow, error) {
 	return &langRow, nil
 }
 
-// GetLanguages return language rows from lang_lst join to lang_word tables and map from lang_code to lang_id
+// GetLanguages return language rows from lang_lst join to lang_word tables and map from lang_code to lang_id.
 func GetLanguages(dbConn *sql.DB) (*LangList, error) {
 
 	// select lang_lst rows, build index maps
@@ -119,6 +119,7 @@ func GetLanguages(dbConn *sql.DB) (*LangList, error) {
 }
 
 // GetProfileList return profile names: profile_lst table rows.
+//
 // Profile is a named group of (key, value) options, similar to ini-file.
 // Default model options has profile_name = model_name.
 func GetProfileList(dbConn *sql.DB) ([]string, error) {
@@ -150,6 +151,7 @@ func GetRunOptions(dbConn *sql.DB, runId int) (map[string]string, error) {
 }
 
 // GetProfile return profile_option table rows as (key, value) map.
+//
 // Profile is a named group of (key, value) options, similar to ini-file.
 // Default model options has profile_name = model_name.
 func GetProfile(dbConn *sql.DB, name string) (*ProfileMeta, error) {
@@ -213,6 +215,7 @@ func getRunOpts(dbConn *sql.DB, query string) (map[int]map[string]string, error)
 }
 
 // GetModelGroup return db rows of model parent-child groups of parameters and output tables.
+//
 // If langCode not empty then only specified language selected else all languages.
 func GetModelGroup(dbConn *sql.DB, modelId int, langCode string) (*GroupMeta, error) {
 

@@ -10,6 +10,7 @@ import (
 )
 
 // UpdateLanguage insert new or update existing language and words in lang_lst and lang_word tables.
+//
 // Language ids updated with actual id's from database
 func UpdateLanguage(dbConn *sql.DB, langDef *LangList) error {
 

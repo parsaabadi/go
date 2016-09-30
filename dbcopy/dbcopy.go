@@ -1,6 +1,94 @@
 // Copyright (c) 2016 OpenM++
 // This code is licensed under the MIT license (see LICENSE.txt for details)
 
+/*
+dbcopy is command line tool for import-export OpenM++ model metadata, input parameters and run results.
+
+Arguments for dbcopy can be specified on command line or through .ini file:
+  dbcopy -ini my.ini
+Command line arguments take precedence over ini-file options.
+
+Only model name argument does not have default value and must be specified explicitly:
+  dbcopy -m modelOne
+  dbcopy -OpenM.ModelName modelOne
+
+There are 3 possible copy directions: "text", "db", "db2db" and default is "text".
+
+"text": read from database and save into metadata .json and .csv values (parameters and output tables):
+  dbcopy -m modelOne
+
+"db": read from metadata .json and .csv values and insert or update database:
+  dbcopy -m modelOne -dbcopy.To db
+
+"db2db": direct copy between two databases:
+  dbcopy -m modelOne -dbcopy.To db2db -dbcopy.ToDatabase "Database=dst.sqlite;OpenMode=ReadWrite"
+
+By default entire model data is copied.
+It is also possible to copy only: model run results and input parameters,
+set of input parameters (workset), modeling task metadata and run history.
+
+To copy only one set of input parameters:
+  dbcopy -m redModel -OpenM.SetName Default
+  dbcopy -m redModel -s Default
+
+To copy only one model run results and input parameters:
+  dbcopy -m modelOne -OpenM.RunId 101
+  dbcopy -m someModel -OpenM.RunName modelOne_2016_09_28_11_38_49_0945_101
+
+To copy only one modeling task metadata and run history:
+  dbcopy -m modelOne -OpenM.TaskName taskOne
+  dbcopy -m modelOne -OpenM.TaskId 1
+
+It may be convenient to pack (unpack) text files into .zip archive:
+  dbcopy -m modelOne -dbcopy.Zip=true
+  dbcopy -m modelOne -dbcopy.Zip
+  dbcopy -m redModel -OpenM.SetName Default -dbcopy.Zip
+
+By default model name is used to create output directory for text files or as input directory to import from.
+It may be a problem on Linux if current directory already contains executable "modelName".
+
+To specify output or input directory for text files:
+  dbcopy -m modelOne -dbcopy.OutputDir one
+  dbcopy -m redModel -dbcopy.OutputDir red -s Default
+  dbcopy -m redModel -dbcopy.InputDir red -dbcopy.To db -dbcopy.ToDatabase "Database=dst.sqlite;OpenMode=ReadWrite"
+  dbcopy -m redModel -dbcopy.OutputDir red -s Default
+
+Also in case of input parameters you can use "-OpenM.ParamDir" or "-p" to specify input or output directory:
+  dbcopy -m modelOne -OpenM.SetId 2 -OpenM.ParamDir two
+  dbcopy -m modelOne -OpenM.SetId 2 -p two
+  dbcopy -m redModel -s Default -p 101 -dbcopy.To db -dbcopy.ToDatabase "Database=dst.sqlite;OpenMode=ReadWrite"
+
+OpenM++ using hash digest to compare models, input parameters and output values.
+By default float and double values converted into text with "%.15g" format.
+It is possible to specify other format for float values digest calculation:
+  dbcopy -m redModel -OpenM.DoubleFormat "%.7G" -dbcopy.To db -dbcopy.ToDatabase "Database=dst.sqlite;OpenMode=ReadWrite"
+
+By default dbcopy using SQLite database connection:
+  dbcopy -m modelOne
+is equivalent of:
+  dbcopy -m modelOne -OpenM.DatabaseDriver SQLite -OpenM.Database "Database=modelOne.sqlite; Timeout=86400; OpenMode=ReadWrite;"
+
+Output database connection settings by default are the same as input database,
+which may not be suitable because you don't want to write into input database.
+
+To specify output database connection string and driver:
+  dbcopy -m modelOne -dbcopy.To db -dbcopy.ToDatabaseDriver SQLite -dbcopy.ToDatabase "Database=dst.sqlite; Timeout=86400; OpenMode=ReadWrite;"
+or skip default database driver name "SQLite":
+  dbcopy -m modelOne -dbcopy.To db -dbcopy.ToDatabase "Database=dst.sqlite; Timeout=86400; OpenMode=ReadWrite;"
+
+Other supported database drivers are "sqlite3" and "odbc":
+  dbcopy -m modelOne -dbcopy.To db -dbcopy.ToDatabaseDriver odbc -dbcopy.ToDatabase "DSN=bigSql"
+  dbcopy -m modelOne -dbcopy.To db -dbcopy.ToDatabaseDriver sqlite3 -dbcopy.ToDatabase "file:dst.sqlite?mode=rw"
+
+Also dbcopy support OpenM++ standard log settings (described in wiki at http://www.openmpp.org/wiki/):
+  -OpenM.LogToConsole: if true then log to standard output, default: true
+  -OpenM.LogToFile:    if true then log to file
+  -OpenM.LogFilePath:  path to log file, default = current/dir/exeName.log
+  -OpenM.LogUseTs:     if true then use time-stamp in log file name
+  -OpenM.LogUsePid:    if true then use pid-stamp in log file name
+  -OpenM.LogNoMsgTime: if true then do not prefix log messages with date-time
+  -OpenM.LogSql:       if true then log sql statements into log file
+*/
 package main
 
 import (

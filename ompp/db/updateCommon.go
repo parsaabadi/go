@@ -10,6 +10,7 @@ import (
 )
 
 // UpdateProfile insert new, update existing or delete existing profile in profile_lst and profile_option tables.
+//
 // It always delete from profile_lst and profile_option rows where profile_name = profile.Name
 // If profile.Opts is not empty then new rows inserted into profile_lst and profile_option.
 func UpdateProfile(dbConn *sql.DB, profile *ProfileMeta) error {

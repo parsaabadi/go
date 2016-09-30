@@ -13,6 +13,7 @@ import (
 )
 
 // UpdateTask insert new or update existing modeling task and task run history in database.
+//
 // Model id, task id, run id, set id updated with actual database id's.
 // Remove non-existing worksets and model runs from task
 func UpdateTask(

@@ -53,7 +53,7 @@ const (
 	LogUseTs          = "OpenM.LogUseTimeStamp" // if true then use time-stamp in log file name
 	LogUsePid         = "OpenM.LogUsePidStamp"  // if true then use pid-stamp in log file name
 	LogNoMsgTime      = "OpenM.LogNoMsgTime"    // if true then do not prefix log messages with date-time
-	LogSql            = "OpenM.LogSql"          // if true then log sql statements
+	LogSql            = "OpenM.LogSql"          // if true then log sql statements into log file
 )
 
 // RunOptions is (key,value) map of command line arguments and ini-file.
@@ -157,7 +157,7 @@ func New() (*RunOptions, *LogOptions, error) {
 	return runOpts, logOpts, nil
 }
 
-// IsExist return true if key is defined as command line argument or ini-file option
+// IsExist return true if key is defined as command line argument or ini-file option.
 func (opts *RunOptions) IsExist(key string) bool {
 	if opts == nil || opts.KeyValue == nil {
 		return false
@@ -267,7 +267,7 @@ func addStandardFlags(runOpts *RunOptions, logOpts *LogOptions) {
 	_ = flag.Bool(LogUseTs, false, "if true then use time-stamp in log file name")
 	_ = flag.Bool(LogUsePid, false, "if true then use pid-stamp in log file name")
 	flag.BoolVar(&logOpts.IsNoMsgTime, LogNoMsgTime, false, "if true then do not prefix log messages with date-time")
-	flag.BoolVar(&logOpts.IsLogSql, LogSql, false, "if true then log sql statements")
+	flag.BoolVar(&logOpts.IsLogSql, LogSql, false, "if true then log sql statements into log file")
 }
 
 // adjust log settings by merging command line arguments and ini-file options

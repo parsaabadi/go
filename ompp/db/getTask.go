@@ -59,7 +59,8 @@ func GetTaskByName(dbConn *sql.DB, modelId int, name string) (*TaskRow, []int, e
 	return taskRow, idRs, nil
 }
 
-// GetTaskByModelId return list of modeling tasks with description and notes: task_lst and task_txt rows
+// GetTaskByModelId return list of modeling tasks with description and notes: task_lst and task_txt rows.
+//
 // If langCode not empty then only specified language selected else all languages
 func GetTaskByModelId(dbConn *sql.DB, modelId int, langCode string) ([]TaskRow, []TaskTxtRow, error) {
 
@@ -182,6 +183,7 @@ func getTaskSetLst(dbConn *sql.DB, query string) (map[int][]int, error) {
 }
 
 // GetTaskText return modeling task description and notes: task_txt table rows.
+//
 // If langCode not empty then only specified language selected else all languages
 func GetTaskText(dbConn *sql.DB, taskId int, langCode string) ([]TaskTxtRow, error) {
 
@@ -246,6 +248,7 @@ func GetTaskLastRun(dbConn *sql.DB, taskId int) (*TaskRunRow, error) {
 }
 
 // GetTaskLastCompletedRun return last completed run of the modeling task: task_run_lst table row.
+//
 // Task run completed if run status one of: s=success, x=exit, e=error
 func GetTaskLastCompletedRun(dbConn *sql.DB, taskId int) (*TaskRunRow, error) {
 
@@ -364,6 +367,7 @@ func getTaskRunSetLst(dbConn *sql.DB, query string) ([]TaskRunSetRow, error) {
 
 // GetTaskFull return modeling task metadata, description, notes and run history
 // from db-tables: task_lst, task_txt, task_set, task_run_lst, task_run_set.
+//
 // It does not return non-completed task runs (run in progress).
 // If langCode not empty then only specified language selected else all languages
 func GetTaskFull(dbConn *sql.DB, modelDef *ModelMeta, taskRow *TaskRow, langCode string) (*TaskMeta, error) {
@@ -455,6 +459,7 @@ func GetTaskFull(dbConn *sql.DB, modelDef *ModelMeta, taskRow *TaskRow, langCode
 
 // GetTaskFullList return list of modeling tasks metadata, description, notes and run history
 // from db-tables: task_lst, task_txt, task_set, task_run_lst, task_run_set.
+//
 // If isSuccess true then return only successfully completed task runs else all completed runs.
 // It does not return non-completed task runs (run in progress).
 // If langCode not empty then only specified language selected else all languages

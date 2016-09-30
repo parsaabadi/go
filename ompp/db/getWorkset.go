@@ -19,6 +19,7 @@ func GetWorkset(dbConn *sql.DB, setId int) (*WorksetRow, error) {
 }
 
 // GetDefaultWorkset return default working set for the model.
+//
 // Default workset is a first workset for the model, each model must have default workset.
 func GetDefaultWorkset(dbConn *sql.DB, modelId int) (*WorksetRow, error) {
 	return getWsRow(dbConn,
@@ -30,6 +31,7 @@ func GetDefaultWorkset(dbConn *sql.DB, modelId int) (*WorksetRow, error) {
 }
 
 // GetWorksetByName return working set by name.
+//
 // If model has multiple worksets with that name then return first set.
 func GetWorksetByName(dbConn *sql.DB, modelId int, name string) (*WorksetRow, error) {
 	return getWsRow(dbConn,
@@ -45,6 +47,7 @@ func GetWorksetByName(dbConn *sql.DB, modelId int, name string) (*WorksetRow, er
 }
 
 // GetWorksetList return list of model worksets, description and notes: workset_lst and workset_txt rows.
+//
 // If langCode not empty then only specified language selected else all languages
 func GetWorksetList(dbConn *sql.DB, modelId int, langCode string) ([]WorksetRow, []WorksetTxtRow, error) {
 
@@ -138,6 +141,7 @@ func getWsLst(dbConn *sql.DB, query string) ([]WorksetRow, error) {
 }
 
 // GetWorksetText return workset description and notes: workset_txt table rows.
+//
 // If langCode not empty then only specified language selected else all languages
 func GetWorksetText(dbConn *sql.DB, setId int, langCode string) ([]WorksetTxtRow, error) {
 
@@ -179,6 +183,7 @@ func getWsText(dbConn *sql.DB, query string) ([]WorksetTxtRow, error) {
 }
 
 // GetWorksetRunIds return ids of model run results (run_id) where input parameters are from specified working set.
+//
 // Only successfully completed run ids returned, not failed, not "in progress".
 // This method is "local" to database and if data transfered between databases it very likely return wrong results.
 // This method is not recommended, use modeling task to establish relationship between input set and model run.
@@ -230,6 +235,7 @@ func GetWorksetParamIds(dbConn *sql.DB, modelDef *ModelMeta, setId int) ([]int, 
 }
 
 // GetWorksetParamText return parameter value notes: workset_parameter_txt table rows.
+//
 // If langCode not empty then only specified language selected else all languages
 func GetWorksetParamText(dbConn *sql.DB, modelDef *ModelMeta, setId int, paramId int, langCode string) ([]WorksetParamTxtRow, error) {
 
@@ -255,6 +261,7 @@ func GetWorksetParamText(dbConn *sql.DB, modelDef *ModelMeta, setId int, paramId
 }
 
 // GetWorksetAllParamText return all workset parameters value notes: workset_parameter_txt table rows.
+//
 // If langCode not empty then only specified language selected else all languages
 func GetWorksetAllParamText(dbConn *sql.DB, modelDef *ModelMeta, setId int, langCode string) ([]WorksetParamTxtRow, error) {
 
@@ -303,6 +310,7 @@ func getWsParamText(dbConn *sql.DB, modelDef *ModelMeta, query string) ([]Workse
 }
 
 // GetWorksetFull return full workset metadata: workset_lst, workset_txt, workset_parameter, workset_parameter_txt table rows.
+//
 // If langCode not empty then only specified language selected else all languages
 func GetWorksetFull(dbConn *sql.DB, modelDef *ModelMeta, setRow *WorksetRow, langCode string) (*WorksetMeta, error) {
 
@@ -388,6 +396,7 @@ func GetWorksetFull(dbConn *sql.DB, modelDef *ModelMeta, setRow *WorksetRow, lan
 }
 
 // GetWorksetFullList return list of full workset metadata: workset_lst, workset_txt, workset_parameter, workset_parameter_txt table rows.
+//
 // If isReadonly true then return only readonly worksets else all worksets.
 // If langCode not empty then only specified language selected else all languages
 func GetWorksetFullList(dbConn *sql.DB, modelDef *ModelMeta, isReadonly bool, langCode string) ([]WorksetMeta, error) {

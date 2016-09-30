@@ -10,6 +10,7 @@ import (
 )
 
 // GetModelTextList return list of the models text: model_dic_txt table rows.
+//
 // If langCode not empty then only specified language selected else all languages.
 func GetModelTextList(dbConn *sql.DB, langCode string) ([]ModelTxtRow, error) {
 
@@ -46,6 +47,7 @@ func GetModelTextList(dbConn *sql.DB, langCode string) ([]ModelTxtRow, error) {
 }
 
 // GetModelText return model text metadata: description and notes.
+//
 // If langCode not empty then only specified language selected else all languages.
 func GetModelText(dbConn *sql.DB, modelId int, langCode string) (*ModelTxtMeta, error) {
 

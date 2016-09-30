@@ -45,7 +45,7 @@ const (
 // Open database connection.
 //
 // Default driver name: "SQLite" and connection string is compatible with model connection, ie:
-//     Database=C:\My Model\m1.sqlite; Timeout=86400; OpenMode=ReadWrite;
+//     Database=modelName.sqlite; Timeout=86400; OpenMode=ReadWrite;
 // Otherwise it is expected to be driver-specific connection string, ie:
 //     DSN=ms2014; UID=sa; PWD=secret;
 //     file:m1.sqlite?mode=rw&_busy_timeout=86400000
@@ -74,14 +74,14 @@ func Open(dbConnStr, dbDriver string, isFacetRequired bool) (*sql.DB, Facet, err
 	return dbConn, facet, nil
 }
 
-// DefaultConnectionSettings return SQLite connection string and driver name based on model name:
-//   Database=modelName.sqlite; Timeout=86400; OpenMode=ReadOnly;
+// IfEmptyMakeDefault return SQLite connection string and driver name based on model name:
+//   Database=modelName.sqlite; Timeout=86400; OpenMode=ReadWrite;
 func IfEmptyMakeDefault(modelName, dbConnStr, dbDriver string) (string, string) {
 	if dbDriver == "" {
 		dbDriver = SQLiteDbDriver
 	}
 	if dbDriver == SQLiteDbDriver && (dbConnStr == "" && modelName != "") {
-		dbConnStr = "Database=" + modelName + ".sqlite; Timeout=86400; OpenMode=ReadOnly;"
+		dbConnStr = "Database=" + modelName + ".sqlite; Timeout=" + strconv.Itoa(SQLiteTimeout) + "; OpenMode=ReadWrite;"
 	}
 	return dbConnStr, dbDriver
 }
@@ -148,7 +148,7 @@ func prepareSqlite(dbConnStr string) (string, string, error) {
 	}
 
 	// make sqlite3 connection string
-	s3Conn := dbPath + "?mode=" + m
+	s3Conn := "file:" + dbPath + "?mode=" + m
 	if t != 0 {
 		s3Conn += "&_busy_timeout=" + strconv.Itoa(1000*t)
 	}
@@ -246,6 +246,7 @@ func TrxSelectRows(dbTrx *sql.Tx, query string, cvt func(rows *sql.Rows) error) 
 }
 
 // SelectToList select db rows into list using cvt to convert (scan) each db row into struct.
+//
 // It selects "page size" number of rows starting from row number == offset (zero based).
 // If page size <= 0 then all rows returned.
 func SelectToList(

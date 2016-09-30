@@ -9,6 +9,7 @@ import (
 )
 
 // WriteLayout describes parameters or output tables values for insert or update.
+//
 // Name is a parameter or output table name to read, also for output table if ValueName is not empty
 type WriteLayout struct {
 	Name      string // parameter name or output table name
@@ -18,6 +19,7 @@ type WriteLayout struct {
 }
 
 // ReadLayout describes source and size of data page to read input parameters or output tables.
+//
 // Name is a parameter or output table name to read.
 // For output table if ValueName is not empty then only accumulator or output expression
 // with that name selected (i.e: "acc1" or "expr4") else all output table accumulators (expressions) selected.

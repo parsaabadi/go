@@ -10,6 +10,7 @@ import (
 )
 
 // UpdateModelText insert new or update existing model text (description and notes) in database.
+//
 // Model id, type Hid, parameter Hid, table Hid, language id updated with actual database id's
 func UpdateModelText(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangList, modelTxt *ModelTxtMeta) error {
 

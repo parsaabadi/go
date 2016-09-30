@@ -94,7 +94,8 @@ func (Cell) CsvHeader(modelDef *ModelMeta, name string) ([]string, error) {
 	return h, nil
 }
 
-// CsvToRow return converter from parameter cell (dimensions and value) to csv row []string
+// CsvToRow return converter from parameter cell (dimensions and value) to csv row []string.
+//
 // Converter will retrun error if len(row) not equal to number of fields in csv record.
 // Double format string is used if parameter type is float, double, long double
 func (Cell) CsvToRow(modelDef *ModelMeta, name string, doubleFmt string) (func(interface{}, []string) error, error) {
@@ -144,6 +145,7 @@ func (Cell) CsvToRow(modelDef *ModelMeta, name string, doubleFmt string) (func(i
 }
 
 // CsvToCell return closure to convert csv row []string to parameter cell (dimensions and value).
+//
 // It does retrun error if len(row) not equal to number of fields in cell db-record.
 func (Cell) CsvToCell(modelDef *ModelMeta, name string) (func(row []string) (interface{}, error), error) {
 
@@ -261,7 +263,8 @@ func (CellExpr) CsvHeader(modelDef *ModelMeta, name string) ([]string, error) {
 	return h, nil
 }
 
-// CsvToRow return converter from output table cell (expr_id, dimensions, value) to csv row []string
+// CsvToRow return converter from output table cell (expr_id, dimensions, value) to csv row []string.
+//
 // Converter will retrun error if len(row) not equal to number of fields in csv record.
 // Double format string is used if parameter type is float, double, long double
 func (CellExpr) CsvToRow(modelDef *ModelMeta, name string, doubleFmt string) (func(interface{}, []string) error, error) {
@@ -301,6 +304,7 @@ func (CellExpr) CsvToRow(modelDef *ModelMeta, name string, doubleFmt string) (fu
 }
 
 // CsvToCell return closure to convert csv row []string to output table expression cell (dimensions and value).
+//
 // It does retrun error if len(row) not equal to number of fields in cell db-record.
 func (CellExpr) CsvToCell(modelDef *ModelMeta, name string) (func(row []string) (interface{}, error), error) {
 
@@ -415,7 +419,8 @@ func (CellAcc) CsvHeader(modelDef *ModelMeta, name string) ([]string, error) {
 	return h, nil
 }
 
-// CsvToRow return converter from output table cell (acc_id, sub_id, dimensions, value) to csv row []string
+// CsvToRow return converter from output table cell (acc_id, sub_id, dimensions, value) to csv row []string.
+//
 // Converter will retrun error if len(row) not equal to number of fields in csv record.
 // Double format string is used if parameter type is float, double, long double
 func (CellAcc) CsvToRow(modelDef *ModelMeta, name string, doubleFmt string) (func(interface{}, []string) error, error) {
@@ -456,6 +461,7 @@ func (CellAcc) CsvToRow(modelDef *ModelMeta, name string, doubleFmt string) (fun
 }
 
 // CsvToCell return closure to convert csv row []string to output table accumulator cell (dimensions and value).
+//
 // It does retrun error if len(row) not equal to number of fields in cell db-record.
 func (CellAcc) CsvToCell(modelDef *ModelMeta, name string) (func(row []string) (interface{}, error), error) {
 

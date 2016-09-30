@@ -92,6 +92,7 @@ type LangMeta struct {
 }
 
 // ProfileMeta is rows from profile_option table.
+//
 // Profile is a named group of (key, value) options, similar to ini-file.
 // Default model options has profile_name = model_name.
 type ProfileMeta struct {
@@ -100,6 +101,7 @@ type ProfileMeta struct {
 }
 
 // LangLstRow is db row of lang_lst table.
+//
 // LangId (lang_lst.lang_id) is db-unique id of the language, use lang_code to find same language in other db.
 type LangLstRow struct {
 	LangId   int    // lang_id   INT          NOT NULL
@@ -115,6 +117,7 @@ type WordRow struct {
 }
 
 // ModelDicRow is db row of model_dic table.
+//
 // ModelId (model_dic.model_id) is db-unique id of the model, use digest to find same model in other db.
 type ModelDicRow struct {
 	ModelId        int    // model_id         INT          NOT NULL
@@ -135,6 +138,7 @@ type ModelTxtRow struct {
 }
 
 // TypeDicRow is db row of type_dic join to model_type_dic table.
+//
 // TypeHid (type_dic.type_hid) is db-unique id of the type, use digest to find same type in other db.
 // TypeId (model_type_dic.model_type_id) is model-unique type id, assigned by model compiler.
 type TypeDicRow struct {
@@ -177,6 +181,7 @@ type TypeEnumTxtRow struct {
 }
 
 // ParamDicRow is db row of parameter_dic join to model_parameter_dic table
+//
 // ParamHid (parameter_dic.parameter_hid) is db-unique id of the parameter, use digest to find same parameter in other db.
 // ParamId (model_parameter_dic.model_parameter_id) is model-unique parameter id, assigned by model compiler.
 type ParamDicRow struct {
@@ -225,7 +230,8 @@ type ParamDimsTxtRow struct {
 	Note     string // note               VARCHAR(32000)
 }
 
-// TableDicRow is db row of table_dic join to model_table_dic table
+// TableDicRow is db row of table_dic join to model_table_dic table.
+//
 // TableHid (table_dic.table_hid) is db-unique id of the output table, use digest to find same table in other db.
 // TableId (model_table_dic.model_table_id) is model-unique output table id, assigned by model compiler.
 type TableDicRow struct {

@@ -10,6 +10,7 @@ import (
 )
 
 // UpdateWorkset insert new or update existing workset metadata in database.
+//
 // Model id, set id, parameter Hid, base run id updated with actual database id's.
 func UpdateWorkset(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangList, meta *WorksetMeta) error {
 

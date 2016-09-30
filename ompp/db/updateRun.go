@@ -15,6 +15,7 @@ import (
 )
 
 // UpdateRun insert new or return existing model run metadata in database.
+//
 // Run status must be completed (success, exit or error) otherwise error returned.
 // If this run already exist then nothing is updated in database, only actual id's returned (model id, run id, parameter Hid).
 // Following is used to find existing model run:
@@ -264,6 +265,7 @@ func doUpdateRunDigest(trx *sql.Tx, runId int) (string, error) {
 }
 
 // UpdateRunText update run_txt table of existing run_id.
+//
 // Model id, run id, parameter Hid updated with actual database id's.
 // If run not exist or status is not completed (success, exit, error) then function does nothing.
 func UpdateRunText(dbConn *sql.DB, modelDef *ModelMeta, runId int, txt []RunTxtRow) error {

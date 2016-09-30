@@ -16,6 +16,7 @@ import (
 )
 
 // WriteOutputTable insert output table values (accumulators or expressions) into model run.
+//
 // Model run must exist and be in completed state (i.e. success or error state).
 // Model run should not already contain output table values: it can be inserted only once in model run and cannot be updated after.
 // Double format is used for float model types digest calculation, if non-empty format supplied

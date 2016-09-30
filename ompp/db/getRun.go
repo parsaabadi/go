@@ -45,6 +45,7 @@ func GetLastRun(dbConn *sql.DB, modelId int) (*RunRow, error) {
 }
 
 // GetLastCompletedRun return last completed run of the model: run_lst table row.
+//
 // Run completed if run status one of: s=success, x=exit, e=error
 func GetLastCompletedRun(dbConn *sql.DB, modelId int) (*RunRow, error) {
 	return getRunRow(dbConn,
@@ -61,6 +62,7 @@ func GetLastCompletedRun(dbConn *sql.DB, modelId int) (*RunRow, error) {
 }
 
 // GetRunByName return model run row by run name: run_lst table row.
+//
 // If there is multiple runs with this name then run with min(run_id) returned
 func GetRunByName(dbConn *sql.DB, name string) (*RunRow, error) {
 	return getRunRow(dbConn,
@@ -130,6 +132,7 @@ func getRunLst(dbConn *sql.DB, query string) ([]RunRow, error) {
 }
 
 // GetRunList return list of model runs with description and notes: run_lst and run_txt rows.
+//
 // If langCode not empty then only specified language selected else all languages
 func GetRunList(dbConn *sql.DB, modelId int, langCode string) ([]RunRow, []RunTxtRow, error) {
 
@@ -171,6 +174,7 @@ func GetRunList(dbConn *sql.DB, modelId int, langCode string) ([]RunRow, []RunTx
 }
 
 // GetRunText return model run description and notes: run_txt table rows.
+//
 // If langCode not empty then only specified language selected else all languages
 func GetRunText(dbConn *sql.DB, runId int, langCode string) ([]RunTxtRow, error) {
 
@@ -213,6 +217,7 @@ func getRunText(dbConn *sql.DB, query string) ([]RunTxtRow, error) {
 }
 
 // GetRunParamText return run parameter value notes: run_parameter_txt table rows.
+//
 // If langCode not empty then only specified language selected else all languages
 func GetRunParamText(dbConn *sql.DB, modelDef *ModelMeta, runId int, paramId int, langCode string) ([]RunParamTxtRow, error) {
 
@@ -238,6 +243,7 @@ func GetRunParamText(dbConn *sql.DB, modelDef *ModelMeta, runId int, paramId int
 }
 
 // GetRunAllParamText return all run parameters value notes: run_parameter_txt table rows.
+//
 // If langCode not empty then only specified language selected else all languages
 func GetRunAllParamText(dbConn *sql.DB, modelDef *ModelMeta, runId int, langCode string) ([]RunParamTxtRow, error) {
 
@@ -286,6 +292,7 @@ func getRunParamText(dbConn *sql.DB, modelDef *ModelMeta, query string) ([]RunPa
 }
 
 // GetRunFull return full metadata for completed model run: run_lst, run_txt, run_option run_parameter_txt rows.
+//
 // It does not return non-completed runs (run in progress).
 // If langCode not empty then only specified language selected else all languages
 func GetRunFull(dbConn *sql.DB, modelDef *ModelMeta, runRow *RunRow, langCode string) (*RunMeta, error) {
@@ -364,6 +371,7 @@ func GetRunFull(dbConn *sql.DB, modelDef *ModelMeta, runRow *RunRow, langCode st
 }
 
 // GetRunFullList return list of full metadata for completed model runs: run_lst, run_txt, run_option run_parameter_txt rows.
+//
 // If isSuccess true then return only successfully completed runs else all completed runs.
 // It does not return non-completed runs (run in progress).
 // If langCode not empty then only specified language selected else all languages

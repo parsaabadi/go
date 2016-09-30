@@ -10,6 +10,7 @@ import (
 )
 
 // UpdateModelGroup insert new or update existing model groups and groups text (description, notes) in group_lst, group_pc, group_txt.
+//
 // If modelGroup contains all non-empty GroupLst slice then all 3 tables (group_lst, group_pc, group_txt) erased and new values inserted.
 // If only text slice GroupTxt non-empty then only group_txt rows updated or inserted (not deleted).
 // Model id and language id updated with id's from modelDef (assuming it contains actual db id's)

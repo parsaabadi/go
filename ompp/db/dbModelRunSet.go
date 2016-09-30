@@ -4,6 +4,7 @@
 package db
 
 // Model run part of database: run, workset, task, profile.
+//
 // That portion of model database updated during model run and should not be cached.
 
 // Model run status (run_lst table) and modeling task run status (task_run_lst table):
@@ -30,6 +31,7 @@ type RunMeta struct {
 }
 
 // RunRow is model run row: run_lst table row.
+//
 // Run status: i=init p=progress s=success x=exit e=error(failed).
 // Run id must be different from working set id (use id_lst to get it)
 type RunRow struct {
@@ -145,7 +147,6 @@ type TaskMeta struct {
 }
 
 // TaskRow is db row of task_lst.
-// Modeling task: named set of model inputs (of working sets)
 type TaskRow struct {
 	TaskId  int    // task_id      INT          NOT NULL, -- unique task id
 	ModelId int    // model_id     INT          NOT NULL
@@ -163,6 +164,7 @@ type TaskTxtRow struct {
 
 // TaskRunRow is db row of task_run_lst.
 // This table contains task run history and status.
+//
 // Task status: i=init p=progress w=wait s=success x=exit e=error(failed)
 //   if task status = w (wait) then
 //      model wait and NOT completed until other process set status to one of finals: s,x,e
