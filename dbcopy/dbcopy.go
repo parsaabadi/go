@@ -33,7 +33,7 @@ To copy only one set of input parameters:
 
 To copy only one model run results and input parameters:
   dbcopy -m modelOne -OpenM.RunId 101
-  dbcopy -m someModel -OpenM.RunName modelOne_2016_09_28_11_38_49_0945_101
+  dbcopy -m modelOne -OpenM.RunName modelOne_2016_09_28_11_38_49_0945_101
 
 To copy only one modeling task metadata and run history:
   dbcopy -m modelOne -OpenM.TaskName taskOne
