@@ -7,7 +7,31 @@ import (
 	"database/sql"
 	"errors"
 	"strconv"
+	"time"
+
+	"go.openmpp.org/ompp/helper"
 )
+
+// UpdateWorksetReadonly update workset readonly status.
+func UpdateWorksetReadonly(dbConn *sql.DB, setId int, isReadonly bool) error {
+
+	// do update in transaction scope
+	trx, err := dbConn.Begin()
+	if err != nil {
+		return err
+	}
+	err = TrxUpdate(trx,
+		"UPDATE workset_lst"+
+			" SET is_readonly = "+toBoolStr(isReadonly)+", "+" update_dt = "+toQuoted(helper.MakeDateTime(time.Now()))+
+			" WHERE set_id ="+strconv.Itoa(setId))
+	if err != nil {
+		trx.Rollback()
+		return err
+	}
+	trx.Commit()
+
+	return nil
+}
 
 // UpdateWorkset insert new or update existing workset metadata in database.
 //
@@ -130,6 +154,7 @@ func doUpdateOrInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList
 
 // doInsertWorkset insert new workset metadata in database.
 // It does update as part of transaction
+// New workset created as read-only.
 // Model id, parameter Hid, base run id updated with actual database id's.
 func doInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, meta *WorksetMeta) error {
 
@@ -140,14 +165,21 @@ func doInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, meta *
 	} else {
 		sbId = "NULL"
 	}
-	sId := strconv.Itoa(meta.Set.SetId)
+
+	// new workset created as read-only
+	meta.Set.IsReadonly = true
+
+	// set update time if not defined
+	if meta.Set.UpdateDateTime == "" {
+		meta.Set.UpdateDateTime = helper.MakeDateTime(time.Now())
+	}
 
 	// INSERT INTO workset_lst (set_id, base_run_id, model_id, set_name, is_readonly, update_dt)
 	// VALUES (22, NULL, 1, 'set 22', 0, '2012-08-17 16:05:59.0123')
 	err := TrxUpdate(trx,
 		"INSERT INTO workset_lst (set_id, base_run_id, model_id, set_name, is_readonly, update_dt)"+
 			" VALUES ("+
-			sId+", "+
+			strconv.Itoa(meta.Set.SetId)+", "+
 			sbId+", "+
 			strconv.Itoa(modelDef.Model.ModelId)+", "+
 			toQuoted(meta.Set.Name)+", "+
@@ -161,7 +193,7 @@ func doInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, meta *
 	if err = doInsertWorksetBody(trx, modelDef, langDef, meta); err != nil {
 		return err
 	}
-	return nil
+	return err
 }
 
 // doUpdateWorkset update workset metadata in database.
@@ -174,9 +206,13 @@ func doUpdateWorkset(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, meta *
 	// UPDATE workset_lst
 	// SET is_readonly = 0, update_dt = '2012-08-17 16:05:59.0123'
 	// WHERE set_id = 22
+	//
+	if meta.Set.UpdateDateTime == "" {
+		meta.Set.UpdateDateTime = helper.MakeDateTime(time.Now())
+	}
 	err := TrxUpdate(trx,
 		"UPDATE workset_lst"+
-			" SET is_readonly = "+toBoolStr(meta.Set.IsReadonly)+", update_dt = "+toQuoted(meta.Set.UpdateDateTime)+
+			" SET is_readonly = "+toBoolStr(meta.Set.IsReadonly)+", "+" update_dt = "+toQuoted(meta.Set.UpdateDateTime)+
 			" WHERE set_id ="+sId)
 	if err != nil {
 		return err

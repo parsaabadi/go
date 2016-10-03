@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 
 	"go.openmpp.org/ompp/config"
@@ -511,22 +512,41 @@ func fromWorksetTextToDb(
 		return 0, 0, nil // no workset
 	}
 
-	// save model workset
-	// update incoming set id with actual new set id created in database
-	// update incoming base run id with actual run id in database
+	// if set id is default zero then parse file name to get actual id
 	srcId := wm.Set.SetId
+
+	if srcId == 0 {
+		re := regexp.MustCompile("\\.set\\.([0-9]+)\\.")
+		s2 := re.FindStringSubmatch(filepath.Base(metaPath))
+		if len(s2) >= 2 {
+			srcId, _ = strconv.Atoi(s2[1]) // if any error source set id remain default zero
+		}
+	}
+
+	// update incoming base run id with actual run id in database
 	wm.Set.BaseRunId = runIdMap[wm.Set.BaseRunId] // update base run id
 
-	err = db.UpdateWorkset(dbConn, modelDef, langDef, &wm)
-	if err != nil {
-		return 0, 0, err
+	// update model name or digest of incoming set:
+	// if name or digest empty then assume it is match to the model
+	if wm.ModelName == "" && wm.ModelDigest != "" {
+		wm.ModelName = modelDef.Model.Name
 	}
-	dstId := wm.Set.SetId
+	if wm.ModelName != "" && wm.ModelDigest == "" {
+		wm.ModelDigest = modelDef.Model.Digest
+	}
 
-	omppLog.Log("Workset from ", srcId, " to ", dstId)
+	// update incoming parameter id's by name if id = 0 and name not "" empty
+	for k := range wm.Param {
 
-	if len(wm.Param) <= 0 {
-		return srcId, dstId, nil // workset is empty, no parameters
+		if wm.Param[k].ParamId != 0 || wm.Param[k].Name == "" {
+			continue // skip if id is defined or name undefined
+		}
+
+		idx, isExist := modelDef.ParamByName(wm.Param[k].Name)
+		if !isExist {
+			return 0, 0, errors.New("parameter not found or parameter name invalid: " + wm.Param[k].Name)
+		}
+		wm.Param[k].ParamId = modelDef.Param[idx].ParamId
 	}
 
 	// check if workset subdir exist
@@ -534,6 +554,19 @@ func fromWorksetTextToDb(
 
 	if _, err := os.Stat(csvDir); err != nil {
 		return 0, 0, errors.New("workset directory not found: " + strconv.Itoa(srcId) + " " + wm.Set.Name)
+	}
+
+	// save model workset
+	err = db.UpdateWorkset(dbConn, modelDef, langDef, &wm)
+	if err != nil {
+		return 0, 0, err
+	}
+	dstId := wm.Set.SetId // update incoming set id with actual new set id created in database
+
+	omppLog.Log("Workset from ", srcId, " to ", dstId)
+
+	if len(wm.Param) <= 0 {
+		return srcId, dstId, nil // workset is empty, no parameters
 	}
 
 	// read all workset parameters from csv files
