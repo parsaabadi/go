@@ -154,7 +154,6 @@ func doUpdateOrInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList
 
 // doInsertWorkset insert new workset metadata in database.
 // It does update as part of transaction
-// New workset created as read-only.
 // Model id, parameter Hid, base run id updated with actual database id's.
 func doInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, meta *WorksetMeta) error {
 
@@ -165,9 +164,6 @@ func doInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, meta *
 	} else {
 		sbId = "NULL"
 	}
-
-	// new workset created as read-only
-	meta.Set.IsReadonly = true
 
 	// set update time if not defined
 	if meta.Set.UpdateDateTime == "" {

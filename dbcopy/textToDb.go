@@ -535,7 +535,7 @@ func fromWorksetTextToDb(
 		wm.ModelDigest = modelDef.Model.Digest
 	}
 
-	// update incoming parameter id's by name if id = 0 and name not "" empty
+	// update incoming parameter id's by name if id = 0 (default) and name not "" empty default
 	for k := range wm.Param {
 
 		if wm.Param[k].ParamId != 0 || wm.Param[k].Name == "" {
@@ -547,6 +547,20 @@ func fromWorksetTextToDb(
 			return 0, 0, errors.New("parameter not found or parameter name invalid: " + wm.Param[k].Name)
 		}
 		wm.Param[k].ParamId = modelDef.Param[idx].ParamId
+	}
+
+	// update incoming parameter id's by name if id = 0 (default) and name not "" empty default
+	for k := range wm.ParamTxt {
+
+		if wm.ParamTxt[k].ParamId != 0 || wm.ParamTxt[k].Name == "" {
+			continue // skip if id is defined or name undefined
+		}
+
+		idx, isExist := modelDef.ParamByName(wm.ParamTxt[k].Name)
+		if !isExist {
+			return 0, 0, errors.New("parameter not found or parameter name invalid: " + wm.ParamTxt[k].Name)
+		}
+		wm.ParamTxt[k].ParamId = modelDef.Param[idx].ParamId
 	}
 
 	// check if workset subdir exist
@@ -570,7 +584,9 @@ func fromWorksetTextToDb(
 	}
 
 	// read all workset parameters from csv files
-	layout := db.WriteLayout{ToId: dstId}
+	// isReadonly = true for json created by db-to-text
+	// and hand-edited json may have isReadonly = default false
+	layout := db.WriteLayout{ToId: dstId, IsEditSet: !wm.Set.IsReadonly}
 
 	for j := range wm.Param {
 

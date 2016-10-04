@@ -90,7 +90,7 @@ type WorksetMeta struct {
 	Set         WorksetRow           // model workset rows: workset_lst
 	Txt         []WorksetTxtRow      // workset text rows: workset_txt
 	Param       []ParamDicRow        // workset parameter rows: parameter_dic join to model_parameter_dic
-	ParamTxt    []WorksetParamTxtRow // parameter text rows: workset_parameter_txt
+	ParamTxt    []WorksetParamTxtRow // parameter text rows: workset_parameter_txt plus parameter id and name
 }
 
 // WorksetRow is workset_lst table row.
@@ -112,10 +112,11 @@ type WorksetTxtRow struct {
 	Note     string // note      VARCHAR(32000)
 }
 
-// WorksetParamTxtRow is db row of workset_parameter_txt
+// WorksetParamTxtRow is db row of workset_parameter_txt plus parameter id and name
 type WorksetParamTxtRow struct {
 	SetId    int    // set_id             INT          NOT NULL
 	ParamId  int    // model_parameter_id INT          NOT NULL
+	Name     string // parameter_name     VARCHAR(255) NOT NULL
 	LangId   int    // lang_id            INT          NOT NULL
 	LangCode string // lang_code          VARCHAR(32)  NOT NULL
 	Note     string // note               VARCHAR(32000)
