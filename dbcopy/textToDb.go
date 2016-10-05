@@ -553,7 +553,7 @@ func fromWorksetTextListToDb(
 // update set id's and base run id's with actual id in destination database
 // it return source workset id (set id from metadata json file) and destination set id
 func fromWorksetTextToDb(
-	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangList, srcSetName string, srcId int, metaPath string, csvDir string, runIdMap map[int]int) (int, int, error) {
+	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangList, srcName string, srcId int, metaPath string, csvDir string, runIdMap map[int]int) (int, int, error) {
 
 	// if no metadata file and no csv directory then exit: nothing to do
 	if metaPath == "" && csvDir == "" {
@@ -565,7 +565,7 @@ func fromWorksetTextToDb(
 	var wm db.WorksetMeta
 
 	if metaPath == "" && csvDir != "" {
-		wm.Set.Name = srcSetName
+		wm.Set.Name = srcName
 		wm.ModelName = modelDef.Model.Name
 	}
 
@@ -581,7 +581,7 @@ func fromWorksetTextToDb(
 				return 0, 0, nil // no workset
 			}
 			// metadata empty but there is csv directory: use expected model name and set name
-			wm.Set.Name = srcSetName
+			wm.Set.Name = srcName
 			wm.ModelName = modelDef.Model.Name
 
 		} else {

@@ -288,9 +288,9 @@ func (typeRow *TypeDicRow) sqlColumnType(dbFacet Facet) (string, error) {
 	// path to a file (a string)
 	case "file":
 		return dbFacet.textType(4096), nil
-		// go 1.7
-		// linux:  return dbFacet.textType(syscall.PathMax), nil
-		// win:    return dbFacet.textType(syscall.MAX_PATH), nil
+		// go 1.7 max path:
+		// linux:  syscall.PathMax
+		// win:    syscall.MAX_PATH
 	}
 
 	return "", errors.New("invalid type id: " + strconv.Itoa(typeRow.TypeId))
