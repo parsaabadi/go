@@ -139,45 +139,84 @@ func textToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 		inpDir = filepath.Join(outDir, base)
 	}
 
-	// get workset metadata file name by set id or set name or both
+	// get workset metadata json path and csv directory by set id or set name or both
 	var metaPath string
+	var csvDir string
 
 	if runOpts.IsExist(config.SetName) && runOpts.IsExist(config.SetId) { // both: set id and name
 
 		metaPath = filepath.Join(inpDir,
 			modelName+".set."+strconv.Itoa(setId)+"."+helper.ToAlphaNumeric(setName)+".json")
 
+		if _, err := os.Stat(metaPath); err != nil { // clear path to indicate metadata json file exist
+			metaPath = ""
+		}
+
+		csvDir = filepath.Join(inpDir,
+			"set."+strconv.Itoa(setId)+"."+helper.ToAlphaNumeric(setName))
+
+		if _, err := os.Stat(csvDir); err != nil { // clear path to indicate csv directory exist
+			csvDir = ""
+		}
+
 	} else { // set id or set name only
 
-		// make file search pattern
-		var namePattern string
+		// make path search patterns for metadata json and csv directory
+		var cp string
 		if runOpts.IsExist(config.SetName) && !runOpts.IsExist(config.SetId) { // set name only
-			namePattern = modelName + ".set.[0-9]*." + helper.ToAlphaNumeric(setName) + ".json"
+			cp = "set.[0-9]*." + helper.ToAlphaNumeric(setName)
 		}
 		if !runOpts.IsExist(config.SetName) && runOpts.IsExist(config.SetId) { // set id only
-			namePattern = modelName + ".set." + strconv.Itoa(setId) + ".*.json"
+			cp = "set." + strconv.Itoa(setId) + ".*"
 		}
+		mp := modelName + "." + cp + ".json"
 
-		// find file name by the pattern: it must be single workset metadata file
-		fl, err := filepath.Glob(inpDir + "/" + namePattern)
+		// find path to metadata json by pattern
+		fl, err := filepath.Glob(inpDir + "/" + mp)
 		if err != nil {
 			return err
 		}
-		if len(fl) == 1 {
+		if len(fl) >= 1 {
 			metaPath = fl[0]
-		} else {
-			if len(fl) <= 0 {
-				return errors.New("workset metadata json file not found: " + strconv.Itoa(setId) + " " + setName)
-			}
 			if len(fl) > 1 {
-				return errors.New("found multiple workset metadata json files, it must be single file: " + strconv.Itoa(setId) + " " + setName)
+				omppLog.Log("found multiple workset metadata json files, using: " + filepath.Base(metaPath))
+			}
+		}
+
+		// csv directory:
+		// if metadata json file exist then check if csv directory for that json file
+		if metaPath != "" {
+
+			re := regexp.MustCompile("\\.set\\.([0-9]+)\\.((_|[0-9A-Za-z])+)\\.json")
+			s := re.FindString(filepath.Base(metaPath))
+
+			if len(s) > 6 { // expected match string: .set.4.q.json, csv directory: set.4.q
+
+				csvDir = filepath.Join(inpDir, s[1:len(s)-5])
+
+				if _, err := os.Stat(csvDir); err != nil {
+					csvDir = ""
+				}
+			}
+
+		} else { // metadata json file not exist: search for csv directory by pattern
+
+			fl, err := filepath.Glob(inpDir + "/" + cp)
+			if err != nil {
+				return err
+			}
+			if len(fl) >= 1 {
+				csvDir = fl[0]
+				if len(fl) > 1 {
+					omppLog.Log("found multiple workset csv directories, using: " + filepath.Base(csvDir))
+				}
 			}
 		}
 	}
 
-	// check if metadata json file file exist
-	if _, err := os.Stat(metaPath); err != nil {
-		return errors.New("workset metadata json file not found or empty: " + strconv.Itoa(setId) + " " + setName)
+	// check results: metadata json file or csv directory must exist
+	if metaPath == "" && csvDir == "" {
+		return errors.New("workset metadata json file and csv directory, workset: " + strconv.Itoa(setId) + " " + setName)
 	}
 
 	// get connection string and driver name
@@ -222,11 +261,11 @@ func textToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 	runIdMap := make(map[int]int)
 
 	// read from metadata json and csv files and update target database
-	srcId, _, err := fromWorksetTextToDb(dstDb, modelDef, langDef, metaPath, runIdMap)
+	srcId, _, err := fromWorksetTextToDb(dstDb, modelDef, langDef, setName, setId, metaPath, csvDir, runIdMap)
 	if err != nil {
 		return err
 	}
-	if srcId <= 0 {
+	if srcId <= 0 && csvDir == "" {
 		return errors.New("workset not found or empty: " + strconv.Itoa(setId) + " " + setName)
 	}
 
@@ -483,7 +522,21 @@ func fromWorksetTextListToDb(
 	// read csv files from workset csv subdir and update parameter values
 	for k := range fl {
 
-		srcId, dstId, err := fromWorksetTextToDb(dbConn, modelDef, langDef, fl[k], runIdMap)
+		// check if workset subdir exist
+		re := regexp.MustCompile("\\.set\\.([0-9]+)\\.((_|[0-9A-Za-z])+)\\.json")
+		s := re.FindString(filepath.Base(fl[k]))
+
+		csvDir := ""
+		if len(s) > 6 { // expected match string: .set.4.q.json, csv directory: set.4.q
+
+			csvDir = filepath.Join(inpDir, s[1:len(s)-5])
+
+			if _, err := os.Stat(csvDir); err != nil {
+				csvDir = ""
+			}
+		}
+
+		srcId, dstId, err := fromWorksetTextToDb(dbConn, modelDef, langDef, "", 0, fl[k], csvDir, runIdMap)
 		if err != nil {
 			return nil, err
 		}
@@ -500,27 +553,53 @@ func fromWorksetTextListToDb(
 // update set id's and base run id's with actual id in destination database
 // it return source workset id (set id from metadata json file) and destination set id
 func fromWorksetTextToDb(
-	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangList, metaPath string, runIdMap map[int]int) (int, int, error) {
+	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangList, srcSetName string, srcId int, metaPath string, csvDir string, runIdMap map[int]int) (int, int, error) {
 
-	// get workset metadata
-	var wm db.WorksetMeta
-	isExist, err := helper.FromJsonFile(metaPath, &wm)
-	if err != nil {
-		return 0, 0, err
-	}
-	if !isExist {
+	// if no metadata file and no csv directory then exit: nothing to do
+	if metaPath == "" && csvDir == "" {
 		return 0, 0, nil // no workset
 	}
 
-	// if set id is default zero then parse file name to get actual id
-	srcId := wm.Set.SetId
+	// get workset metadata:
+	// model name and set name must be specified as parameter or inside of metadata json
+	var wm db.WorksetMeta
 
-	if srcId == 0 {
-		re := regexp.MustCompile("\\.set\\.([0-9]+)\\.")
-		s2 := re.FindStringSubmatch(filepath.Base(metaPath))
-		if len(s2) >= 2 {
-			srcId, _ = strconv.Atoi(s2[1]) // if any error source set id remain default zero
+	if metaPath == "" && csvDir != "" {
+		wm.Set.Name = srcSetName
+		wm.ModelName = modelDef.Model.Name
+	}
+
+	if metaPath != "" {
+
+		isExist, err := helper.FromJsonFile(metaPath, &wm)
+		if err != nil {
+			return 0, 0, err
 		}
+		if !isExist { // if metadata json empty and no csv directory then exit: no data
+
+			if csvDir == "" {
+				return 0, 0, nil // no workset
+			}
+			// metadata empty but there is csv directory: use expected model name and set name
+			wm.Set.Name = srcSetName
+			wm.ModelName = modelDef.Model.Name
+
+		} else {
+
+			// if set id is default zero then parse file name to get actual id
+			srcId = wm.Set.SetId
+
+			if srcId == 0 {
+				re := regexp.MustCompile("\\.set\\.([0-9]+)\\.")
+				s2 := re.FindStringSubmatch(filepath.Base(metaPath))
+				if len(s2) >= 2 {
+					srcId, _ = strconv.Atoi(s2[1]) // if any error source set id remain default zero
+				}
+			}
+		}
+	}
+	if wm.Set.Name == "" {
+		return 0, 0, errors.New("workset name is empty and metadata json file not found or empty")
 	}
 
 	// update incoming base run id with actual run id in database
@@ -533,6 +612,32 @@ func fromWorksetTextToDb(
 	}
 	if wm.ModelName != "" && wm.ModelDigest == "" {
 		wm.ModelDigest = modelDef.Model.Digest
+	}
+
+	// make list of parameter names: from metadata json or from csv directory files
+	var nameLst []string
+
+	if metaPath != "" && len(wm.Param) > 0 { // list of parameters from metadata json file
+		nameLst = make([]string, len(wm.Param))
+		for j := range wm.Param {
+			nameLst[j] = wm.Param[j].Name
+		}
+	}
+
+	if metaPath == "" && csvDir != "" { // only csv directory specified: make list of parameters based on csv file names
+
+		fl, err := filepath.Glob(csvDir + "/*.csv")
+		if err != nil {
+			return 0, 0, err
+		}
+		nameLst = make([]string, len(fl))
+		wm.Param = make([]db.ParamDicRow, len(fl))
+
+		for j := range fl {
+			nameLst[j] = filepath.Base(fl[j])
+			nameLst[j] = nameLst[j][:len(nameLst[j])-4] // remove .csv extension
+			wm.Param[j].Name = nameLst[j]
+		}
 	}
 
 	// update incoming parameter id's by name if id = 0 (default) and name not "" empty default
@@ -563,15 +668,8 @@ func fromWorksetTextToDb(
 		wm.ParamTxt[k].ParamId = modelDef.Param[idx].ParamId
 	}
 
-	// check if workset subdir exist
-	csvDir := filepath.Join(filepath.Dir(metaPath), "set."+strconv.Itoa(srcId)+"."+helper.ToAlphaNumeric(wm.Set.Name))
-
-	if _, err := os.Stat(csvDir); err != nil {
-		return 0, 0, errors.New("workset directory not found: " + strconv.Itoa(srcId) + " " + wm.Set.Name)
-	}
-
 	// save model workset
-	err = db.UpdateWorkset(dbConn, modelDef, langDef, &wm)
+	err := db.UpdateWorkset(dbConn, modelDef, langDef, &wm)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -579,29 +677,29 @@ func fromWorksetTextToDb(
 
 	omppLog.Log("Workset from ", srcId, " to ", dstId)
 
-	if len(wm.Param) <= 0 {
+	if len(nameLst) <= 0 {
 		return srcId, dstId, nil // workset is empty, no parameters
 	}
 
 	// read all workset parameters from csv files
-	// isReadonly = true for json created by db-to-text
-	// and hand-edited json may have isReadonly = default false
+	// isReadonly == true for json created by db-to-text
+	// and if no metadata json or handmade json then it may have isReadonly == default false
 	layout := db.WriteLayout{ToId: dstId, IsEditSet: !wm.Set.IsReadonly}
 
-	for j := range wm.Param {
+	for j := range nameLst {
 
 		// read parameter values from csv file
 		var cell db.Cell
-		cLst, err := fromCsvFile(csvDir, modelDef, wm.Param[j].Name, &cell)
+		cLst, err := fromCsvFile(csvDir, modelDef, nameLst[j], &cell)
 		if err != nil {
 			return 0, 0, err
 		}
 		if cLst == nil || cLst.Len() <= 0 {
-			return 0, 0, errors.New("workset: " + strconv.Itoa(srcId) + " " + wm.Set.Name + " parameter empty: " + wm.Param[j].Name)
+			return 0, 0, errors.New("workset: " + strconv.Itoa(srcId) + " " + wm.Set.Name + " parameter empty: " + nameLst[j])
 		}
 
 		// insert or update parameter values in workset
-		layout.Name = wm.Param[j].Name
+		layout.Name = nameLst[j]
 
 		err = db.WriteParameter(dbConn, modelDef, &layout, cLst, "")
 		if err != nil {
