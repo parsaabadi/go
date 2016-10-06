@@ -37,7 +37,7 @@ type RunMeta struct {
 type RunRow struct {
 	RunId          int    // run_id        INT          NOT NULL, -- unique run id
 	ModelId        int    // model_id      INT          NOT NULL
-	Name           string // set_name      VARCHAR(255) NOT NULL
+	Name           string // run_name      VARCHAR(255) NOT NULL
 	SubCount       int    // sub_count     INT          NOT NULL, -- subsamples count
 	SubStarted     int    // sub_started   INT          NOT NULL, -- number of subsamples started
 	SubCompleted   int    // sub_completed INT          NOT NULL, -- number of subsamples completed
