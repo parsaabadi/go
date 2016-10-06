@@ -195,6 +195,7 @@ func doInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, meta *
 // doUpdateWorkset update workset metadata in database.
 // It does update as part of transaction
 // Model id, parameter Hid, base run id updated with actual database id's.
+// It does delete existing parameter values which are not in the list of workset parameters.
 func doUpdateWorkset(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, meta *WorksetMeta) error {
 
 	sId := strconv.Itoa(meta.Set.SetId)
@@ -212,6 +213,42 @@ func doUpdateWorkset(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, meta *
 			" WHERE set_id ="+sId)
 	if err != nil {
 		return err
+	}
+
+	// get Hid's of current workset parameters list
+	var hs []int
+	err = TrxSelectRows(trx,
+		"SELECT parameter_hid FROM workset_parameter WHERE set_id ="+sId,
+		func(rows *sql.Rows) error {
+			var i int
+			err := rows.Scan(&i)
+			if err != nil {
+				return err
+			}
+			hs = append(hs, i)
+			return err
+		})
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+
+	// delete values for existing parameters, which are not in the new parameters list
+hidLoop:
+	for _, h := range hs {
+
+		idx, ok := modelDef.ParamByHid(h)
+		if !ok {
+			continue // handle non existing parameters later
+		}
+		for j := range meta.Param {
+			if modelDef.Param[idx].ParamId == meta.Param[j].ParamId {
+				continue hidLoop // id found in the new parameters list
+			}
+		}
+		// delete currenrt values of parameter: parameter not found in the new parameters list
+		if err = TrxUpdate(trx, "DELETE FROM "+modelDef.Param[idx].DbSetTable+" WHERE set_id = "+sId); err != nil {
+			return err
+		}
 	}
 
 	// delete existing workset_parameter_txt, workset_parameter, workset_txt
