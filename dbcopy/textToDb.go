@@ -257,11 +257,8 @@ func textToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 		return err
 	}
 
-	// TODO: run id based on run digest
-	runIdMap := make(map[int]int)
-
 	// read from metadata json and csv files and update target database
-	srcId, _, err := fromWorksetTextToDb(dstDb, modelDef, langDef, setName, setId, metaPath, csvDir, runIdMap)
+	srcId, _, err := fromWorksetTextToDb(dstDb, modelDef, langDef, setName, setId, metaPath, csvDir)
 	if err != nil {
 		return err
 	}
@@ -536,7 +533,7 @@ func fromWorksetTextListToDb(
 			}
 		}
 
-		srcId, dstId, err := fromWorksetTextToDb(dbConn, modelDef, langDef, "", 0, fl[k], csvDir, runIdMap)
+		srcId, dstId, err := fromWorksetTextToDb(dbConn, modelDef, langDef, "", 0, fl[k], csvDir)
 		if err != nil {
 			return nil, err
 		}
@@ -553,7 +550,7 @@ func fromWorksetTextListToDb(
 // update set id's and base run id's with actual id in destination database
 // it return source workset id (set id from metadata json file) and destination set id
 func fromWorksetTextToDb(
-	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangList, srcName string, srcId int, metaPath string, csvDir string, runIdMap map[int]int) (int, int, error) {
+	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangList, srcName string, srcId int, metaPath string, csvDir string) (int, int, error) {
 
 	// if no metadata file and no csv directory then exit: nothing to do
 	if metaPath == "" && csvDir == "" {
@@ -603,7 +600,26 @@ func fromWorksetTextToDb(
 	}
 
 	// update incoming base run id with actual run id in database
-	wm.Set.BaseRunId = runIdMap[wm.Set.BaseRunId] // update base run id
+	// if run digest empty then run id must be zero (treated as NULL) else find base run id by digest
+	if wm.Set.BaseRunDigest == "" {
+
+		wm.Set.BaseRunId = 0 // no run digest: no base run, set base run id as NULL
+
+	} else { // find base run id by digest
+
+		runRow, err := db.GetRunByDigest(dbConn, wm.Set.BaseRunDigest)
+		if err != nil {
+			return 0, 0, err
+		}
+
+		if runRow != nil {
+			wm.Set.BaseRunId = runRow.RunId
+		} else {
+			// run not found in target database: set base run id as NULL
+			wm.Set.BaseRunId = 0
+			omppLog.Log("warning: workset ", srcId, " ", wm.Set.Name, ", base run not found by digest ", wm.Set.BaseRunDigest)
+		}
+	}
 
 	// update model name or digest of incoming set:
 	// if name or digest empty then assume it is match to the model

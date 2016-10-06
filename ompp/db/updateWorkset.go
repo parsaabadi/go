@@ -198,10 +198,18 @@ func doInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, meta *
 // It does delete existing parameter values which are not in the list of workset parameters.
 func doUpdateWorkset(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, meta *WorksetMeta) error {
 
+	// if workset based on existing run then base run id must be positive
+	sbId := ""
+	if meta.Set.BaseRunId > 0 {
+		sbId = strconv.Itoa(meta.Set.BaseRunId)
+	} else {
+		sbId = "NULL"
+	}
+
 	sId := strconv.Itoa(meta.Set.SetId)
 
 	// UPDATE workset_lst
-	// SET is_readonly = 0, update_dt = '2012-08-17 16:05:59.0123'
+	// SET is_readonly = 0, base_run_id = 1234, update_dt = '2012-08-17 16:05:59.0123'
 	// WHERE set_id = 22
 	//
 	if meta.Set.UpdateDateTime == "" {
@@ -209,7 +217,9 @@ func doUpdateWorkset(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, meta *
 	}
 	err := TrxUpdate(trx,
 		"UPDATE workset_lst"+
-			" SET is_readonly = "+toBoolStr(meta.Set.IsReadonly)+", "+" update_dt = "+toQuoted(meta.Set.UpdateDateTime)+
+			" SET is_readonly = "+toBoolStr(meta.Set.IsReadonly)+", "+
+			" base_run_id = "+sbId+", "+
+			" update_dt = "+toQuoted(meta.Set.UpdateDateTime)+
 			" WHERE set_id ="+sId)
 	if err != nil {
 		return err

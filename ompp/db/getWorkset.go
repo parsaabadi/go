@@ -13,7 +13,9 @@ import (
 func GetWorkset(dbConn *sql.DB, setId int) (*WorksetRow, error) {
 	return getWsRow(dbConn,
 		"SELECT"+
-			" W.set_id, W.base_run_id, W.model_id, W.set_name, W.is_readonly, W.update_dt"+
+			" W.set_id, W.model_id, W.base_run_id,"+
+			" (SELECT R.run_digest FROM run_lst R WHERE R.run_id = W.base_run_id),"+
+			" W.set_name, W.is_readonly, W.update_dt"+
 			" FROM workset_lst W"+
 			" WHERE W.set_id = "+strconv.Itoa(setId))
 }
@@ -24,7 +26,9 @@ func GetWorkset(dbConn *sql.DB, setId int) (*WorksetRow, error) {
 func GetDefaultWorkset(dbConn *sql.DB, modelId int) (*WorksetRow, error) {
 	return getWsRow(dbConn,
 		"SELECT"+
-			" W.set_id, W.base_run_id, W.model_id, W.set_name, W.is_readonly, W.update_dt"+
+			" W.set_id, W.model_id, W.base_run_id,"+
+			" (SELECT R.run_digest FROM run_lst R WHERE R.run_id = W.base_run_id),"+
+			" W.set_name, W.is_readonly, W.update_dt"+
 			" FROM workset_lst W"+
 			" WHERE W.set_id ="+
 			" (SELECT MIN(M.set_id) FROM workset_lst M WHERE M.model_id = "+strconv.Itoa(modelId)+")")
@@ -36,7 +40,9 @@ func GetDefaultWorkset(dbConn *sql.DB, modelId int) (*WorksetRow, error) {
 func GetWorksetByName(dbConn *sql.DB, modelId int, name string) (*WorksetRow, error) {
 	return getWsRow(dbConn,
 		"SELECT"+
-			" W.set_id, W.base_run_id, W.model_id, W.set_name, W.is_readonly, W.update_dt"+
+			" W.set_id, W.model_id, W.base_run_id,"+
+			" (SELECT R.run_digest FROM run_lst R WHERE R.run_id = W.base_run_id),"+
+			" W.set_name, W.is_readonly, W.update_dt"+
 			" FROM workset_lst W"+
 			" WHERE W.set_id ="+
 			" ("+
@@ -58,7 +64,9 @@ func GetWorksetList(dbConn *sql.DB, modelId int, langCode string) ([]WorksetRow,
 
 	// select worksets by model id
 	q := "SELECT" +
-		" W.set_id, W.base_run_id, W.model_id, W.set_name, W.is_readonly, W.update_dt" +
+		" W.set_id, W.model_id, W.base_run_id," +
+		" (SELECT R.run_digest FROM run_lst R WHERE R.run_id = W.base_run_id)," +
+		" W.set_name, W.is_readonly, W.update_dt" +
 		" FROM workset_lst W" +
 		" WHERE W.model_id = " + strconv.Itoa(modelId) +
 		" ORDER BY 1"
@@ -93,13 +101,17 @@ func getWsRow(dbConn *sql.DB, query string) (*WorksetRow, error) {
 
 	err := SelectFirst(dbConn, query,
 		func(row *sql.Row) error {
-			var baseId sql.NullInt64
+			var rId sql.NullInt64
+			var rDigest sql.NullString
 			if err := row.Scan(
-				&setRow.SetId, &baseId, &setRow.ModelId, &setRow.Name, &setRow.IsReadonly, &setRow.UpdateDateTime); err != nil {
+				&setRow.SetId, &setRow.ModelId, &rId, &rDigest, &setRow.Name, &setRow.IsReadonly, &setRow.UpdateDateTime); err != nil {
 				return err
 			}
-			if baseId.Valid {
-				setRow.BaseRunId = int(baseId.Int64)
+			if rId.Valid {
+				setRow.BaseRunId = int(rId.Int64)
+			}
+			if rDigest.Valid {
+				setRow.BaseRunDigest = rDigest.String
 			}
 			return nil
 		})
@@ -123,12 +135,16 @@ func getWsLst(dbConn *sql.DB, query string) ([]WorksetRow, error) {
 		func(rows *sql.Rows) error {
 			var r WorksetRow
 			var rId sql.NullInt64
+			var rDigest sql.NullString
 			if err := rows.Scan(
-				&r.SetId, &rId, &r.ModelId, &r.Name, &r.IsReadonly, &r.UpdateDateTime); err != nil {
+				&r.SetId, &r.ModelId, &rId, &rDigest, &r.Name, &r.IsReadonly, &r.UpdateDateTime); err != nil {
 				return err
 			}
 			if rId.Valid {
 				r.BaseRunId = int(rId.Int64)
+			}
+			if rDigest.Valid {
+				r.BaseRunDigest = rDigest.String
 			}
 			setRs = append(setRs, r)
 			return nil
@@ -416,7 +432,9 @@ func GetWorksetFullList(dbConn *sql.DB, modelDef *ModelMeta, isReadonly bool, la
 	smId := strconv.Itoa(modelDef.Model.ModelId)
 
 	q := "SELECT" +
-		" H.set_id, H.base_run_id, H.model_id, H.set_name, H.is_readonly, H.update_dt" +
+		" H.set_id, H.model_id, H.base_run_id," +
+		" (SELECT R.run_digest FROM run_lst R WHERE R.run_id = H.base_run_id)," +
+		" H.set_name, H.is_readonly, H.update_dt" +
 		" FROM workset_lst H" +
 		" WHERE H.model_id = " + smId +
 		roFilter +

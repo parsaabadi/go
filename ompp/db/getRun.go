@@ -17,7 +17,7 @@ func GetRun(dbConn *sql.DB, runId int) (*RunRow, error) {
 			" H.sub_started, H.sub_completed, H.create_dt, H.status,"+
 			" H.update_dt, H.run_digest"+
 			" FROM run_lst H"+
-			" WHERE H.run_id ="+strconv.Itoa(runId))
+			" WHERE H.run_id = "+strconv.Itoa(runId))
 }
 
 // GetFirstRun return first run of the model: run_lst table row.
@@ -59,6 +59,17 @@ func GetLastCompletedRun(dbConn *sql.DB, modelId int) (*RunRow, error) {
 			" SELECT MAX(M.run_id) FROM run_lst M"+
 			" WHERE M.model_id = "+strconv.Itoa(modelId)+" AND M.status IN ('s', 'x', 'e')"+
 			" )")
+}
+
+// GetRunByDigest return model run row by digest: run_lst table row.
+func GetRunByDigest(dbConn *sql.DB, digest string) (*RunRow, error) {
+	return getRunRow(dbConn,
+		"SELECT"+
+			" H.run_id, H.model_id, H.run_name, H.sub_count,"+
+			" H.sub_started, H.sub_completed, H.create_dt, H.status,"+
+			" H.update_dt, H.run_digest"+
+			" FROM run_lst H"+
+			" WHERE H.run_digest = "+toQuoted(digest))
 }
 
 // GetRunByName return model run row by run name: run_lst table row.

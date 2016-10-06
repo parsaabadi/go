@@ -96,8 +96,9 @@ type WorksetMeta struct {
 // WorksetRow is workset_lst table row.
 type WorksetRow struct {
 	SetId          int    // unique working set id
-	BaseRunId      int    // if not NULL and positive then base run id (source run id)
 	ModelId        int    // model_id     INT          NOT NULL
+	BaseRunId      int    // if not NULL and positive then base run id (source run id)
+	BaseRunDigest  string // if not empty then digest of the base run
 	Name           string // set_name     VARCHAR(255) NOT NULL
 	IsReadonly     bool   // is_readonly  SMALLINT     NOT NULL
 	UpdateDateTime string // update_dt    VARCHAR(32)  NOT NULL, -- last update date-time

@@ -166,11 +166,8 @@ func dbToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOpti
 		return err
 	}
 
-	// TODO: run id based on run digest
-	runIdMap := make(map[int]int)
-
 	// copy source workset metadata and parameters into destination database
-	_, err = copyWorksetDbToDb(srcDb, dstDb, srcModel, dstModel, srcWs, dstLang, runIdMap)
+	_, err = copyWorksetDbToDb(srcDb, dstDb, srcModel, dstModel, srcWs, dstLang)
 	if err != nil {
 		return err
 	}
@@ -274,7 +271,7 @@ func copyDbToDb(
 	}
 
 	// source to destination: copy all readonly worksets parameters
-	setIdMap, err := copyWorksetListDbToDb(srcDb, dstDb, srcModel, dstModel, dstLang, runIdMap)
+	setIdMap, err := copyWorksetListDbToDb(srcDb, dstDb, srcModel, dstModel, dstLang)
 	if err != nil {
 		return err
 	}
@@ -412,7 +409,7 @@ func copyRunDbToDb(
 
 // copyWorksetListDbToDb do copy all readonly worksets parameters from source to destination database
 func copyWorksetListDbToDb(
-	srcDb *sql.DB, dstDb *sql.DB, srcModel *db.ModelMeta, dstModel *db.ModelMeta, dstLang *db.LangList, runIdMap map[int]int) (map[int]int, error) {
+	srcDb *sql.DB, dstDb *sql.DB, srcModel *db.ModelMeta, dstModel *db.ModelMeta, dstLang *db.LangList) (map[int]int, error) {
 
 	// source: get all readonly worksets in all languages
 	srcWl, err := db.GetWorksetFullList(srcDb, srcModel, true, "")
@@ -431,7 +428,7 @@ func copyWorksetListDbToDb(
 
 		srcId := srcWl[k].Set.SetId
 
-		dstId, err := copyWorksetDbToDb(srcDb, dstDb, srcModel, dstModel, &srcWl[k], dstLang, runIdMap)
+		dstId, err := copyWorksetDbToDb(srcDb, dstDb, srcModel, dstModel, &srcWl[k], dstLang)
 		if err != nil {
 			return nil, err
 		}
@@ -443,7 +440,7 @@ func copyWorksetListDbToDb(
 // copyWorksetDbToDb do copy workset metadata and parameters from source to destination database
 // it return destination set id (set id in destination database)
 func copyWorksetDbToDb(
-	srcDb *sql.DB, dstDb *sql.DB, srcModel *db.ModelMeta, dstModel *db.ModelMeta, srcWs *db.WorksetMeta, dstLang *db.LangList, runIdMap map[int]int) (int, error) {
+	srcDb *sql.DB, dstDb *sql.DB, srcModel *db.ModelMeta, dstModel *db.ModelMeta, srcWs *db.WorksetMeta, dstLang *db.LangList) (int, error) {
 
 	// validate parameters
 	if srcWs == nil {
@@ -459,7 +456,27 @@ func copyWorksetDbToDb(
 	// update incoming set id with actual new set id created in database
 	// update incoming base run id with actual run id in database
 	srcId := srcWs.Set.SetId
-	dstWs.Set.BaseRunId = runIdMap[srcWs.Set.BaseRunId] // update base run id
+
+	// update incoming base run id with actual run id in database
+	// if run digest empty then run id must be zero (treated as NULL) else find base run id by digest
+	if dstWs.Set.BaseRunDigest == "" {
+
+		dstWs.Set.BaseRunId = 0 // no run digest: no base run, set base run id as NULL
+
+	} else { // find base run id by digest
+
+		runRow, err := db.GetRunByDigest(srcDb, dstWs.Set.BaseRunDigest)
+		if err != nil {
+			return 0, err
+		}
+		if runRow != nil {
+			dstWs.Set.BaseRunId = runRow.RunId
+		} else {
+			// run not found in target database: set base run id as NULL
+			dstWs.Set.BaseRunId = 0
+			omppLog.Log("warning: workset ", srcId, " ", dstWs.Set.Name, ", base run not found by digest ", dstWs.Set.BaseRunDigest)
+		}
+	}
 
 	err := db.UpdateWorkset(dstDb, dstModel, dstLang, &dstWs)
 	if err != nil {
