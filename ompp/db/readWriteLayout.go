@@ -12,10 +12,9 @@ import (
 //
 // Name is a parameter or output table name to read, also for output table if ValueName is not empty
 type WriteLayout struct {
-	Name      string // parameter name or output table name
-	ToId      int    // run id or set id to write parameter or output table values
-	IsToRun   bool   // only for parameter: if true then write into into model run else into workset
-	IsEditSet bool   // only for parameter: if true then workset must be editable (readonly = false) else must be readonly
+	Name    string // parameter name or output table name
+	ToId    int    // run id or set id to write parameter or output table values
+	IsToRun bool   // only for parameter: if true then write into into model run else into workset
 }
 
 // ReadLayout describes source and size of data page to read input parameters or output tables.

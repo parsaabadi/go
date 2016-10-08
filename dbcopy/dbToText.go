@@ -347,6 +347,12 @@ func toWorksetTextFileList(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string
 // toWorksetTextFile write workset into csv file, in separate subdirectory
 func toWorksetTextFile(dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.WorksetMeta, outDir string, doubleFmt string) error {
 
+	// convert db rows into "public" format
+	pub, err := meta.ToPublic(dbConn, modelDef)
+	if err != nil {
+		return err
+	}
+
 	// create workset subdir under output dir
 	setId := meta.Set.SetId
 	omppLog.Log("Workset ", setId, " ", meta.Set.Name)
@@ -354,7 +360,7 @@ func toWorksetTextFile(dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.WorksetM
 	csvName := "set." + strconv.Itoa(setId) + "." + helper.ToAlphaNumeric(meta.Set.Name)
 	csvDir := filepath.Join(outDir, csvName)
 
-	err := os.MkdirAll(csvDir, 0750)
+	err = os.MkdirAll(csvDir, 0750)
 	if err != nil {
 		return err
 	}
@@ -362,9 +368,9 @@ func toWorksetTextFile(dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.WorksetM
 	layout := &db.ReadLayout{FromId: setId, IsFromSet: true}
 
 	// write parameter into csv file
-	for j := range meta.Param {
+	for j := range pub.Param {
 
-		layout.Name = meta.Param[j].Name
+		layout.Name = pub.Param[j].Name
 
 		cLst, err := db.ReadParameter(dbConn, modelDef, layout)
 		if err != nil {
@@ -382,7 +388,7 @@ func toWorksetTextFile(dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.WorksetM
 	}
 
 	// save model workset metadata into json
-	if err := helper.ToJsonFile(filepath.Join(outDir, modelDef.Model.Name+"."+csvName+".json"), meta); err != nil {
+	if err := helper.ToJsonFile(filepath.Join(outDir, modelDef.Model.Name+"."+csvName+".json"), pub); err != nil {
 		return err
 	}
 	return nil

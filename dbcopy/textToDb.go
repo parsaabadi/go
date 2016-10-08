@@ -559,168 +559,108 @@ func fromWorksetTextToDb(
 
 	// get workset metadata:
 	// model name and set name must be specified as parameter or inside of metadata json
-	var wm db.WorksetMeta
+	var pub db.WorksetPub
 
-	if metaPath == "" && csvDir != "" {
-		wm.Set.Name = srcName
-		wm.ModelName = modelDef.Model.Name
+	if metaPath == "" && csvDir != "" { // no metadata json file, only csv directory
+		pub.Name = srcName
+		pub.ModelName = modelDef.Model.Name
 	}
 
-	if metaPath != "" {
+	if metaPath != "" { // read metadata json file
 
-		isExist, err := helper.FromJsonFile(metaPath, &wm)
+		isExist, err := helper.FromJsonFile(metaPath, &pub)
 		if err != nil {
 			return 0, 0, err
 		}
-		if !isExist { // if metadata json empty and no csv directory then exit: no data
 
-			if csvDir == "" {
-				return 0, 0, nil // no workset
+		if !isExist { // metadata from json is empty
+
+			if csvDir == "" { // if metadata json empty and no csv directory then exit: no data
+				return 0, 0, nil
 			}
 			// metadata empty but there is csv directory: use expected model name and set name
-			wm.Set.Name = srcName
-			wm.ModelName = modelDef.Model.Name
+			pub.Name = srcName
+			pub.ModelName = modelDef.Model.Name
 
-		} else {
+		} else { // metadata from json
 
-			// if set id is default zero then parse file name to get actual id
-			srcId = wm.Set.SetId
-
-			if srcId == 0 {
-				re := regexp.MustCompile("\\.set\\.([0-9]+)\\.")
-				s2 := re.FindStringSubmatch(filepath.Base(metaPath))
-				if len(s2) >= 2 {
-					srcId, _ = strconv.Atoi(s2[1]) // if any error source set id remain default zero
-				}
+			// set id: parse json file name to get source set id
+			re := regexp.MustCompile("\\.set\\.([0-9]+)\\.")
+			s2 := re.FindStringSubmatch(filepath.Base(metaPath))
+			if len(s2) >= 2 {
+				srcId, _ = strconv.Atoi(s2[1]) // if any error source set id remain default zero
 			}
 		}
 	}
-	if wm.Set.Name == "" {
+	if pub.Name == "" {
 		return 0, 0, errors.New("workset name is empty and metadata json file not found or empty")
 	}
 
-	// update incoming base run id with actual run id in database
-	// if run digest empty then run id must be zero (treated as NULL) else find base run id by digest
-	if wm.Set.BaseRunDigest == "" {
-
-		wm.Set.BaseRunId = 0 // no run digest: no base run, set base run id as NULL
-
-	} else { // find base run id by digest
-
-		runRow, err := db.GetRunByDigest(dbConn, wm.Set.BaseRunDigest)
-		if err != nil {
-			return 0, 0, err
-		}
-
-		if runRow != nil {
-			wm.Set.BaseRunId = runRow.RunId
-		} else {
-			// run not found in target database: set base run id as NULL
-			wm.Set.BaseRunId = 0
-			omppLog.Log("warning: workset ", srcId, " ", wm.Set.Name, ", base run not found by digest ", wm.Set.BaseRunDigest)
-		}
-	}
-
-	// update model name or digest of incoming set:
-	// if name or digest empty then assume it is match to the model
-	if wm.ModelName == "" && wm.ModelDigest != "" {
-		wm.ModelName = modelDef.Model.Name
-	}
-	if wm.ModelName != "" && wm.ModelDigest == "" {
-		wm.ModelDigest = modelDef.Model.Digest
-	}
-
-	// make list of parameter names: from metadata json or from csv directory files
-	var nameLst []string
-
-	if metaPath != "" && len(wm.Param) > 0 { // list of parameters from metadata json file
-		nameLst = make([]string, len(wm.Param))
-		for j := range wm.Param {
-			nameLst[j] = wm.Param[j].Name
-		}
-	}
-
-	if metaPath == "" && csvDir != "" { // only csv directory specified: make list of parameters based on csv file names
+	// if only csv directory specified: make list of parameters based on csv file names
+	if metaPath == "" && csvDir != "" {
 
 		fl, err := filepath.Glob(csvDir + "/*.csv")
 		if err != nil {
 			return 0, 0, err
 		}
-		nameLst = make([]string, len(fl))
-		wm.Param = make([]db.ParamDicRow, len(fl))
+		pub.Param = make([]db.WorksetParamPub, len(fl))
 
 		for j := range fl {
-			nameLst[j] = filepath.Base(fl[j])
-			nameLst[j] = nameLst[j][:len(nameLst[j])-4] // remove .csv extension
-			wm.Param[j].Name = nameLst[j]
+			fn := filepath.Base(fl[j])
+			fn = fn[:len(fn)-4] // remove .csv extension
+			pub.Param[j].Name = fn
 		}
 	}
 
-	// update incoming parameter id's by name if id = 0 (default) and name not "" empty default
-	for k := range wm.Param {
+	// destination: convert from "public" format into destination db rows
+	// display warning if base run not found in destination database
+	ws, err := pub.FromPublic(dbConn, modelDef, langDef)
 
-		if wm.Param[k].ParamId != 0 || wm.Param[k].Name == "" {
-			continue // skip if id is defined or name undefined
-		}
-
-		idx, isExist := modelDef.ParamByName(wm.Param[k].Name)
-		if !isExist {
-			return 0, 0, errors.New("parameter not found or parameter name invalid: " + wm.Param[k].Name)
-		}
-		wm.Param[k].ParamId = modelDef.Param[idx].ParamId
+	if ws.Set.BaseRunId <= 0 && pub.BaseRunDigest != "" {
+		omppLog.Log("warning: workset ", ws.Set.Name, ", base run not found by digest ", pub.BaseRunDigest)
 	}
 
-	// update incoming parameter id's by name if id = 0 (default) and name not "" empty default
-	for k := range wm.ParamTxt {
+	// save workset metadata as "read-write" and after importing all parameters set it as "readonly"
+	isReadonly := pub.IsReadonly
+	ws.Set.IsReadonly = false
 
-		if wm.ParamTxt[k].ParamId != 0 || wm.ParamTxt[k].Name == "" {
-			continue // skip if id is defined or name undefined
-		}
-
-		idx, isExist := modelDef.ParamByName(wm.ParamTxt[k].Name)
-		if !isExist {
-			return 0, 0, errors.New("parameter not found or parameter name invalid: " + wm.ParamTxt[k].Name)
-		}
-		wm.ParamTxt[k].ParamId = modelDef.Param[idx].ParamId
-	}
-
-	// save model workset
-	err := db.UpdateWorkset(dbConn, modelDef, langDef, &wm)
+	err = ws.UpdateWorkset(dbConn, modelDef)
 	if err != nil {
 		return 0, 0, err
 	}
-	dstId := wm.Set.SetId // update incoming set id with actual new set id created in database
+	dstId := ws.Set.SetId // actual set id from destination database
 
-	omppLog.Log("Workset from ", srcId, " to ", dstId)
-
-	if len(nameLst) <= 0 {
-		return srcId, dstId, nil // workset is empty, no parameters
-	}
+	// read all workset parameters and copy into destination database
+	omppLog.Log("Workset ", ws.Set.Name, " from id ", srcId, " to ", dstId)
 
 	// read all workset parameters from csv files
-	// isReadonly == true for json created by db-to-text
-	// and if no metadata json or handmade json then it may have isReadonly == default false
-	layout := db.WriteLayout{ToId: dstId, IsEditSet: !wm.Set.IsReadonly}
+	layout := db.WriteLayout{ToId: dstId}
 
-	for j := range nameLst {
+	for j := range pub.Param {
 
 		// read parameter values from csv file
 		var cell db.Cell
-		cLst, err := fromCsvFile(csvDir, modelDef, nameLst[j], &cell)
+		cLst, err := fromCsvFile(csvDir, modelDef, pub.Param[j].Name, &cell)
 		if err != nil {
 			return 0, 0, err
 		}
 		if cLst == nil || cLst.Len() <= 0 {
-			return 0, 0, errors.New("workset: " + strconv.Itoa(srcId) + " " + wm.Set.Name + " parameter empty: " + nameLst[j])
+			return 0, 0, errors.New("workset: " + strconv.Itoa(srcId) + " " + ws.Set.Name + " parameter empty: " + pub.Param[j].Name)
 		}
 
 		// insert or update parameter values in workset
-		layout.Name = nameLst[j]
+		layout.Name = pub.Param[j].Name
 
 		err = db.WriteParameter(dbConn, modelDef, &layout, cLst, "")
 		if err != nil {
 			return 0, 0, err
 		}
+	}
+
+	// update workset readonly status with actual value
+	err = db.UpdateWorksetReadonly(dbConn, dstId, isReadonly)
+	if err != nil {
+		return 0, 0, err
 	}
 
 	return srcId, dstId, nil

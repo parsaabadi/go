@@ -224,12 +224,7 @@ func doInsertTaskBody(
 
 		// update task id and language id
 		meta.Txt[j].TaskId = meta.Task.TaskId
-
-		k, ok := langDef.codeIndex[meta.Txt[j].LangCode]
-		if !ok {
-			return errors.New("invalid language code " + meta.Txt[j].LangCode)
-		}
-		meta.Txt[j].LangId = langDef.LangWord[k].LangId
+		meta.Txt[j].LangId = langDef.IdByCode(meta.Txt[j].LangCode)
 
 		// insert into task_txt
 		err := TrxUpdate(trx,

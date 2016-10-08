@@ -20,9 +20,6 @@ import (
 // If this is model run update (layout.IsToRun is true) then model run must exist and be in completed state (i.e. success or error state).
 // Model run should not already contain parameter values: parameter can be inserted only once in model run and cannot be updated after.
 //
-// If this is workset case (layout.IsToRun is false) then workset must exist and workset.is_readonly must be opposite to layout.IsEditSet.
-// IsEditSet means write parameter called during parameter "edit" when user changing parameter values and required is_readonly = false.
-// If IsEditSet = false then is_readonly must be true and WriteParameter() assume it is called from bulk load utility (db copy).
 // If workset already contain parameter values then values updated else inserted.
 //
 // Double format is used for float model types digest calculation, if non-empty format supplied
@@ -67,7 +64,7 @@ func WriteParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *WriteLayout, ce
 			return err
 		}
 	} else {
-		if err = doWriteSetParameter(trx, param, layout.IsEditSet, layout.ToId, cellLst); err != nil {
+		if err = doWriteSetParameter(trx, param, layout.ToId, cellLst); err != nil {
 			trx.Rollback()
 			return err
 		}
@@ -150,8 +147,8 @@ func doWriteRunParameter(trx *sql.Tx, modelDef *ModelMeta, param *ParamMeta, run
 	nBase := 0
 	err = TrxSelectFirst(trx,
 		"SELECT MIN(run_id) FROM run_parameter"+
-		" WHERE parameter_hid = "+sHid+
-		" AND run_digest = "+toQuoted(digest),
+			" WHERE parameter_hid = "+sHid+
+			" AND run_digest = "+toQuoted(digest),
 		func(row *sql.Row) error {
 			if err := row.Scan(&nBase); err != nil {
 				return err
@@ -170,8 +167,8 @@ func doWriteRunParameter(trx *sql.Tx, modelDef *ModelMeta, param *ParamMeta, run
 
 		err = TrxUpdate(trx,
 			"UPDATE run_parameter SET base_run_id = "+strconv.Itoa(nBase)+
-			" WHERE parameter_hid = "+sHid+
-			" AND run_id = "+srId)
+				" WHERE parameter_hid = "+sHid+
+				" AND run_id = "+srId)
 		if err != nil {
 			return err
 		}
@@ -219,9 +216,8 @@ func digestParameter(modelDef *ModelMeta, param *ParamMeta, cellLst *list.List, 
 
 // doWriteSetParameter insert or update parameter values in workset.
 // It does insert as part of transaction
-// Workset must exist and and workset.is_readonly must be opposite to isEdit.
 // If workset already contain parameter values then values updated else inserted.
-func doWriteSetParameter(trx *sql.Tx, param *ParamMeta, isEdit bool, setId int, cellLst *list.List) error {
+func doWriteSetParameter(trx *sql.Tx, param *ParamMeta, setId int, cellLst *list.List) error {
 
 	// start workset update
 	sId := strconv.Itoa(setId)
@@ -233,7 +229,7 @@ func doWriteSetParameter(trx *sql.Tx, param *ParamMeta, isEdit bool, setId int, 
 		return err
 	}
 
-	// check if workset exist and readonly status is compatible with "parameter edit" status
+	// check if workset exist and not readonly
 	nRd := 0
 	err = TrxSelectFirst(trx,
 		"SELECT is_readonly FROM workset_lst WHERE set_id = "+sId,
@@ -249,11 +245,8 @@ func doWriteSetParameter(trx *sql.Tx, param *ParamMeta, isEdit bool, setId int, 
 	case err != nil:
 		return err
 	}
-	if isEdit && nRd != 1 || !isEdit && nRd == 1 {
-		if isEdit {
-			return errors.New("cannot update parameter " + param.Name + ", workset is readonly, id: " + sId)
-		}
-		return errors.New("cannot insert parameter " + param.Name + ", workset in process of update (read-write), id: " + sId)
+	if nRd != 1 {
+		return errors.New("cannot update parameter " + param.Name + ", workset is readonly, id: " + sId)
 	}
 
 	// delete existing parameter values
@@ -271,10 +264,8 @@ func doWriteSetParameter(trx *sql.Tx, param *ParamMeta, isEdit bool, setId int, 
 		return err
 	}
 
-	// update completed: restore readonly status
-	err = TrxUpdate(trx,
-		"UPDATE workset_lst SET is_readonly = "+toBoolStr(!isEdit)+
-			" WHERE set_id = "+sId)
+	// update completed: reset readonly status to "read-write"
+	err = TrxUpdate(trx, "UPDATE workset_lst SET is_readonly = 0 WHERE set_id = "+sId)
 	if err != nil {
 		return err
 	}

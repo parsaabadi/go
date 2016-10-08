@@ -166,8 +166,13 @@ func dbToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOpti
 		return err
 	}
 
-	// copy source workset metadata and parameters into destination database
-	_, err = copyWorksetDbToDb(srcDb, dstDb, srcModel, dstModel, srcWs, dstLang)
+	// convert workset db rows into "public"" format
+	// and copy source workset metadata and parameters into destination database
+	pub, err := srcWs.ToPublic(srcDb, srcModel)
+	if err != nil {
+		return err
+	}
+	_, err = copyWorksetDbToDb(srcDb, dstDb, srcModel, dstModel, srcWs.Set.SetId, pub, dstLang)
 	if err != nil {
 		return err
 	}
@@ -420,15 +425,20 @@ func copyWorksetListDbToDb(
 		return make(map[int]int), nil // no worksets
 	}
 
-	// copy worksets from source to destination database
-	// update set id's and base run id's with actual destination database values
+	// copy worksets from source to destination database by using "public" format
 	setIdMap := make(map[int]int, len(srcWl))
 
 	for k := range srcWl {
 
-		srcId := srcWl[k].Set.SetId
+		// convert workset db rows into "public"" format
+		pub, err := srcWl[k].ToPublic(srcDb, srcModel)
+		if err != nil {
+			return nil, err
+		}
 
-		dstId, err := copyWorksetDbToDb(srcDb, dstDb, srcModel, dstModel, &srcWl[k], dstLang)
+		// save into destination database
+		srcId := srcWl[k].Set.SetId
+		dstId, err := copyWorksetDbToDb(srcDb, dstDb, srcModel, dstModel, srcId, pub, dstLang)
 		if err != nil {
 			return nil, err
 		}
@@ -440,61 +450,42 @@ func copyWorksetListDbToDb(
 // copyWorksetDbToDb do copy workset metadata and parameters from source to destination database
 // it return destination set id (set id in destination database)
 func copyWorksetDbToDb(
-	srcDb *sql.DB, dstDb *sql.DB, srcModel *db.ModelMeta, dstModel *db.ModelMeta, srcWs *db.WorksetMeta, dstLang *db.LangList) (int, error) {
+	srcDb *sql.DB, dstDb *sql.DB, srcModel *db.ModelMeta, dstModel *db.ModelMeta, srcId int, pub *db.WorksetPub, dstLang *db.LangList) (int, error) {
 
 	// validate parameters
-	if srcWs == nil {
+	if pub == nil {
 		return 0, errors.New("invalid (empty) source workset metadata, source workset not found or not exists")
 	}
 
-	// destination: make a deep of source workset
-	// deep copy is required because during db writing source set id's and base run id's updated with destination database id's
-	var dstWs db.WorksetMeta
-	helper.DeepCopy(srcWs, &dstWs)
+	// destination: convert from "public" format into destination db rows
+	// display warning if base run not found in destination database
+	dstWs, err := pub.FromPublic(dstDb, dstModel, dstLang)
 
-	// destination: save model workset metadata
-	// update incoming set id with actual new set id created in database
-	// update incoming base run id with actual run id in database
-	srcId := srcWs.Set.SetId
-
-	// update incoming base run id with actual run id in database
-	// if run digest empty then run id must be zero (treated as NULL) else find base run id by digest
-	if dstWs.Set.BaseRunDigest == "" {
-
-		dstWs.Set.BaseRunId = 0 // no run digest: no base run, set base run id as NULL
-
-	} else { // find base run id by digest
-
-		runRow, err := db.GetRunByDigest(srcDb, dstWs.Set.BaseRunDigest)
-		if err != nil {
-			return 0, err
-		}
-		if runRow != nil {
-			dstWs.Set.BaseRunId = runRow.RunId
-		} else {
-			// run not found in target database: set base run id as NULL
-			dstWs.Set.BaseRunId = 0
-			omppLog.Log("warning: workset ", srcId, " ", dstWs.Set.Name, ", base run not found by digest ", dstWs.Set.BaseRunDigest)
-		}
+	if dstWs.Set.BaseRunId <= 0 && pub.BaseRunDigest != "" {
+		omppLog.Log("warning: workset ", dstWs.Set.Name, ", base run not found by digest ", pub.BaseRunDigest)
 	}
 
-	err := db.UpdateWorkset(dstDb, dstModel, dstLang, &dstWs)
+	// save workset metadata as "read-write" and after importing all parameters set it as "readonly"
+	isReadonly := pub.IsReadonly
+	dstWs.Set.IsReadonly = false
+
+	err = dstWs.UpdateWorkset(dstDb, dstModel)
 	if err != nil {
 		return 0, err
 	}
-	dstId := dstWs.Set.SetId
+	dstId := dstWs.Set.SetId // actual set id from destination database
 
 	// read all workset parameters and copy into destination database
-	omppLog.Log("Workset from ", srcId, " to ", dstId)
+	omppLog.Log("Workset ", dstWs.Set.Name, " from id ", srcId, " to ", dstId)
 
 	srcLt := &db.ReadLayout{FromId: srcId, IsFromSet: true}
 	dstLt := db.WriteLayout{ToId: dstId}
 
 	// write parameter into destination database
-	for j := range srcWs.Param {
+	for j := range pub.Param {
 
 		// source: read workset parameter values
-		srcLt.Name = srcWs.Param[j].Name
+		srcLt.Name = pub.Param[j].Name
 
 		cLst, err := db.ReadParameter(srcDb, srcModel, srcLt)
 		if err != nil {
@@ -505,12 +496,18 @@ func copyWorksetDbToDb(
 		}
 
 		// destination: insert or update parameter values in workset
-		dstLt.Name = dstWs.Param[j].Name
+		dstLt.Name = pub.Param[j].Name
 
 		err = db.WriteParameter(dstDb, dstModel, &dstLt, cLst, "")
 		if err != nil {
 			return 0, err
 		}
+	}
+
+	// update workset readonly status with actual value
+	err = db.UpdateWorksetReadonly(dstDb, dstId, isReadonly)
+	if err != nil {
+		return 0, err
 	}
 
 	return dstId, nil

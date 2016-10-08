@@ -52,11 +52,7 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, mode
 
 		// update model id and language id
 		modelTxt.ModelTxt[idx].ModelId = modelDef.Model.ModelId
-		k, ok := langDef.codeIndex[modelTxt.ModelTxt[idx].LangCode]
-		if !ok {
-			return errors.New("invalid language code " + modelTxt.ModelTxt[idx].LangCode)
-		}
-		modelTxt.ModelTxt[idx].LangId = langDef.LangWord[k].LangId
+		modelTxt.ModelTxt[idx].LangId = langDef.IdByCode(modelTxt.ModelTxt[idx].LangCode)
 
 		// delete and insert into model_dic_txt
 		err := TrxUpdate(trx,
@@ -80,14 +76,10 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, mode
 
 		// update model id and language id
 		modelTxt.TypeTxt[idx].ModelId = modelDef.Model.ModelId
-		k, ok := langDef.codeIndex[modelTxt.TypeTxt[idx].LangCode]
-		if !ok {
-			return errors.New("invalid language code " + modelTxt.TypeTxt[idx].LangCode)
-		}
-		modelTxt.TypeTxt[idx].LangId = langDef.LangWord[k].LangId
+		modelTxt.TypeTxt[idx].LangId = langDef.IdByCode(modelTxt.TypeTxt[idx].LangCode)
 
 		// find type Hid
-		k, ok = modelDef.TypeByKey(modelTxt.TypeTxt[idx].TypeId)
+		k, ok := modelDef.TypeByKey(modelTxt.TypeTxt[idx].TypeId)
 		if !ok {
 			return errors.New("invalid type id " + strconv.Itoa(modelTxt.TypeTxt[idx].TypeId))
 		}
@@ -117,14 +109,10 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, mode
 
 		// update model id and language id
 		modelTxt.TypeEnumTxt[idx].ModelId = modelDef.Model.ModelId
-		k, ok := langDef.codeIndex[modelTxt.TypeEnumTxt[idx].LangCode]
-		if !ok {
-			return errors.New("invalid language code " + modelTxt.TypeEnumTxt[idx].LangCode)
-		}
-		modelTxt.TypeEnumTxt[idx].LangId = langDef.LangWord[k].LangId
+		modelTxt.TypeEnumTxt[idx].LangId = langDef.IdByCode(modelTxt.TypeEnumTxt[idx].LangCode)
 
 		// find type Hid
-		k, ok = modelDef.TypeByKey(modelTxt.TypeEnumTxt[idx].TypeId)
+		k, ok := modelDef.TypeByKey(modelTxt.TypeEnumTxt[idx].TypeId)
 		if !ok {
 			return errors.New("invalid type id " + strconv.Itoa(modelTxt.TypeEnumTxt[idx].TypeId))
 		}
@@ -156,11 +144,7 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, mode
 
 		// update model id and language id
 		modelTxt.ParamTxt[idx].ModelId = modelDef.Model.ModelId
-		k, ok := langDef.codeIndex[modelTxt.ParamTxt[idx].LangCode]
-		if !ok {
-			return errors.New("invalid language code " + modelTxt.ParamTxt[idx].LangCode)
-		}
-		modelTxt.ParamTxt[idx].LangId = langDef.LangWord[k].LangId
+		modelTxt.ParamTxt[idx].LangId = langDef.IdByCode(modelTxt.ParamTxt[idx].LangCode)
 
 		// find parameter Hid
 		hId := modelDef.ParamHidById(modelTxt.ParamTxt[idx].ParamId)
@@ -192,11 +176,7 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, mode
 
 		// update model id and language id
 		modelTxt.ParamDimsTxt[idx].ModelId = modelDef.Model.ModelId
-		k, ok := langDef.codeIndex[modelTxt.ParamDimsTxt[idx].LangCode]
-		if !ok {
-			return errors.New("invalid language code " + modelTxt.ParamDimsTxt[idx].LangCode)
-		}
-		modelTxt.ParamDimsTxt[idx].LangId = langDef.LangWord[k].LangId
+		modelTxt.ParamDimsTxt[idx].LangId = langDef.IdByCode(modelTxt.ParamDimsTxt[idx].LangCode)
 
 		// find parameter Hid
 		hId := modelDef.ParamHidById(modelTxt.ParamDimsTxt[idx].ParamId)
@@ -230,11 +210,7 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, mode
 
 		// update model id and language id
 		modelTxt.TableTxt[idx].ModelId = modelDef.Model.ModelId
-		k, ok := langDef.codeIndex[modelTxt.TableTxt[idx].LangCode]
-		if !ok {
-			return errors.New("invalid language code " + modelTxt.TableTxt[idx].LangCode)
-		}
-		modelTxt.TableTxt[idx].LangId = langDef.LangWord[k].LangId
+		modelTxt.TableTxt[idx].LangId = langDef.IdByCode(modelTxt.TableTxt[idx].LangCode)
 
 		// find output table Hid
 		hId := modelDef.OutTableHidById(modelTxt.TableTxt[idx].TableId)
@@ -268,11 +244,7 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, mode
 
 		// update model id and language id
 		modelTxt.TableDimsTxt[idx].ModelId = modelDef.Model.ModelId
-		k, ok := langDef.codeIndex[modelTxt.TableDimsTxt[idx].LangCode]
-		if !ok {
-			return errors.New("invalid language code " + modelTxt.TableDimsTxt[idx].LangCode)
-		}
-		modelTxt.TableDimsTxt[idx].LangId = langDef.LangWord[k].LangId
+		modelTxt.TableDimsTxt[idx].LangId = langDef.IdByCode(modelTxt.TableDimsTxt[idx].LangCode)
 
 		// find output table Hid
 		hId := modelDef.OutTableHidById(modelTxt.TableDimsTxt[idx].TableId)
@@ -306,11 +278,7 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, mode
 
 		// update model id and language id
 		modelTxt.TableAccTxt[idx].ModelId = modelDef.Model.ModelId
-		k, ok := langDef.codeIndex[modelTxt.TableAccTxt[idx].LangCode]
-		if !ok {
-			return errors.New("invalid language code " + modelTxt.TableAccTxt[idx].LangCode)
-		}
-		modelTxt.TableAccTxt[idx].LangId = langDef.LangWord[k].LangId
+		modelTxt.TableAccTxt[idx].LangId = langDef.IdByCode(modelTxt.TableAccTxt[idx].LangCode)
 
 		// find output table Hid
 		hId := modelDef.OutTableHidById(modelTxt.TableAccTxt[idx].TableId)
@@ -344,11 +312,7 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, mode
 
 		// update model id and language id
 		modelTxt.TableExprTxt[idx].ModelId = modelDef.Model.ModelId
-		k, ok := langDef.codeIndex[modelTxt.TableExprTxt[idx].LangCode]
-		if !ok {
-			return errors.New("invalid language code " + modelTxt.TableExprTxt[idx].LangCode)
-		}
-		modelTxt.TableExprTxt[idx].LangId = langDef.LangWord[k].LangId
+		modelTxt.TableExprTxt[idx].LangId = langDef.IdByCode(modelTxt.TableExprTxt[idx].LangCode)
 
 		// find output table Hid
 		hId := modelDef.OutTableHidById(modelTxt.TableExprTxt[idx].TableId)

@@ -31,6 +31,16 @@ func OpenmppSchemaVersion(dbConn *sql.DB) (int, error) {
 	return nVer, nil
 }
 
+// IdByCode return language id by language code or first language if code not found
+func (langDef *LangList) IdByCode(langCode string) int {
+	return langDef.LangWord[langDef.codeIndex[langCode]].LangId
+}
+
+// CodeIdId return language code by language id or first language if id not found
+func (langDef *LangList) CodeById(langId int) string {
+	return langDef.LangWord[langDef.idIndex[langId]].LangCode
+}
+
 // DefaultLanguage return first model language: select min(lang_id) from model_dic_txt.
 func DefaultLanguage(dbConn *sql.DB, modelId int) (*LangLstRow, error) {
 

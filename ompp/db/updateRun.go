@@ -348,12 +348,7 @@ func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, meta *RunM
 
 		// update run id and language id
 		meta.Txt[j].RunId = runId
-
-		k, ok := langDef.codeIndex[meta.Txt[j].LangCode]
-		if !ok {
-			return errors.New("invalid language code " + meta.Txt[j].LangCode)
-		}
-		meta.Txt[j].LangId = langDef.LangWord[k].LangId
+		meta.Txt[j].LangId = langDef.IdByCode(meta.Txt[j].LangCode)
 
 		// insert into run_txt
 		err = TrxUpdate(trx,
@@ -386,12 +381,7 @@ func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, meta *RunM
 
 		// update run id, language id and parameter Hid
 		meta.ParamTxt[j].RunId = runId
-
-		k, ok := langDef.codeIndex[meta.ParamTxt[j].LangCode]
-		if !ok {
-			return errors.New("invalid language code " + meta.ParamTxt[j].LangCode)
-		}
-		meta.ParamTxt[j].LangId = langDef.LangWord[k].LangId
+		meta.ParamTxt[j].LangId = langDef.IdByCode(meta.ParamTxt[j].LangCode)
 
 		hId := modelDef.ParamHidById(meta.ParamTxt[j].ParamId)
 		if hId <= 0 {

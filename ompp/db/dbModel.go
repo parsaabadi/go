@@ -91,6 +91,19 @@ type LangMeta struct {
 	Word       []WordRow // lang_word db-table rows for the language
 }
 
+// descrNote is a holder for language code, descripriton and notes
+type descrNote struct {
+	LangCode string // lang_code VARCHAR(32)  NOT NULL
+	Descr    string // descr     VARCHAR(255) NOT NULL
+	Note     string // note      VARCHAR(32000)
+}
+
+// langDescrNote is a holder for language code and notes
+type langNote struct {
+	LangCode string // lang_code VARCHAR(32)  NOT NULL
+	Note     string // note      VARCHAR(32000)
+}
+
 // ProfileMeta is rows from profile_option table.
 //
 // Profile is a named group of (key, value) options, similar to ini-file.

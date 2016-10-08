@@ -141,11 +141,7 @@ func doUpdateGroupAll(trx *sql.Tx, modelId int, langDef *LangList, modelGroup *G
 
 		// update model id and language id
 		modelGroup.GroupTxt[idx].ModelId = modelId
-		k, ok := langDef.codeIndex[modelGroup.GroupTxt[idx].LangCode]
-		if !ok {
-			return errors.New("invalid language code " + modelGroup.GroupTxt[idx].LangCode)
-		}
-		modelGroup.GroupTxt[idx].LangId = langDef.LangWord[k].LangId
+		modelGroup.GroupTxt[idx].LangId = langDef.IdByCode(modelGroup.GroupTxt[idx].LangCode)
 
 		err = TrxUpdate(trx,
 			"INSERT INTO group_txt (model_id, group_id, lang_id, descr, note)"+
@@ -175,11 +171,7 @@ func doUpdateGroupText(trx *sql.Tx, modelId int, langDef *LangList, groupTxt []G
 
 		// update model id and language id
 		groupTxt[idx].ModelId = modelId
-		k, ok := langDef.codeIndex[groupTxt[idx].LangCode]
-		if !ok {
-			return errors.New("invalid language code " + groupTxt[idx].LangCode)
-		}
-		groupTxt[idx].LangId = langDef.LangWord[k].LangId
+		groupTxt[idx].LangId = langDef.IdByCode(groupTxt[idx].LangCode)
 
 		// delete and insert into group_txt
 		err := TrxUpdate(trx,

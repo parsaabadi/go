@@ -13,9 +13,7 @@ import (
 func GetWorkset(dbConn *sql.DB, setId int) (*WorksetRow, error) {
 	return getWsRow(dbConn,
 		"SELECT"+
-			" W.set_id, W.model_id, W.base_run_id,"+
-			" (SELECT R.run_digest FROM run_lst R WHERE R.run_id = W.base_run_id),"+
-			" W.set_name, W.is_readonly, W.update_dt"+
+			" W.set_id, W.base_run_id, W.model_id, W.set_name, W.is_readonly, W.update_dt"+
 			" FROM workset_lst W"+
 			" WHERE W.set_id = "+strconv.Itoa(setId))
 }
@@ -26,9 +24,7 @@ func GetWorkset(dbConn *sql.DB, setId int) (*WorksetRow, error) {
 func GetDefaultWorkset(dbConn *sql.DB, modelId int) (*WorksetRow, error) {
 	return getWsRow(dbConn,
 		"SELECT"+
-			" W.set_id, W.model_id, W.base_run_id,"+
-			" (SELECT R.run_digest FROM run_lst R WHERE R.run_id = W.base_run_id),"+
-			" W.set_name, W.is_readonly, W.update_dt"+
+			" W.set_id, W.base_run_id, W.model_id, W.set_name, W.is_readonly, W.update_dt"+
 			" FROM workset_lst W"+
 			" WHERE W.set_id ="+
 			" (SELECT MIN(M.set_id) FROM workset_lst M WHERE M.model_id = "+strconv.Itoa(modelId)+")")
@@ -40,9 +36,7 @@ func GetDefaultWorkset(dbConn *sql.DB, modelId int) (*WorksetRow, error) {
 func GetWorksetByName(dbConn *sql.DB, modelId int, name string) (*WorksetRow, error) {
 	return getWsRow(dbConn,
 		"SELECT"+
-			" W.set_id, W.model_id, W.base_run_id,"+
-			" (SELECT R.run_digest FROM run_lst R WHERE R.run_id = W.base_run_id),"+
-			" W.set_name, W.is_readonly, W.update_dt"+
+			" W.set_id, W.base_run_id, W.model_id, W.set_name, W.is_readonly, W.update_dt"+
 			" FROM workset_lst W"+
 			" WHERE W.set_id ="+
 			" ("+
@@ -64,9 +58,7 @@ func GetWorksetList(dbConn *sql.DB, modelId int, langCode string) ([]WorksetRow,
 
 	// select worksets by model id
 	q := "SELECT" +
-		" W.set_id, W.model_id, W.base_run_id," +
-		" (SELECT R.run_digest FROM run_lst R WHERE R.run_id = W.base_run_id)," +
-		" W.set_name, W.is_readonly, W.update_dt" +
+		" W.set_id, W.base_run_id, W.model_id, W.set_name, W.is_readonly, W.update_dt" +
 		" FROM workset_lst W" +
 		" WHERE W.model_id = " + strconv.Itoa(modelId) +
 		" ORDER BY 1"
@@ -102,16 +94,12 @@ func getWsRow(dbConn *sql.DB, query string) (*WorksetRow, error) {
 	err := SelectFirst(dbConn, query,
 		func(row *sql.Row) error {
 			var rId sql.NullInt64
-			var rDigest sql.NullString
 			if err := row.Scan(
-				&setRow.SetId, &setRow.ModelId, &rId, &rDigest, &setRow.Name, &setRow.IsReadonly, &setRow.UpdateDateTime); err != nil {
+				&setRow.SetId, &rId, &setRow.ModelId, &setRow.Name, &setRow.IsReadonly, &setRow.UpdateDateTime); err != nil {
 				return err
 			}
 			if rId.Valid {
 				setRow.BaseRunId = int(rId.Int64)
-			}
-			if rDigest.Valid {
-				setRow.BaseRunDigest = rDigest.String
 			}
 			return nil
 		})
@@ -135,16 +123,12 @@ func getWsLst(dbConn *sql.DB, query string) ([]WorksetRow, error) {
 		func(rows *sql.Rows) error {
 			var r WorksetRow
 			var rId sql.NullInt64
-			var rDigest sql.NullString
 			if err := rows.Scan(
-				&r.SetId, &r.ModelId, &rId, &rDigest, &r.Name, &r.IsReadonly, &r.UpdateDateTime); err != nil {
+				&r.SetId, &rId, &r.ModelId, &r.Name, &r.IsReadonly, &r.UpdateDateTime); err != nil {
 				return err
 			}
 			if rId.Valid {
 				r.BaseRunId = int(rId.Int64)
-			}
-			if rDigest.Valid {
-				r.BaseRunDigest = rDigest.String
 			}
 			setRs = append(setRs, r)
 			return nil
@@ -299,22 +283,18 @@ func GetWorksetAllParamText(dbConn *sql.DB, modelDef *ModelMeta, setId int, lang
 func getWsParamText(dbConn *sql.DB, modelDef *ModelMeta, query string) ([]WorksetParamTxtRow, error) {
 
 	var txtLst []WorksetParamTxtRow
-	hId := 0
 
 	err := SelectRows(dbConn, query,
 		func(rows *sql.Rows) error {
 			var r WorksetParamTxtRow
 			var note sql.NullString
 			if err := rows.Scan(
-				&r.SetId, &hId, &r.LangId, &r.LangCode, &note); err != nil {
+				&r.SetId, &r.ParamHid, &r.LangId, &r.LangCode, &note); err != nil {
 				return err
 			}
-
 			if note.Valid {
 				r.Note = note.String
 			}
-			r.ParamId = modelDef.ParamIdByHid(hId) // set parameter id in output results
-
 			txtLst = append(txtLst, r)
 			return nil
 		})
@@ -323,6 +303,62 @@ func getWsParamText(dbConn *sql.DB, modelDef *ModelMeta, query string) ([]Workse
 	}
 
 	return txtLst, nil
+}
+
+// ToWorksetPub convert workset db rows into "public" workset format for json import-export
+func (meta *WorksetMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*WorksetPub, error) {
+
+	// validate workset model id: workset must belong to the model
+	if meta.Set.ModelId != modelDef.Model.ModelId {
+		return nil, errors.New("workset: " + strconv.Itoa(meta.Set.SetId) + " " + meta.Set.Name + ", model id " + strconv.Itoa(meta.Set.ModelId) + " expected: " + strconv.Itoa(modelDef.Model.ModelId))
+	}
+
+	// workset header
+	pub := WorksetPub{
+		ModelName:      modelDef.Model.Name,
+		ModelDigest:    modelDef.Model.Digest,
+		Name:           meta.Set.Name,
+		IsReadonly:     meta.Set.IsReadonly,
+		UpdateDateTime: meta.Set.UpdateDateTime,
+		Txt:            make([]descrNote, len(meta.Txt)),
+		Param:          make([]WorksetParamPub, len(meta.Param)),
+	}
+
+	// find base run digest by id, if workset based on run then base run id must be positive
+	if meta.Set.BaseRunId > 0 {
+		runRow, err := GetRun(dbConn, meta.Set.BaseRunId)
+		if err != nil {
+			return nil, err
+		}
+		if runRow != nil {
+			pub.BaseRunDigest = runRow.Digest // base run found
+		}
+	}
+
+	// workset desription and notes by language
+	for k := range meta.Txt {
+		pub.Txt[k] = descrNote{
+			LangCode: meta.Txt[k].LangCode,
+			Descr:    meta.Txt[k].Descr,
+			Note:     meta.Txt[k].Note}
+	}
+
+	// workset parameters and parameter value notes
+	for k := range meta.Param {
+
+		pub.Param[k] = WorksetParamPub{
+			Name: modelDef.Param[meta.Param[k].paramIndex].Name,
+			Txt:  make([]langNote, len(meta.Param[k].Txt)),
+		}
+		for j := range meta.Param[k].Txt {
+			pub.Param[k].Txt[j] = langNote{
+				LangCode: meta.Param[k].Txt[j].LangCode,
+				Note:     meta.Param[k].Txt[j].Note,
+			}
+		}
+	}
+
+	return &pub, nil
 }
 
 // GetWorksetFull return full workset metadata: workset_lst, workset_txt, workset_parameter, workset_parameter_txt table rows.
@@ -344,11 +380,7 @@ func GetWorksetFull(dbConn *sql.DB, modelDef *ModelMeta, setRow *WorksetRow, lan
 	}
 
 	// workset header: workset_lst row, model name and digest
-	ws := &WorksetMeta{
-		ModelName:   modelDef.Model.Name,
-		ModelDigest: modelDef.Model.Digest,
-		Set:         *setRow,
-	}
+	ws := &WorksetMeta{Set: *setRow}
 	smId := strconv.Itoa(modelDef.Model.ModelId)
 
 	// workset_txt rows
@@ -367,31 +399,41 @@ func GetWorksetFull(dbConn *sql.DB, modelDef *ModelMeta, setRow *WorksetRow, lan
 	}
 	ws.Txt = setTxtRs
 
-	// workset_parameter: select Hid, translate to parameter row in result
+	// workset_parameter: select list of parameters Hid
 	q = "SELECT M.parameter_hid" +
 		" FROM workset_parameter M" +
 		" INNER JOIN workset_lst H ON (H.set_id = M.set_id)" +
 		" WHERE H.model_id = " + smId +
 		setIdFilter +
 		" ORDER BY 1"
+	hi := make(map[int]int) // map (parameter Hid) => index in parameter array
 
 	err = SelectRows(dbConn, q,
 		func(rows *sql.Rows) error {
+
 			var hId int
-			if err := rows.Scan(&hId); err != nil {
+			err := rows.Scan(&hId)
+			if err != nil {
 				return err
 			}
-			if j, ok := modelDef.ParamByHid(hId); ok {
-				ws.Param = append(ws.Param, modelDef.Param[j].ParamDicRow)
+			r := WorksetParam{ParamHid: hId}
+
+			// find parameter by Hid
+			idx, ok := modelDef.ParamByHid(hId)
+			if !ok {
+				return errors.New("workset: " + strconv.Itoa(setRow.SetId) + " " + setRow.Name + ", invalid parameter Hid " + strconv.Itoa(hId))
 			}
-			// else parameter hId not found: assume parameter deleted, remove it from workset
+			r.paramIndex = idx
+
+			hi[hId] = len(ws.Param) // index of parameter Hid in parameter list
+			ws.Param = append(ws.Param, r)
 			return nil
 		})
 	if err != nil {
 		return nil, err
 	}
 
-	// workset_parameter_txt: select using Hid
+	// workset_parameter_txt: select rows and join to parameter by Hid
 	q = "SELECT M.set_id, M.parameter_hid, M.lang_id, L.lang_code, M.note" +
 		" FROM workset_parameter_txt M" +
 		" INNER JOIN workset_lst H ON (H.set_id = M.set_id)" +
@@ -401,12 +443,15 @@ func GetWorksetFull(dbConn *sql.DB, modelDef *ModelMeta, setRow *WorksetRow, lan
 		langFilter +
 		" ORDER BY 1, 2, 3"
 
-	// do select and set parameter id in output results
 	paramTxtRs, err := getWsParamText(dbConn, modelDef, q)
 	if err != nil {
 		return nil, err
 	}
-	ws.ParamTxt = paramTxtRs
+	for k := range paramTxtRs {
+		if i, ok := hi[paramTxtRs[k].ParamHid]; ok {
+			ws.Param[i].Txt = append(ws.Param[i].Txt, paramTxtRs[k])
+		}
+	}
 
 	return ws, nil
 }
@@ -432,9 +477,7 @@ func GetWorksetFullList(dbConn *sql.DB, modelDef *ModelMeta, isReadonly bool, la
 	smId := strconv.Itoa(modelDef.Model.ModelId)
 
 	q := "SELECT" +
-		" H.set_id, H.model_id, H.base_run_id," +
-		" (SELECT R.run_digest FROM run_lst R WHERE R.run_id = H.base_run_id)," +
-		" H.set_name, H.is_readonly, H.update_dt" +
+		" H.set_id, H.base_run_id, H.model_id, H.set_name, H.is_readonly, H.update_dt" +
 		" FROM workset_lst H" +
 		" WHERE H.model_id = " + smId +
 		roFilter +
@@ -506,27 +549,39 @@ func GetWorksetFullList(dbConn *sql.DB, modelDef *ModelMeta, isReadonly bool, la
 	// workset header: workset_lst row and model name, digest
 	for k := range setRs {
 		setId := setRs[k].SetId
-		wl[k].ModelName = modelDef.Model.Name
-		wl[k].ModelDigest = modelDef.Model.Digest
 		wl[k].Set = setRs[k]
 		m[setId] = k
 	}
-	// workset parameters: append parameters to coresponding workset
-	for k := range ps {
-		i := m[ps[k][0]]
-		if j, ok := modelDef.ParamByHid(ps[k][1]); ok {
-			wl[i].Param = append(wl[i].Param, modelDef.Param[j].ParamDicRow)
-		}
-	}
+
 	// workset text (description and notes): append to coresponding workset
 	for k := range setTxtRs {
 		i := m[setTxtRs[k].SetId]
 		wl[i].Txt = append(wl[i].Txt, setTxtRs[k])
 	}
-	// workset parameters text (parameter value notes): append to coresponding workset
+
+	// workset parameters: append parameters to coresponding workset
+	// and set index of parameter in model parameters list
+	for k := range ps {
+		i := m[ps[k][0]]
+		idx, ok := modelDef.ParamByHid(ps[k][1])
+		if !ok {
+			return nil, errors.New("workset: " + strconv.Itoa(wl[i].Set.SetId) + " " + wl[i].Set.Name + ", invalid parameter Hid " + strconv.Itoa(ps[k][1]))
+		}
+		wl[i].Param = append(wl[i].Param,
+			WorksetParam{
+				ParamHid:   ps[k][1],
+				paramIndex: idx})
+	}
+
+	// workset parameters text (parameter value notes):
+	// find parameter by Hid in coresponding workset and append value notes
 	for k := range paramTxtRs {
 		i := m[paramTxtRs[k].SetId]
-		wl[i].ParamTxt = append(wl[i].ParamTxt, paramTxtRs[k])
+		for j := range wl[i].Param {
+			if wl[i].Param[j].ParamHid == paramTxtRs[k].ParamHid {
+				wl[i].Param[j].Txt = append(wl[i].Param[j].Txt, paramTxtRs[k])
+			}
+		}
 	}
 
 	return wl, nil

@@ -84,24 +84,47 @@ type RunParamTxtRow struct {
 // Important: working set_id must be different from run_id (use id_lst to get it)
 // Important: always update parameter values inside of transaction scope
 // Important: before parameter update do is_readonly = is_readonly + 1 to "lock" workset
+//
+// WorksetMeta is workset metadata db rows: workset_lst, workset_txt, workset_parameter, workset_parameter_txt
 type WorksetMeta struct {
-	ModelName   string               // model name for that workset
-	ModelDigest string               // model digest for that workset
-	Set         WorksetRow           // model workset rows: workset_lst
-	Txt         []WorksetTxtRow      // workset text rows: workset_txt
-	Param       []ParamDicRow        // workset parameter rows: parameter_dic join to model_parameter_dic
-	ParamTxt    []WorksetParamTxtRow // parameter text rows: workset_parameter_txt plus parameter id and name
+	Set   WorksetRow      // workset master row: workset_lst
+	Txt   []WorksetTxtRow // workset text rows: workset_txt
+	Param []WorksetParam  // workset parameter: parameter_hid and workset_parameter_txt rows
+}
+
+// WorksetPub is "public" workset metadata for json import-export
+type WorksetPub struct {
+	ModelName      string            // model name for that workset
+	ModelDigest    string            // model digest for that workset
+	Name           string            // set_name     VARCHAR(255) NOT NULL
+	BaseRunDigest  string            // if not empty then digest of the base run
+	IsReadonly     bool              // is_readonly  SMALLINT     NOT NULL
+	UpdateDateTime string            // update_dt    VARCHAR(32)  NOT NULL, -- last update date-time
+	Txt            []descrNote       // workset text: description and notes by language
+	Param          []WorksetParamPub // workset parameters: name and text (value notes by language)
+}
+
+// WorksetParam is workset parameter name  and text (value notes by language)
+type WorksetParamPub struct {
+	Name string     // parameter_name     VARCHAR(255) NOT NULL
+	Txt  []langNote // parameter value notes by language
 }
 
 // WorksetRow is workset_lst table row.
 type WorksetRow struct {
 	SetId          int    // unique working set id
-	ModelId        int    // model_id     INT          NOT NULL
 	BaseRunId      int    // if not NULL and positive then base run id (source run id)
-	BaseRunDigest  string // if not empty then digest of the base run
+	ModelId        int    // model_id     INT          NOT NULL
 	Name           string // set_name     VARCHAR(255) NOT NULL
 	IsReadonly     bool   // is_readonly  SMALLINT     NOT NULL
 	UpdateDateTime string // update_dt    VARCHAR(32)  NOT NULL, -- last update date-time
+}
+
+// WorksetParam is a holder for workset parameter Hid and workset_parameter_txt rows
+type WorksetParam struct {
+	ParamHid   int                  // parameter_hid INT NOT NULL
+	Txt        []WorksetParamTxtRow // workset_parameter_txt table rows
+	paramIndex int                  // index of parameter in model metadata parameters array
 }
 
 // WorksetTxtRow is db row of workset_txt
@@ -113,14 +136,13 @@ type WorksetTxtRow struct {
 	Note     string // note      VARCHAR(32000)
 }
 
-// WorksetParamTxtRow is db row of workset_parameter_txt plus parameter id and name
+// WorksetParamTxtRow is workset_parameter_txt table row.
 type WorksetParamTxtRow struct {
-	SetId    int    // set_id             INT          NOT NULL
-	ParamId  int    // model_parameter_id INT          NOT NULL
-	Name     string // parameter_name     VARCHAR(255) NOT NULL
-	LangId   int    // lang_id            INT          NOT NULL
-	LangCode string // lang_code          VARCHAR(32)  NOT NULL
-	Note     string // note               VARCHAR(32000)
+	SetId    int    // set_id        INT NOT NULL
+	ParamHid int    // parameter_hid INT NOT NULL
+	LangId   int    // lang_id       INT NOT NULL
+	LangCode string // lang_code VARCHAR(32)  NOT NULL
+	Note     string // note          VARCHAR(32000), -- parameter value note
 }
 
 // TaskMeta struct is meta data for modeling task: name, status, description, notes, task run history.
