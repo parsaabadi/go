@@ -14,7 +14,7 @@ import (
 // If modelGroup contains all non-empty GroupLst slice then all 3 tables (group_lst, group_pc, group_txt) erased and new values inserted.
 // If only text slice GroupTxt non-empty then only group_txt rows updated or inserted (not deleted).
 // Model id and language id updated with id's from modelDef (assuming it contains actual db id's)
-func UpdateModelGroup(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangList, modelGroup *GroupMeta) error {
+func UpdateModelGroup(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangMeta, modelGroup *GroupMeta) error {
 
 	// source is empty: nothing to do, exit
 	if modelGroup == nil {
@@ -71,7 +71,7 @@ func UpdateModelGroup(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangList, mo
 // doUpdateGroupAll delete existing and insert new model groups: group_lst, group_pc, group_txt tables.
 // It does update as part of transaction
 // Model id and language id updated with actual id's from database
-func doUpdateGroupAll(trx *sql.Tx, modelId int, langDef *LangList, modelGroup *GroupMeta) error {
+func doUpdateGroupAll(trx *sql.Tx, modelId int, langDef *LangMeta, modelGroup *GroupMeta) error {
 
 	// delete existing groups
 	smId := strconv.Itoa(modelId)
@@ -162,7 +162,7 @@ func doUpdateGroupAll(trx *sql.Tx, modelId int, langDef *LangList, modelGroup *G
 // doUpdateGroupText insert new or update existing groups text (description, notes) in group_txt table.
 // It does update as part of transaction
 // Model id and language id updated with actual id's from database
-func doUpdateGroupText(trx *sql.Tx, modelId int, langDef *LangList, groupTxt []GroupTxtRow) error {
+func doUpdateGroupText(trx *sql.Tx, modelId int, langDef *LangMeta, groupTxt []GroupTxtRow) error {
 
 	// update groups text (description and notes) into group_txt
 	smId := strconv.Itoa(modelId)

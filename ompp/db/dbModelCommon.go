@@ -27,9 +27,9 @@ func (src *ModelMeta) Clone() (*ModelMeta, error) {
 }
 
 // Clone return deep copy of source language metadata
-func (src *LangList) Clone() (*LangList, error) {
+func (src *LangMeta) Clone() (*LangMeta, error) {
 
-	dst := &LangList{}
+	dst := &LangMeta{}
 
 	if err := helper.DeepCopy(src, dst); err != nil {
 		return nil, err
@@ -54,7 +54,7 @@ func (dst *ModelMeta) FromJson(srcJson []byte) (bool, error) {
 }
 
 // FromJson restore language list from json string bytes
-func (dst *LangList) FromJson(srcJson []byte) (bool, error) {
+func (dst *LangMeta) FromJson(srcJson []byte) (bool, error) {
 
 	isExist, err := helper.FromJson(srcJson, dst)
 	if err != nil {
@@ -69,14 +69,14 @@ func (dst *LangList) FromJson(srcJson []byte) (bool, error) {
 
 // updateInternals language metadata internal members.
 // It must be called after restoring from json.
-func (meta *LangList) updateInternals() {
+func (meta *LangMeta) updateInternals() {
 
-	meta.idIndex = make(map[int]int, len(meta.LangWord))
-	meta.codeIndex = make(map[string]int, len(meta.LangWord))
+	meta.idIndex = make(map[int]int, len(meta.Lang))
+	meta.codeIndex = make(map[string]int, len(meta.Lang))
 
-	for k := range meta.LangWord {
-		meta.idIndex[meta.LangWord[k].LangId] = k     // index of lang_id in result []language slice
-		meta.codeIndex[meta.LangWord[k].LangCode] = k // index of lang_code in result []language slice
+	for k := range meta.Lang {
+		meta.idIndex[meta.Lang[k].LangId] = k     // index of lang_id in result []language slice
+		meta.codeIndex[meta.Lang[k].LangCode] = k // index of lang_code in result []language slice
 	}
 }
 

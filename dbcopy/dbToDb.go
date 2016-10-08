@@ -297,7 +297,7 @@ func copyDbToDb(
 // copyRunListDbToDb do copy all model runs parameters and output tables from source to destination database
 // Double format is used for float model types digest calculation, if non-empty format supplied
 func copyRunListDbToDb(
-	srcDb *sql.DB, dstDb *sql.DB, srcModel *db.ModelMeta, dstModel *db.ModelMeta, dstLang *db.LangList, doubleFmt string) (map[int]int, error) {
+	srcDb *sql.DB, dstDb *sql.DB, srcModel *db.ModelMeta, dstModel *db.ModelMeta, dstLang *db.LangMeta, doubleFmt string) (map[int]int, error) {
 
 	// source: get all successfully completed model runs in all languages
 	srcRl, err := db.GetRunFullList(srcDb, srcModel, true, "")
@@ -328,7 +328,7 @@ func copyRunListDbToDb(
 // copyRunDbToDb do copy model run metadata, run parameters and output tables from source to destination database
 // it return destination run id (run id in destination database)
 func copyRunDbToDb(
-	srcDb *sql.DB, dstDb *sql.DB, srcModel *db.ModelMeta, dstModel *db.ModelMeta, srcRun *db.RunMeta, dstLang *db.LangList, doubleFmt string) (int, error) {
+	srcDb *sql.DB, dstDb *sql.DB, srcModel *db.ModelMeta, dstModel *db.ModelMeta, srcRun *db.RunMeta, dstLang *db.LangMeta, doubleFmt string) (int, error) {
 
 	// validate parameters
 	if srcRun == nil {
@@ -414,7 +414,7 @@ func copyRunDbToDb(
 
 // copyWorksetListDbToDb do copy all readonly worksets parameters from source to destination database
 func copyWorksetListDbToDb(
-	srcDb *sql.DB, dstDb *sql.DB, srcModel *db.ModelMeta, dstModel *db.ModelMeta, dstLang *db.LangList) (map[int]int, error) {
+	srcDb *sql.DB, dstDb *sql.DB, srcModel *db.ModelMeta, dstModel *db.ModelMeta, dstLang *db.LangMeta) (map[int]int, error) {
 
 	// source: get all readonly worksets in all languages
 	srcWl, err := db.GetWorksetFullList(srcDb, srcModel, true, "")
@@ -450,7 +450,7 @@ func copyWorksetListDbToDb(
 // copyWorksetDbToDb do copy workset metadata and parameters from source to destination database
 // it return destination set id (set id in destination database)
 func copyWorksetDbToDb(
-	srcDb *sql.DB, dstDb *sql.DB, srcModel *db.ModelMeta, dstModel *db.ModelMeta, srcId int, pub *db.WorksetPub, dstLang *db.LangList) (int, error) {
+	srcDb *sql.DB, dstDb *sql.DB, srcModel *db.ModelMeta, dstModel *db.ModelMeta, srcId int, pub *db.WorksetPub, dstLang *db.LangMeta) (int, error) {
 
 	// validate parameters
 	if pub == nil {

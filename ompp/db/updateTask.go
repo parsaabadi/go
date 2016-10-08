@@ -17,7 +17,7 @@ import (
 // Model id, task id, run id, set id updated with actual database id's.
 // Remove non-existing worksets and model runs from task
 func UpdateTask(
-	dbConn *sql.DB, modelDef *ModelMeta, langDef *LangList, meta *TaskMeta, runIdMap map[int]int, setIdMap map[int]int) error {
+	dbConn *sql.DB, modelDef *ModelMeta, langDef *LangMeta, meta *TaskMeta, runIdMap map[int]int, setIdMap map[int]int) error {
 
 	// validate parameters
 	if meta == nil {
@@ -52,7 +52,7 @@ func UpdateTask(
 // Model id, task id, run id, set id updated with actual database id's.
 // Remove non-existing worksets and model runs from task
 func doUpdateOrInsertTask(
-	trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, meta *TaskMeta, runIdMap map[int]int, setIdMap map[int]int) error {
+	trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, meta *TaskMeta, runIdMap map[int]int, setIdMap map[int]int) error {
 
 	smId := strconv.Itoa(modelDef.Model.ModelId)
 
@@ -138,7 +138,7 @@ func doUpdateOrInsertTask(
 // Task id, run id, set id updated with actual database id's.
 // Remove non-existing worksets and model runs from task
 func doInsertTask(
-	trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, meta *TaskMeta, runIdMap map[int]int, setIdMap map[int]int) error {
+	trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, meta *TaskMeta, runIdMap map[int]int, setIdMap map[int]int) error {
 
 	stId := strconv.Itoa(meta.Task.TaskId)
 
@@ -164,7 +164,7 @@ func doInsertTask(
 // Task id, run id, set id updated with actual database id's.
 // Remove non-existing worksets and model runs from task
 func doUpdateTask(
-	trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, meta *TaskMeta, runIdMap map[int]int, setIdMap map[int]int) error {
+	trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, meta *TaskMeta, runIdMap map[int]int, setIdMap map[int]int) error {
 
 	// update with unique name
 	stId := strconv.Itoa(meta.Task.TaskId)
@@ -215,7 +215,7 @@ func doUpdateTask(
 // Task id, run id, set id updated with actual database id's.
 // Remove non-existing worksets and model runs from task
 func doInsertTaskBody(
-	trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, meta *TaskMeta, runIdMap map[int]int, setIdMap map[int]int) error {
+	trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, meta *TaskMeta, runIdMap map[int]int, setIdMap map[int]int) error {
 
 	stId := strconv.Itoa(meta.Task.TaskId)
 

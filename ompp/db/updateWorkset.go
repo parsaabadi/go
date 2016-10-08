@@ -34,7 +34,7 @@ func UpdateWorksetReadonly(dbConn *sql.DB, setId int, isReadonly bool) error {
 }
 
 // FromPublic convert workset metadata from "public" format (coming from json import-export) into db rows.
-func (pub *WorksetPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangList) (*WorksetMeta, error) {
+func (pub *WorksetPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangMeta) (*WorksetMeta, error) {
 
 	// validate parameters
 	if modelDef == nil {

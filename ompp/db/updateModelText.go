@@ -12,7 +12,7 @@ import (
 // UpdateModelText insert new or update existing model text (description and notes) in database.
 //
 // Model id, type Hid, parameter Hid, table Hid, language id updated with actual database id's
-func UpdateModelText(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangList, modelTxt *ModelTxtMeta) error {
+func UpdateModelText(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangMeta, modelTxt *ModelTxtMeta) error {
 
 	// validate parameters
 	if modelTxt == nil {
@@ -44,7 +44,7 @@ func UpdateModelText(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangList, mod
 // doUpdateModelText insert new or update existing model text (description and notes) in database.
 // It does update as part of transaction
 // Model id, type Hid, parameter Hid, table Hid, language id updated with actual database id's
-func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, modelTxt *ModelTxtMeta) error {
+func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, modelTxt *ModelTxtMeta) error {
 
 	// update model_dic_txt and ids
 	smId := strconv.Itoa(modelDef.Model.ModelId)

@@ -78,15 +78,24 @@ type GroupMeta struct {
 	GroupTxt    []GroupTxtRow // group text rows: group_txt
 }
 
-// LangList is language and words in that language
-type LangList struct {
-	LangWord  []LangMeta     // languages and words in that language
-	idIndex   map[int]int    // language id index
-	codeIndex map[string]int // language code index
+// ProfileMeta is rows from profile_option table.
+//
+// Profile is a named group of (key, value) options, similar to ini-file.
+// Default model options has profile_name = model_name.
+type ProfileMeta struct {
+	Name string            // profile name
+	Opts map[string]string // profile (key, value) options
 }
 
 // LangMeta is language and words in that language
 type LangMeta struct {
+	Lang      []langWord     // languages and words in that language
+	idIndex   map[int]int    // language id index
+	codeIndex map[string]int // language code index
+}
+
+// langWord is language and words in that language
+type langWord struct {
 	LangLstRow           // lang_lst db-table row
 	Word       []WordRow // lang_word db-table rows for the language
 }
@@ -104,18 +113,10 @@ type langNote struct {
 	Note     string // note      VARCHAR(32000)
 }
 
-// ProfileMeta is rows from profile_option table.
-//
-// Profile is a named group of (key, value) options, similar to ini-file.
-// Default model options has profile_name = model_name.
-type ProfileMeta struct {
-	Name string            // profile name
-	Opts map[string]string // profile (key, value) options
-}
-
 // LangLstRow is db row of lang_lst table.
 //
-// LangId (lang_lst.lang_id) is db-unique id of the language, use lang_code to find same language in other db.
+// LangId is db-unique id of the language.
+// LangCode is unique language code: EN, FR.
 type LangLstRow struct {
 	LangId   int    // lang_id   INT          NOT NULL
 	LangCode string // lang_code VARCHAR(32)  NOT NULL

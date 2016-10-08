@@ -21,7 +21,7 @@ import (
 // Following is used to find existing model run:
 // if digest not "" empty then by run digest
 // if status not success or exit then by run_name, sub_count, sub_completed, status, create_dt, update_dt
-func UpdateRun(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangList, meta *RunMeta) (bool, error) {
+func UpdateRun(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangMeta, meta *RunMeta) (bool, error) {
 
 	// validate parameters
 	if meta == nil {
@@ -275,7 +275,7 @@ func UpdateRunText(dbConn *sql.DB, modelDef *ModelMeta, runId int, txt []RunTxtR
 // doInsertRun insert new model run metadata in database.
 // It does update as part of transaction
 // Run status must be completed (success, exit or error) otherwise error returned.
-func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, langDef *LangList, meta *RunMeta) error {
+func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, meta *RunMeta) error {
 
 	// validate: run must be completed
 	if meta.Run.Status != DoneRunStatus && meta.Run.Status != ExitRunStatus && meta.Run.Status != ErrorRunStatus {

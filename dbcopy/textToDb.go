@@ -311,14 +311,14 @@ func fromModelJsonToDb(dbConn *sql.DB, dbFacet db.Facet, inpDir string, modelNam
 }
 
 // fromLangTextJsonToDb reads languages, model text and model groups from json file and insert it into database.
-func fromLangTextJsonToDb(dbConn *sql.DB, modelDef *db.ModelMeta, inpDir string) (*db.LangList, error) {
+func fromLangTextJsonToDb(dbConn *sql.DB, modelDef *db.ModelMeta, inpDir string) (*db.LangMeta, error) {
 
 	// restore language list from json and if exist then update db tables
 	js, err := ioutil.ReadFile(filepath.Join(inpDir, modelDef.Model.Name+".lang.json"))
 	if err != nil {
 		return nil, err
 	}
-	langDef := &db.LangList{}
+	langDef := &db.LangMeta{}
 
 	isExist, err := langDef.FromJson(js)
 	if err != nil {
@@ -367,7 +367,7 @@ func fromLangTextJsonToDb(dbConn *sql.DB, modelDef *db.ModelMeta, inpDir string)
 // from csv and json files, convert it to db cells and insert into database.
 // Double format is used for float model types digest calculation, if non-empty format supplied
 func fromRunTextListToDb(
-	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangList, inpDir string, doubleFmt string) (map[int]int, error) {
+	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, inpDir string, doubleFmt string) (map[int]int, error) {
 
 	// get list of model run json files
 	fl, err := filepath.Glob(inpDir + "/" + modelDef.Model.Name + ".run.[0-9]*.*.json")
@@ -403,7 +403,7 @@ func fromRunTextListToDb(
 // Double format is used for float model types digest calculation, if non-empty format supplied
 // it return source run id (run id from metadata json file) and destination run id
 func fromRunTextToDb(
-	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangList, metaPath string, doubleFmt string) (int, int, error) {
+	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, metaPath string, doubleFmt string) (int, int, error) {
 
 	// get model run metadata
 	var meta db.RunMeta
@@ -502,7 +502,7 @@ func fromRunTextToDb(
 // convert it to db cells and insert into database
 // update set id's and base run id's with actual id in database
 func fromWorksetTextListToDb(
-	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangList, inpDir string, runIdMap map[int]int) (map[int]int, error) {
+	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, inpDir string, runIdMap map[int]int) (map[int]int, error) {
 
 	// get list of workset json files
 	fl, err := filepath.Glob(inpDir + "/" + modelDef.Model.Name + ".set.[0-9]*.*.json")
@@ -550,7 +550,7 @@ func fromWorksetTextListToDb(
 // update set id's and base run id's with actual id in destination database
 // it return source workset id (set id from metadata json file) and destination set id
 func fromWorksetTextToDb(
-	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangList, srcName string, srcId int, metaPath string, csvDir string) (int, int, error) {
+	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, srcName string, srcId int, metaPath string, csvDir string) (int, int, error) {
 
 	// if no metadata file and no csv directory then exit: nothing to do
 	if metaPath == "" && csvDir == "" {
@@ -669,7 +669,7 @@ func fromWorksetTextToDb(
 // fromTaskListJsonToDb reads modeling tasks and tasks run history from json file and insert it into database.
 // it does update task id, set id's and run id's with actual id in destination database
 func fromTaskListJsonToDb(
-	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangList, inpDir string, runIdMap map[int]int, setIdMap map[int]int) error {
+	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, inpDir string, runIdMap map[int]int, setIdMap map[int]int) error {
 
 	// get list of task json files
 	fl, err := filepath.Glob(inpDir + "/" + modelDef.Model.Name + ".task.[0-9]*.*.json")
@@ -695,7 +695,7 @@ func fromTaskListJsonToDb(
 // fromWorksetTextToDb reads modeling task and task run history from json file and insert it into database.
 // it does update task id, set id's and run id's with actual id in destination database
 func fromTaskJsonToDb(
-	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangList, metaPath string, runIdMap map[int]int, setIdMap map[int]int) error {
+	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, metaPath string, runIdMap map[int]int, setIdMap map[int]int) error {
 
 	// get task metadata
 	var tm db.TaskMeta

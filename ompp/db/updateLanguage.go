@@ -12,10 +12,10 @@ import (
 // UpdateLanguage insert new or update existing language and words in lang_lst and lang_word tables.
 //
 // Language ids updated with actual id's from database
-func UpdateLanguage(dbConn *sql.DB, langDef *LangList) error {
+func UpdateLanguage(dbConn *sql.DB, langDef *LangMeta) error {
 
 	// source is empty: nothing to do, exit
-	if langDef == nil || len(langDef.LangWord) <= 0 {
+	if langDef == nil || len(langDef.Lang) <= 0 {
 		return nil
 	}
 
@@ -31,9 +31,9 @@ func UpdateLanguage(dbConn *sql.DB, langDef *LangList) error {
 	}
 
 	// rebuild language id index
-	langDef.idIndex = make(map[int]int, len(langDef.LangWord))
-	for k := range langDef.LangWord {
-		langDef.idIndex[langDef.LangWord[k].LangId] = k
+	langDef.idIndex = make(map[int]int, len(langDef.Lang))
+	for k := range langDef.Lang {
+		langDef.idIndex[langDef.Lang[k].LangId] = k
 	}
 
 	trx.Commit()
@@ -43,11 +43,11 @@ func UpdateLanguage(dbConn *sql.DB, langDef *LangList) error {
 // doUpdateLanguage insert new or update existing language and words in lang_lst and lang_word tables.
 // It does update as part of transaction
 // Language ids updated with actual id's from database
-func doUpdateLanguage(trx *sql.Tx, langDef *LangList) error {
+func doUpdateLanguage(trx *sql.Tx, langDef *LangMeta) error {
 
 	// for each language:
 	// if language code exist then update else insert into lang_lst
-	for idx := range langDef.LangWord {
+	for idx := range langDef.Lang {
 
 		// get new language id
 		// UPDATE id_lst SET id_value =
@@ -60,7 +60,7 @@ func doUpdateLanguage(trx *sql.Tx, langDef *LangList) error {
 		err := TrxUpdate(trx,
 			"UPDATE id_lst SET id_value ="+
 				" CASE"+
-				" WHEN 0 = (SELECT COUNT(*) FROM lang_lst WHERE lang_code = "+toQuoted(langDef.LangWord[idx].LangCode)+")"+
+				" WHEN 0 = (SELECT COUNT(*) FROM lang_lst WHERE lang_code = "+toQuoted(langDef.Lang[idx].LangCode)+")"+
 				" THEN id_value + 1"+
 				" ELSE id_value"+
 				" END"+
@@ -70,24 +70,24 @@ func doUpdateLanguage(trx *sql.Tx, langDef *LangList) error {
 		}
 
 		// check if this language already exist
-		langDef.LangWord[idx].LangId = -1
+		langDef.Lang[idx].LangId = -1
 		err = TrxSelectFirst(trx,
-			"SELECT lang_id FROM lang_lst WHERE lang_code = "+toQuoted(langDef.LangWord[idx].LangCode),
+			"SELECT lang_id FROM lang_lst WHERE lang_code = "+toQuoted(langDef.Lang[idx].LangCode),
 			func(row *sql.Row) error {
-				return row.Scan(&langDef.LangWord[idx].LangId)
+				return row.Scan(&langDef.Lang[idx].LangId)
 			})
 		if err != nil && err != sql.ErrNoRows {
 			return err
 		}
 
 		// if language exist then update else insert into lang_lst
-		if langDef.LangWord[idx].LangId >= 0 {
+		if langDef.Lang[idx].LangId >= 0 {
 
 			// UPDATE lang_lst SET lang_name = 'English' WHERE lang_id = 0
 			err = TrxUpdate(trx,
 				"UPDATE lang_lst"+
-					" SET lang_name = "+toQuoted(langDef.LangWord[idx].Name)+
-					" WHERE lang_id = "+strconv.Itoa(langDef.LangWord[idx].LangId))
+					" SET lang_name = "+toQuoted(langDef.Lang[idx].Name)+
+					" WHERE lang_id = "+strconv.Itoa(langDef.Lang[idx].LangId))
 			if err != nil {
 				return err
 			}
@@ -98,7 +98,7 @@ func doUpdateLanguage(trx *sql.Tx, langDef *LangList) error {
 			err = TrxSelectFirst(trx,
 				"SELECT id_value FROM id_lst WHERE id_key = 'lang_id'",
 				func(row *sql.Row) error {
-					return row.Scan(&langDef.LangWord[idx].LangId)
+					return row.Scan(&langDef.Lang[idx].LangId)
 				})
 			switch {
 			case err == sql.ErrNoRows:
@@ -111,16 +111,16 @@ func doUpdateLanguage(trx *sql.Tx, langDef *LangList) error {
 			err = TrxUpdate(trx,
 				"INSERT INTO lang_lst (lang_id, lang_code, lang_name)"+
 					" VALUES ("+
-					strconv.Itoa(langDef.LangWord[idx].LangId)+", "+
-					toQuoted(langDef.LangWord[idx].LangCode)+", "+
-					toQuoted(langDef.LangWord[idx].Name)+")")
+					strconv.Itoa(langDef.Lang[idx].LangId)+", "+
+					toQuoted(langDef.Lang[idx].LangCode)+", "+
+					toQuoted(langDef.Lang[idx].Name)+")")
 			if err != nil {
 				return err
 			}
 		}
 
 		// update lang_word for that language
-		if err = doUpdateWord(trx, langDef.LangWord[idx].LangId, langDef.LangWord[idx].Word); err != nil {
+		if err = doUpdateWord(trx, langDef.Lang[idx].LangId, langDef.Lang[idx].Word); err != nil {
 			return err
 		}
 	}

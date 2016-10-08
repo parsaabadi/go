@@ -32,13 +32,13 @@ func OpenmppSchemaVersion(dbConn *sql.DB) (int, error) {
 }
 
 // IdByCode return language id by language code or first language if code not found
-func (langDef *LangList) IdByCode(langCode string) int {
-	return langDef.LangWord[langDef.codeIndex[langCode]].LangId
+func (langDef *LangMeta) IdByCode(langCode string) int {
+	return langDef.Lang[langDef.codeIndex[langCode]].LangId
 }
 
 // CodeIdId return language code by language id or first language if id not found
-func (langDef *LangList) CodeById(langId int) string {
-	return langDef.LangWord[langDef.idIndex[langId]].LangCode
+func (langDef *LangMeta) CodeById(langId int) string {
+	return langDef.Lang[langDef.idIndex[langId]].LangCode
 }
 
 // DefaultLanguage return first model language: select min(lang_id) from model_dic_txt.
@@ -84,10 +84,10 @@ func DefaultLanguage(dbConn *sql.DB, modelId int) (*LangLstRow, error) {
 }
 
 // GetLanguages return language rows from lang_lst join to lang_word tables and map from lang_code to lang_id.
-func GetLanguages(dbConn *sql.DB) (*LangList, error) {
+func GetLanguages(dbConn *sql.DB) (*LangMeta, error) {
 
 	// select lang_lst rows, build index maps
-	langDef := LangList{idIndex: make(map[int]int), codeIndex: make(map[string]int)}
+	langDef := LangMeta{idIndex: make(map[int]int), codeIndex: make(map[string]int)}
 
 	err := SelectRows(dbConn, "SELECT lang_id, lang_code, lang_name FROM lang_lst ORDER BY 1",
 		func(rows *sql.Rows) error {
@@ -95,13 +95,13 @@ func GetLanguages(dbConn *sql.DB) (*LangList, error) {
 			if err := rows.Scan(&r.LangId, &r.LangCode, &r.Name); err != nil {
 				return err
 			}
-			langDef.LangWord = append(langDef.LangWord, LangMeta{LangLstRow: r})
+			langDef.Lang = append(langDef.Lang, langWord{LangLstRow: r})
 			return nil
 		})
 	if err != nil {
 		return nil, err
 	}
-	if len(langDef.LangWord) <= 0 {
+	if len(langDef.Lang) <= 0 {
 		return nil, errors.New("invalid database: no language(s) found")
 	}
 	langDef.updateInternals() // update internal maps from id and code to index of language
@@ -116,7 +116,7 @@ func GetLanguages(dbConn *sql.DB) (*LangList, error) {
 
 			if err == nil {
 				if i, ok := langDef.idIndex[r.LangId]; ok { // ignore if lang_id not exist, assume updated lang_lst between selects
-					langDef.LangWord[i].Word = append(langDef.LangWord[i].Word, r)
+					langDef.Lang[i].Word = append(langDef.Lang[i].Word, r)
 				}
 			}
 			return err
