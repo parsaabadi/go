@@ -50,7 +50,7 @@ func (pub *RunPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta, langDef *Lang
 		},
 		Txt:      make([]RunTxtRow, len(pub.Txt)),
 		Opts:     make(map[string]string, len(pub.Opts)),
-		ParamTxt: make([]RunParam, len(pub.ParamTxt)),
+		ParamTxt: make([]runParam, len(pub.ParamTxt)),
 	}
 
 	// model run description and notes: run_txt rows

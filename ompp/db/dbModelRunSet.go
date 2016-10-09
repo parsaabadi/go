@@ -25,7 +25,7 @@ type RunMeta struct {
 	Run      RunRow            // model run master row: run_lst
 	Txt      []RunTxtRow       // run text rows: run_txt
 	Opts     map[string]string // options used to run the model: run_option
-	ParamTxt []RunParam        // run parameters: name and text (value notes by language)
+	ParamTxt []runParam        // run parameters: name and text (value notes by language)
 }
 
 // RunMeta is "public" model run metadata for json import-export
@@ -72,7 +72,7 @@ type RunTxtRow struct {
 }
 
 // RunParam is a holder for run parameter Hid and run_parameter_txt rows
-type RunParam struct {
+type runParam struct {
 	ParamHid int              // parameter_hid INT NOT NULL
 	Txt      []RunParamTxtRow // run_parameter_txt table rows
 }

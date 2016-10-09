@@ -431,7 +431,7 @@ func GetRunFull(dbConn *sql.DB, runRow *RunRow, langCode string) (*RunMeta, erro
 		if !ok {
 			i = len(meta.ParamTxt)
 			hi[paramTxtRs[k].ParamHid] = i
-			meta.ParamTxt = append(meta.ParamTxt, RunParam{ParamHid: paramTxtRs[k].ParamHid})
+			meta.ParamTxt = append(meta.ParamTxt, runParam{ParamHid: paramTxtRs[k].ParamHid})
 		}
 		meta.ParamTxt[i].Txt = append(meta.ParamTxt[i].Txt, paramTxtRs[k])
 	}
@@ -556,7 +556,7 @@ func GetRunFullList(dbConn *sql.DB, modelId int, isSuccess bool, langCode string
 		// append Hid and append parameter value notes to that parameter Hid
 		if !isFound {
 			idx := len(rl[i].ParamTxt)
-			rl[i].ParamTxt = append(rl[i].ParamTxt, RunParam{ParamHid: paramTxtRs[k].ParamHid})
+			rl[i].ParamTxt = append(rl[i].ParamTxt, runParam{ParamHid: paramTxtRs[k].ParamHid})
 			rl[i].ParamTxt[idx].Txt = append(rl[i].ParamTxt[idx].Txt, paramTxtRs[k])
 		}
 	}
