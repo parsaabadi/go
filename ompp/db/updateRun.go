@@ -14,27 +14,103 @@ import (
 	"go.openmpp.org/ompp/helper"
 )
 
+// FromPublic convert model run metadata from "public" format (coming from json import-export) into db rows.
+func (pub *RunPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangMeta) (*RunMeta, error) {
+
+	// validate parameters
+	if modelDef == nil {
+		return nil, errors.New("invalid (empty) model metadata")
+	}
+	if langDef == nil {
+		return nil, errors.New("invalid (empty) language list")
+	}
+	if pub.ModelName == "" && pub.ModelDigest == "" {
+		return nil, errors.New("invalid (empty) model name and digest, model run: " + pub.Name + " " + pub.CreateDateTime)
+	}
+
+	// validate run model name and/or digest: run must belong to the model
+	if (pub.ModelName != "" && pub.ModelName != modelDef.Model.Name) ||
+		(pub.ModelDigest != "" && pub.ModelDigest != modelDef.Model.Digest) {
+		return nil, errors.New("invalid model name " + pub.ModelName + " or digest " + pub.ModelDigest + " expected: " + modelDef.Model.Name + " " + modelDef.Model.Digest)
+	}
+
+	// run header: run_lst row with zero default ru id
+	meta := RunMeta{
+		Run: RunRow{
+			RunId:          0, // run id is undefined
+			ModelId:        modelDef.Model.ModelId,
+			Name:           pub.Name,
+			SubCount:       pub.SubCount,
+			SubStarted:     pub.SubStarted,
+			SubCompleted:   pub.SubCompleted,
+			CreateDateTime: pub.CreateDateTime,
+			Status:         pub.Status,
+			UpdateDateTime: pub.UpdateDateTime,
+			Digest:         pub.Digest,
+		},
+		Txt:      make([]RunTxtRow, len(pub.Txt)),
+		Opts:     make(map[string]string, len(pub.Opts)),
+		ParamTxt: make([]RunParam, len(pub.ParamTxt)),
+	}
+
+	// model run description and notes: run_txt rows
+	// use set id default zero
+	for k := range pub.Txt {
+		meta.Txt[k].LangCode = pub.Txt[k].LangCode
+		meta.Txt[k].LangId = langDef.IdByCode(pub.Txt[k].LangCode)
+		meta.Txt[k].Descr = pub.Txt[k].Descr
+		meta.Txt[k].Note = pub.Txt[k].Note
+	}
+
+	// run options
+	for k, v := range pub.Opts {
+		meta.Opts[k] = v
+	}
+
+	// run parameters value notes: run_parameter_txt rows
+	// use set id default zero
+	for k := range pub.ParamTxt {
+
+		// find model parameter index by name
+		idx, ok := modelDef.ParamByName(pub.ParamTxt[k].Name)
+		if !ok {
+			return nil, errors.New("model run: " + pub.Name + " parameter " + pub.ParamTxt[k].Name + " not found")
+		}
+		meta.ParamTxt[k].ParamHid = modelDef.Param[idx].ParamHid
+
+		// workset parameter value notes, use set id default zero
+		if len(pub.ParamTxt[k].Txt) > 0 {
+			meta.ParamTxt[k].Txt = make([]RunParamTxtRow, len(pub.ParamTxt[k].Txt))
+
+			for j := range pub.ParamTxt[k].Txt {
+				meta.ParamTxt[k].Txt[j].ParamHid = meta.ParamTxt[k].ParamHid
+				meta.ParamTxt[k].Txt[j].LangCode = pub.ParamTxt[k].Txt[j].LangCode
+				meta.ParamTxt[k].Txt[j].LangId = langDef.IdByCode(pub.ParamTxt[k].Txt[j].LangCode)
+				meta.ParamTxt[k].Txt[j].Note = pub.ParamTxt[k].Txt[j].Note
+			}
+		}
+	}
+
+	return &meta, nil
+}
+
 // UpdateRun insert new or return existing model run metadata in database.
 //
 // Run status must be completed (success, exit or error) otherwise error returned.
-// If this run already exist then nothing is updated in database, only actual id's returned (model id, run id, parameter Hid).
+// If this run already exist then nothing is updated in database, only metadate updated with actual run id.
 // Following is used to find existing model run:
-// if digest not "" empty then by run digest
-// if status not success or exit then by run_name, sub_count, sub_completed, status, create_dt, update_dt
-func UpdateRun(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangMeta, meta *RunMeta) (bool, error) {
+// if digest not "" empty then by run digest;
+// if status not success or exit then by run_name, sub_count, sub_completed, status, create_dt, update_dt.
+//
+// It return "is found" flag and update metadata with actual run id in database.
+func (meta *RunMeta) UpdateRun(dbConn *sql.DB, modelDef *ModelMeta) (bool, error) {
 
 	// validate parameters
-	if meta == nil {
-		return false, nil // source is empty: nothing to do, exit
-	}
 	if modelDef == nil {
 		return false, errors.New("invalid (empty) model metadata")
 	}
-	if langDef == nil {
-		return false, errors.New("invalid (empty) language list")
-	}
-	if meta.ModelName != modelDef.Model.Name || meta.ModelDigest != modelDef.Model.Digest {
-		return false, errors.New("invalid model name " + meta.ModelName + " or digest " + meta.ModelDigest + " expected: " + modelDef.Model.Name + " " + modelDef.Model.Digest)
+	if meta.Run.ModelId != modelDef.Model.ModelId {
+		return false, errors.New("model run: " + strconv.Itoa(meta.Run.RunId) + " " + meta.Run.Name + " invalid model id " + strconv.Itoa(meta.Run.ModelId) + " expected: " + strconv.Itoa(modelDef.Model.ModelId))
 	}
 	if meta.Run.Status != DoneRunStatus && meta.Run.Status != ExitRunStatus && meta.Run.Status != ErrorRunStatus {
 		return false, errors.New("model run not completed: " + strconv.Itoa(meta.Run.RunId) + " " + meta.Run.Name)
@@ -86,17 +162,17 @@ func UpdateRun(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangMeta, meta *Run
 		}
 	}
 
-	// if run id exist then select existing run metadata
+	// if run id exist then update run id
 	if dstId > 0 {
-		runRow, err := GetRun(dbConn, dstId)
-		if err != nil {
-			return false, err
+		meta.Run.RunId = dstId
+		for k := range meta.Txt {
+			meta.Txt[k].RunId = dstId
 		}
-		m, err := GetRunFull(dbConn, modelDef, runRow, "")
-		if err != nil {
-			return false, err
+		for k := range meta.ParamTxt {
+			for j := range meta.ParamTxt[k].Txt {
+				meta.ParamTxt[k].Txt[j].RunId = dstId
+			}
 		}
-		*meta = *m
 		return true, nil
 	}
 	// else: run not exist
@@ -106,7 +182,7 @@ func UpdateRun(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangMeta, meta *Run
 	if err != nil {
 		return false, err
 	}
-	err = doInsertRun(trx, modelDef, langDef, meta)
+	err = doInsertRun(trx, modelDef, meta)
 	if err != nil {
 		trx.Rollback()
 		return false, err
@@ -252,30 +328,95 @@ func doUpdateRunDigest(trx *sql.Tx, runId int) (string, error) {
 	}
 
 	// update model run digest
-	rdg := fmt.Sprintf("%x", hMd5.Sum(nil))
+	dg := fmt.Sprintf("%x", hMd5.Sum(nil))
 
 	err = TrxUpdate(trx,
-		"UPDATE run_lst SET run_digest = "+toQuoted(rdg)+" WHERE run_id = "+srId)
+		"UPDATE run_lst SET run_digest = "+toQuoted(dg)+" WHERE run_id = "+srId)
 	if err != nil {
 		return "", err
 	}
 
-	return rdg, nil
+	return dg, nil
 
 }
 
 // UpdateRunText update run_txt table of existing run_id.
 //
-// Model id, run id, parameter Hid updated with actual database id's.
+// Run id of the input txt db rows updated with runId value.
 // If run not exist or status is not completed (success, exit, error) then function does nothing.
-func UpdateRunText(dbConn *sql.DB, modelDef *ModelMeta, runId int, txt []RunTxtRow) error {
+func UpdateRunText(dbConn *sql.DB, runId int, txt []RunTxtRow) error {
+
+	// check run status: if not completed then exit
+	var st string
+
+	err := SelectFirst(dbConn,
+		"SELECT status FROM run_lst WHERE run_id = "+strconv.Itoa(runId),
+		func(row *sql.Row) error {
+			err := row.Scan(&st)
+			return err
+		})
+	switch {
+	case err == sql.ErrNoRows:
+		return nil // model run not found: nothing to do
+	case err != nil:
+		return err
+	}
+
+	// if run run not completed then exit
+	if st != DoneRunStatus && st != ExitRunStatus && st != ErrorRunStatus {
+		return nil
+	}
+
+	// do update in transaction scope
+	trx, err := dbConn.Begin()
+	if err != nil {
+		return err
+	}
+	err = doUpdateRunText(trx, runId, txt)
+	if err != nil {
+		trx.Rollback()
+		return err
+	}
+	trx.Commit()
+
+	return nil
+}
+
+// doUpdateRunText update run_txt table of existing run_id.
+// It does update as part of transaction.
+// Run id of the input txt db rows updated with runId value.
+func doUpdateRunText(trx *sql.Tx, runId int, txt []RunTxtRow) error {
+
+	// delete existing run text
+	srId := strconv.Itoa(runId)
+
+	err := TrxUpdate(trx, "DELETE FROM run_txt WHERE run_id = "+srId)
+	if err != nil {
+		return err
+	}
+
+	// insert new run_txt db rows
+	for k := range txt {
+
+		txt[k].RunId = runId // update run id
+
+		err = TrxUpdate(trx,
+			"INSERT INTO run_txt (run_id, lang_id, descr, note) VALUES ("+
+				srId+", "+
+				strconv.Itoa(txt[k].LangId)+", "+
+				toQuoted(txt[k].Descr)+", "+
+				toQuotedOrNull(txt[k].Note)+")")
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 // doInsertRun insert new model run metadata in database.
 // It does update as part of transaction
 // Run status must be completed (success, exit or error) otherwise error returned.
-func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, meta *RunMeta) error {
+func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, meta *RunMeta) error {
 
 	// validate: run must be completed
 	if meta.Run.Status != DoneRunStatus && meta.Run.Status != ExitRunStatus && meta.Run.Status != ErrorRunStatus {
@@ -346,9 +487,7 @@ func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, meta *RunM
 	// update run text (description and notes)
 	for j := range meta.Txt {
 
-		// update run id and language id
-		meta.Txt[j].RunId = runId
-		meta.Txt[j].LangId = langDef.IdByCode(meta.Txt[j].LangCode)
+		meta.Txt[j].RunId = runId // update run id
 
 		// insert into run_txt
 		err = TrxUpdate(trx,
@@ -377,26 +516,21 @@ func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, meta *RunM
 	}
 
 	// update parameter run text: parameter run value notes
-	for j := range meta.ParamTxt {
+	for k := range meta.ParamTxt {
+		for j := range meta.ParamTxt[k].Txt {
 
-		// update run id, language id and parameter Hid
-		meta.ParamTxt[j].RunId = runId
-		meta.ParamTxt[j].LangId = langDef.IdByCode(meta.ParamTxt[j].LangCode)
+			meta.ParamTxt[k].Txt[j].RunId = runId // update run id
 
-		hId := modelDef.ParamHidById(meta.ParamTxt[j].ParamId)
-		if hId <= 0 {
-			return errors.New("invalid parameter id: " + strconv.Itoa(meta.ParamTxt[j].ParamId))
-		}
-
-		// insert into run_parameter_txt
-		err = TrxUpdate(trx,
-			"INSERT INTO run_parameter_txt (run_id, parameter_hid, lang_id, note) VALUES ("+
-				srId+", "+
-				strconv.Itoa(hId)+", "+
-				strconv.Itoa(meta.ParamTxt[j].LangId)+", "+
-				toQuotedOrNull(meta.ParamTxt[j].Note)+")")
-		if err != nil {
-			return err
+			// insert into run_parameter_txt
+			err = TrxUpdate(trx,
+				"INSERT INTO run_parameter_txt (run_id, parameter_hid, lang_id, note) VALUES ("+
+					srId+", "+
+					strconv.Itoa(meta.ParamTxt[k].ParamHid)+", "+
+					strconv.Itoa(meta.ParamTxt[k].Txt[j].LangId)+", "+
+					toQuotedOrNull(meta.ParamTxt[k].Txt[j].Note)+")")
+			if err != nil {
+				return err
+			}
 		}
 	}
 

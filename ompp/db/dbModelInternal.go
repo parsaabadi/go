@@ -10,6 +10,19 @@ import (
 	"strconv"
 )
 
+// updateInternals language metadata internal members.
+// It must be called after restoring from json.
+func (meta *LangMeta) updateInternals() {
+
+	meta.idIndex = make(map[int]int, len(meta.Lang))
+	meta.codeIndex = make(map[string]int, len(meta.Lang))
+
+	for k := range meta.Lang {
+		meta.idIndex[meta.Lang[k].LangId] = k     // index of lang_id in result []language slice
+		meta.codeIndex[meta.Lang[k].LangCode] = k // index of lang_code in result []language slice
+	}
+}
+
 // updateInternals model metadata internal members.
 // It must be called after restoring from json.
 // It does recalculate digest of type, parameter, output table, model if digest is "" empty.

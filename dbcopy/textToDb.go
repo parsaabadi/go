@@ -90,7 +90,7 @@ func textToDb(modelName string, runOpts *config.RunOptions) error {
 	}
 
 	// insert model workset data from csv into database: input parameters
-	setIdMap, err := fromWorksetTextListToDb(dstDb, modelDef, langDef, inpDir, runIdMap)
+	setIdMap, err := fromWorksetTextListToDb(dstDb, modelDef, langDef, inpDir)
 	if err != nil {
 		return err
 	}
@@ -99,6 +99,147 @@ func textToDb(modelName string, runOpts *config.RunOptions) error {
 	if err = fromTaskListJsonToDb(dstDb, modelDef, langDef, inpDir, runIdMap, setIdMap); err != nil {
 		return err
 	}
+	return nil
+}
+
+// copy model run from text json and csv files into database
+func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOptions) error {
+
+	// validate parameters
+	if modelName == "" {
+		return errors.New("invalid (empty) model name")
+	}
+
+	// get model run name and id
+	runName := runOpts.String(config.RunName)
+	runId := runOpts.Int(config.RunId, 0)
+
+	if runId < 0 || runId == 0 && runName == "" {
+		return errors.New("dbcopy invalid argument(s) for model run id: " + runOpts.String(config.RunId) + " and/or name: " + runOpts.String(config.RunName))
+	}
+
+	// root for run data: input directory or name of input.zip
+	// it is input directory/modelName
+	// later this "root" combined with run name subdirectory: root/runName
+	inpDir := filepath.Join(runOpts.String(inputDirArgKey), modelName)
+
+	if runOpts.Bool(zipArgKey) {
+		base := filepath.Base(inpDir)
+		omppLog.Log("Unpack ", base, ".zip")
+
+		outDir := runOpts.String(outputDirArgKey)
+		if err := helper.UnpackZip(inpDir+".zip", outDir); err != nil {
+			return err
+		}
+		inpDir = filepath.Join(outDir, base)
+	}
+
+	// get model run metadata json path and csv directory by run id or run name or both
+	var metaPath string
+	var csvDir string
+
+	if runOpts.IsExist(config.RunName) && runOpts.IsExist(config.RunId) { // both: run id and name
+
+		metaPath = filepath.Join(inpDir,
+			modelName+".run."+strconv.Itoa(runId)+"."+helper.ToAlphaNumeric(runName)+".json")
+		csvDir = filepath.Join(inpDir,
+			"run."+strconv.Itoa(runId)+"."+helper.ToAlphaNumeric(runName))
+
+	} else { // run id or run name only
+
+		// make path search patterns for metadata json and csv directory
+		var cp string
+		if runOpts.IsExist(config.RunName) && !runOpts.IsExist(config.RunId) { // run name only
+			cp = "run.[0-9]*." + helper.ToAlphaNumeric(runName)
+		}
+		if !runOpts.IsExist(config.RunName) && runOpts.IsExist(config.RunId) { // run id only
+			cp = "run." + strconv.Itoa(runId) + ".*"
+		}
+		mp := modelName + "." + cp + ".json"
+
+		// find path to metadata json by pattern
+		fl, err := filepath.Glob(inpDir + "/" + mp)
+		if err != nil {
+			return err
+		}
+		if len(fl) <= 0 {
+			return errors.New("no metadata json file found for model run: " + strconv.Itoa(runId) + " " + runName)
+		}
+		if len(fl) > 1 {
+			omppLog.Log("found multiple model run metadata json files, using: " + filepath.Base(metaPath))
+		}
+		metaPath = fl[0]
+
+		// csv directory: check if csv directory exist for that json file
+		re := regexp.MustCompile("\\.run\\.([0-9]+)\\.((_|[0-9A-Za-z])+)\\.json")
+		s := re.FindString(filepath.Base(metaPath))
+
+		if len(s) > 6 { // expected match string: .run.4.q.json, csv directory: run.4.q
+			csvDir = filepath.Join(inpDir, s[1:len(s)-5])
+		}
+	}
+
+	// check results: metadata json file or csv directory must exist
+	if metaPath == "" {
+		return errors.New("no metadata json file found for model run: " + strconv.Itoa(runId) + " " + runName)
+	}
+	if csvDir == "" {
+		return errors.New("no csv directory found for model run: " + strconv.Itoa(runId) + " " + runName)
+	}
+	if _, err := os.Stat(metaPath); err != nil {
+		return errors.New("no metadata json file found for model run: " + strconv.Itoa(runId) + " " + runName)
+	}
+	if _, err := os.Stat(csvDir); err != nil {
+		return errors.New("no csv directory found for model run: " + strconv.Itoa(runId) + " " + runName)
+	}
+
+	// get connection string and driver name
+	// use OpenM options if DBCopy ouput database not defined
+	cs := runOpts.String(toDbConnectionStr)
+	if cs == "" && runOpts.IsExist(config.DbConnectionStr) {
+		cs = runOpts.String(config.DbConnectionStr)
+	}
+
+	dn := runOpts.String(toDbDriverName)
+	if dn == "" && runOpts.IsExist(config.DbDriverName) {
+		dn = runOpts.String(config.DbDriverName)
+	}
+
+	cs, dn = db.IfEmptyMakeDefault(modelName, cs, dn)
+
+	// open destination database and check is it valid
+	dstDb, _, err := db.Open(cs, dn, true)
+	if err != nil {
+		return err
+	}
+	defer dstDb.Close()
+
+	nv, err := db.OpenmppSchemaVersion(dstDb)
+	if err != nil || nv < db.MinSchemaVersion {
+		return errors.New("invalid database, likely not an openM++ database")
+	}
+
+	// get model metadata
+	modelDef, err := db.GetModel(dstDb, modelName, modelDigest)
+	if err != nil {
+		return err
+	}
+
+	// get full list of languages
+	langDef, err := db.GetLanguages(dstDb)
+	if err != nil {
+		return err
+	}
+
+	// read from metadata json and csv files and update target database
+	srcId, _, err := fromRunTextToDb(dstDb, modelDef, langDef, runName, runId, metaPath, csvDir)
+	if err != nil {
+		return err
+	}
+	if srcId <= 0 {
+		return errors.New("model run not found or empty: " + strconv.Itoa(runId) + " " + runName)
+	}
+
 	return nil
 }
 
@@ -216,7 +357,7 @@ func textToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 
 	// check results: metadata json file or csv directory must exist
 	if metaPath == "" && csvDir == "" {
-		return errors.New("workset metadata json file and csv directory, workset: " + strconv.Itoa(setId) + " " + setName)
+		return errors.New("no workset metadata json file and no csv directory, workset: " + strconv.Itoa(setId) + " " + setName)
 	}
 
 	// get connection string and driver name
@@ -385,7 +526,7 @@ func fromRunTextListToDb(
 	// update model run digest
 	for k := range fl {
 
-		srcId, dstId, err := fromRunTextToDb(dbConn, modelDef, langDef, fl[k], doubleFmt)
+		srcId, dstId, err := fromRunTextToDb(dbConn, modelDef, langDef, "", 0, fl[k], doubleFmt)
 		if err != nil {
 			return nil, err
 		}
@@ -397,17 +538,23 @@ func fromRunTextListToDb(
 	return runIdMap, nil
 }
 
-// fromRunTextToDb read model run metadatafrom json file,
+// fromRunTextToDb read model run metadata from json file,
 // read from csv files parameter values, output tables values convert it to db cells and insert into database,
 // and finally update model run digest.
 // Double format is used for float model types digest calculation, if non-empty format supplied
 // it return source run id (run id from metadata json file) and destination run id
 func fromRunTextToDb(
-	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, metaPath string, doubleFmt string) (int, int, error) {
+	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, srcName string, srcId int, metaPath string, doubleFmt string) (int, int, error) {
+
+	// if no metadata file then exit: nothing to do
+	if metaPath == "" {
+		return 0, 0, nil // no workset
+	}
 
 	// get model run metadata
-	var meta db.RunMeta
-	isExist, err := helper.FromJsonFile(metaPath, &meta)
+	// model name and set name must be specified as parameter or inside of metadata json
+	var pub db.RunPub
+	isExist, err := helper.FromJsonFile(metaPath, &pub)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -415,28 +562,45 @@ func fromRunTextToDb(
 		return 0, 0, nil // no model run
 	}
 
-	// save model run
-	// update incoming run id's with actual new run id created in database
-	srcId := meta.Run.RunId
+	// run id: parse json file name to get source run id
+	if srcId <= 0 {
+		re := regexp.MustCompile("\\.run\\.([0-9]+)\\.")
+		s2 := re.FindStringSubmatch(filepath.Base(metaPath))
+		if len(s2) >= 2 {
+			srcId, _ = strconv.Atoi(s2[1]) // if any error source run id remain default zero
+		}
+	}
 
-	isExist, err = db.UpdateRun(dbConn, modelDef, langDef, &meta)
+	// run name: use run name from json metadata, if empty
+	if pub.Name != "" && srcName != pub.Name {
+		srcName = pub.Name
+	}
+
+	// check if run subdir exist
+	csvDir := filepath.Join(filepath.Dir(metaPath), "run."+strconv.Itoa(srcId)+"."+helper.ToAlphaNumeric(pub.Name))
+
+	if _, err := os.Stat(csvDir); err != nil {
+		return 0, 0, errors.New("run directory not found: " + strconv.Itoa(srcId) + " " + pub.Name)
+	}
+
+	// destination: convert from "public" format into destination db rows
+	meta, err := pub.FromPublic(dbConn, modelDef, langDef)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	// save model run
+	isExist, err = meta.UpdateRun(dbConn, modelDef)
 	if err != nil {
 		return 0, 0, err
 	}
 	dstId := meta.Run.RunId
 	if isExist { // exit if model run already exist
-		omppLog.Log("Model run ", srcId, " already exists as ", dstId)
+		omppLog.Log("Model run ", srcId, " ", srcName, " already exists as ", dstId)
 		return srcId, dstId, nil
 	}
 
-	omppLog.Log("Model run from ", srcId, " to ", dstId)
-
-	// check if run subdir exist
-	csvDir := filepath.Join(filepath.Dir(metaPath), "run."+strconv.Itoa(srcId)+"."+helper.ToAlphaNumeric(meta.Run.Name))
-
-	if _, err := os.Stat(csvDir); err != nil {
-		return 0, 0, errors.New("run directory not found: " + strconv.Itoa(srcId) + " " + meta.Run.Name)
-	}
+	omppLog.Log("Model run from ", srcId, " ", srcName, " to ", dstId)
 
 	// restore run parameters: all model parameters must be included in the run
 	layout := db.WriteLayout{ToId: meta.Run.RunId, IsToRun: true}
@@ -502,7 +666,7 @@ func fromRunTextToDb(
 // convert it to db cells and insert into database
 // update set id's and base run id's with actual id in database
 func fromWorksetTextListToDb(
-	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, inpDir string, runIdMap map[int]int) (map[int]int, error) {
+	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, inpDir string) (map[int]int, error) {
 
 	// get list of workset json files
 	fl, err := filepath.Glob(inpDir + "/" + modelDef.Model.Name + ".set.[0-9]*.*.json")
@@ -603,7 +767,7 @@ func fromWorksetTextToDb(
 		if err != nil {
 			return 0, 0, err
 		}
-		pub.Param = make([]db.WorksetParamPub, len(fl))
+		pub.Param = make([]db.NameLangNote, len(fl))
 
 		for j := range fl {
 			fn := filepath.Base(fl[j])
@@ -615,7 +779,9 @@ func fromWorksetTextToDb(
 	// destination: convert from "public" format into destination db rows
 	// display warning if base run not found in destination database
 	ws, err := pub.FromPublic(dbConn, modelDef, langDef)
-
+	if err != nil {
+		return 0, 0, err
+	}
 	if ws.Set.BaseRunId <= 0 && pub.BaseRunDigest != "" {
 		omppLog.Log("warning: workset ", ws.Set.Name, ", base run not found by digest ", pub.BaseRunDigest)
 	}

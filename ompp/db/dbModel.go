@@ -100,6 +100,13 @@ type langWord struct {
 	Word       []WordRow // lang_word db-table rows for the language
 }
 
+// NameLangNote is a name and notes by language,
+// for example parameter value notes: parameter name, language, notes
+type NameLangNote struct {
+	Name string     // parameter_name     VARCHAR(255) NOT NULL
+	Txt  []langNote // parameter value notes by language
+}
+
 // descrNote is a holder for language code, descripriton and notes
 type descrNote struct {
 	LangCode string // lang_code VARCHAR(32)  NOT NULL

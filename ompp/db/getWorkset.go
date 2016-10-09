@@ -213,10 +213,10 @@ func GetWorksetRunIds(dbConn *sql.DB, setId int) ([]int, error) {
 	return idRs, nil
 }
 
-// GetWorksetParamIds return id of parameters (parameter_id) included in that workset
-func GetWorksetParamIds(dbConn *sql.DB, modelDef *ModelMeta, setId int) ([]int, error) {
+// GetWorksetParamIds return Hid of parameters (parameter_hid) included in that workset
+func GetWorksetParamHids(dbConn *sql.DB, setId int) ([]int, error) {
 
-	var idRs []int
+	var hRs []int
 
 	err := SelectRows(dbConn,
 		"SELECT parameter_hid FROM workset_parameter WHERE set_id = "+strconv.Itoa(setId)+" ORDER BY 1",
@@ -225,47 +225,38 @@ func GetWorksetParamIds(dbConn *sql.DB, modelDef *ModelMeta, setId int) ([]int, 
 			if err := rows.Scan(&hId); err != nil {
 				return err
 			}
-			idRs = append(idRs, modelDef.ParamIdByHid(hId))
+			hRs = append(hRs, hId)
 			return nil
 		})
 	if err != nil {
 		return nil, err
 	}
-	return idRs, nil
+	return hRs, nil
 }
 
 // GetWorksetParamText return parameter value notes: workset_parameter_txt table rows.
 //
 // If langCode not empty then only specified language selected else all languages
-func GetWorksetParamText(dbConn *sql.DB, modelDef *ModelMeta, setId int, paramId int, langCode string) ([]WorksetParamTxtRow, error) {
+func GetWorksetParamText(dbConn *sql.DB, setId int, paramHid int, langCode string) ([]WorksetParamTxtRow, error) {
 
-	// find parameter Hid
-	hId := modelDef.ParamHidById(paramId)
-	if hId <= 0 {
-		return []WorksetParamTxtRow{}, nil // parameter not found, return empty results
-	}
-
-	// make select using Hid
 	q := "SELECT M.set_id, M.parameter_hid, M.lang_id, L.lang_code, M.note" +
 		" FROM workset_parameter_txt M" +
 		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)" +
 		" WHERE M.set_id = " + strconv.Itoa(setId) +
-		" AND M.parameter_hid = " + strconv.Itoa(hId)
+		" AND M.parameter_hid = " + strconv.Itoa(paramHid)
 	if langCode != "" {
 		q += " AND L.lang_code = " + toQuoted(langCode)
 	}
 	q += " ORDER BY 1, 2, 3"
 
-	// do select and set parameter id in output results
-	return getWsParamText(dbConn, modelDef, q)
+	return getWsParamText(dbConn, q)
 }
 
 // GetWorksetAllParamText return all workset parameters value notes: workset_parameter_txt table rows.
 //
 // If langCode not empty then only specified language selected else all languages
-func GetWorksetAllParamText(dbConn *sql.DB, modelDef *ModelMeta, setId int, langCode string) ([]WorksetParamTxtRow, error) {
+func GetWorksetAllParamText(dbConn *sql.DB, setId int, langCode string) ([]WorksetParamTxtRow, error) {
 
-	// make select using Hid
 	q := "SELECT M.set_id, M.parameter_hid, M.lang_id, L.lang_code, M.note" +
 		" FROM workset_parameter_txt M" +
 		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)" +
@@ -275,12 +266,11 @@ func GetWorksetAllParamText(dbConn *sql.DB, modelDef *ModelMeta, setId int, lang
 	}
 	q += " ORDER BY 1, 2, 3"
 
-	// do select and set parameter id in output results
-	return getWsParamText(dbConn, modelDef, q)
+	return getWsParamText(dbConn, q)
 }
 
 // getWsParamText return parameter value notes: workset_parameter_txt table rows.
-func getWsParamText(dbConn *sql.DB, modelDef *ModelMeta, query string) ([]WorksetParamTxtRow, error) {
+func getWsParamText(dbConn *sql.DB, query string) ([]WorksetParamTxtRow, error) {
 
 	var txtLst []WorksetParamTxtRow
 
@@ -305,7 +295,7 @@ func getWsParamText(dbConn *sql.DB, modelDef *ModelMeta, query string) ([]Workse
 	return txtLst, nil
 }
 
-// ToWorksetPub convert workset db rows into "public" workset format for json import-export
+// ToPublic convert workset db rows into "public" workset format for json import-export
 func (meta *WorksetMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*WorksetPub, error) {
 
 	// validate workset model id: workset must belong to the model
@@ -321,7 +311,7 @@ func (meta *WorksetMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*Workset
 		IsReadonly:     meta.Set.IsReadonly,
 		UpdateDateTime: meta.Set.UpdateDateTime,
 		Txt:            make([]descrNote, len(meta.Txt)),
-		Param:          make([]WorksetParamPub, len(meta.Param)),
+		Param:          make([]NameLangNote, len(meta.Param)),
 	}
 
 	// find base run digest by id, if workset based on run then base run id must be positive
@@ -335,7 +325,7 @@ func (meta *WorksetMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*Workset
 		}
 	}
 
-	// workset desription and notes by language
+	// workset description and notes by language
 	for k := range meta.Txt {
 		pub.Txt[k] = descrNote{
 			LangCode: meta.Txt[k].LangCode,
@@ -346,8 +336,14 @@ func (meta *WorksetMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*Workset
 	// workset parameters and parameter value notes
 	for k := range meta.Param {
 
-		pub.Param[k] = WorksetParamPub{
-			Name: modelDef.Param[meta.Param[k].paramIndex].Name,
+		// find model parameter index by name
+		idx, ok := modelDef.ParamByHid(meta.Param[k].ParamHid)
+		if !ok {
+			return nil, errors.New("workset: " + strconv.Itoa(meta.Set.SetId) + " " + meta.Set.Name + ", parameter " + strconv.Itoa(meta.Param[k].ParamHid) + " not found")
+		}
+
+		pub.Param[k] = NameLangNote{
+			Name: modelDef.Param[idx].Name,
 			Txt:  make([]langNote, len(meta.Param[k].Txt)),
 		}
 		for j := range meta.Param[k].Txt {
@@ -364,7 +360,7 @@ func (meta *WorksetMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*Workset
 // GetWorksetFull return full workset metadata: workset_lst, workset_txt, workset_parameter, workset_parameter_txt table rows.
 //
 // If langCode not empty then only specified language selected else all languages
-func GetWorksetFull(dbConn *sql.DB, modelDef *ModelMeta, setRow *WorksetRow, langCode string) (*WorksetMeta, error) {
+func GetWorksetFull(dbConn *sql.DB, setRow *WorksetRow, langCode string) (*WorksetMeta, error) {
 
 	// validate parameters
 	if setRow == nil {
@@ -372,8 +368,6 @@ func GetWorksetFull(dbConn *sql.DB, modelDef *ModelMeta, setRow *WorksetRow, lan
 	}
 
 	// where filters
-	setIdFilter := " AND H.set_id = " + strconv.Itoa(setRow.SetId)
-
 	var langFilter string
 	if langCode != "" {
 		langFilter = " AND L.lang_code = " + toQuoted(langCode)
@@ -381,15 +375,13 @@ func GetWorksetFull(dbConn *sql.DB, modelDef *ModelMeta, setRow *WorksetRow, lan
 
 	// workset header: workset_lst row, model name and digest
 	ws := &WorksetMeta{Set: *setRow}
-	smId := strconv.Itoa(modelDef.Model.ModelId)
 
 	// workset_txt rows
 	q := "SELECT M.set_id, M.lang_id, L.lang_code, M.descr, M.note" +
 		" FROM workset_txt M" +
 		" INNER JOIN workset_lst H ON (H.set_id = M.set_id)" +
 		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)" +
-		" WHERE H.model_id = " + smId +
-		setIdFilter +
+		" WHERE H.set_id = " + strconv.Itoa(setRow.SetId) +
 		langFilter +
 		" ORDER BY 1, 2"
 
@@ -403,8 +395,7 @@ func GetWorksetFull(dbConn *sql.DB, modelDef *ModelMeta, setRow *WorksetRow, lan
 	q = "SELECT M.parameter_hid" +
 		" FROM workset_parameter M" +
 		" INNER JOIN workset_lst H ON (H.set_id = M.set_id)" +
-		" WHERE H.model_id = " + smId +
-		setIdFilter +
+		" WHERE H.set_id = " + strconv.Itoa(setRow.SetId) +
 		" ORDER BY 1"
 	hi := make(map[int]int) // map (parameter Hid) => index in parameter array
 
@@ -417,13 +408,6 @@ func GetWorksetFull(dbConn *sql.DB, modelDef *ModelMeta, setRow *WorksetRow, lan
 				return err
 			}
 			r := WorksetParam{ParamHid: hId}
-
-			// find parameter by Hid
-			idx, ok := modelDef.ParamByHid(hId)
-			if !ok {
-				return errors.New("workset: " + strconv.Itoa(setRow.SetId) + " " + setRow.Name + ", invalid parameter Hid " + strconv.Itoa(hId))
-			}
-			r.paramIndex = idx
 
 			hi[hId] = len(ws.Param) // index of parameter Hid in parameter list
 			ws.Param = append(ws.Param, r)
@@ -438,12 +422,11 @@ func GetWorksetFull(dbConn *sql.DB, modelDef *ModelMeta, setRow *WorksetRow, lan
 		" FROM workset_parameter_txt M" +
 		" INNER JOIN workset_lst H ON (H.set_id = M.set_id)" +
 		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)" +
-		" WHERE H.model_id = " + smId +
-		setIdFilter +
+		" WHERE H.set_id = " + strconv.Itoa(setRow.SetId) +
 		langFilter +
 		" ORDER BY 1, 2, 3"
 
-	paramTxtRs, err := getWsParamText(dbConn, modelDef, q)
+	paramTxtRs, err := getWsParamText(dbConn, q)
 	if err != nil {
 		return nil, err
 	}
@@ -460,7 +443,7 @@ func GetWorksetFull(dbConn *sql.DB, modelDef *ModelMeta, setRow *WorksetRow, lan
 //
 // If isReadonly true then return only readonly worksets else all worksets.
 // If langCode not empty then only specified language selected else all languages
-func GetWorksetFullList(dbConn *sql.DB, modelDef *ModelMeta, isReadonly bool, langCode string) ([]WorksetMeta, error) {
+func GetWorksetFullList(dbConn *sql.DB, modelId int, isReadonly bool, langCode string) ([]WorksetMeta, error) {
 
 	// where filters
 	var roFilter string
@@ -474,7 +457,7 @@ func GetWorksetFullList(dbConn *sql.DB, modelDef *ModelMeta, isReadonly bool, la
 	}
 
 	// workset_lst rows
-	smId := strconv.Itoa(modelDef.Model.ModelId)
+	smId := strconv.Itoa(modelId)
 
 	q := "SELECT" +
 		" H.set_id, H.base_run_id, H.model_id, H.set_name, H.is_readonly, H.update_dt" +
@@ -503,7 +486,7 @@ func GetWorksetFullList(dbConn *sql.DB, modelDef *ModelMeta, isReadonly bool, la
 		return nil, err
 	}
 
-	// workset_parameter: select using Hid, translate to parameter id in result
+	// workset_parameter: select using Hid
 	q = "SELECT H.set_id, M.parameter_hid" +
 		" FROM workset_parameter M" +
 		" INNER JOIN workset_lst H ON (H.set_id = M.set_id)" +
@@ -536,8 +519,7 @@ func GetWorksetFullList(dbConn *sql.DB, modelDef *ModelMeta, isReadonly bool, la
 		langFilter +
 		" ORDER BY 1, 2, 3"
 
-	// do select and set parameter id in output results
-	paramTxtRs, err := getWsParamText(dbConn, modelDef, q)
+	paramTxtRs, err := getWsParamText(dbConn, q)
 	if err != nil {
 		return nil, err
 	}
@@ -560,17 +542,9 @@ func GetWorksetFullList(dbConn *sql.DB, modelDef *ModelMeta, isReadonly bool, la
 	}
 
 	// workset parameters: append parameters to coresponding workset
-	// and set index of parameter in model parameters list
 	for k := range ps {
 		i := m[ps[k][0]]
-		idx, ok := modelDef.ParamByHid(ps[k][1])
-		if !ok {
-			return nil, errors.New("workset: " + strconv.Itoa(wl[i].Set.SetId) + " " + wl[i].Set.Name + ", invalid parameter Hid " + strconv.Itoa(ps[k][1]))
-		}
-		wl[i].Param = append(wl[i].Param,
-			WorksetParam{
-				ParamHid:   ps[k][1],
-				paramIndex: idx})
+		wl[i].Param = append(wl[i].Param, WorksetParam{ParamHid: ps[k][1]})
 	}
 
 	// workset parameters text (parameter value notes):

@@ -81,6 +81,103 @@ func dbToText(modelName string, modelDigest string, runOpts *config.RunOptions) 
 	return nil
 }
 
+// copy model from database into text json and csv files
+func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOptions) error {
+
+	// get model run name and id
+	runName := runOpts.String(config.RunName)
+	runId := runOpts.Int(config.RunId, 0)
+
+	// conflicting options: use run id if positive else use run name
+	if runOpts.IsExist(config.RunName) && runOpts.IsExist(config.RunId) {
+		if runId > 0 {
+			omppLog.Log("dbcopy options conflict. Using run id: ", runId, " ignore run name: ", runName)
+			runName = ""
+		} else {
+			omppLog.Log("dbcopy options conflict. Using run name: ", runName, " ignore run id: ", runId)
+			runId = 0
+		}
+	}
+
+	if runId < 0 || runId == 0 && runName == "" {
+		return errors.New("dbcopy invalid argument(s) for run id: " + runOpts.String(config.RunId) + " and/or run name: " + runOpts.String(config.RunName))
+	}
+
+	// open source database connection and check is it valid
+	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(config.DbConnectionStr), runOpts.String(config.DbDriverName))
+	srcDb, _, err := db.Open(cs, dn, false)
+	if err != nil {
+		return err
+	}
+	defer srcDb.Close()
+
+	nv, err := db.OpenmppSchemaVersion(srcDb)
+	if err != nil || nv < db.MinSchemaVersion {
+		return errors.New("invalid database, likely not an openM++ database")
+	}
+
+	// get model metadata
+	modelDef, err := db.GetModel(srcDb, modelName, modelDigest)
+	if err != nil {
+		return err
+	}
+	modelName = modelDef.Model.Name // set model name: it can be empty and only model digest specified
+
+	// get model run metadata by id or name
+	var runRow *db.RunRow
+	if runId > 0 {
+		if runRow, err = db.GetRun(srcDb, runId); err != nil {
+			return err
+		}
+		if runRow == nil {
+			return errors.New("model run not found, id: " + strconv.Itoa(runId))
+		}
+	} else {
+		if runRow, err = db.GetRunByName(srcDb, modelDef.Model.ModelId, runName); err != nil {
+			return err
+		}
+		if runRow == nil {
+			return errors.New("model run not found: " + runName)
+		}
+	}
+
+	// run must be completed: status success, error or exit
+	if runRow.Status != db.DoneRunStatus && runRow.Status != db.ExitRunStatus && runRow.Status != db.ErrorRunStatus {
+		return errors.New("model run not completed: " + strconv.Itoa(runRow.RunId) + " " + runRow.Name)
+	}
+
+	// get full model run metadata
+	meta, err := db.GetRunFull(srcDb, runRow, "")
+	if err != nil {
+		return err
+	}
+
+	// create new model run output directory "root"
+	// later this "root" combined with run name subdirectory: root/runName
+	outDir := filepath.Join(runOpts.String(outputDirArgKey), modelName)
+	err = os.MkdirAll(outDir, 0750)
+	if err != nil {
+		return err
+	}
+
+	// write model run metadata into json, parameters and output result values into csv files
+	dblFmt := runOpts.String(doubleFmtArgKey)
+	if err = toRunTextFile(srcDb, modelDef, meta, outDir, dblFmt); err != nil {
+		return err
+	}
+
+	// pack model run metadata and results into zip
+	if runOpts.Bool(zipArgKey) {
+		zipPath, err := helper.PackZip(outDir, "")
+		if err != nil {
+			return err
+		}
+		omppLog.Log("Packed ", zipPath)
+	}
+
+	return nil
+}
+
 // copy workset from database into text json and csv files
 func dbToTextWorkset(modelName string, modelDigest string, runOpts *config.RunOptions) error {
 
@@ -141,13 +238,13 @@ func dbToTextWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 		}
 	}
 
-	ws, err := db.GetWorksetFull(srcDb, modelDef, wsRow, "") // get full workset metadata
+	wm, err := db.GetWorksetFull(srcDb, wsRow, "") // get full workset metadata
 	if err != nil {
 		return err
 	}
 
 	// check: workset must be readonly
-	if !ws.Set.IsReadonly {
+	if !wm.Set.IsReadonly {
 		return errors.New("workset must be readonly: " + strconv.Itoa(wsRow.SetId) + " " + wsRow.Name)
 	}
 
@@ -164,13 +261,13 @@ func dbToTextWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 		return err
 	}
 
-	// write all readonly workset data into csv files: input parameters
+	// write workset metadata into json and parameter values into csv files
 	dblFmt := runOpts.String(doubleFmtArgKey)
-	if err = toWorksetTextFile(srcDb, modelDef, ws, outDir, dblFmt); err != nil {
+	if err = toWorksetTextFile(srcDb, modelDef, wm, outDir, dblFmt); err != nil {
 		return err
 	}
 
-	// pack model metadata, run results and worksets into zip
+	// pack worksets metadata json and csv files into zip
 	if runOpts.Bool(zipArgKey) {
 		zipPath, err := helper.PackZip(outDir, "")
 		if err != nil {
@@ -233,7 +330,7 @@ func toModelJsonFile(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) erro
 func toRunTextFileList(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleFmt string) error {
 
 	// get all successfully completed model runs
-	rl, err := db.GetRunFullList(dbConn, modelDef, true, "")
+	rl, err := db.GetRunFullList(dbConn, modelDef.Model.ModelId, true, "")
 	if err != nil {
 		return err
 	}
@@ -251,14 +348,20 @@ func toRunTextFileList(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, do
 // toRunTextFile write model run metadata, parameters and output tables into csv files, in separate subdirectory
 func toRunTextFile(dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.RunMeta, outDir string, doubleFmt string) error {
 
+	// convert db rows into "public" format
+	pub, err := meta.ToPublic(dbConn, modelDef)
+	if err != nil {
+		return err
+	}
+
 	// create run subdir under model dir
 	runId := meta.Run.RunId
-	omppLog.Log("Model run ", runId, " ", meta.Run.Name)
+	omppLog.Log("Model run ", runId, " ", pub.Name)
 
-	csvName := "run." + strconv.Itoa(runId) + "." + helper.ToAlphaNumeric(meta.Run.Name)
+	csvName := "run." + strconv.Itoa(runId) + "." + helper.ToAlphaNumeric(pub.Name)
 	csvDir := filepath.Join(outDir, csvName)
 
-	err := os.MkdirAll(csvDir, 0750)
+	err = os.MkdirAll(csvDir, 0750)
 	if err != nil {
 		return err
 	}
@@ -319,7 +422,7 @@ func toRunTextFile(dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.RunMeta, out
 	}
 
 	// save model run metadata into json
-	if err := helper.ToJsonFile(filepath.Join(outDir, modelDef.Model.Name+"."+csvName+".json"), meta); err != nil {
+	if err := helper.ToJsonFile(filepath.Join(outDir, modelDef.Model.Name+"."+csvName+".json"), pub); err != nil {
 		return err
 	}
 	return nil
@@ -329,7 +432,7 @@ func toRunTextFile(dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.RunMeta, out
 func toWorksetTextFileList(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleFmt string) error {
 
 	// get all readonly worksets
-	wl, err := db.GetWorksetFullList(dbConn, modelDef, true, "")
+	wl, err := db.GetWorksetFullList(dbConn, modelDef.Model.ModelId, true, "")
 	if err != nil {
 		return err
 	}
@@ -355,9 +458,9 @@ func toWorksetTextFile(dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.WorksetM
 
 	// create workset subdir under output dir
 	setId := meta.Set.SetId
-	omppLog.Log("Workset ", setId, " ", meta.Set.Name)
+	omppLog.Log("Workset ", setId, " ", pub.Name)
 
-	csvName := "set." + strconv.Itoa(setId) + "." + helper.ToAlphaNumeric(meta.Set.Name)
+	csvName := "set." + strconv.Itoa(setId) + "." + helper.ToAlphaNumeric(pub.Name)
 	csvDir := filepath.Join(outDir, csvName)
 
 	err = os.MkdirAll(csvDir, 0750)

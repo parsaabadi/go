@@ -20,14 +20,29 @@ const (
 	ErrorRunStatus    = "e" // e = error failure
 )
 
-// RunMeta struct is meta data for model run: name, status, run options, description, notes.
+// RunMeta is metadata of model run: name, status, run options, description, notes.
 type RunMeta struct {
-	ModelName   string            // model name for that run list
-	ModelDigest string            // model digest for that run list
-	Run         RunRow            // model run rows: run_lst
-	Txt         []RunTxtRow       // run text rows: run_txt
-	Opts        map[string]string // options used to run the model: run_option
-	ParamTxt    []RunParamTxtRow  // parameter text rows: run_parameter_txt
+	Run      RunRow            // model run master row: run_lst
+	Txt      []RunTxtRow       // run text rows: run_txt
+	Opts     map[string]string // options used to run the model: run_option
+	ParamTxt []RunParam        // run parameters: name and text (value notes by language)
+}
+
+// RunMeta is "public" model run metadata for json import-export
+type RunPub struct {
+	ModelName      string            // model name for that run list
+	ModelDigest    string            // model digest for that run list
+	Name           string            // run_name      VARCHAR(255) NOT NULL
+	SubCount       int               // sub_count     INT          NOT NULL, -- subsamples count
+	SubStarted     int               // sub_started   INT          NOT NULL, -- number of subsamples started
+	SubCompleted   int               // sub_completed INT          NOT NULL, -- number of subsamples completed
+	CreateDateTime string            // create_dt     VARCHAR(32)  NOT NULL, -- start date-time
+	Status         string            // status        VARCHAR(1)   NOT NULL, -- run status: i=init p=progress s=success x=exit e=error(failed)
+	UpdateDateTime string            // update_dt     VARCHAR(32)  NOT NULL, -- last update date-time
+	Digest         string            // run_digest    VARCHAR(32)  NULL,     -- digest of the run
+	Txt            []descrNote       // run text: description and notes by language
+	Opts           map[string]string // options used to run the model: run_option
+	ParamTxt       []NameLangNote    // run parameters: name and text (value notes by language)
 }
 
 // RunRow is model run row: run_lst table row.
@@ -56,16 +71,22 @@ type RunTxtRow struct {
 	Note     string // note      VARCHAR(32000)
 }
 
-// RunParamTxtRow is db row of run_parameter_txt
-type RunParamTxtRow struct {
-	RunId    int    // run_id             INT          NOT NULL
-	ParamId  int    // model_parameter_id INT          NOT NULL
-	LangId   int    // lang_id            INT          NOT NULL0
-	LangCode string // lang_code          VARCHAR(32)  NOT NULL
-	Note     string // note               VARCHAR(32000)
+// RunParam is a holder for run parameter Hid and run_parameter_txt rows
+type RunParam struct {
+	ParamHid int              // parameter_hid INT NOT NULL
+	Txt      []RunParamTxtRow // run_parameter_txt table rows
 }
 
-// WorksetMeta is model workset metadata: name, parameters, decription, notes.
+// RunParamTxtRow is db row of run_parameter_txt
+type RunParamTxtRow struct {
+	RunId    int    // run_id        INT         NOT NULL
+	ParamHid int    // parameter_hid INT         NOT NULL
+	LangId   int    // lang_id       INT         NOT NULL
+	LangCode string // lang_code     VARCHAR(32) NOT NULL
+	Note     string // note          VARCHAR(32000)
+}
+
+// Model workset metadata: name, parameters, decription, notes.
 //
 // Workset (working set of model input parameters):
 // it can be a full set, which include all model parameters
@@ -75,7 +96,7 @@ type RunParamTxtRow struct {
 // Default workset must include ALL model parameters (it is a full set).
 // Default workset is a first workset of the model: set_id = min(set_id).
 // If workset is a subset (does not include all model parameters)
-// then it must be based on model run results, specified by run_id (not NULL).
+// then it can be based on model run results, specified by run_id (not NULL).
 //
 // Workset can be editable or read-only.
 // If workset is editable then you can modify input parameters or workset description, notes, etc.
@@ -94,20 +115,14 @@ type WorksetMeta struct {
 
 // WorksetPub is "public" workset metadata for json import-export
 type WorksetPub struct {
-	ModelName      string            // model name for that workset
-	ModelDigest    string            // model digest for that workset
-	Name           string            // set_name     VARCHAR(255) NOT NULL
-	BaseRunDigest  string            // if not empty then digest of the base run
-	IsReadonly     bool              // is_readonly  SMALLINT     NOT NULL
-	UpdateDateTime string            // update_dt    VARCHAR(32)  NOT NULL, -- last update date-time
-	Txt            []descrNote       // workset text: description and notes by language
-	Param          []WorksetParamPub // workset parameters: name and text (value notes by language)
-}
-
-// WorksetParam is workset parameter name  and text (value notes by language)
-type WorksetParamPub struct {
-	Name string     // parameter_name     VARCHAR(255) NOT NULL
-	Txt  []langNote // parameter value notes by language
+	ModelName      string         // model name for that workset
+	ModelDigest    string         // model digest for that workset
+	Name           string         // workset name: set_name VARCHAR(255) NOT NULL
+	BaseRunDigest  string         // if not empty then digest of the base run
+	IsReadonly     bool           // readonly flag
+	UpdateDateTime string         // last update date-time
+	Txt            []descrNote    // workset text: description and notes by language
+	Param          []NameLangNote // workset parameters: name and text (value notes by language)
 }
 
 // WorksetRow is workset_lst table row.
@@ -122,9 +137,8 @@ type WorksetRow struct {
 
 // WorksetParam is a holder for workset parameter Hid and workset_parameter_txt rows
 type WorksetParam struct {
-	ParamHid   int                  // parameter_hid INT NOT NULL
-	Txt        []WorksetParamTxtRow // workset_parameter_txt table rows
-	paramIndex int                  // index of parameter in model metadata parameters array
+	ParamHid int                  // parameter_hid INT NOT NULL
+	Txt      []WorksetParamTxtRow // workset_parameter_txt table rows
 }
 
 // WorksetTxtRow is db row of workset_txt

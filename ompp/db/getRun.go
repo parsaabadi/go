@@ -75,7 +75,7 @@ func GetRunByDigest(dbConn *sql.DB, digest string) (*RunRow, error) {
 // GetRunByName return model run row by run name: run_lst table row.
 //
 // If there is multiple runs with this name then run with min(run_id) returned
-func GetRunByName(dbConn *sql.DB, name string) (*RunRow, error) {
+func GetRunByName(dbConn *sql.DB, modelId int, name string) (*RunRow, error) {
 	return getRunRow(dbConn,
 		"SELECT"+
 			" H.run_id, H.model_id, H.run_name, H.sub_count,"+
@@ -83,7 +83,11 @@ func GetRunByName(dbConn *sql.DB, name string) (*RunRow, error) {
 			" H.update_dt, H.run_digest"+
 			" FROM run_lst H"+
 			" WHERE H.run_id = "+
-			" (SELECT MIN(M.run_id) FROM run_lst M WHERE M.run_name = "+toQuoted(name)+")")
+			" ("+
+			" SELECT MIN(M.run_id) FROM run_lst M"+
+			" WHERE M.model_id = "+strconv.Itoa(modelId)+
+			" AND M.run_name = "+toQuoted(name)+
+			")")
 }
 
 // getRunRow return run_lst table row.
@@ -230,33 +234,26 @@ func getRunText(dbConn *sql.DB, query string) ([]RunTxtRow, error) {
 // GetRunParamText return run parameter value notes: run_parameter_txt table rows.
 //
 // If langCode not empty then only specified language selected else all languages
-func GetRunParamText(dbConn *sql.DB, modelDef *ModelMeta, runId int, paramId int, langCode string) ([]RunParamTxtRow, error) {
+func GetRunParamText(dbConn *sql.DB, runId int, paramHid int, langCode string) ([]RunParamTxtRow, error) {
 
-	// find parameter Hid
-	hId := modelDef.ParamHidById(paramId)
-	if hId <= 0 {
-		return []RunParamTxtRow{}, nil // parameter not found, return empty results
-	}
-
-	// make select using Hid
 	q := "SELECT M.run_id, M.parameter_hid, M.lang_id, L.lang_code, M.note" +
 		" FROM run_parameter_txt M" +
 		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)" +
 		" WHERE M.run_id = " + strconv.Itoa(runId) +
-		" AND M.parameter_hid = " + strconv.Itoa(hId)
+		" AND M.parameter_hid = " + strconv.Itoa(paramHid)
 	if langCode != "" {
 		q += " AND L.lang_code = " + toQuoted(langCode)
 	}
 	q += " ORDER BY 1, 2, 3"
 
 	// do select and set parameter id in output results
-	return getRunParamText(dbConn, modelDef, q)
+	return getRunParamText(dbConn, q)
 }
 
 // GetRunAllParamText return all run parameters value notes: run_parameter_txt table rows.
 //
 // If langCode not empty then only specified language selected else all languages
-func GetRunAllParamText(dbConn *sql.DB, modelDef *ModelMeta, runId int, langCode string) ([]RunParamTxtRow, error) {
+func GetRunAllParamText(dbConn *sql.DB, runId int, langCode string) ([]RunParamTxtRow, error) {
 
 	// make select using Hid
 	q := "SELECT M.run_id, M.parameter_hid, M.lang_id, L.lang_code, M.note" +
@@ -269,29 +266,25 @@ func GetRunAllParamText(dbConn *sql.DB, modelDef *ModelMeta, runId int, langCode
 	q += " ORDER BY 1, 2, 3"
 
 	// do select and set parameter id in output results
-	return getRunParamText(dbConn, modelDef, q)
+	return getRunParamText(dbConn, q)
 }
 
 // getRunParamText return run parameter value notes: run_parameter_txt table rows.
-func getRunParamText(dbConn *sql.DB, modelDef *ModelMeta, query string) ([]RunParamTxtRow, error) {
+func getRunParamText(dbConn *sql.DB, query string) ([]RunParamTxtRow, error) {
 
 	var txtLst []RunParamTxtRow
-	hId := 0
 
 	err := SelectRows(dbConn, query,
 		func(rows *sql.Rows) error {
 			var r RunParamTxtRow
 			var note sql.NullString
 			if err := rows.Scan(
-				&r.RunId, &hId, &r.LangId, &r.LangCode, &note); err != nil {
+				&r.RunId, &r.ParamHid, &r.LangId, &r.LangCode, &note); err != nil {
 				return err
 			}
-
 			if note.Valid {
 				r.Note = note.String
 			}
-			r.ParamId = modelDef.ParamIdByHid(hId) // set parameter id in output results
-
 			txtLst = append(txtLst, r)
 			return nil
 		})
@@ -302,11 +295,73 @@ func getRunParamText(dbConn *sql.DB, modelDef *ModelMeta, query string) ([]RunPa
 	return txtLst, nil
 }
 
+// ToPublic convert model run db rows into "public" model run format for json import-export.
+func (meta *RunMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunPub, error) {
+
+	// validate run model id: run must belong to the model
+	if meta.Run.ModelId != modelDef.Model.ModelId {
+		return nil, errors.New("model run: " + strconv.Itoa(meta.Run.RunId) + " " + meta.Run.Name + ", model id " + strconv.Itoa(meta.Run.ModelId) + " expected: " + strconv.Itoa(modelDef.Model.ModelId))
+	}
+
+	// run header
+	pub := RunPub{
+		ModelName:      modelDef.Model.Name,
+		ModelDigest:    modelDef.Model.Digest,
+		Name:           meta.Run.Name,
+		SubCount:       meta.Run.SubCount,
+		SubStarted:     meta.Run.SubStarted,
+		SubCompleted:   meta.Run.SubCompleted,
+		CreateDateTime: meta.Run.CreateDateTime,
+		Status:         meta.Run.Status,
+		UpdateDateTime: meta.Run.UpdateDateTime,
+		Digest:         meta.Run.Digest,
+		Opts:           make(map[string]string, len(meta.Opts)),
+		Txt:            make([]descrNote, len(meta.Txt)),
+		ParamTxt:       make([]NameLangNote, len(meta.ParamTxt)),
+	}
+
+	// copy run_option rows
+	for k, v := range meta.Opts {
+		pub.Opts[k] = v
+	}
+
+	// run description and notes by language
+	for k := range meta.Txt {
+		pub.Txt[k] = descrNote{
+			LangCode: meta.Txt[k].LangCode,
+			Descr:    meta.Txt[k].Descr,
+			Note:     meta.Txt[k].Note}
+	}
+
+	// run parameters value notes
+	for k := range meta.ParamTxt {
+
+		// find model parameter index by name
+		idx, ok := modelDef.ParamByHid(meta.ParamTxt[k].ParamHid)
+		if !ok {
+			return nil, errors.New("model run: " + strconv.Itoa(meta.Run.RunId) + " " + meta.Run.Name + ", parameter " + strconv.Itoa(meta.ParamTxt[k].ParamHid) + " not found")
+		}
+
+		pub.ParamTxt[k] = NameLangNote{
+			Name: modelDef.Param[idx].Name,
+			Txt:  make([]langNote, len(meta.ParamTxt[k].Txt)),
+		}
+		for j := range meta.ParamTxt[k].Txt {
+			pub.ParamTxt[k].Txt[j] = langNote{
+				LangCode: meta.ParamTxt[k].Txt[j].LangCode,
+				Note:     meta.ParamTxt[k].Txt[j].Note,
+			}
+		}
+	}
+
+	return &pub, nil
+}
+
 // GetRunFull return full metadata for completed model run: run_lst, run_txt, run_option run_parameter_txt rows.
 //
 // It does not return non-completed runs (run in progress).
 // If langCode not empty then only specified language selected else all languages
-func GetRunFull(dbConn *sql.DB, modelDef *ModelMeta, runRow *RunRow, langCode string) (*RunMeta, error) {
+func GetRunFull(dbConn *sql.DB, runRow *RunRow, langCode string) (*RunMeta, error) {
 
 	// validate parameters
 	if runRow == nil {
@@ -314,7 +369,7 @@ func GetRunFull(dbConn *sql.DB, modelDef *ModelMeta, runRow *RunRow, langCode st
 	}
 
 	// where filters
-	runFilter := " AND H.run_id = " + strconv.Itoa(runRow.RunId) +
+	runWhere := " WHERE H.run_id = " + strconv.Itoa(runRow.RunId) +
 		" AND H.status IN (" + toQuoted(DoneRunStatus) + ", " + toQuoted(ErrorRunStatus) + ", " + toQuoted(ExitRunStatus) + ")"
 
 	var langFilter string
@@ -323,20 +378,14 @@ func GetRunFull(dbConn *sql.DB, modelDef *ModelMeta, runRow *RunRow, langCode st
 	}
 
 	// run meta header: run_lst row, model name and digest
-	meta := &RunMeta{
-		ModelName:   modelDef.Model.Name,
-		ModelDigest: modelDef.Model.Digest,
-		Run:         *runRow,
-	}
-	smId := strconv.Itoa(modelDef.Model.ModelId)
+	meta := &RunMeta{Run: *runRow}
 
 	// get run description and notes by run id and language
 	q := "SELECT M.run_id, M.lang_id, L.lang_code, M.descr, M.note" +
 		" FROM run_txt M" +
 		" INNER JOIN run_lst H ON (H.run_id = M.run_id)" +
 		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)" +
-		" WHERE H.model_id = " + smId +
-		runFilter +
+		runWhere +
 		langFilter +
 		" ORDER BY 1, 2"
 
@@ -351,8 +400,7 @@ func GetRunFull(dbConn *sql.DB, modelDef *ModelMeta, runRow *RunRow, langCode st
 		" M.run_id, M.option_key, M.option_value" +
 		" FROM run_option M" +
 		" INNER JOIN run_lst H ON (H.run_id = M.run_id)" +
-		" WHERE H.model_id = " + smId +
-		runFilter +
+		runWhere +
 		" ORDER BY 1, 2"
 
 	optRs, err := getRunOpts(dbConn, q)
@@ -366,17 +414,27 @@ func GetRunFull(dbConn *sql.DB, modelDef *ModelMeta, runRow *RunRow, langCode st
 		" FROM run_parameter_txt M" +
 		" INNER JOIN run_lst H ON (H.run_id = M.run_id)" +
 		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)" +
-		" WHERE H.model_id = " + smId +
-		runFilter +
+		runWhere +
 		langFilter +
 		" ORDER BY 1, 2, 3"
 
-	// do select and set parameter id in output results
-	paramTxtRs, err := getRunParamText(dbConn, modelDef, q)
+	paramTxtRs, err := getRunParamText(dbConn, q)
 	if err != nil {
 		return nil, err
 	}
-	meta.ParamTxt = paramTxtRs
+
+	// append parameter value notes to corresponding Hid of parameter
+	hi := make(map[int]int) // map (parameter Hid) => index in parameter array
+
+	for k := range paramTxtRs {
+		i, ok := hi[paramTxtRs[k].ParamHid]
+		if !ok {
+			i = len(meta.ParamTxt)
+			hi[paramTxtRs[k].ParamHid] = i
+			meta.ParamTxt = append(meta.ParamTxt, RunParam{ParamHid: paramTxtRs[k].ParamHid})
+		}
+		meta.ParamTxt[i].Txt = append(meta.ParamTxt[i].Txt, paramTxtRs[k])
+	}
 
 	return meta, nil
 }
@@ -386,7 +444,7 @@ func GetRunFull(dbConn *sql.DB, modelDef *ModelMeta, runRow *RunRow, langCode st
 // If isSuccess true then return only successfully completed runs else all completed runs.
 // It does not return non-completed runs (run in progress).
 // If langCode not empty then only specified language selected else all languages
-func GetRunFullList(dbConn *sql.DB, modelDef *ModelMeta, isSuccess bool, langCode string) ([]RunMeta, error) {
+func GetRunFullList(dbConn *sql.DB, modelId int, isSuccess bool, langCode string) ([]RunMeta, error) {
 
 	// where filters
 	var statusFilter string
@@ -403,7 +461,7 @@ func GetRunFullList(dbConn *sql.DB, modelDef *ModelMeta, isSuccess bool, langCod
 	}
 
 	// get list of runs for that model id
-	smId := strconv.Itoa(modelDef.Model.ModelId)
+	smId := strconv.Itoa(modelId)
 
 	q := "SELECT" +
 		" H.run_id, H.model_id, H.run_name, H.sub_count," +
@@ -458,8 +516,7 @@ func GetRunFullList(dbConn *sql.DB, modelDef *ModelMeta, isSuccess bool, langCod
 		langFilter +
 		" ORDER BY 1, 2, 3"
 
-	// do select and set parameter id in output results
-	paramTxtRs, err := getRunParamText(dbConn, modelDef, q)
+	paramTxtRs, err := getRunParamText(dbConn, q)
 	if err != nil {
 		return nil, err
 	}
@@ -470,8 +527,6 @@ func GetRunFullList(dbConn *sql.DB, modelDef *ModelMeta, isSuccess bool, langCod
 
 	for k := range runRs {
 		runId := runRs[k].RunId
-		rl[k].ModelName = modelDef.Model.Name
-		rl[k].ModelDigest = modelDef.Model.Digest
 		rl[k].Run = runRs[k]
 		rl[k].Opts = optRs[runId]
 		m[runId] = k
@@ -480,9 +535,30 @@ func GetRunFullList(dbConn *sql.DB, modelDef *ModelMeta, isSuccess bool, langCod
 		i := m[runTxtRs[k].RunId]
 		rl[i].Txt = append(rl[i].Txt, runTxtRs[k])
 	}
+
+	// for each run_parameter_txt row
 	for k := range paramTxtRs {
+
 		i := m[paramTxtRs[k].RunId]
-		rl[i].ParamTxt = append(rl[i].ParamTxt, paramTxtRs[k])
+
+		// find parameter Hid in the list of that run parameters with value notes
+		// append parameter value notes to that parameter Hid
+		isFound := false
+
+		for j := range rl[i].ParamTxt {
+			isFound = rl[i].ParamTxt[j].ParamHid == paramTxtRs[k].ParamHid
+			if isFound {
+				rl[i].ParamTxt[j].Txt = append(rl[i].ParamTxt[j].Txt, paramTxtRs[k])
+				break
+			}
+		}
+		// there is no parameter Hid in the list of that run parameters with value notes
+		// append Hid and append parameter value notes to that parameter Hid
+		if !isFound {
+			idx := len(rl[i].ParamTxt)
+			rl[i].ParamTxt = append(rl[i].ParamTxt, RunParam{ParamHid: paramTxtRs[k].ParamHid})
+			rl[i].ParamTxt[idx].Txt = append(rl[i].ParamTxt[idx].Txt, paramTxtRs[k])
+		}
 	}
 
 	return rl, nil

@@ -89,7 +89,7 @@ func (pub *WorksetPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta, langDef *
 		ws.Txt[k].Note = pub.Txt[k].Note
 	}
 
-	// workset parameters and parameter value nots: workset_parameter, workset_parameter_txt rows
+	// workset parameters and parameter value notes: workset_parameter, workset_parameter_txt rows
 	// use set id default zero
 	for k := range pub.Param {
 
@@ -98,7 +98,6 @@ func (pub *WorksetPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta, langDef *
 		if !ok {
 			return nil, errors.New("workset: " + pub.Name + " parameter " + pub.Param[k].Name + " not found")
 		}
-		ws.Param[k].paramIndex = idx
 		ws.Param[k].ParamHid = modelDef.Param[idx].ParamHid
 
 		// workset parameter value notes, use set id default zero

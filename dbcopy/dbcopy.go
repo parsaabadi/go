@@ -190,21 +190,16 @@ func main() {
 
 	// copy single model run
 	if isRun {
-
-		omppLog.Log("model run copy under construction, coming soon")
-		// TODO: use run digest instead of id
-		/*
-			switch strings.ToLower(runOpts.String(copyToArgKey)) {
-			case "text":
-				err = dbToTextRun(modelName, modelDigest, runOpts)
-			case "db":
-				err = textToDbRun(modelName, modelDigest, runOpts)
-			case "db2db":
-				err = dbToDbRun(modelName, modelDigest, runOpts)
-			default:
-				panic("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
-			}
-		*/
+		switch strings.ToLower(runOpts.String(copyToArgKey)) {
+		case "text":
+			err = dbToTextRun(modelName, modelDigest, runOpts)
+		case "db":
+			err = textToDbRun(modelName, modelDigest, runOpts)
+		case "db2db":
+			err = dbToDbRun(modelName, modelDigest, runOpts)
+		default:
+			panic("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
+		}
 	}
 
 	// copy single modeling task
