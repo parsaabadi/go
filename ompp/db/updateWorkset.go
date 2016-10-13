@@ -66,7 +66,7 @@ func (pub *WorksetPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta, langDef *
 			UpdateDateTime: pub.UpdateDateTime,
 		},
 		Txt:   make([]WorksetTxtRow, len(pub.Txt)),
-		Param: make([]WorksetParam, len(pub.Param)),
+		Param: make([]worksetParam, len(pub.Param)),
 	}
 
 	// if base run digest not "" empty then find base run for that workset

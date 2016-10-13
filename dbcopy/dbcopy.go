@@ -109,7 +109,6 @@ const (
 	outputDirArgKey   = "dbcopy.OutputDir"        // output dir to write model .json and .csv files
 	toDbConnectionStr = "dbcopy.ToDatabase"       // output db connection string
 	toDbDriverName    = "dbcopy.ToDatabaseDriver" // output db driver name, ie: SQLite, odbc, sqlite3
-	doubleFmtArgKey   = "OpenM.DoubleFormat"      // convert to string format for float and double
 )
 
 func main() {
@@ -132,9 +131,11 @@ func main() {
 	_ = flag.Int(config.SetId, 0, "workset id (set of model input parameters), if specified then copy only this workset")
 	_ = flag.String(config.RunName, "", "model run name, if specified then copy only this run data")
 	_ = flag.Int(config.RunId, 0, "model run id, if specified then copy only this run data")
+	_ = flag.String(config.TaskName, "", "modeling task name, if specified then copy only this modeling task data")
+	_ = flag.Int(config.TaskId, 0, "modeling task id, if specified then copy only this run modeling task data")
 	_ = flag.String(config.ParamDir, "", "path to parameters directory (workset directory)")
 	_ = flag.String(config.ParamDirShort, "", "path to parameters directory (short of "+config.ParamDir+")")
-	_ = flag.String(doubleFmtArgKey, "%.15g", "convert to string format for float and double")
+	_ = flag.String(config.DoubleFormat, "%.15g", "convert to string format for float and double")
 
 	runOpts, logOpts, err := config.New()
 	if err != nil {
@@ -204,20 +205,16 @@ func main() {
 
 	// copy single modeling task
 	if isTask {
-		omppLog.Log("modeling tsk copy under construction, coming soon")
-		// TODO: use run digest instead of id
-		/*
-			switch strings.ToLower(runOpts.String(copyToArgKey)) {
-			case "text":
-				err = dbToTextTask(modelName, modelDigest, runOpts)
-			case "db":
-				err = textToDbTask(modelName, modelDigest, runOpts)
-			case "db2db":
-				err = dbToDbTask(modelName, modelDigest, runOpts)
-			default:
-				panic("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
-			}
-		*/
+		switch strings.ToLower(runOpts.String(copyToArgKey)) {
+		case "text":
+			err = dbToTextTask(modelName, modelDigest, runOpts)
+		case "db":
+			err = textToDbTask(modelName, modelDigest, runOpts)
+		case "db2db":
+			err = dbToDbTask(modelName, modelDigest, runOpts)
+		default:
+			panic("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
+		}
 	}
 	if err != nil {
 		panic(err)

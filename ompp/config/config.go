@@ -36,6 +36,7 @@ const (
 	TaskId           = "OpenM.TaskId"         // modeling task id
 	ParamDir         = "OpenM.ParamDir"       // path to workset parameters directory
 	ParamDirShort    = "p"                    // path to workset parameters directory (short form)
+	DoubleFormat     = "OpenM.DoubleFormat"   // convert to string format for float and double
 )
 
 /* Log config keys.

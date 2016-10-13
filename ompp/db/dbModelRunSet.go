@@ -25,13 +25,13 @@ type RunMeta struct {
 	Run      RunRow            // model run master row: run_lst
 	Txt      []RunTxtRow       // run text rows: run_txt
 	Opts     map[string]string // options used to run the model: run_option
-	ParamTxt []runParam        // run parameters: name and text (value notes by language)
+	ParamTxt []runParam        // run parameters text: name and value notes by language
 }
 
 // RunMeta is "public" model run metadata for json import-export
 type RunPub struct {
-	ModelName      string            // model name for that run list
-	ModelDigest    string            // model digest for that run list
+	ModelName      string            // model name for that run
+	ModelDigest    string            // model digest for that run
 	Name           string            // run_name      VARCHAR(255) NOT NULL
 	SubCount       int               // sub_count     INT          NOT NULL, -- subsamples count
 	SubStarted     int               // sub_started   INT          NOT NULL, -- number of subsamples started
@@ -42,7 +42,7 @@ type RunPub struct {
 	Digest         string            // run_digest    VARCHAR(32)  NULL,     -- digest of the run
 	Txt            []descrNote       // run text: description and notes by language
 	Opts           map[string]string // options used to run the model: run_option
-	ParamTxt       []NameLangNote    // run parameters: name and text (value notes by language)
+	ParamTxt       []NameLangNote    // run parameters text: name and value notes by language
 }
 
 // RunRow is model run row: run_lst table row.
@@ -110,7 +110,7 @@ type RunParamTxtRow struct {
 type WorksetMeta struct {
 	Set   WorksetRow      // workset master row: workset_lst
 	Txt   []WorksetTxtRow // workset text rows: workset_txt
-	Param []WorksetParam  // workset parameter: parameter_hid and workset_parameter_txt rows
+	Param []worksetParam  // workset parameter: parameter_hid and workset_parameter_txt rows
 }
 
 // WorksetPub is "public" workset metadata for json import-export
@@ -136,7 +136,7 @@ type WorksetRow struct {
 }
 
 // WorksetParam is a holder for workset parameter Hid and workset_parameter_txt rows
-type WorksetParam struct {
+type worksetParam struct {
 	ParamHid int                  // parameter_hid INT NOT NULL
 	Txt      []WorksetParamTxtRow // workset_parameter_txt table rows
 }
@@ -159,7 +159,7 @@ type WorksetParamTxtRow struct {
 	Note     string // note          VARCHAR(32000), -- parameter value note
 }
 
-// TaskMeta struct is meta data for modeling task: name, status, description, notes, task run history.
+// TaskMeta is metadata for modeling task: name, status, description, notes, task run history.
 //
 // Modeling task is a named set of input model inputs (of workset ids) to run the model.
 // Typical use case: create multiple input sets by varying some model parameters,
@@ -175,13 +175,17 @@ type WorksetParamTxtRow struct {
 // or contain same input parameter values as it was at the time of task run.
 // To find actual input for any particular model run and/or task run we must use run_id.
 type TaskMeta struct {
-	ModelName   string          // model name for that task list
-	ModelDigest string          // model digest for that task list
-	Task        TaskRow         // modeling task row: task_lst
-	Txt         []TaskTxtRow    // task text rows: task_txt
-	Set         []int           // task body (current list of workset id's): task_set
-	TaskRun     []TaskRunRow    // task run history rows: task_run_lst
-	TaskRunSet  []TaskRunSetRow // task run history body: task_run_set
+	Task    TaskRow       // modeling task row: task_lst
+	Txt     []TaskTxtRow  // task text rows: task_txt
+	Set     []int         // task body (current list of workset id's): task_set
+	TaskRun []taskRunItem // task run history: task_run_lst and task_run_set rows
+}
+
+// taskRunItem is master task_run_lst row (task run status, date-time...)
+// and details as list of (run id, ste id) pairs
+type taskRunItem struct {
+	TaskRunRow                 // task run history row: task_run_lst
+	TaskRunSet []TaskRunSetRow // task run history body: task_run_set
 }
 
 // TaskRow is db row of task_lst.
@@ -223,4 +227,39 @@ type TaskRunSetRow struct {
 	RunId     int // run_id      INT NOT NULL, -- if > 0 then result run id
 	SetId     int // set_id      INT NOT NULL, -- if > 0 then input working set id
 	TaskId    int // task_id     INT NOT NULL
+}
+
+// TaskPub is "public" modeling task metadata for json import-export
+type TaskPub struct {
+	ModelName   string       // model name for that task list
+	ModelDigest string       // model digest for that task list
+	Name        string       // task_name    VARCHAR(255) NOT NULL
+	Txt         []descrNote  // task text: description and notes by language
+	Set         []string     // task body: list of workset names
+	TaskRun     []taskRunPub // task run history: task_run_lst
+}
+
+// taskRunPub is "public" metadata of task run history.
+type taskRunPub struct {
+	SubCount       int             // sub_count   INT         NOT NULL, -- subsamples count of task run
+	CreateDateTime string          // create_dt   VARCHAR(32) NOT NULL, -- start date-time
+	Status         string          // status      VARCHAR(1)  NOT NULL, -- task status: i=init p=progress w=wait s=success x=exit e=error(failed)
+	UpdateDateTime string          // update_dt   VARCHAR(32) NOT NULL, -- last update date-time
+	TaskRunSet     []taskRunSetPub // task run history body: run and set pairs
+}
+
+// taskRunSetPub is "public" metadata of task run history body: run and set pairs.
+// To find workset name is used, it is unique by model.
+// To find model run:
+// if digest not empty then use digest;
+// else if status is error then by run_name, sub_count, sub_completed, status, create_dt.
+type taskRunSetPub struct {
+	SetName string   // workset name
+	Run     struct { // "public" link to model run
+		Name           string // run_name      VARCHAR(255) NOT NULL
+		SubCompleted   int    // sub_completed INT          NOT NULL, -- number of subsamples completed
+		CreateDateTime string // create_dt     VARCHAR(32)  NOT NULL, -- start date-time
+		Status         string // status        VARCHAR(1)   NOT NULL, -- run status: i=init p=progress s=success x=exit e=error(failed)
+		Digest         string // run_digest    VARCHAR(32)  NULL,     -- digest of the run
+	}
 }

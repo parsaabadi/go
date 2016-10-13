@@ -34,7 +34,7 @@ func (pub *RunPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta, langDef *Lang
 		return nil, errors.New("invalid model name " + pub.ModelName + " or digest " + pub.ModelDigest + " expected: " + modelDef.Model.Name + " " + modelDef.Model.Digest)
 	}
 
-	// run header: run_lst row with zero default ru id
+	// run header: run_lst row with zero default run id
 	meta := RunMeta{
 		Run: RunRow{
 			RunId:          0, // run id is undefined
@@ -54,7 +54,7 @@ func (pub *RunPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta, langDef *Lang
 	}
 
 	// model run description and notes: run_txt rows
-	// use set id default zero
+	// use run id default zero
 	for k := range pub.Txt {
 		meta.Txt[k].LangCode = pub.Txt[k].LangCode
 		meta.Txt[k].LangId = langDef.IdByCode(pub.Txt[k].LangCode)
@@ -100,7 +100,7 @@ func (pub *RunPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta, langDef *Lang
 // If this run already exist then nothing is updated in database, only metadate updated with actual run id.
 // Following is used to find existing model run:
 // if digest not "" empty then by run digest;
-// if status not success or exit then by run_name, sub_count, sub_completed, status, create_dt, update_dt.
+// else if status is error then by run_name, sub_count, sub_completed, status, create_dt.
 //
 // It return "is found" flag and update metadata with actual run id in database.
 func (meta *RunMeta) UpdateRun(dbConn *sql.DB, modelDef *ModelMeta) (bool, error) {
@@ -118,12 +118,10 @@ func (meta *RunMeta) UpdateRun(dbConn *sql.DB, modelDef *ModelMeta) (bool, error
 
 	// find existing run:
 	// if digest not "" empty then by run digest
-	// if status not success or exit then by run_name, sub_count, sub_completed, status, create_dt, update_dt
+	// else if status is error then by run_name, sub_count, sub_completed, status, create_dt
 	var dstId int
 
-	if meta.Run.Digest != "" ||
-		(meta.Run.Status != DoneRunStatus && meta.Run.Status != ExitRunStatus &&
-			meta.Run.Name != "" && meta.Run.CreateDateTime != "" && meta.Run.UpdateDateTime != "") {
+	if meta.Run.Digest != "" || (meta.Run.Status == ErrorRunStatus && meta.Run.Name != "" && meta.Run.CreateDateTime != "") {
 
 		q := "SELECT MIN(R.run_id)" +
 			" FROM run_lst R" +
@@ -132,14 +130,11 @@ func (meta *RunMeta) UpdateRun(dbConn *sql.DB, modelDef *ModelMeta) (bool, error
 		if meta.Run.Digest != "" {
 			q += " AND R.run_digest = " + toQuoted(meta.Run.Digest)
 		} else {
-			if meta.Run.Status != DoneRunStatus && meta.Run.Status != ExitRunStatus {
-				q += " AND R.run_name = " + toQuoted(meta.Run.Name) +
-					" AND R.sub_count = " + strconv.Itoa(meta.Run.SubCount) +
-					" AND R.sub_completed = " + strconv.Itoa(meta.Run.SubCompleted) +
-					" AND R.status = " + toQuoted(meta.Run.Status) +
-					" AND R.create_dt = " + toQuoted(meta.Run.CreateDateTime) +
-					" AND R.update_dt = " + toQuoted(meta.Run.UpdateDateTime)
-			}
+			q += " AND R.run_name = " + toQuoted(meta.Run.Name) +
+				" AND R.sub_count = " + strconv.Itoa(meta.Run.SubCount) +
+				" AND R.sub_completed = " + strconv.Itoa(meta.Run.SubCompleted) +
+				" AND R.status = " + toQuoted(meta.Run.Status) +
+				" AND R.create_dt = " + toQuoted(meta.Run.CreateDateTime)
 		}
 
 		err := SelectFirst(dbConn,
@@ -156,7 +151,7 @@ func (meta *RunMeta) UpdateRun(dbConn *sql.DB, modelDef *ModelMeta) (bool, error
 			})
 		switch {
 		case err == sql.ErrNoRows:
-			dstId = 0 // model run not exist, select min() should always return run_id
+			dstId = 0 // model run not exist, select min() should always return run_id or null
 		case err != nil:
 			return false, err
 		}

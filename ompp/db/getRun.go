@@ -140,7 +140,7 @@ func getRunLst(dbConn *sql.DB, query string) ([]RunRow, error) {
 			runRs = append(runRs, r)
 			return nil
 		})
-	if err != nil {
+	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
 	return runRs, nil
@@ -168,6 +168,9 @@ func GetRunList(dbConn *sql.DB, modelId int, langCode string) ([]RunRow, []RunTx
 	runRs, err := getRunLst(dbConn, q)
 	if err != nil {
 		return nil, nil, err
+	}
+	if len(runRs) <= 0 { // no model runs
+		return nil, nil, nil
 	}
 
 	// get run description and notes by model id and language
@@ -225,7 +228,7 @@ func getRunText(dbConn *sql.DB, query string) ([]RunTxtRow, error) {
 			txtLst = append(txtLst, r)
 			return nil
 		})
-	if err != nil {
+	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
 	return txtLst, nil
@@ -288,7 +291,7 @@ func getRunParamText(dbConn *sql.DB, query string) ([]RunParamTxtRow, error) {
 			txtLst = append(txtLst, r)
 			return nil
 		})
-	if err != nil {
+	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
 
@@ -300,7 +303,7 @@ func (meta *RunMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunPub, err
 
 	// validate run model id: run must belong to the model
 	if meta.Run.ModelId != modelDef.Model.ModelId {
-		return nil, errors.New("model run: " + strconv.Itoa(meta.Run.RunId) + " " + meta.Run.Name + ", model id " + strconv.Itoa(meta.Run.ModelId) + " expected: " + strconv.Itoa(modelDef.Model.ModelId))
+		return nil, errors.New("model run: " + strconv.Itoa(meta.Run.RunId) + " " + meta.Run.Name + ", invalid model id " + strconv.Itoa(meta.Run.ModelId) + " expected: " + strconv.Itoa(modelDef.Model.ModelId))
 	}
 
 	// run header
@@ -532,14 +535,18 @@ func GetRunFullList(dbConn *sql.DB, modelId int, isSuccess bool, langCode string
 		m[runId] = k
 	}
 	for k := range runTxtRs {
-		i := m[runTxtRs[k].RunId]
-		rl[i].Txt = append(rl[i].Txt, runTxtRs[k])
+		if i, ok := m[runTxtRs[k].RunId]; ok {
+			rl[i].Txt = append(rl[i].Txt, runTxtRs[k])
+		}
 	}
 
 	// for each run_parameter_txt row
 	for k := range paramTxtRs {
 
-		i := m[paramTxtRs[k].RunId]
+		i, ok := m[paramTxtRs[k].RunId]
+		if !ok {
+			continue // run id not found: run list updated between selects
+		}
 
 		// find parameter Hid in the list of that run parameters with value notes
 		// append parameter value notes to that parameter Hid

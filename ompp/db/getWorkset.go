@@ -65,6 +65,9 @@ func GetWorksetList(dbConn *sql.DB, modelId int, langCode string) ([]WorksetRow,
 
 	setRs, err := getWsLst(dbConn, q)
 	if err != nil {
+
+	}
+	if len(setRs) <= 0 { // no worksets found
 		return nil, nil, err
 	}
 
@@ -133,7 +136,7 @@ func getWsLst(dbConn *sql.DB, query string) ([]WorksetRow, error) {
 			setRs = append(setRs, r)
 			return nil
 		})
-	if err != nil {
+	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
 
@@ -176,7 +179,7 @@ func getWsText(dbConn *sql.DB, query string) ([]WorksetTxtRow, error) {
 			txtLst = append(txtLst, r)
 			return nil
 		})
-	if err != nil {
+	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
 	return txtLst, nil
@@ -207,7 +210,7 @@ func GetWorksetRunIds(dbConn *sql.DB, setId int) ([]int, error) {
 			idRs = append(idRs, rId)
 			return nil
 		})
-	if err != nil {
+	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
 	return idRs, nil
@@ -228,7 +231,7 @@ func GetWorksetParamHids(dbConn *sql.DB, setId int) ([]int, error) {
 			hRs = append(hRs, hId)
 			return nil
 		})
-	if err != nil {
+	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
 	return hRs, nil
@@ -288,7 +291,7 @@ func getWsParamText(dbConn *sql.DB, query string) ([]WorksetParamTxtRow, error) 
 			txtLst = append(txtLst, r)
 			return nil
 		})
-	if err != nil {
+	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
 
@@ -300,7 +303,7 @@ func (meta *WorksetMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*Workset
 
 	// validate workset model id: workset must belong to the model
 	if meta.Set.ModelId != modelDef.Model.ModelId {
-		return nil, errors.New("workset: " + strconv.Itoa(meta.Set.SetId) + " " + meta.Set.Name + ", model id " + strconv.Itoa(meta.Set.ModelId) + " expected: " + strconv.Itoa(modelDef.Model.ModelId))
+		return nil, errors.New("workset: " + strconv.Itoa(meta.Set.SetId) + " " + meta.Set.Name + ", invalid model id " + strconv.Itoa(meta.Set.ModelId) + " expected: " + strconv.Itoa(modelDef.Model.ModelId))
 	}
 
 	// workset header
@@ -407,7 +410,7 @@ func GetWorksetFull(dbConn *sql.DB, setRow *WorksetRow, langCode string) (*Works
 			if err != nil {
 				return err
 			}
-			r := WorksetParam{ParamHid: hId}
+			r := worksetParam{ParamHid: hId}
 
 			hi[hId] = len(ws.Param) // index of parameter Hid in parameter list
 			ws.Param = append(ws.Param, r)
@@ -537,23 +540,26 @@ func GetWorksetFullList(dbConn *sql.DB, modelId int, isReadonly bool, langCode s
 
 	// workset text (description and notes): append to coresponding workset
 	for k := range setTxtRs {
-		i := m[setTxtRs[k].SetId]
-		wl[i].Txt = append(wl[i].Txt, setTxtRs[k])
+		if i, ok := m[setTxtRs[k].SetId]; ok {
+			wl[i].Txt = append(wl[i].Txt, setTxtRs[k])
+		}
 	}
 
 	// workset parameters: append parameters to coresponding workset
 	for k := range ps {
-		i := m[ps[k][0]]
-		wl[i].Param = append(wl[i].Param, WorksetParam{ParamHid: ps[k][1]})
+		if i, ok := m[ps[k][0]]; ok {
+			wl[i].Param = append(wl[i].Param, worksetParam{ParamHid: ps[k][1]})
+		}
 	}
 
 	// workset parameters text (parameter value notes):
 	// find parameter by Hid in coresponding workset and append value notes
 	for k := range paramTxtRs {
-		i := m[paramTxtRs[k].SetId]
-		for j := range wl[i].Param {
-			if wl[i].Param[j].ParamHid == paramTxtRs[k].ParamHid {
-				wl[i].Param[j].Txt = append(wl[i].Param[j].Txt, paramTxtRs[k])
+		if i, ok := m[paramTxtRs[k].SetId]; ok {
+			for j := range wl[i].Param {
+				if wl[i].Param[j].ParamHid == paramTxtRs[k].ParamHid {
+					wl[i].Param[j].Txt = append(wl[i].Param[j].Txt, paramTxtRs[k])
+				}
 			}
 		}
 	}

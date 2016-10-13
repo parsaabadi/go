@@ -10,53 +10,21 @@ import (
 )
 
 // GetTask return modeling task rows by id: task_lst table row and set ids from task_set
-func GetTask(dbConn *sql.DB, taskId int) (*TaskRow, []int, error) {
-
-	// select task header row
-	taskRow, err := getTaskRow(dbConn,
+func GetTask(dbConn *sql.DB, taskId int) (*TaskRow, error) {
+	return getTaskRow(dbConn,
 		"SELECT K.task_id, K.model_id, K.task_name FROM task_lst K"+
 			" WHERE K.task_id ="+strconv.Itoa(taskId))
-	if err != nil {
-		return nil, nil, err
-	}
-	if taskRow == nil {
-		return nil, nil, nil // task not found
-	}
-
-	// select task body: set ids of workset inputs
-	idRs, err := getTaskSetIds(dbConn, taskId)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return taskRow, idRs, nil
 }
 
 // GetTaskByName return modeling task rows by id: task_lst table row and set ids from task_set
-func GetTaskByName(dbConn *sql.DB, modelId int, name string) (*TaskRow, []int, error) {
-
-	// select task header row
-	taskRow, err := getTaskRow(dbConn,
+func GetTaskByName(dbConn *sql.DB, modelId int, name string) (*TaskRow, error) {
+	return getTaskRow(dbConn,
 		"SELECT K.task_id, K.model_id, K.task_name FROM task_lst K"+
 			" WHERE K.task_id = "+
 			" ("+
 			" SELECT MIN(M.task_id) FROM task_lst M"+
 			" WHERE M.model_id = "+strconv.Itoa(modelId)+" AND M.task_name ="+toQuoted(name)+
 			" )")
-	if err != nil {
-		return nil, nil, err
-	}
-	if taskRow == nil {
-		return nil, nil, nil // task not found
-	}
-
-	// select task body: set ids of workset inputs
-	idRs, err := getTaskSetIds(dbConn, taskRow.TaskId)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return taskRow, idRs, nil
 }
 
 // GetTaskByModelId return list of modeling tasks with description and notes: task_lst and task_txt rows.
@@ -78,6 +46,9 @@ func GetTaskByModelId(dbConn *sql.DB, modelId int, langCode string) ([]TaskRow, 
 	if err != nil {
 		return nil, nil, err
 	}
+	if len(taskRs) <= 0 { // no tasks found
+		return nil, nil, err
+	}
 
 	// get tasks description and notes by model id
 	q = "SELECT M.task_id, M.lang_id, L.lang_code, M.descr, M.note" +
@@ -93,6 +64,28 @@ func GetTaskByModelId(dbConn *sql.DB, modelId int, langCode string) ([]TaskRow, 
 	txtRs, err := getTaskText(dbConn, q)
 
 	return taskRs, txtRs, nil
+}
+
+// GetTaskSetIds return modeling task set id's by task id from task_set db table
+func GetTaskSetIds(dbConn *sql.DB, taskId int) ([]int, error) {
+
+	var idRs []int
+
+	err := SelectRows(dbConn,
+		"SELECT TS.set_id FROM task_set TS WHERE TS.task_id = "+strconv.Itoa(taskId)+" ORDER BY 1",
+		func(rows *sql.Rows) error {
+			var id int
+			if err := rows.Scan(&id); err != nil {
+				return err
+			}
+			idRs = append(idRs, id)
+			return nil
+		})
+	if err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+
+	return idRs, nil
 }
 
 // getTaskRow return task_lst table row.
@@ -133,32 +126,10 @@ func getTaskLst(dbConn *sql.DB, query string) ([]TaskRow, error) {
 			taskRs = append(taskRs, r)
 			return nil
 		})
-	if err != nil {
+	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
 	return taskRs, nil
-}
-
-// getTaskSetIds return modeling task set ids from task_set table
-func getTaskSetIds(dbConn *sql.DB, taskId int) ([]int, error) {
-
-	var idRs []int
-
-	err := SelectRows(dbConn,
-		"SELECT TS.set_id FROM task_set TS WHERE TS.task_id = "+strconv.Itoa(taskId)+" ORDER BY 1",
-		func(rows *sql.Rows) error {
-			var id int
-			if err := rows.Scan(&id); err != nil {
-				return err
-			}
-			idRs = append(idRs, id)
-			return nil
-		})
-	if err != nil {
-		return nil, err
-	}
-
-	return idRs, nil
 }
 
 // getTaskSetLst return modeling tasks id map to set ids from task_set table
@@ -175,7 +146,7 @@ func getTaskSetLst(dbConn *sql.DB, query string) (map[int][]int, error) {
 			tsRs[taskId] = append(tsRs[taskId], setId)
 			return nil
 		})
-	if err != nil {
+	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
 
@@ -219,7 +190,7 @@ func getTaskText(dbConn *sql.DB, query string) ([]TaskTxtRow, error) {
 			txtLst = append(txtLst, r)
 			return nil
 		})
-	if err != nil {
+	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
 	return txtLst, nil
@@ -338,7 +309,7 @@ func getTaskRunLst(dbConn *sql.DB, query string) ([]TaskRunRow, error) {
 			trRs = append(trRs, r)
 			return nil
 		})
-	if err != nil {
+	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
 
@@ -359,10 +330,140 @@ func getTaskRunSetLst(dbConn *sql.DB, query string) ([]TaskRunSetRow, error) {
 			trsRs = append(trsRs, r)
 			return nil
 		})
-	if err != nil {
+	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
 	return trsRs, nil
+}
+
+// ToPublic convert modeling task metadata db rows into "public" modeling task format for json import-export.
+func (meta *TaskMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskPub, error) {
+
+	// validate model id: task must belong to the model
+	if meta.Task.ModelId != modelDef.Model.ModelId {
+		return nil, errors.New("task: " + strconv.Itoa(meta.Task.TaskId) + " " + meta.Task.Name + ", model id " + strconv.Itoa(meta.Task.ModelId) + " expected: " + strconv.Itoa(modelDef.Model.ModelId))
+	}
+
+	// task header
+	pub := TaskPub{
+		ModelName:   modelDef.Model.Name,
+		ModelDigest: modelDef.Model.Digest,
+		Name:        meta.Task.Name,
+		Txt:         make([]descrNote, len(meta.Txt)),
+	}
+
+	// task description and notes by language
+	for k := range meta.Txt {
+		pub.Txt[k] = descrNote{
+			LangCode: meta.Txt[k].LangCode,
+			Descr:    meta.Txt[k].Descr,
+			Note:     meta.Txt[k].Note}
+	}
+
+	// task workset list:
+	// select workset names for the task
+	// ignore worksets if id is not in the input list of task set id's
+	err := SelectRows(dbConn,
+		"SELECT W.set_id, W.set_name"+
+			" FROM task_set TS"+
+			" INNER JOIN workset_lst W ON (W.set_id = TS.set_id)"+
+			" WHERE TS.task_id = "+strconv.Itoa(meta.Task.TaskId)+
+			" ORDER BY 1",
+		func(rows *sql.Rows) error {
+			var id int
+			var sn string
+			if err := rows.Scan(&id, &sn); err != nil {
+				return err
+			}
+			for _, i := range meta.Set { // include only set id's which are in the meta list of set id's
+				if i == id {
+					pub.Set = append(pub.Set, sn) // workset found
+					return nil
+				}
+			}
+			return nil // ignore set id which is not found in the input list of task set id's
+		})
+	if err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+
+	// task run history: header rows
+	// select list task run's
+	// ignore task run if id is not in the input list of task run id's
+
+	ri := make(map[int]int) // map (task run id) => index in task run array
+
+	err = SelectRows(dbConn,
+		"SELECT TR.task_run_id, TR.sub_count, TR.create_dt, TR.status, TR.update_dt"+
+			" FROM task_run_lst TR"+
+			" WHERE TR.task_id = "+strconv.Itoa(meta.Task.TaskId)+
+			" ORDER BY 1",
+		func(rows *sql.Rows) error {
+			var id int
+			var r taskRunPub
+			if err := rows.Scan(&id, &r.SubCount, &r.CreateDateTime, &r.Status, &r.UpdateDateTime); err != nil {
+				return err
+			}
+			for k := range meta.TaskRun { // include only task run id's which are in the meta list of run id's
+				if id == meta.TaskRun[k].TaskRunId {
+					ri[meta.TaskRun[k].TaskRunId] = len(pub.TaskRun) // index of task run id
+					pub.TaskRun = append(pub.TaskRun, r)             // task run id found
+					return nil
+				}
+			}
+			return nil // ignore task run id which is not found in the input list of run id's
+		})
+	if err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+
+	// task run history body: pairs of (set id, run id)
+	// select list task run's body rows
+	// ignore task run body row if any of: (task run id, run id, set id) is not in the input list of id's
+	err = SelectRows(dbConn,
+		"SELECT"+
+			" TRS.task_run_id, TRS.run_id, TRS.set_id, W.set_name,"+
+			" R.run_name, R.sub_completed, R.create_dt, R.status, R.run_digest"+
+			" FROM task_run_set TRS"+
+			" INNER JOIN workset_lst W ON (W.set_id = TRS.set_id)"+
+			" INNER JOIN run_lst R ON (R.run_id = TRS.run_id)"+
+			" WHERE TRS.task_id = "+strconv.Itoa(meta.Task.TaskId)+
+			" ORDER BY 1, 2",
+		func(rows *sql.Rows) error {
+			var trId, wId, rId int
+			var r taskRunSetPub
+			if err := rows.Scan(&trId, &rId, &wId, &r.SetName,
+				&r.Run.Name, &r.Run.SubCompleted, &r.Run.CreateDateTime, &r.Run.Status, &r.Run.Digest); err != nil {
+				return err
+			}
+			for k := range meta.TaskRun { // include only task run id's which are in the meta list of run id's
+
+				if trId != meta.TaskRun[k].TaskRunId { // skip if task run id not the same as in db row
+					continue
+				}
+
+				// find pair of (run id, set id) in the metadata
+				for j := range meta.TaskRun[k].TaskRunSet {
+
+					if rId != meta.TaskRun[k].TaskRunSet[j].RunId || wId != meta.TaskRun[k].TaskRunSet[j].SetId {
+						continue // skip if db row run id or set id is not in the metadata
+					}
+					// task run id, run id, set id found in the input meta task run list
+					// get index of that task run id in the "public" task run list
+					if i, ok := ri[meta.TaskRun[k].TaskRunId]; ok {
+						pub.TaskRun[i].TaskRunSet = append(pub.TaskRun[i].TaskRunSet, r) // found
+					}
+					return nil // done with that db row
+				}
+				return nil // db row not found: no such run id or set id
+			}
+			return nil // ignore task run id which is not found in the input list of run id's
+		})
+	if err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+
+	return &pub, nil
 }
 
 // GetTaskFull return modeling task metadata, description, notes and run history
@@ -370,7 +471,7 @@ func getTaskRunSetLst(dbConn *sql.DB, query string) ([]TaskRunSetRow, error) {
 //
 // It does not return non-completed task runs (run in progress).
 // If langCode not empty then only specified language selected else all languages
-func GetTaskFull(dbConn *sql.DB, modelDef *ModelMeta, taskRow *TaskRow, langCode string) (*TaskMeta, error) {
+func GetTaskFull(dbConn *sql.DB, taskRow *TaskRow, langCode string) (*TaskMeta, error) {
 
 	// validate parameters
 	if taskRow == nil {
@@ -378,7 +479,7 @@ func GetTaskFull(dbConn *sql.DB, modelDef *ModelMeta, taskRow *TaskRow, langCode
 	}
 
 	// where filters
-	taskIdFilter := " AND K.task_id = " + strconv.Itoa(taskRow.TaskId)
+	taskWhere := " WHERE K.task_id = " + strconv.Itoa(taskRow.TaskId)
 
 	statusFilter := " AND H.status IN (" +
 		toQuoted(DoneRunStatus) + ", " + toQuoted(ErrorRunStatus) + ", " + toQuoted(ExitRunStatus) + ")"
@@ -389,46 +490,32 @@ func GetTaskFull(dbConn *sql.DB, modelDef *ModelMeta, taskRow *TaskRow, langCode
 	}
 
 	// task meta header: task_lst row, model name and digest
-	meta := &TaskMeta{
-		ModelName:   modelDef.Model.Name,
-		ModelDigest: modelDef.Model.Digest,
-		Task:        *taskRow,
-	}
-	smId := strconv.Itoa(modelDef.Model.ModelId)
+	meta := &TaskMeta{Task: *taskRow}
 
 	// get tasks description and notes by model id
 	q := "SELECT M.task_id, M.lang_id, L.lang_code, M.descr, M.note" +
 		" FROM task_txt M" +
 		" INNER JOIN task_lst K ON (K.task_id = M.task_id)" +
 		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)" +
-		" WHERE K.model_id = " + smId +
-		taskIdFilter +
+		taskWhere +
 		langFilter +
 		" ORDER BY 1, 2"
 
 	txtRs, err := getTaskText(dbConn, q)
 	meta.Txt = txtRs
 
-	// get list of set ids for each task
-	q = "SELECT M.task_id, M.set_id" +
-		" FROM task_set M" +
-		" INNER JOIN task_lst K ON (K.task_id = M.task_id)" +
-		" WHERE K.model_id = " + smId +
-		taskIdFilter +
-		" ORDER BY 1, 2"
-
-	setRs, err := getTaskSetLst(dbConn, q)
+	// get list of set ids for the task
+	setRs, err := GetTaskSetIds(dbConn, taskRow.TaskId)
 	if err != nil {
 		return nil, err
 	}
-	meta.Set = setRs[taskRow.TaskId]
+	meta.Set = setRs
 
 	// get task run history and status
 	q = "SELECT H.task_run_id, H.task_id, H.sub_count, H.create_dt, H.status, H.update_dt" +
 		" FROM task_run_lst H" +
 		" INNER JOIN task_lst K ON (K.task_id = H.task_id)" +
-		" WHERE K.model_id = " + smId +
-		taskIdFilter +
+		taskWhere +
 		statusFilter +
 		" ORDER BY 1"
 
@@ -436,15 +523,21 @@ func GetTaskFull(dbConn *sql.DB, modelDef *ModelMeta, taskRow *TaskRow, langCode
 	if err != nil {
 		return nil, err
 	}
-	meta.TaskRun = runRs
+
+	meta.TaskRun = make([]taskRunItem, len(runRs))
+	ri := make(map[int]int, len(runRs)) // map (task run id) => index in task run array
+
+	for k := range runRs {
+		ri[runRs[k].TaskRunId] = k
+		meta.TaskRun[k].TaskRunRow = runRs[k]
+	}
 
 	// select run results for the tasks
 	q = "SELECT M.task_run_id, M.run_id, M.set_id, M.task_id" +
 		" FROM task_run_set M" +
 		" INNER JOIN task_run_lst H ON (H.task_run_id = M.task_run_id)" +
 		" INNER JOIN task_lst K ON (K.task_id = H.task_id)" +
-		" WHERE K.model_id = " + smId +
-		taskIdFilter +
+		taskWhere +
 		statusFilter +
 		" ORDER BY 1, 2"
 
@@ -452,7 +545,12 @@ func GetTaskFull(dbConn *sql.DB, modelDef *ModelMeta, taskRow *TaskRow, langCode
 	if err != nil {
 		return nil, err
 	}
-	meta.TaskRunSet = runSetRs
+
+	for k := range runSetRs {
+		if i, ok := ri[runSetRs[k].TaskRunId]; ok {
+			meta.TaskRun[i].TaskRunSet = append(meta.TaskRun[i].TaskRunSet, runSetRs[k])
+		}
+	}
 
 	return meta, nil
 }
@@ -464,22 +562,6 @@ func GetTaskFull(dbConn *sql.DB, modelDef *ModelMeta, taskRow *TaskRow, langCode
 // It does not return non-completed task runs (run in progress).
 // If langCode not empty then only specified language selected else all languages
 func GetTaskFullList(dbConn *sql.DB, modelId int, isSuccess bool, langCode string) ([]TaskMeta, error) {
-
-	// select model name and digest by id
-	smId := strconv.Itoa(modelId)
-
-	var mName, mDigest string
-	err := SelectFirst(dbConn,
-		"SELECT model_name, model_digest FROM model_dic WHERE model_id = "+smId,
-		func(row *sql.Row) error {
-			return row.Scan(&mName, &mDigest)
-		})
-	switch {
-	case err == sql.ErrNoRows:
-		return nil, errors.New("model not found, invalid model id: " + smId)
-	case err != nil:
-		return nil, err
-	}
 
 	// where filters
 	var statusFilter string
@@ -496,6 +578,8 @@ func GetTaskFullList(dbConn *sql.DB, modelId int, isSuccess bool, langCode strin
 	}
 
 	// get list of modeling task for that model id
+	smId := strconv.Itoa(modelId)
+
 	q := "SELECT K.task_id, K.model_id, K.task_name FROM task_lst K" +
 		" WHERE K.model_id =" + smId +
 		" ORDER BY 1"
@@ -557,27 +641,35 @@ func GetTaskFullList(dbConn *sql.DB, modelId int, isSuccess bool, langCode strin
 
 	// convert to output result: join run pieces in struct by task id
 	tl := make([]TaskMeta, len(taskRs))
-	m := make(map[int]int) // map [task id] => index of task_lst row
+	im := make(map[int]int) // map [task id] => index of task_lst row
 
 	for k := range taskRs {
 		taskId := taskRs[k].TaskId
-		tl[k].ModelName = mName
-		tl[k].ModelDigest = mDigest
 		tl[k].Task = taskRs[k]
 		tl[k].Set = setRs[taskId]
-		m[taskId] = k
+		im[taskId] = k
 	}
 	for k := range txtRs {
-		i := m[txtRs[k].TaskId]
-		tl[i].Txt = append(tl[i].Txt, txtRs[k])
+		if i, ok := im[txtRs[k].TaskId]; ok {
+			tl[i].Txt = append(tl[i].Txt, txtRs[k])
+		}
 	}
 	for k := range runRs {
-		i := m[runRs[k].TaskId]
-		tl[i].TaskRun = append(tl[i].TaskRun, runRs[k])
+		if i, ok := im[runRs[k].TaskId]; ok {
+			tl[i].TaskRun = append(tl[i].TaskRun, taskRunItem{TaskRunRow: runRs[k]})
+		}
 	}
 	for k := range runSetRs {
-		i := m[runSetRs[k].TaskId]
-		tl[i].TaskRunSet = append(tl[i].TaskRunSet, runSetRs[k])
+		// find task run id in the list af task runs for the task
+		// and append task pair of (run id, set id) to that task run
+		if i, ok := im[runSetRs[k].TaskId]; ok {
+			for j := range tl[i].TaskRun {
+				if tl[i].TaskRun[j].TaskRunRow.TaskRunId == runSetRs[k].TaskRunId {
+					tl[i].TaskRun[j].TaskRunSet = append(tl[i].TaskRun[j].TaskRunSet, runSetRs[k])
+					break
+				}
+			}
+		}
 	}
 
 	return tl, nil

@@ -53,7 +53,7 @@ func dbToDb(modelName string, modelDigest string, runOpts *config.RunOptions) er
 	}
 
 	// get source model metadata and languages, make a deep copy to use for destination database writing
-	err = copyDbToDb(srcDb, dstDb, dbFacet, modelName, modelDigest, runOpts.String(doubleFmtArgKey))
+	err = copyDbToDb(srcDb, dstDb, dbFacet, modelName, modelDigest, runOpts.String(config.DoubleFormat))
 	if err != nil {
 		return err
 	}
@@ -172,7 +172,7 @@ func dbToDbRun(modelName string, modelDigest string, runOpts *config.RunOptions)
 	if err != nil {
 		return err
 	}
-	dblFmt := runOpts.String(doubleFmtArgKey)
+	dblFmt := runOpts.String(config.DoubleFormat)
 
 	_, err = copyRunDbToDb(srcDb, dstDb, srcModel, dstModel, meta.Run.RunId, pub, dstLang, dblFmt)
 	if err != nil {
@@ -300,6 +300,119 @@ func dbToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOpti
 	return nil
 }
 
+// copy modeling task metadata and run history from source database to destination database
+func dbToDbTask(modelName string, modelDigest string, runOpts *config.RunOptions) error {
+
+	// get task name and id
+	taskName := runOpts.String(config.TaskName)
+	taskId := runOpts.Int(config.TaskId, 0)
+
+	// conflicting options: use task id if positive else use task name
+	if runOpts.IsExist(config.TaskName) && runOpts.IsExist(config.TaskId) {
+		if taskId > 0 {
+			omppLog.Log("dbcopy options conflict. Using task id: ", taskId, " ignore task name: ", taskName)
+			taskName = ""
+		} else {
+			omppLog.Log("dbcopy options conflict. Using task name: ", taskName, " ignore task id: ", taskId)
+			taskId = 0
+		}
+	}
+
+	if taskId < 0 || taskId == 0 && taskName == "" {
+		return errors.New("dbcopy invalid argument(s) for task id: " + runOpts.String(config.TaskId) + " and/or task name: " + runOpts.String(config.TaskName))
+	}
+
+	// validate source and destination
+	inpConnStr := runOpts.String(config.DbConnectionStr)
+	inpDriver := runOpts.String(config.DbDriverName)
+	outConnStr := runOpts.String(toDbConnectionStr)
+	outDriver := runOpts.String(toDbDriverName)
+
+	if inpConnStr == outConnStr && inpDriver == outDriver {
+		return errors.New("source same as destination: cannot overwrite model in database")
+	}
+
+	// open source database connection and check is it valid
+	cs, dn := db.IfEmptyMakeDefault(modelName, inpConnStr, inpDriver)
+	srcDb, _, err := db.Open(cs, dn, false)
+	if err != nil {
+		return err
+	}
+	defer srcDb.Close()
+
+	nv, err := db.OpenmppSchemaVersion(srcDb)
+	if err != nil || nv < db.MinSchemaVersion {
+		return errors.New("invalid source database, likely not an openM++ database")
+	}
+
+	// open destination database and check is it valid
+	cs, dn = db.IfEmptyMakeDefault(modelName, outConnStr, outDriver)
+	dstDb, _, err := db.Open(cs, dn, true)
+	if err != nil {
+		return err
+	}
+	defer dstDb.Close()
+
+	nv, err = db.OpenmppSchemaVersion(dstDb)
+	if err != nil || nv < db.MinSchemaVersion {
+		return errors.New("invalid destination database, likely not an openM++ database")
+	}
+
+	// source: get model metadata
+	srcModel, err := db.GetModel(srcDb, modelName, modelDigest)
+	if err != nil {
+		return err
+	}
+	modelName = srcModel.Model.Name // set model name: it can be empty and only model digest specified
+
+	// get task metadata by id or name
+	var taskRow *db.TaskRow
+	if taskId > 0 {
+		if taskRow, err = db.GetTask(srcDb, taskId); err != nil {
+			return err
+		}
+		if taskRow == nil {
+			return errors.New("modeling task not found, task id: " + strconv.Itoa(taskId))
+		}
+	} else {
+		if taskRow, err = db.GetTaskByName(srcDb, srcModel.Model.ModelId, taskName); err != nil {
+			return err
+		}
+		if taskRow == nil {
+			return errors.New("modeling task not found: " + taskName)
+		}
+	}
+
+	meta, err := db.GetTaskFull(srcDb, taskRow, "") // get task full metadata, including task run history
+	if err != nil {
+		return err
+	}
+
+	// destination: get model metadata
+	dstModel, err := db.GetModel(dstDb, modelName, modelDigest)
+	if err != nil {
+		return err
+	}
+
+	// destination: get list of languages
+	dstLang, err := db.GetLanguages(dstDb)
+	if err != nil {
+		return err
+	}
+
+	// convert task db rows into "public"" format
+	// and copy source task metadata into destination database
+	pub, err := meta.ToPublic(srcDb, srcModel)
+	if err != nil {
+		return err
+	}
+	_, err = copyTaskDbToDb(srcDb, dstDb, srcModel, dstModel, meta.Task.TaskId, pub, dstLang)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // copyDbToDb select from source database and insert or update existing
 // model metadata in all languages, model runs, workset(s), modeling tasks and task run history.
 //
@@ -336,12 +449,6 @@ func copyDbToDb(
 
 	// source: get model profile: default model profile is profile where name = model name
 	modelProfile, err := db.GetProfile(srcDb, modelName)
-	if err != nil {
-		return err
-	}
-
-	// source: get all modeling tasks and successfully completed tasks run history in all languages
-	tl, err := db.GetTaskFullList(srcDb, srcModel.Model.ModelId, true, "")
 	if err != nil {
 		return err
 	}
@@ -391,25 +498,21 @@ func copyDbToDb(
 	}
 
 	// source to destination: copy model runs: parameters, output expressions and accumulators
-	runIdMap, err := copyRunListDbToDb(srcDb, dstDb, srcModel, dstModel, dstLang, doubleFmt)
+	err = copyRunListDbToDb(srcDb, dstDb, srcModel, dstModel, dstLang, doubleFmt)
 	if err != nil {
 		return err
 	}
 
 	// source to destination: copy all readonly worksets parameters
-	setIdMap, err := copyWorksetListDbToDb(srcDb, dstDb, srcModel, dstModel, dstLang)
+	err = copyWorksetListDbToDb(srcDb, dstDb, srcModel, dstModel, dstLang)
 	if err != nil {
 		return err
 	}
 
-	// destination: insert or update modeling tasks and tasks run history
-	for k := range tl {
-
-		omppLog.Log("Modeling task ", tl[k].Task.TaskId)
-
-		if err = db.UpdateTask(dstDb, dstModel, dstLang, &tl[k], runIdMap, setIdMap); err != nil {
-			return err
-		}
+	// source to destination: copy all modeling tasks
+	err = copyTaskListDbToDb(srcDb, dstDb, srcModel, dstModel, dstLang)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -418,38 +521,34 @@ func copyDbToDb(
 // copyRunListDbToDb do copy all model runs parameters and output tables from source to destination database
 // Double format is used for float model types digest calculation, if non-empty format supplied
 func copyRunListDbToDb(
-	srcDb *sql.DB, dstDb *sql.DB, srcModel *db.ModelMeta, dstModel *db.ModelMeta, dstLang *db.LangMeta, doubleFmt string) (map[int]int, error) {
+	srcDb *sql.DB, dstDb *sql.DB, srcModel *db.ModelMeta, dstModel *db.ModelMeta, dstLang *db.LangMeta, doubleFmt string) error {
 
 	// source: get all successfully completed model runs in all languages
 	srcRl, err := db.GetRunFullList(srcDb, srcModel.Model.ModelId, true, "")
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if len(srcRl) <= 0 {
-		return make(map[int]int), nil // exit if no model runs
+		return nil
 	}
 
 	// copy all run metadata, run parameters, output accumulators and expressions from source to destination
 	// model run "public" format is used
-	runIdMap := make(map[int]int, len(srcRl))
-
 	for k := range srcRl {
 
 		// convert model db rows into "public"" format
 		pub, err := srcRl[k].ToPublic(srcDb, srcModel)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		// save into destination database
-		srcId := srcRl[k].Run.RunId
-		dstId, err := copyRunDbToDb(srcDb, dstDb, srcModel, dstModel, srcId, pub, dstLang, doubleFmt)
+		_, err = copyRunDbToDb(srcDb, dstDb, srcModel, dstModel, srcRl[k].Run.RunId, pub, dstLang, doubleFmt)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		runIdMap[srcId] = dstId
 	}
-	return runIdMap, nil
+	return nil
 }
 
 // copyRunDbToDb do copy model run metadata, run parameters and output tables from source to destination database
@@ -464,6 +563,9 @@ func copyRunDbToDb(
 
 	// destination: convert from "public" format into destination db rows
 	dstRun, err := pub.FromPublic(dstDb, dstModel, dstLang)
+	if err != nil {
+		return 0, err
+	}
 
 	// destination: save model run metadata
 	isExist, err := dstRun.UpdateRun(dstDb, dstModel)
@@ -536,37 +638,33 @@ func copyRunDbToDb(
 
 // copyWorksetListDbToDb do copy all readonly worksets parameters from source to destination database
 func copyWorksetListDbToDb(
-	srcDb *sql.DB, dstDb *sql.DB, srcModel *db.ModelMeta, dstModel *db.ModelMeta, dstLang *db.LangMeta) (map[int]int, error) {
+	srcDb *sql.DB, dstDb *sql.DB, srcModel *db.ModelMeta, dstModel *db.ModelMeta, dstLang *db.LangMeta) error {
 
 	// source: get all readonly worksets in all languages
 	srcWl, err := db.GetWorksetFullList(srcDb, srcModel.Model.ModelId, true, "")
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if len(srcWl) <= 0 {
-		return make(map[int]int), nil // no worksets
+		return nil
 	}
 
 	// copy worksets from source to destination database by using "public" format
-	setIdMap := make(map[int]int, len(srcWl))
-
 	for k := range srcWl {
 
 		// convert workset db rows into "public"" format
 		pub, err := srcWl[k].ToPublic(srcDb, srcModel)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		// save into destination database
-		srcId := srcWl[k].Set.SetId
-		dstId, err := copyWorksetDbToDb(srcDb, dstDb, srcModel, dstModel, srcId, pub, dstLang)
+		_, err = copyWorksetDbToDb(srcDb, dstDb, srcModel, dstModel, srcWl[k].Set.SetId, pub, dstLang)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		setIdMap[srcId] = dstId
 	}
-	return setIdMap, nil
+	return nil
 }
 
 // copyWorksetDbToDb do copy workset metadata and parameters from source to destination database
@@ -582,9 +680,11 @@ func copyWorksetDbToDb(
 	// destination: convert from "public" format into destination db rows
 	// display warning if base run not found in destination database
 	dstWs, err := pub.FromPublic(dstDb, dstModel, dstLang)
-
+	if err != nil {
+		return 0, err
+	}
 	if dstWs.Set.BaseRunId <= 0 && pub.BaseRunDigest != "" {
-		omppLog.Log("warning: workset ", dstWs.Set.Name, ", base run not found by digest ", pub.BaseRunDigest)
+		omppLog.Log("Warning: workset ", dstWs.Set.Name, ", base run not found by digest ", pub.BaseRunDigest)
 	}
 
 	// save workset metadata as "read-write" and after importing all parameters set it as "readonly"
@@ -631,6 +731,70 @@ func copyWorksetDbToDb(
 	if err != nil {
 		return 0, err
 	}
+
+	return dstId, nil
+}
+
+// copyTaskListDbToDb do copy all modeling tasks from source to destination database
+func copyTaskListDbToDb(
+	srcDb *sql.DB, dstDb *sql.DB, srcModel *db.ModelMeta, dstModel *db.ModelMeta, dstLang *db.LangMeta) error {
+
+	// source: get all modeling tasks metadata in all languages
+	srcTl, err := db.GetTaskFullList(srcDb, srcModel.Model.ModelId, true, "")
+	if err != nil {
+		return err
+	}
+	if len(srcTl) <= 0 {
+		return nil
+	}
+
+	// copy task metadata from source to destination database by using "public" format
+	for k := range srcTl {
+
+		// convert task metadata db rows into "public"" format
+		pub, err := srcTl[k].ToPublic(srcDb, srcModel)
+		if err != nil {
+			return err
+		}
+
+		// save into destination database
+		_, err = copyTaskDbToDb(srcDb, dstDb, srcModel, dstModel, srcTl[k].Task.TaskId, pub, dstLang)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// copyTaskDbToDb do copy modeling task metadata and task run history from source to destination database
+// it return destination task id (task id in destination database)
+func copyTaskDbToDb(
+	srcDb *sql.DB, dstDb *sql.DB, srcModel *db.ModelMeta, dstModel *db.ModelMeta, srcId int, pub *db.TaskPub, dstLang *db.LangMeta) (int, error) {
+
+	// validate parameters
+	if pub == nil {
+		return 0, errors.New("invalid (empty) source modeling task metadata, source task not found or not exists")
+	}
+
+	// destination: convert from "public" format into destination db rows
+	dstTask, isSetNotFound, isTaskRunNotFound, err := pub.FromPublic(dstDb, dstModel, dstLang)
+	if err != nil {
+		return 0, err
+	}
+	if isSetNotFound {
+		omppLog.Log("Warning: task ", dstTask.Task.Name, " worksets not found, copy of task incomplete")
+	}
+	if isTaskRunNotFound {
+		omppLog.Log("Warning: task ", dstTask.Task.Name, " worksets or model runs not found, copy of task run history incomplete")
+	}
+
+	// destination: save modeling task metadata
+	err = dstTask.UpdateTask(dstDb, dstModel)
+	if err != nil {
+		return 0, err
+	}
+	dstId := dstTask.Task.TaskId
+	omppLog.Log("Modeling task from ", srcId, " ", pub.Name, " to ", dstId)
 
 	return dstId, nil
 }

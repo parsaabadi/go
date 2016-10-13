@@ -84,19 +84,17 @@ func textToDb(modelName string, runOpts *config.RunOptions) error {
 
 	// insert model runs data from csv into database:
 	// parameters, output expressions and accumulators
-	runIdMap, err := fromRunTextListToDb(dstDb, modelDef, langDef, inpDir, runOpts.String(doubleFmtArgKey))
-	if err != nil {
+	if err = fromRunTextListToDb(dstDb, modelDef, langDef, inpDir, runOpts.String(config.DoubleFormat)); err != nil {
 		return err
 	}
 
 	// insert model workset data from csv into database: input parameters
-	setIdMap, err := fromWorksetTextListToDb(dstDb, modelDef, langDef, inpDir)
-	if err != nil {
+	if err = fromWorksetTextListToDb(dstDb, modelDef, langDef, inpDir); err != nil {
 		return err
 	}
 
 	// insert modeling tasks and tasks run history from json file into database
-	if err = fromTaskListJsonToDb(dstDb, modelDef, langDef, inpDir, runIdMap, setIdMap); err != nil {
+	if err = fromTaskListJsonToDb(dstDb, modelDef, langDef, inpDir); err != nil {
 		return err
 	}
 	return nil
@@ -410,6 +408,116 @@ func textToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 	return nil
 }
 
+// copy modeling task metadata and run history from json files into database
+func textToDbTask(modelName string, modelDigest string, runOpts *config.RunOptions) error {
+
+	// validate parameters
+	if modelName == "" {
+		return errors.New("invalid (empty) model name")
+	}
+
+	// get modeling task name and id
+	taskName := runOpts.String(config.TaskName)
+	taskId := runOpts.Int(config.TaskId, 0)
+
+	if taskId < 0 || taskId == 0 && taskName == "" {
+		return errors.New("dbcopy invalid argument(s) for modeling task id: " + runOpts.String(config.TaskId) + " and/or name: " + runOpts.String(config.TaskName))
+	}
+
+	// deirectory for task metadata: it is input directory/modelName
+	inpDir := filepath.Join(runOpts.String(inputDirArgKey), modelName)
+
+	// get model task metadata json path by task id or task name or both
+	var metaPath string
+
+	if runOpts.IsExist(config.TaskName) && runOpts.IsExist(config.TaskId) { // both: task id and name
+
+		metaPath = filepath.Join(inpDir,
+			modelName+".task."+strconv.Itoa(taskId)+"."+helper.ToAlphaNumeric(taskName)+".json")
+
+	} else { // task id or task name only
+
+		// make path search patterns for metadata json file
+		var mp string
+		if runOpts.IsExist(config.TaskName) && !runOpts.IsExist(config.TaskId) { // task name only
+			mp = modelName + ".task.[0-9]*." + helper.ToAlphaNumeric(taskName) + ".json"
+		}
+		if !runOpts.IsExist(config.TaskName) && runOpts.IsExist(config.TaskId) { // task id only
+			mp = modelName + ".task." + strconv.Itoa(taskId) + ".*.json"
+		}
+
+		// find path to metadata json by pattern
+		fl, err := filepath.Glob(inpDir + "/" + mp)
+		if err != nil {
+			return err
+		}
+		if len(fl) <= 0 {
+			return errors.New("no metadata json file found for modeling task: " + strconv.Itoa(taskId) + " " + taskName)
+		}
+		if len(fl) > 1 {
+			omppLog.Log("found multiple modeling task metadata json files, using: " + filepath.Base(metaPath))
+		}
+		metaPath = fl[0]
+	}
+
+	// check results: metadata json file must exist
+	if metaPath == "" {
+		return errors.New("no metadata json file found for modeling task: " + strconv.Itoa(taskId) + " " + taskName)
+	}
+	if _, err := os.Stat(metaPath); err != nil {
+		return errors.New("no metadata json file found for modeling task: " + strconv.Itoa(taskId) + " " + taskName)
+	}
+
+	// get connection string and driver name
+	// use OpenM options if DBCopy ouput database not defined
+	cs := runOpts.String(toDbConnectionStr)
+	if cs == "" && runOpts.IsExist(config.DbConnectionStr) {
+		cs = runOpts.String(config.DbConnectionStr)
+	}
+
+	dn := runOpts.String(toDbDriverName)
+	if dn == "" && runOpts.IsExist(config.DbDriverName) {
+		dn = runOpts.String(config.DbDriverName)
+	}
+
+	cs, dn = db.IfEmptyMakeDefault(modelName, cs, dn)
+
+	// open destination database and check is it valid
+	dstDb, _, err := db.Open(cs, dn, true)
+	if err != nil {
+		return err
+	}
+	defer dstDb.Close()
+
+	nv, err := db.OpenmppSchemaVersion(dstDb)
+	if err != nil || nv < db.MinSchemaVersion {
+		return errors.New("invalid database, likely not an openM++ database")
+	}
+
+	// get model metadata
+	modelDef, err := db.GetModel(dstDb, modelName, modelDigest)
+	if err != nil {
+		return err
+	}
+
+	// get full list of languages
+	langDef, err := db.GetLanguages(dstDb)
+	if err != nil {
+		return err
+	}
+
+	// read from metadata json and update target database
+	srcId, _, err := fromTaskJsonToDb(dstDb, modelDef, langDef, taskName, taskId, metaPath)
+	if err != nil {
+		return err
+	}
+	if srcId <= 0 {
+		return errors.New("modeling task not found or empty: " + strconv.Itoa(taskId) + " " + taskName)
+	}
+
+	return nil
+}
+
 // fromModelJsonToDb reads model metadata from json file and insert it into database.
 func fromModelJsonToDb(dbConn *sql.DB, dbFacet db.Facet, inpDir string, modelName string) (*db.ModelMeta, error) {
 
@@ -508,16 +616,15 @@ func fromLangTextJsonToDb(dbConn *sql.DB, modelDef *db.ModelMeta, inpDir string)
 // from csv and json files, convert it to db cells and insert into database.
 // Double format is used for float model types digest calculation, if non-empty format supplied
 func fromRunTextListToDb(
-	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, inpDir string, doubleFmt string) (map[int]int, error) {
+	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, inpDir string, doubleFmt string) error {
 
 	// get list of model run json files
 	fl, err := filepath.Glob(inpDir + "/" + modelDef.Model.Name + ".run.[0-9]*.*.json")
 	if err != nil {
-		return nil, err
+		return err
 	}
-	runIdMap := make(map[int]int, len(fl)) // map[source run id] => destination runt id
 	if len(fl) <= 0 {
-		return runIdMap, nil // no model runs
+		return nil // no model runs
 	}
 
 	// for each file:
@@ -526,16 +633,13 @@ func fromRunTextListToDb(
 	// update model run digest
 	for k := range fl {
 
-		srcId, dstId, err := fromRunTextToDb(dbConn, modelDef, langDef, "", 0, fl[k], doubleFmt)
+		_, _, err := fromRunTextToDb(dbConn, modelDef, langDef, "", 0, fl[k], doubleFmt)
 		if err != nil {
-			return nil, err
-		}
-		if srcId > 0 {
-			runIdMap[srcId] = dstId // update run id with actual id value from database
+			return err
 		}
 	}
 
-	return runIdMap, nil
+	return nil
 }
 
 // fromRunTextToDb read model run metadata from json file,
@@ -548,7 +652,7 @@ func fromRunTextToDb(
 
 	// if no metadata file then exit: nothing to do
 	if metaPath == "" {
-		return 0, 0, nil // no workset
+		return 0, 0, nil // no model run metadata
 	}
 
 	// get model run metadata
@@ -665,17 +769,15 @@ func fromRunTextToDb(
 // fromWorksetTextListToDb read all worksets parameters from csv and json files,
 // convert it to db cells and insert into database
 // update set id's and base run id's with actual id in database
-func fromWorksetTextListToDb(
-	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, inpDir string) (map[int]int, error) {
+func fromWorksetTextListToDb(dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, inpDir string) error {
 
 	// get list of workset json files
 	fl, err := filepath.Glob(inpDir + "/" + modelDef.Model.Name + ".set.[0-9]*.*.json")
 	if err != nil {
-		return nil, err
+		return err
 	}
-	setIdMap := make(map[int]int, len(fl)) // map[source set id] => destination set id
 	if len(fl) <= 0 {
-		return setIdMap, nil // no worksets
+		return nil // no worksets
 	}
 
 	// for each file:
@@ -697,16 +799,13 @@ func fromWorksetTextListToDb(
 			}
 		}
 
-		srcId, dstId, err := fromWorksetTextToDb(dbConn, modelDef, langDef, "", 0, fl[k], csvDir)
+		_, _, err := fromWorksetTextToDb(dbConn, modelDef, langDef, "", 0, fl[k], csvDir)
 		if err != nil {
-			return nil, err
-		}
-		if srcId > 0 {
-			setIdMap[srcId] = dstId // update workset id with actual id value from database
+			return err
 		}
 	}
 
-	return setIdMap, nil
+	return nil
 }
 
 // fromWorksetTextToDb read workset metadata from json file,
@@ -783,7 +882,7 @@ func fromWorksetTextToDb(
 		return 0, 0, err
 	}
 	if ws.Set.BaseRunId <= 0 && pub.BaseRunDigest != "" {
-		omppLog.Log("warning: workset ", ws.Set.Name, ", base run not found by digest ", pub.BaseRunDigest)
+		omppLog.Log("Warning: workset ", ws.Set.Name, ", base run not found by digest ", pub.BaseRunDigest)
 	}
 
 	// save workset metadata as "read-write" and after importing all parameters set it as "readonly"
@@ -834,8 +933,7 @@ func fromWorksetTextToDb(
 
 // fromTaskListJsonToDb reads modeling tasks and tasks run history from json file and insert it into database.
 // it does update task id, set id's and run id's with actual id in destination database
-func fromTaskListJsonToDb(
-	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, inpDir string, runIdMap map[int]int, setIdMap map[int]int) error {
+func fromTaskListJsonToDb(dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, inpDir string) error {
 
 	// get list of task json files
 	fl, err := filepath.Glob(inpDir + "/" + modelDef.Model.Name + ".task.[0-9]*.*.json")
@@ -848,9 +946,7 @@ func fromTaskListJsonToDb(
 
 	// for each file: read task metadata, update task in target database
 	for k := range fl {
-
-		err := fromTaskJsonToDb(dbConn, modelDef, langDef, fl[k], runIdMap, setIdMap)
-		if err != nil {
+		if _, _, err = fromTaskJsonToDb(dbConn, modelDef, langDef, "", 0, fl[k]); err != nil {
 			return err
 		}
 	}
@@ -858,27 +954,63 @@ func fromTaskListJsonToDb(
 	return nil
 }
 
-// fromWorksetTextToDb reads modeling task and task run history from json file and insert it into database.
+// fromTaskTextToDb reads modeling task and task run history from json file and insert it into database.
 // it does update task id, set id's and run id's with actual id in destination database
+// it return source task id (task id from metadata json file) and destination task id
 func fromTaskJsonToDb(
-	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, metaPath string, runIdMap map[int]int, setIdMap map[int]int) error {
+	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, srcName string, srcId int, metaPath string) (int, int, error) {
+
+	// if no metadata file then exit: nothing to do
+	if metaPath == "" {
+		return 0, 0, nil // no task metadata
+	}
 
 	// get task metadata
-	var tm db.TaskMeta
-	isExist, err := helper.FromJsonFile(metaPath, &tm)
+	// model name and task name must be specified as parameter or inside of metadata json
+	var pub db.TaskPub
+	isExist, err := helper.FromJsonFile(metaPath, &pub)
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
 	if !isExist {
-		return nil // no task
+		return 0, 0, nil // no modeling task
 	}
-	omppLog.Log("Modeling task ", tm.Task.TaskId)
 
-	// save modeling task
-	// update task id, set id's and run id's with actual id in destination database
+	// task id: parse json file name to get source task id
+	if srcId <= 0 {
+		re := regexp.MustCompile("\\.task\\.([0-9]+)\\.")
+		s2 := re.FindStringSubmatch(filepath.Base(metaPath))
+		if len(s2) >= 2 {
+			srcId, _ = strconv.Atoi(s2[1]) // if any error source task id remain default zero
+		}
+	}
 
-	err = db.UpdateTask(dbConn, modelDef, langDef, &tm, runIdMap, setIdMap)
-	return err
+	// task name: use task name from json metadata, if empty
+	if pub.Name != "" && srcName != pub.Name {
+		srcName = pub.Name
+	}
+
+	// convert from "public" format into destination db rows
+	meta, isSetNotFound, isTaskRunNotFound, err := pub.FromPublic(dbConn, modelDef, langDef)
+	if err != nil {
+		return 0, 0, err
+	}
+	if isSetNotFound {
+		omppLog.Log("Warning: task ", meta.Task.Name, " worksets not found, copy of task incomplete")
+	}
+	if isTaskRunNotFound {
+		omppLog.Log("Warning: task ", meta.Task.Name, " worksets or model runs not found, copy of task run history incomplete")
+	}
+
+	// save modeling task metadata
+	err = meta.UpdateTask(dbConn, modelDef)
+	if err != nil {
+		return 0, 0, err
+	}
+	dstId := meta.Task.TaskId
+	omppLog.Log("Modeling task from ", srcId, " ", pub.Name, " to ", dstId)
+
+	return srcId, dstId, nil
 }
 
 // fromCsvFile read parameter or output table csv file and convert it to list of db cells
