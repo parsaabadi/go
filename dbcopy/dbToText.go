@@ -639,7 +639,7 @@ func toCsvFile(
 	wr := csv.NewWriter(f)
 
 	// write header line: column names
-	cs, err := cell.CsvHeader(modelDef, name)
+	cs, err := cell.CsvHeader(modelDef, name, false)
 	if err != nil {
 		return err
 	}

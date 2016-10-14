@@ -80,7 +80,7 @@ func doUpdateProfile(trx *sql.Tx, profile *ProfileMeta) error {
 func digestCells(hSum hash.Hash, modelDef *ModelMeta, name string, cell CsvConverter, cellLst *list.List, doubleFmt string) error {
 
 	// append header, like: acc_id,sub_id,dim0,dim1,acc_value\n
-	cs, err := cell.CsvHeader(modelDef, name)
+	cs, err := cell.CsvHeader(modelDef, name, true)
 	if err != nil {
 		return err
 	}
@@ -99,7 +99,7 @@ func digestCells(hSum hash.Hash, modelDef *ModelMeta, name string, cell CsvConve
 	}
 
 	// append dimensions and value to digest
-	cvt, err := cell.CsvToRow(modelDef, name, doubleFmt) // converter from cell to csv row []string
+	cvt, err := cell.CsvToIdRow(modelDef, name, doubleFmt) // converter from cell id's to csv row []string
 	if err != nil {
 		return err
 	}

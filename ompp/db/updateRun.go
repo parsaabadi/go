@@ -335,79 +335,6 @@ func doUpdateRunDigest(trx *sql.Tx, runId int) (string, error) {
 
 }
 
-// UpdateRunText update run_txt table of existing run_id.
-//
-// Run id of the input txt db rows updated with runId value.
-// If run not exist or status is not completed (success, exit, error) then function does nothing.
-func UpdateRunText(dbConn *sql.DB, runId int, txt []RunTxtRow) error {
-
-	// check run status: if not completed then exit
-	var st string
-
-	err := SelectFirst(dbConn,
-		"SELECT status FROM run_lst WHERE run_id = "+strconv.Itoa(runId),
-		func(row *sql.Row) error {
-			err := row.Scan(&st)
-			return err
-		})
-	switch {
-	case err == sql.ErrNoRows:
-		return nil // model run not found: nothing to do
-	case err != nil:
-		return err
-	}
-
-	// if run run not completed then exit
-	if st != DoneRunStatus && st != ExitRunStatus && st != ErrorRunStatus {
-		return nil
-	}
-
-	// do update in transaction scope
-	trx, err := dbConn.Begin()
-	if err != nil {
-		return err
-	}
-	err = doUpdateRunText(trx, runId, txt)
-	if err != nil {
-		trx.Rollback()
-		return err
-	}
-	trx.Commit()
-
-	return nil
-}
-
-// doUpdateRunText update run_txt table of existing run_id.
-// It does update as part of transaction.
-// Run id of the input txt db rows updated with runId value.
-func doUpdateRunText(trx *sql.Tx, runId int, txt []RunTxtRow) error {
-
-	// delete existing run text
-	srId := strconv.Itoa(runId)
-
-	err := TrxUpdate(trx, "DELETE FROM run_txt WHERE run_id = "+srId)
-	if err != nil {
-		return err
-	}
-
-	// insert new run_txt db rows
-	for k := range txt {
-
-		txt[k].RunId = runId // update run id
-
-		err = TrxUpdate(trx,
-			"INSERT INTO run_txt (run_id, lang_id, descr, note) VALUES ("+
-				srId+", "+
-				strconv.Itoa(txt[k].LangId)+", "+
-				toQuoted(txt[k].Descr)+", "+
-				toQuotedOrNull(txt[k].Note)+")")
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // doInsertRun insert new model run metadata in database.
 // It does update as part of transaction
 // Run status must be completed (success, exit or error) otherwise error returned.
@@ -529,5 +456,78 @@ func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, meta *RunMeta) error {
 		}
 	}
 
+	return nil
+}
+
+// UpdateRunText update run_txt table of existing run_id.
+//
+// Run id of the input txt db rows updated with runId value.
+// If run not exist or status is not completed (success, exit, error) then function does nothing.
+func UpdateRunText(dbConn *sql.DB, runId int, txt []RunTxtRow) error {
+
+	// check run status: if not completed then exit
+	var st string
+
+	err := SelectFirst(dbConn,
+		"SELECT status FROM run_lst WHERE run_id = "+strconv.Itoa(runId),
+		func(row *sql.Row) error {
+			err := row.Scan(&st)
+			return err
+		})
+	switch {
+	case err == sql.ErrNoRows:
+		return nil // model run not found: nothing to do
+	case err != nil:
+		return err
+	}
+
+	// if run run not completed then exit
+	if st != DoneRunStatus && st != ExitRunStatus && st != ErrorRunStatus {
+		return nil
+	}
+
+	// do update in transaction scope
+	trx, err := dbConn.Begin()
+	if err != nil {
+		return err
+	}
+	err = doUpdateRunText(trx, runId, txt)
+	if err != nil {
+		trx.Rollback()
+		return err
+	}
+	trx.Commit()
+
+	return nil
+}
+
+// doUpdateRunText update run_txt table of existing run_id.
+// It does update as part of transaction.
+// Run id of the input txt db rows updated with runId value.
+func doUpdateRunText(trx *sql.Tx, runId int, txt []RunTxtRow) error {
+
+	// delete existing run text
+	srId := strconv.Itoa(runId)
+
+	err := TrxUpdate(trx, "DELETE FROM run_txt WHERE run_id = "+srId)
+	if err != nil {
+		return err
+	}
+
+	// insert new run_txt db rows
+	for k := range txt {
+
+		txt[k].RunId = runId // update run id
+
+		err = TrxUpdate(trx,
+			"INSERT INTO run_txt (run_id, lang_id, descr, note) VALUES ("+
+				srId+", "+
+				strconv.Itoa(txt[k].LangId)+", "+
+				toQuoted(txt[k].Descr)+", "+
+				toQuotedOrNull(txt[k].Note)+")")
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }

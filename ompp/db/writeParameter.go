@@ -177,8 +177,8 @@ func doWriteRunParameter(trx *sql.Tx, modelDef *ModelMeta, param *ParamMeta, run
 
 		// make sql to insert parameter values into model run
 		// prepare put() closure to convert each cell into insert sql statement parameters
-		q := makeSqlParamValueInsert(param.DbRunTable, "run_id", param.Dim, runId)
-		put := makePutParamValueInsert(param, cellLst)
+		q := makeSqlInsertParamValue(param.DbRunTable, "run_id", param.Dim, runId)
+		put := makePutInsertParamValue(param, cellLst)
 
 		// execute sql insert using put() above for each row
 		if err = TrxUpdateStatement(trx, q, put); err != nil {
@@ -256,8 +256,8 @@ func doWriteSetParameter(trx *sql.Tx, param *ParamMeta, setId int, cellLst *list
 
 	// make sql to insert parameter values into workset
 	// prepare put() closure to convert each cell into insert sql statement parameters
-	q := makeSqlParamValueInsert(param.DbSetTable, "set_id", param.Dim, setId)
-	put := makePutParamValueInsert(param, cellLst)
+	q := makeSqlInsertParamValue(param.DbSetTable, "set_id", param.Dim, setId)
+	put := makePutInsertParamValue(param, cellLst)
 
 	// execute sql insert using put() above for each row
 	if err = TrxUpdateStatement(trx, q, put); err != nil {
@@ -273,7 +273,7 @@ func doWriteSetParameter(trx *sql.Tx, param *ParamMeta, setId int, cellLst *list
 }
 
 // make sql to insert parameter values into model run or workset
-func makeSqlParamValueInsert(dbTable string, runSetCol string, dims []ParamDimsRow, toId int) string {
+func makeSqlInsertParamValue(dbTable string, runSetCol string, dims []ParamDimsRow, toId int) string {
 
 	// INSERT INTO ageSex_w2012817 (set_id, dim0, dim1, param_value) VALUES (2, ?, ?, ?)
 	q := "INSERT INTO " + dbTable +
@@ -294,7 +294,7 @@ func makeSqlParamValueInsert(dbTable string, runSetCol string, dims []ParamDimsR
 }
 
 // prepare put() closure to convert each cell into insert sql statement parameters
-func makePutParamValueInsert(param *ParamMeta, cellLst *list.List) func() (bool, []interface{}, error) {
+func makePutInsertParamValue(param *ParamMeta, cellLst *list.List) func() (bool, []interface{}, error) {
 
 	// for each cell put into row of sql statement parameters
 	row := make([]interface{}, param.Rank+1)
