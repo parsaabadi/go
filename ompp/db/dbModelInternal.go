@@ -38,7 +38,7 @@ func (meta *ModelMeta) updateInternals() error {
 		}
 
 		// for built-in types use _name_ as digest, ie: _int_ or _Time_
-		if meta.Type[idx].TypeId <= maxBuiltInTypeId {
+		if meta.Type[idx].IsBuiltIn() {
 			meta.Type[idx].Digest = "_" + meta.Type[idx].Name + "_"
 			continue
 		}

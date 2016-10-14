@@ -197,13 +197,13 @@ func (table *TableMeta) DimByKey(dimId int) (int, bool) {
 	return k, (k >= 0 && k < n && table.Dim[k].DimId == dimId)
 }
 
-// IsBool return true if model type is boolean
+// IsBool return true if model type is boolean.
 func (typeRow *TypeDicRow) IsBool() bool { return strings.ToLower(typeRow.Name) == "bool" }
 
-// IsString return true if model type is string
+// IsString return true if model type is string.
 func (typeRow *TypeDicRow) IsString() bool { return strings.ToLower(typeRow.Name) == "file" }
 
-// IsFloat return true if model type is float
+// IsFloat return true if model type is float.
 func (typeRow *TypeDicRow) IsFloat() bool {
 	switch strings.ToLower(typeRow.Name) {
 	case "float", "double", "ldouble", "time", "real":
@@ -212,19 +212,20 @@ func (typeRow *TypeDicRow) IsFloat() bool {
 	return false
 }
 
-// IsInt return true if model type is integer (not float, string or boolean)
+// IsInt return true if model type is integer (not float, string or boolean).
+// If type is not a built-in then it must be integer enums.
 func (typeRow *TypeDicRow) IsInt() bool {
 	return !typeRow.IsBool() && !typeRow.IsString() && !typeRow.IsFloat()
 }
 
-// IsBuiltIn return true if model type is built-in, ie: int, double, logical
+// IsBuiltIn return true if model type is built-in, ie: int, double, logical.
 func (typeRow *TypeDicRow) IsBuiltIn() bool { return typeRow.TypeId <= maxBuiltInTypeId }
 
 // sqlColumnType return sql column type, ie: VARCHAR(255)
 func (typeRow *TypeDicRow) sqlColumnType(dbFacet Facet) (string, error) {
 
 	// model specific types: it must be enum
-	if typeRow.TypeId > maxBuiltInTypeId {
+	if !typeRow.IsBuiltIn() {
 		return "INT", nil
 	}
 

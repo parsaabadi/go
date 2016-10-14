@@ -115,6 +115,17 @@ func (Cell) CsvToRow(modelDef *ModelMeta, name string, doubleFmt string) (func(i
 	}
 	param := &modelDef.Param[k]
 
+	// for each dimension create converter from item id to code
+	fd := make([]func(itemId int, theName string, dimName string, enumArr []TypeEnumRow) (string, error), param.Rank)
+
+	for k := 0; k < param.Rank; k++ {
+		f, err := cvtDimItemIdToCode(name, param.Dim[k].Name, param.Dim[k].typeOf)
+		if err != nil {
+			return nil, err
+		}
+		fd[k] = f
+	}
+
 	// for float model types use format if specified
 	isUseFmt := param.typeOf.IsFloat() && doubleFmt != ""
 
@@ -130,9 +141,15 @@ func (Cell) CsvToRow(modelDef *ModelMeta, name string, doubleFmt string) (func(i
 			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+1))
 		}
 
+		// convert dimension item id to code
 		for k, e := range cell.DimIds {
-			row[k] = fmt.Sprint(e)
+			v, err := fd[k](e, name, param.Dim[k].Name, param.Dim[k].typeOf.Enum)
+			if err != nil {
+				return err
+			}
+			row[k] = v
 		}
+
 		if isUseFmt {
 			row[n] = fmt.Sprintf(doubleFmt, cell.Value)
 		} else {
@@ -158,11 +175,22 @@ func (Cell) CsvToCell(modelDef *ModelMeta, name string) (func(row []string) (int
 	}
 
 	// find parameter by name
-	k, ok := modelDef.ParamByName(name)
+	idx, ok := modelDef.ParamByName(name)
 	if !ok {
 		return nil, errors.New("parameter not found: " + name)
 	}
-	param := &modelDef.Param[k]
+	param := &modelDef.Param[idx]
+
+	// for each dimension create converter from item code to id
+	fd := make([]func(src string, theName string, dimName string, enumArr []TypeEnumRow) (int, error), param.Rank)
+
+	for k := 0; k < param.Rank; k++ {
+		f, err := cvtDimItemCodeToId(name, param.Dim[k].Name, param.Dim[k].typeOf)
+		if err != nil {
+			return nil, err
+		}
+		fd[k] = f
+	}
 
 	// cell value converter: float, bool, string or integer by default
 	var fc func(src string) (interface{}, error)
@@ -177,7 +205,7 @@ func (Cell) CsvToCell(modelDef *ModelMeta, name string) (func(row []string) (int
 	case param.typeOf.IsInt():
 		fc = func(src string) (interface{}, error) { return strconv.Atoi(src) }
 	default:
-		return nil, errors.New("invalid (not supported) parameter type")
+		return nil, errors.New("invalid (not supported) parameter type: " + name)
 	}
 
 	// do conversion
@@ -191,9 +219,9 @@ func (Cell) CsvToCell(modelDef *ModelMeta, name string) (func(row []string) (int
 			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(n+1))
 		}
 
-		// dimensions: integer expected, enum ids or integer value for simple type dimension
+		// convert dimensions: enum code to enum id or integer value for simple type dimension
 		for k := range cell.DimIds {
-			i, err := strconv.Atoi(row[k])
+			i, err := fd[k](row[k], name, param.Dim[k].Name, param.Dim[k].typeOf.Enum)
 			if err != nil {
 				return nil, err
 			}
@@ -269,6 +297,32 @@ func (CellExpr) CsvHeader(modelDef *ModelMeta, name string) ([]string, error) {
 // Double format string is used if parameter type is float, double, long double
 func (CellExpr) CsvToRow(modelDef *ModelMeta, name string, doubleFmt string) (func(interface{}, []string) error, error) {
 
+	// validate parameters
+	if modelDef == nil {
+		return nil, errors.New("invalid (empty) model metadata, look like model not found")
+	}
+	if name == "" {
+		return nil, errors.New("invalid (empty) output table name")
+	}
+
+	// find output table by name
+	k, ok := modelDef.OutTableByName(name)
+	if !ok {
+		return nil, errors.New("output table not found: " + name)
+	}
+	table := &modelDef.Table[k]
+
+	// for each dimension create converter from item id to code
+	fd := make([]func(itemId int, theName string, dimName string, enumArr []TypeEnumRow) (string, error), table.Rank)
+
+	for k := 0; k < table.Rank; k++ {
+		f, err := cvtDimItemIdToCode(name, table.Dim[k].Name, table.Dim[k].typeOf)
+		if err != nil {
+			return nil, err
+		}
+		fd[k] = f
+	}
+
 	cvt := func(src interface{}, row []string) error {
 
 		cell, ok := src.(CellExpr)
@@ -281,10 +335,15 @@ func (CellExpr) CsvToRow(modelDef *ModelMeta, name string, doubleFmt string) (fu
 			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2))
 		}
 
-		row[0] = fmt.Sprint(cell.ExprId)
+		row[0] = table.Expr[cell.ExprId].Name
 
+		// convert dimension item id to code
 		for k, e := range cell.DimIds {
-			row[k+1] = fmt.Sprint(e)
+			v, err := fd[k](e, name, table.Dim[k].Name, table.Dim[k].typeOf.Enum)
+			if err != nil {
+				return err
+			}
+			row[k+1] = v
 		}
 
 		// use "null" string for db NULL values and format for model float types
@@ -323,6 +382,17 @@ func (CellExpr) CsvToCell(modelDef *ModelMeta, name string) (func(row []string) 
 	}
 	table := &modelDef.Table[k]
 
+	// for each dimension create converter from item code to id
+	fd := make([]func(src string, theName string, dimName string, enumArr []TypeEnumRow) (int, error), table.Rank)
+
+	for k := 0; k < table.Rank; k++ {
+		f, err := cvtDimItemCodeToId(name, table.Dim[k].Name, table.Dim[k].typeOf)
+		if err != nil {
+			return nil, err
+		}
+		fd[k] = f
+	}
+
 	// do conversion
 	cvt := func(row []string) (interface{}, error) {
 
@@ -334,16 +404,21 @@ func (CellExpr) CsvToCell(modelDef *ModelMeta, name string) (func(row []string) 
 			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(n+2))
 		}
 
-		// expression id
-		i, err := strconv.Atoi(row[0])
-		if err != nil {
-			return nil, err
+		// expression id by name
+		cell.ExprId = -1
+		for k := range table.Expr {
+			if row[0] == table.Expr[k].Name {
+				cell.ExprId = k
+				break
+			}
 		}
-		cell.ExprId = i
+		if cell.ExprId < 0 {
+			return nil, errors.New("invalid expression name: " + row[0] + " output table: " + name)
+		}
 
-		// dimensions: integer expected, enum ids or integer value for simple type dimension
+		// convert dimensions: enum code to enum id or integer value for simple type dimension
 		for k := range cell.DimIds {
-			i, err := strconv.Atoi(row[k+1])
+			i, err := fd[k](row[k+1], name, table.Dim[k].Name, table.Dim[k].typeOf.Enum)
 			if err != nil {
 				return nil, err
 			}
@@ -425,6 +500,32 @@ func (CellAcc) CsvHeader(modelDef *ModelMeta, name string) ([]string, error) {
 // Double format string is used if parameter type is float, double, long double
 func (CellAcc) CsvToRow(modelDef *ModelMeta, name string, doubleFmt string) (func(interface{}, []string) error, error) {
 
+	// validate parameters
+	if modelDef == nil {
+		return nil, errors.New("invalid (empty) model metadata, look like model not found")
+	}
+	if name == "" {
+		return nil, errors.New("invalid (empty) output table name")
+	}
+
+	// find output table by name
+	k, ok := modelDef.OutTableByName(name)
+	if !ok {
+		return nil, errors.New("output table not found: " + name)
+	}
+	table := &modelDef.Table[k]
+
+	// for each dimension create converter from item id to code
+	fd := make([]func(itemId int, theName string, dimName string, enumArr []TypeEnumRow) (string, error), table.Rank)
+
+	for k := 0; k < table.Rank; k++ {
+		f, err := cvtDimItemIdToCode(name, table.Dim[k].Name, table.Dim[k].typeOf)
+		if err != nil {
+			return nil, err
+		}
+		fd[k] = f
+	}
+
 	cvt := func(src interface{}, row []string) error {
 
 		cell, ok := src.(CellAcc)
@@ -437,11 +538,16 @@ func (CellAcc) CsvToRow(modelDef *ModelMeta, name string, doubleFmt string) (fun
 			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+3))
 		}
 
-		row[0] = fmt.Sprint(cell.AccId)
+		row[0] = table.Acc[cell.AccId].Name
 		row[1] = fmt.Sprint(cell.SubId)
 
+		// convert dimension item id to code
 		for k, e := range cell.DimIds {
-			row[k+2] = fmt.Sprint(e)
+			v, err := fd[k](e, name, table.Dim[k].Name, table.Dim[k].typeOf.Enum)
+			if err != nil {
+				return err
+			}
+			row[k+2] = v
 		}
 
 		// use "null" string for db NULL values and format for model float types
@@ -480,6 +586,17 @@ func (CellAcc) CsvToCell(modelDef *ModelMeta, name string) (func(row []string) (
 	}
 	table := &modelDef.Table[k]
 
+	// for each dimension create converter from item code to id
+	fd := make([]func(src string, theName string, dimName string, enumArr []TypeEnumRow) (int, error), table.Rank)
+
+	for k := 0; k < table.Rank; k++ {
+		f, err := cvtDimItemCodeToId(name, table.Dim[k].Name, table.Dim[k].typeOf)
+		if err != nil {
+			return nil, err
+		}
+		fd[k] = f
+	}
+
 	// do conversion
 	cvt := func(row []string) (interface{}, error) {
 
@@ -491,22 +608,28 @@ func (CellAcc) CsvToCell(modelDef *ModelMeta, name string) (func(row []string) (
 			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(n+3))
 		}
 
-		// accumulator id and subsample number
-		i, err := strconv.Atoi(row[0])
-		if err != nil {
-			return nil, err
+		// accumulator id by name
+		cell.AccId = -1
+		for k := range table.Acc {
+			if row[0] == table.Acc[k].Name {
+				cell.AccId = k
+				break
+			}
 		}
-		cell.AccId = i
+		if cell.AccId < 0 {
+			return nil, errors.New("invalid accumulator name: " + row[0] + " output table: " + name)
+		}
 
-		i, err = strconv.Atoi(row[1])
+		// subsample number
+		i, err := strconv.Atoi(row[1])
 		if err != nil {
 			return nil, err
 		}
 		cell.SubId = i
 
-		// dimensions: integer expected, enum ids or integer value for simple type dimension
+		// convert dimensions: enum code to enum id or integer value for simple type dimension
 		for k := range cell.DimIds {
-			i, err := strconv.Atoi(row[k+2])
+			i, err := fd[k](row[k+2], name, table.Dim[k].Name, table.Dim[k].typeOf.Enum)
 			if err != nil {
 				return nil, err
 			}
@@ -526,6 +649,107 @@ func (CellAcc) CsvToCell(modelDef *ModelMeta, name string) (func(row []string) (
 			cell.Value = v
 		}
 		return cell, nil
+	}
+
+	return cvt, nil
+}
+
+// cvtDimItemCodeToId return converter from dimension item code to id.
+// If dimension is enum-based then from enum string to enum id;
+// If dimension is simple integer type then parse integer;
+// If dimension is boolean then false=>0, true=>1
+func cvtDimItemCodeToId(
+	theName string, dimName string, typeOf *TypeMeta,
+) (
+	func(src string, theName string, dimName string, enumArr []TypeEnumRow) (int, error), error,
+) {
+	var cvt func(src string, theName string, dimName string, enumArr []TypeEnumRow) (int, error)
+
+	switch {
+	case !typeOf.IsBuiltIn(): // enum dimension: find enum id by code
+
+		cvt = func(src string, theName string, dimName string, enumArr []TypeEnumRow) (int, error) {
+			for j := range enumArr {
+				if src == enumArr[j].Name {
+					return enumArr[j].EnumId, nil
+				}
+			}
+			return 0, errors.New("invalid value: " + src + " of: " + theName + " dimension: " + dimName)
+		}
+
+	case typeOf.IsBool(): // boolean dimension: false=>0, true=>1
+
+		cvt = func(src string, theName string, dimName string, enumArr []TypeEnumRow) (int, error) {
+			is, err := strconv.ParseBool(src)
+			if err != nil {
+				return 0, errors.New("invalid value: " + src + " of: " + theName + " dimension: " + dimName)
+			}
+			if is {
+				return 1, nil
+			}
+			return 0, nil
+		}
+
+	case typeOf.IsInt(): // integer dimension
+
+		cvt = func(src string, theName string, dimName string, enumArr []TypeEnumRow) (int, error) {
+			i, err := strconv.Atoi(src)
+			if err != nil {
+				return 0, errors.New("invalid value: " + src + " of: " + theName + " dimension: " + dimName)
+			}
+			return i, nil
+		}
+
+	default:
+		return nil, errors.New("invalid (not supported) dimension type: " + typeOf.Name + " of: " + theName + " dimension: " + dimName)
+	}
+
+	return cvt, nil
+}
+
+// cvtDimItemIdToCode return converter from dimension item id to code.
+// If dimension is enum-based then from enum id to enum name;
+// If dimension is simple integer type then use Itoa(integer id) as code;
+// If dimension is boolean then 0=>false, (1 or -1)=>true else error
+func cvtDimItemIdToCode(
+	theName string, dimName string, typeOf *TypeMeta,
+) (
+	func(itemId int, theName string, dimName string, enumArr []TypeEnumRow) (string, error), error,
+) {
+	var cvt func(itemId int, theName string, dimName string, enumArr []TypeEnumRow) (string, error)
+
+	switch {
+	case !typeOf.IsBuiltIn(): // enum dimension: find enum id by code
+
+		cvt = func(itemId int, theName string, dimName string, enumArr []TypeEnumRow) (string, error) {
+			for j := range enumArr {
+				if itemId == enumArr[j].EnumId {
+					return enumArr[j].Name, nil
+				}
+			}
+			return "", errors.New("invalid value: " + strconv.Itoa(itemId) + " of: " + theName + " dimension: " + dimName)
+		}
+
+	case typeOf.IsBool(): // boolean dimension: 0=>false, (1 or -1)=>true else error
+
+		cvt = func(itemId int, theName string, dimName string, enumArr []TypeEnumRow) (string, error) {
+			switch itemId {
+			case 0:
+				return "false", nil
+			case 1, -1:
+				return "true", nil
+			}
+			return "", errors.New("invalid value: " + strconv.Itoa(itemId) + " of: " + theName + " dimension: " + dimName)
+		}
+
+	case typeOf.IsInt(): // integer dimension
+
+		cvt = func(itemId int, theName string, dimName string, enumArr []TypeEnumRow) (string, error) {
+			return strconv.Itoa(itemId), nil
+		}
+
+	default:
+		return nil, errors.New("invalid (not supported) dimension type: " + typeOf.Name + " of: " + theName + " dimension: " + dimName)
 	}
 
 	return cvt, nil
