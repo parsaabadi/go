@@ -141,10 +141,11 @@ func (CellAcc) CsvToRow(modelDef *ModelMeta, name string, doubleFmt string) (fun
 	table := &modelDef.Table[k]
 
 	// for each dimension create converter from item id to code
-	fd := make([]func(itemId int, msgName string, enumArr []TypeEnumRow) (string, error), table.Rank)
+	fd := make([]func(itemId int) (string, error), table.Rank)
 
 	for k := 0; k < table.Rank; k++ {
-		f, err := cvtItemIdToCode(name+"."+table.Dim[k].Name, table.Dim[k].typeOf)
+		f, err := cvtItemIdToCode(
+			name+"."+table.Dim[k].Name, table.Dim[k].typeOf, table.Dim[k].typeOf.Enum, table.Dim[k].IsTotal, table.Dim[k].typeOf.TotalEnumId)
 		if err != nil {
 			return nil, err
 		}
@@ -168,7 +169,7 @@ func (CellAcc) CsvToRow(modelDef *ModelMeta, name string, doubleFmt string) (fun
 
 		// convert dimension item id to code
 		for k, e := range cell.DimIds {
-			v, err := fd[k](e, name+"."+table.Dim[k].Name, table.Dim[k].typeOf.Enum)
+			v, err := fd[k](e)
 			if err != nil {
 				return err
 			}
@@ -213,10 +214,11 @@ func (CellAcc) CsvToCell(modelDef *ModelMeta, name string) (func(row []string) (
 	table := &modelDef.Table[k]
 
 	// for each dimension create converter from item code to id
-	fd := make([]func(src string, msgName string, enumArr []TypeEnumRow) (int, error), table.Rank)
+	fd := make([]func(src string) (int, error), table.Rank)
 
 	for k := 0; k < table.Rank; k++ {
-		f, err := cvtItemCodeToId(name+"."+table.Dim[k].Name, table.Dim[k].typeOf)
+		f, err := cvtItemCodeToId(
+			name+"."+table.Dim[k].Name, table.Dim[k].typeOf, table.Dim[k].typeOf.Enum, table.Dim[k].IsTotal, table.Dim[k].typeOf.TotalEnumId)
 		if err != nil {
 			return nil, err
 		}
@@ -255,7 +257,7 @@ func (CellAcc) CsvToCell(modelDef *ModelMeta, name string) (func(row []string) (
 
 		// convert dimensions: enum code to enum id or integer value for simple type dimension
 		for k := range cell.DimIds {
-			i, err := fd[k](row[k+2], name+"."+table.Dim[k].Name, table.Dim[k].typeOf.Enum)
+			i, err := fd[k](row[k+2])
 			if err != nil {
 				return nil, err
 			}

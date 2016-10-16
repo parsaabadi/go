@@ -3,6 +3,12 @@
 
 package db
 
+// maxBuiltInTypeId is max type id for openM++ built-in types, ie: int, double, logical
+const maxBuiltInTypeId = 100
+
+// totalEnumCode is predefined enum code for "total" enum
+const totalEnumCode = "all"
+
 // ModelMeta is model metadata db rows, language-independent portion of it.
 //
 // Types, parameters and output tables can be shared between different models and even between different databases.
@@ -27,9 +33,6 @@ type ModelMeta struct {
 	Param []ParamMeta // parameters metadata: parameter name, type, dimensions
 	Table []TableMeta // output tables metadata: table name, dimensions, accumulators, expressions
 }
-
-// maxBuiltInTypeId is max type id for openM++ built-in types, ie: int, double, logical
-const maxBuiltInTypeId = 100
 
 // TypeMeta is type metadata: type name and enums
 type TypeMeta struct {

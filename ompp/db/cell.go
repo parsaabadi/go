@@ -163,10 +163,10 @@ func (Cell) CsvToRow(modelDef *ModelMeta, name string, doubleFmt string) (func(i
 	param := &modelDef.Param[k]
 
 	// for each dimension create converter from item id to code
-	fd := make([]func(itemId int, msgName string, enumArr []TypeEnumRow) (string, error), param.Rank)
+	fd := make([]func(itemId int) (string, error), param.Rank)
 
 	for k := 0; k < param.Rank; k++ {
-		f, err := cvtItemIdToCode(name+"."+param.Dim[k].Name, param.Dim[k].typeOf)
+		f, err := cvtItemIdToCode(name+"."+param.Dim[k].Name, param.Dim[k].typeOf, param.Dim[k].typeOf.Enum, false, 0)
 		if err != nil {
 			return nil, err
 		}
@@ -178,10 +178,10 @@ func (Cell) CsvToRow(modelDef *ModelMeta, name string, doubleFmt string) (func(i
 
 	// if parameter value type is enum-based then convert from enum id to code
 	isUseEnum := !param.typeOf.IsBuiltIn()
-	var fv func(itemId int, msgName string, enumArr []TypeEnumRow) (string, error)
+	var fv func(itemId int) (string, error)
 
 	if isUseEnum {
-		f, err := cvtItemIdToCode(name, param.typeOf)
+		f, err := cvtItemIdToCode(name, param.typeOf, param.typeOf.Enum, false, 0)
 		if err != nil {
 			return nil, err
 		}
@@ -202,7 +202,7 @@ func (Cell) CsvToRow(modelDef *ModelMeta, name string, doubleFmt string) (func(i
 
 		// convert dimension item id to code
 		for k, e := range cell.DimIds {
-			v, err := fd[k](e, name+"."+param.Dim[k].Name, param.Dim[k].typeOf.Enum)
+			v, err := fd[k](e)
 			if err != nil {
 				return err
 			}
@@ -215,11 +215,11 @@ func (Cell) CsvToRow(modelDef *ModelMeta, name string, doubleFmt string) (func(i
 			row[n] = fmt.Sprintf(doubleFmt, cell.Value)
 		}
 		if !isUseFmt && isUseEnum {
-			e, ok := cell.Value.(int)
+			e, ok := cell.Value.(int64)
 			if !ok {
 				return errors.New("invalid parameter value type, expected: integer enum")
 			}
-			v, err := fv(e, name, param.typeOf.Enum)
+			v, err := fv(int(e))
 			if err != nil {
 				return err
 			}
@@ -257,10 +257,10 @@ func (Cell) CsvToCell(modelDef *ModelMeta, name string) (func(row []string) (int
 	param := &modelDef.Param[idx]
 
 	// for each dimension create converter from item code to id
-	fd := make([]func(src string, msgName string, enumArr []TypeEnumRow) (int, error), param.Rank)
+	fd := make([]func(src string) (int, error), param.Rank)
 
 	for k := 0; k < param.Rank; k++ {
-		f, err := cvtItemCodeToId(name+"."+param.Dim[k].Name, param.Dim[k].typeOf)
+		f, err := cvtItemCodeToId(name+"."+param.Dim[k].Name, param.Dim[k].typeOf, param.Dim[k].typeOf.Enum, false, 0)
 		if err != nil {
 			return nil, err
 		}
@@ -269,8 +269,16 @@ func (Cell) CsvToCell(modelDef *ModelMeta, name string) (func(row []string) (int
 
 	// cell value converter: float, bool, string or integer by default
 	var fc func(src string) (interface{}, error)
+	var fe func(src string) (int, error)
+	isEnum := !param.typeOf.IsBuiltIn()
 
 	switch {
+	case isEnum:
+		f, err := cvtItemCodeToId(name, param.typeOf, param.typeOf.Enum, false, 0)
+		if err != nil {
+			return nil, err
+		}
+		fe = f
 	case param.typeOf.IsFloat():
 		fc = func(src string) (interface{}, error) { return strconv.ParseFloat(src, 64) }
 	case param.typeOf.IsBool():
@@ -296,7 +304,7 @@ func (Cell) CsvToCell(modelDef *ModelMeta, name string) (func(row []string) (int
 
 		// convert dimensions: enum code to enum id or integer value for simple type dimension
 		for k := range cell.DimIds {
-			i, err := fd[k](row[k], name+"."+param.Dim[k].Name, param.Dim[k].typeOf.Enum)
+			i, err := fd[k](row[k])
 			if err != nil {
 				return nil, err
 			}
@@ -304,7 +312,13 @@ func (Cell) CsvToCell(modelDef *ModelMeta, name string) (func(row []string) (int
 		}
 
 		// value conversion
-		v, err := fc(row[n])
+		var v interface{}
+		var err error
+		if isEnum {
+			v, err = fe(row[n])
+		} else {
+			v, err = fc(row[n])
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -318,30 +332,33 @@ func (Cell) CsvToCell(modelDef *ModelMeta, name string) (func(row []string) (int
 
 // cvtItemCodeToId return converter from dimension item code to id.
 // It is also used for parameter values if parameter type is enum-based.
-// If dimension is enum-based then from enum string to enum id;
+// If dimension is enum-based then from enum code to enum id or to the total enum id;
 // If dimension is simple integer type then parse integer;
 // If dimension is boolean then false=>0, true=>1
-func cvtItemCodeToId(msgName string, typeOf *TypeMeta,
+func cvtItemCodeToId(msgName string, typeOf *TypeMeta, enumArr []TypeEnumRow, isTotalEnabled bool, totalEnumId int,
 ) (
-	func(src string, msgName string, enumArr []TypeEnumRow) (int, error), error,
+	func(src string) (int, error), error,
 ) {
-	var cvt func(src string, msgName string, enumArr []TypeEnumRow) (int, error)
+	var cvt func(src string) (int, error)
 
 	switch {
 	case !typeOf.IsBuiltIn(): // enum dimension: find enum id by code
 
-		cvt = func(src string, msgName string, enumArr []TypeEnumRow) (int, error) {
+		cvt = func(src string) (int, error) {
 			for j := range enumArr {
 				if src == enumArr[j].Name {
 					return enumArr[j].EnumId, nil
 				}
+			}
+			if isTotalEnabled && src == totalEnumCode { // check is it total item
+				return totalEnumId, nil
 			}
 			return 0, errors.New("invalid value: " + src + " of: " + msgName)
 		}
 
 	case typeOf.IsBool(): // boolean dimension: false=>0, true=>1
 
-		cvt = func(src string, msgName string, enumArr []TypeEnumRow) (int, error) {
+		cvt = func(src string) (int, error) {
 			is, err := strconv.ParseBool(src)
 			if err != nil {
 				return 0, errors.New("invalid value: " + src + " of: " + msgName)
@@ -354,7 +371,7 @@ func cvtItemCodeToId(msgName string, typeOf *TypeMeta,
 
 	case typeOf.IsInt(): // integer dimension
 
-		cvt = func(src string, msgName string, enumArr []TypeEnumRow) (int, error) {
+		cvt = func(src string) (int, error) {
 			i, err := strconv.Atoi(src)
 			if err != nil {
 				return 0, errors.New("invalid value: " + src + " of: " + msgName)
@@ -371,30 +388,33 @@ func cvtItemCodeToId(msgName string, typeOf *TypeMeta,
 
 // cvtItemIdToCode return converter from dimension item id to code.
 // It is also used for parameter values if parameter type is enum-based.
-// If dimension is enum-based then from enum id to enum name;
+// If dimension is enum-based then from enum id to enum code or to the "all" total enum code;
 // If dimension is simple integer type then use Itoa(integer id) as code;
 // If dimension is boolean then 0=>false, (1 or -1)=>true else error
-func cvtItemIdToCode(msgName string, typeOf *TypeMeta,
+func cvtItemIdToCode(msgName string, typeOf *TypeMeta, enumArr []TypeEnumRow, isTotalEnabled bool, totalEnumId int,
 ) (
-	func(itemId int, msgName string, enumArr []TypeEnumRow) (string, error), error,
+	func(itemId int) (string, error), error,
 ) {
-	var cvt func(itemId int, msgName string, enumArr []TypeEnumRow) (string, error)
+	var cvt func(itemId int) (string, error)
 
 	switch {
 	case !typeOf.IsBuiltIn(): // enum dimension: find enum id by code
 
-		cvt = func(itemId int, msgName string, enumArr []TypeEnumRow) (string, error) {
+		cvt = func(itemId int) (string, error) {
 			for j := range enumArr {
 				if itemId == enumArr[j].EnumId {
 					return enumArr[j].Name, nil
 				}
+			}
+			if isTotalEnabled && itemId == totalEnumId { // check is it total item
+				return totalEnumCode, nil
 			}
 			return "", errors.New("invalid value: " + strconv.Itoa(itemId) + " of: " + msgName)
 		}
 
 	case typeOf.IsBool(): // boolean dimension: 0=>false, (1 or -1)=>true else error
 
-		cvt = func(itemId int, msgName string, enumArr []TypeEnumRow) (string, error) {
+		cvt = func(itemId int) (string, error) {
 			switch itemId {
 			case 0:
 				return "false", nil
@@ -406,7 +426,7 @@ func cvtItemIdToCode(msgName string, typeOf *TypeMeta,
 
 	case typeOf.IsInt(): // integer dimension
 
-		cvt = func(itemId int, msgName string, enumArr []TypeEnumRow) (string, error) {
+		cvt = func(itemId int) (string, error) {
 			return strconv.Itoa(itemId), nil
 		}
 
