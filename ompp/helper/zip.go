@@ -5,6 +5,7 @@ package helper
 
 import (
 	"archive/zip"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -24,14 +25,14 @@ func PackZip(srcPath string, dstDir string) (string, error) {
 	} else {
 		zipPath = filepath.Join(dstDir, base+".zip")
 		if err := os.MkdirAll(dstDir, 0750); err != nil {
-			return "", err
+			return "", errors.New("make directory failed at pack to zip: " + err.Error())
 		}
 	}
 
 	// create zip file
 	zf, err := os.OpenFile(zipPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
-		return "", err
+		return "", errors.New("create file failed at pack to zip: " + err.Error())
 	}
 	defer zf.Close()
 
@@ -70,7 +71,11 @@ func PackZip(srcPath string, dstDir string) (string, error) {
 		_, err = io.Copy(w, f) // do compression
 		return err
 	})
-	return zipPath, err
+
+	if err != nil {
+		return "", errors.New("failed pack to zip: " + err.Error())
+	}
+	return zipPath, nil
 }
 
 // UnpackZip unpack zip archive into specified directory, creating it if not exist.
@@ -84,19 +89,20 @@ func UnpackZip(zipPath string, dstDir string) error {
 	} else {
 		baseDir = filepath.Clean(dstDir)
 		if err := os.MkdirAll(baseDir, 0750); err != nil {
-			return err
+			return errors.New("make directory failed at unpack from zip: " + err.Error())
 		}
 	}
 
 	// open zip archive
 	zr, err := zip.OpenReader(zipPath)
 	if err != nil {
-		return err
+		return errors.New("open zip file failed at unpack from zip: " + err.Error())
 	}
 	defer zr.Close()
 
 	// for all zipped files and directories
 	for _, znext := range zr.File {
+
 		err := func(zf *zip.File) error {
 
 			// if this is empty directory then create it
@@ -123,8 +129,9 @@ func UnpackZip(zipPath string, dstDir string) error {
 			_, err = io.Copy(f, r) // do unpack
 			return err
 		}(znext)
+
 		if err != nil {
-			return err
+			return errors.New("unpack from zip failed: " + err.Error())
 		}
 	}
 	return nil

@@ -34,6 +34,15 @@ func MakeDateTime(t time.Time) string {
 	return fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d.%04d", y, mm, dd, h, mi, s, ms)
 }
 
+// MakeTimeStamp retrun timestamp string, ie: 20120817_160459_0148
+func MakeTimeStamp(t time.Time) string {
+	y, mm, dd := t.Date()
+	h, mi, s := t.Clock()
+	ms := int(time.Duration(t.Nanosecond()) / time.Millisecond)
+
+	return fmt.Sprintf("%04d%02d%02d_%02d%02d%02d_%04d", y, mm, dd, h, mi, s, ms)
+}
+
 // ToAlphaNumeric replace all non [A-Z,a-z,0-9] by _ underscore and remove repetitive underscores
 func ToAlphaNumeric(src string) string {
 
@@ -63,12 +72,12 @@ func DeepCopy(src interface{}, dst interface{}) error {
 
 	err := enc.Encode(src)
 	if err != nil {
-		return err
+		return errors.New("deep copy encode failed: " + err.Error())
 	}
 
 	err = dec.Decode(dst)
 	if err != nil {
-		return err
+		return errors.New("deep copy decode failed: " + err.Error())
 	}
 	return nil
 }

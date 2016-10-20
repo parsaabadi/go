@@ -9,7 +9,6 @@ import (
 	"encoding/csv"
 	"errors"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -84,12 +83,14 @@ func textToDb(modelName string, runOpts *config.RunOptions) error {
 
 	// insert model runs data from csv into database:
 	// parameters, output expressions and accumulators
-	if err = fromRunTextListToDb(dstDb, modelDef, langDef, inpDir, runOpts.String(config.DoubleFormat)); err != nil {
+	encName := runOpts.String(encodingArgKey)
+
+	if err = fromRunTextListToDb(dstDb, modelDef, langDef, inpDir, runOpts.String(config.DoubleFormat), encName); err != nil {
 		return err
 	}
 
 	// insert model workset data from csv into database: input parameters
-	if err = fromWorksetTextListToDb(dstDb, modelDef, langDef, inpDir); err != nil {
+	if err = fromWorksetTextListToDb(dstDb, modelDef, langDef, inpDir, encName); err != nil {
 		return err
 	}
 
@@ -230,7 +231,9 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 	}
 
 	// read from metadata json and csv files and update target database
-	srcId, _, err := fromRunTextToDb(dstDb, modelDef, langDef, runName, runId, metaPath, csvDir)
+	encName := runOpts.String(encodingArgKey)
+
+	srcId, _, err := fromRunTextToDb(dstDb, modelDef, langDef, runName, runId, metaPath, csvDir, encName)
 	if err != nil {
 		return err
 	}
@@ -397,7 +400,9 @@ func textToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 	}
 
 	// read from metadata json and csv files and update target database
-	srcId, _, err := fromWorksetTextToDb(dstDb, modelDef, langDef, setName, setId, metaPath, csvDir)
+	encName := runOpts.String(encodingArgKey)
+
+	srcId, _, err := fromWorksetTextToDb(dstDb, modelDef, langDef, setName, setId, metaPath, csvDir, encName)
 	if err != nil {
 		return err
 	}
@@ -522,13 +527,13 @@ func textToDbTask(modelName string, modelDigest string, runOpts *config.RunOptio
 func fromModelJsonToDb(dbConn *sql.DB, dbFacet db.Facet, inpDir string, modelName string) (*db.ModelMeta, error) {
 
 	// restore  model metadta from json
-	js, err := ioutil.ReadFile(filepath.Join(inpDir, modelName+".model.json"))
+	js, err := helper.FileToUtf8(filepath.Join(inpDir, modelName+".model.json"), "")
 	if err != nil {
 		return nil, err
 	}
 	modelDef := &db.ModelMeta{}
 
-	isExist, err := modelDef.FromJson(js)
+	isExist, err := modelDef.FromJson([]byte(js))
 	if err != nil {
 		return nil, err
 	}
@@ -563,13 +568,13 @@ func fromModelJsonToDb(dbConn *sql.DB, dbFacet db.Facet, inpDir string, modelNam
 func fromLangTextJsonToDb(dbConn *sql.DB, modelDef *db.ModelMeta, inpDir string) (*db.LangMeta, error) {
 
 	// restore language list from json and if exist then update db tables
-	js, err := ioutil.ReadFile(filepath.Join(inpDir, modelDef.Model.Name+".lang.json"))
+	js, err := helper.FileToUtf8(filepath.Join(inpDir, modelDef.Model.Name+".lang.json"), "")
 	if err != nil {
 		return nil, err
 	}
 	langDef := &db.LangMeta{}
 
-	isExist, err := langDef.FromJson(js)
+	isExist, err := langDef.FromJson([]byte(js))
 	if err != nil {
 		return nil, err
 	}
@@ -616,7 +621,8 @@ func fromLangTextJsonToDb(dbConn *sql.DB, modelDef *db.ModelMeta, inpDir string)
 // from csv and json files, convert it to db cells and insert into database.
 // Double format is used for float model types digest calculation, if non-empty format supplied
 func fromRunTextListToDb(
-	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, inpDir string, doubleFmt string) error {
+	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, inpDir string, doubleFmt string, encodingName string,
+) error {
 
 	// get list of model run json files
 	fl, err := filepath.Glob(inpDir + "/" + modelDef.Model.Name + ".run.[0-9]*.*.json")
@@ -633,7 +639,7 @@ func fromRunTextListToDb(
 	// update model run digest
 	for k := range fl {
 
-		_, _, err := fromRunTextToDb(dbConn, modelDef, langDef, "", 0, fl[k], doubleFmt)
+		_, _, err := fromRunTextToDb(dbConn, modelDef, langDef, "", 0, fl[k], doubleFmt, encodingName)
 		if err != nil {
 			return err
 		}
@@ -648,7 +654,8 @@ func fromRunTextListToDb(
 // Double format is used for float model types digest calculation, if non-empty format supplied
 // it return source run id (run id from metadata json file) and destination run id
 func fromRunTextToDb(
-	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, srcName string, srcId int, metaPath string, doubleFmt string) (int, int, error) {
+	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, srcName string, srcId int, metaPath string, doubleFmt string, encodingName string,
+) (int, int, error) {
 
 	// if no metadata file then exit: nothing to do
 	if metaPath == "" {
@@ -713,7 +720,7 @@ func fromRunTextToDb(
 
 		// read parameter values from csv file
 		var cell db.Cell
-		cLst, err := fromCsvFile(csvDir, modelDef, modelDef.Param[j].Name, &cell)
+		cLst, err := fromCsvFile(csvDir, modelDef, modelDef.Param[j].Name, &cell, encodingName)
 		if err != nil {
 			return 0, 0, err
 		}
@@ -734,14 +741,14 @@ func fromRunTextToDb(
 
 		// read output table accumulator(s) values from csv file
 		var ca db.CellAcc
-		acLst, err := fromCsvFile(csvDir, modelDef, modelDef.Table[j].Name, &ca)
+		acLst, err := fromCsvFile(csvDir, modelDef, modelDef.Table[j].Name, &ca, encodingName)
 		if err != nil {
 			return 0, 0, err
 		}
 
 		// read output table expression(s) values from csv file
 		var ce db.CellExpr
-		ecLst, err := fromCsvFile(csvDir, modelDef, modelDef.Table[j].Name, &ce)
+		ecLst, err := fromCsvFile(csvDir, modelDef, modelDef.Table[j].Name, &ce, encodingName)
 		if err != nil {
 			return 0, 0, err
 		}
@@ -769,7 +776,8 @@ func fromRunTextToDb(
 // fromWorksetTextListToDb read all worksets parameters from csv and json files,
 // convert it to db cells and insert into database
 // update set id's and base run id's with actual id in database
-func fromWorksetTextListToDb(dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, inpDir string) error {
+func fromWorksetTextListToDb(
+	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, inpDir string, encodingName string) error {
 
 	// get list of workset json files
 	fl, err := filepath.Glob(inpDir + "/" + modelDef.Model.Name + ".set.[0-9]*.*.json")
@@ -799,7 +807,7 @@ func fromWorksetTextListToDb(dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db
 			}
 		}
 
-		_, _, err := fromWorksetTextToDb(dbConn, modelDef, langDef, "", 0, fl[k], csvDir)
+		_, _, err := fromWorksetTextToDb(dbConn, modelDef, langDef, "", 0, fl[k], csvDir, encodingName)
 		if err != nil {
 			return err
 		}
@@ -813,7 +821,8 @@ func fromWorksetTextListToDb(dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db
 // update set id's and base run id's with actual id in destination database
 // it return source workset id (set id from metadata json file) and destination set id
 func fromWorksetTextToDb(
-	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, srcName string, srcId int, metaPath string, csvDir string) (int, int, error) {
+	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, srcName string, srcId int, metaPath string, csvDir string, encodingName string,
+) (int, int, error) {
 
 	// if no metadata file and no csv directory then exit: nothing to do
 	if metaPath == "" && csvDir == "" {
@@ -905,7 +914,7 @@ func fromWorksetTextToDb(
 
 		// read parameter values from csv file
 		var cell db.Cell
-		cLst, err := fromCsvFile(csvDir, modelDef, pub.Param[j].Name, &cell)
+		cLst, err := fromCsvFile(csvDir, modelDef, pub.Param[j].Name, &cell, encodingName)
 		if err != nil {
 			return 0, 0, err
 		}
@@ -1014,27 +1023,33 @@ func fromTaskJsonToDb(
 }
 
 // fromCsvFile read parameter or output table csv file and convert it to list of db cells
-func fromCsvFile(csvDir string, modelDef *db.ModelMeta, name string, cell db.CsvConverter) (*list.List, error) {
+func fromCsvFile(
+	csvDir string, modelDef *db.ModelMeta, name string, cell db.CsvConverter, encodingName string) (*list.List, error) {
 
 	// converter from csv row []string to db cell
 	cvt, err := cell.CsvToCell(modelDef, name)
 	if err != nil {
-		return nil, err
+		return nil, errors.New("invalid converter from csv row: " + err.Error())
 	}
 
-	// open csv file
+	// open csv file, convert to utf-8 and parse csv into db cells
 	fn, err := cell.CsvFileName(modelDef, name)
 	if err != nil {
-		return nil, err
+		return nil, errors.New("invalid csv file name: " + err.Error())
 	}
 
 	f, err := os.Open(filepath.Join(csvDir, fn))
 	if err != nil {
-		return nil, err
+		return nil, errors.New("csv file open error: " + err.Error())
 	}
 	defer f.Close()
 
-	rd := csv.NewReader(f)
+	uRd, err := helper.Utf8Reader(f, encodingName)
+	if err != nil {
+		return nil, errors.New("fail to create utf-8 converter: " + err.Error())
+	}
+
+	rd := csv.NewReader(uRd)
 	rd.TrimLeadingSpace = true
 
 	// read csv file and convert and append lines into cell list
@@ -1047,7 +1062,7 @@ ReadFor:
 		case err == io.EOF:
 			break ReadFor
 		case err != nil:
-			return nil, err
+			return nil, errors.New("csv file read error: " + err.Error())
 		}
 
 		// skip header line
@@ -1059,7 +1074,7 @@ ReadFor:
 		// convert and append cell to cell list
 		c, err := cvt(row)
 		if err != nil {
-			return nil, err
+			return nil, errors.New("csv file row convert error: " + err.Error())
 		}
 		cLst.PushBack(c)
 	}

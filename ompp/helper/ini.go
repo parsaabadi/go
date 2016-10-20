@@ -5,7 +5,6 @@ package helper
 
 import (
 	"errors"
-	"io/ioutil"
 	"strconv"
 	"strings"
 )
@@ -37,16 +36,18 @@ func NewIni(iniPath string) (map[string]string, error) {
 		return nil, nil // no ini-file
 	}
 
-	// read ini-file and TODO: convert to utf-8
-	bt, err := ioutil.ReadFile(iniPath)
+	// read ini-file and convert to utf-8
+	// using default encoding rules for ini-file content:
+	// on Windows if ini-file is not utf-8 then windows-1252 assumed
+	s, err := FileToUtf8(iniPath, "")
 	if err != nil {
-		return nil, err
+		return nil, errors.New("reading ini-file file to utf-8 failed: " + err.Error())
 	}
 
 	// parse ini-file into strings map of (section.key)=>value
-	kvIni, err := loadIni(string(bt))
+	kvIni, err := loadIni(s)
 	if err != nil {
-		return nil, err
+		return nil, errors.New("reading ini-file failed: " + err.Error())
 	}
 	return kvIni, nil
 }

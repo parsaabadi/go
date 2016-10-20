@@ -9,7 +9,6 @@ package config
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -96,7 +95,7 @@ func New() (*RunOptions, *LogOptions, error) {
 	}
 	logOpts := &LogOptions{
 		IsConsole: true,
-		TimeStamp: makeTimeStamp(time.Now()),
+		TimeStamp: helper.MakeTimeStamp(time.Now()),
 	}
 
 	addStandardFlags(runOpts, logOpts) // add "standard" config options
@@ -243,15 +242,6 @@ func (opts *RunOptions) Float(key string, defaultValue float64) float64 {
 		return val
 	}
 	return defaultValue
-}
-
-// make timestamp string, ie: 20120817_160459_0148
-func makeTimeStamp(t time.Time) string {
-	y, mm, dd := t.Date()
-	h, mi, s := t.Clock()
-	ms := int(time.Duration(t.Nanosecond()) / time.Millisecond)
-
-	return fmt.Sprintf("%04d%02d%02d_%02d%02d%02d_%04d", y, mm, dd, h, mi, s, ms)
 }
 
 // add "standard" config options to command line arguments

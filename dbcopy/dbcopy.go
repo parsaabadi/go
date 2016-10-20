@@ -92,6 +92,7 @@ Also dbcopy support OpenM++ standard log settings (described in wiki at http://w
 package main
 
 import (
+	"errors"
 	"flag"
 	"os"
 	"strings"
@@ -109,10 +110,21 @@ const (
 	outputDirArgKey   = "dbcopy.OutputDir"        // output dir to write model .json and .csv files
 	toDbConnectionStr = "dbcopy.ToDatabase"       // output db connection string
 	toDbDriverName    = "dbcopy.ToDatabaseDriver" // output db driver name, ie: SQLite, odbc, sqlite3
+	encodingArgKey    = "dbcopy.CodePage"         // code page for converting source files, e.g. windows-1252
 )
 
 func main() {
 	defer exitOnPanic() // fatal error handler: log and exit
+
+	err := mainBody(os.Args)
+	if err != nil {
+		omppLog.Log(err.Error())
+		os.Exit(1)
+	}
+	omppLog.Log("Done.") // compeleted OK
+}
+
+func mainBody(args []string) error {
 
 	// parse command line arguments and ini-file
 	_ = flag.String(config.ModelName, "", "model name")
@@ -136,10 +148,11 @@ func main() {
 	_ = flag.String(config.ParamDir, "", "path to parameters directory (workset directory)")
 	_ = flag.String(config.ParamDirShort, "", "path to parameters directory (short of "+config.ParamDir+")")
 	_ = flag.String(config.DoubleFormat, "%.15g", "convert to string format for float and double")
+	_ = flag.String(encodingArgKey, "", "code page to convert source file into utf-8, e.g.: windows-1252")
 
 	runOpts, logOpts, err := config.New()
 	if err != nil {
-		panic(err)
+		return errors.New("invalid arguments: " + err.Error())
 	}
 
 	omppLog.New(logOpts) // adjust log options
@@ -149,7 +162,7 @@ func main() {
 	modelDigest := runOpts.String(config.ModelDigest)
 
 	if modelName == "" && modelDigest == "" {
-		panic("invalid (empty) model name and model digest")
+		return errors.New("invalid (empty) model name and model digest")
 	}
 	omppLog.Log("Model ", modelName, " ", modelDigest)
 
@@ -171,7 +184,7 @@ func main() {
 		case "db2db":
 			err = dbToDb(modelName, modelDigest, runOpts)
 		default:
-			panic("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
+			return errors.New("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
 		}
 	}
 
@@ -185,7 +198,7 @@ func main() {
 		case "db2db":
 			err = dbToDbWorkset(modelName, modelDigest, runOpts)
 		default:
-			panic("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
+			return errors.New("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
 		}
 	}
 
@@ -199,7 +212,7 @@ func main() {
 		case "db2db":
 			err = dbToDbRun(modelName, modelDigest, runOpts)
 		default:
-			panic("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
+			return errors.New("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
 		}
 	}
 
@@ -213,16 +226,13 @@ func main() {
 		case "db2db":
 			err = dbToDbTask(modelName, modelDigest, runOpts)
 		default:
-			panic("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
+			return errors.New("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
 		}
 	}
 	if err != nil {
-		panic(err)
+		return err
 	}
-
-	// compeleted OK
-	omppLog.Log("Done.")
-	os.Exit(0)
+	return nil
 }
 
 // exitOnPanic log error message and exit with return = 2
