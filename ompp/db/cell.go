@@ -215,11 +215,39 @@ func (Cell) CsvToRow(modelDef *ModelMeta, name string, doubleFmt string) (func(i
 			row[n] = fmt.Sprintf(doubleFmt, cell.Value)
 		}
 		if !isUseFmt && isUseEnum {
-			e, ok := cell.Value.(int64)
-			if !ok {
+
+			// depending on sql + driver it can be different type
+			var iv int
+			switch e := cell.Value.(type) {
+			case int64:
+				iv = int(e)
+			case uint64:
+				iv = int(e)
+			case int32:
+				iv = int(e)
+			case uint32:
+				iv = int(e)
+			case int16:
+				iv = int(e)
+			case uint16:
+				iv = int(e)
+			case int8:
+				iv = int(e)
+			case uint8:
+				iv = int(e)
+			case uint:
+				iv = int(e)
+			case float32: // oracle (very unlikely)
+				iv = int(e)
+			case float64: // oracle (often)
+				iv = int(e)
+			case int:
+				iv = e
+			default:
 				return errors.New("invalid parameter value type, expected: integer enum")
 			}
-			v, err := fv(int(e))
+
+			v, err := fv(int(iv))
 			if err != nil {
 				return err
 			}
