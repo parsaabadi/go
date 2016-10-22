@@ -1,7 +1,7 @@
 // Copyright (c) 2016 OpenM++
 // This code is licensed under the MIT license (see LICENSE.txt for details)
 
-package helper
+package config
 
 import (
 	"os"
@@ -50,7 +50,7 @@ end = ; last line without cr/lf end of line `
 	}
 
 	// load ini-file and compare content
-	kvIni, err := NewIni(iniPath)
+	kvIni, err := NewIni(iniPath, "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -99,7 +99,7 @@ import (
 
 	"go.openmpp.org/ompp/config"
 	"go.openmpp.org/ompp/db"
-	omppLog "go.openmpp.org/ompp/log"
+	"go.openmpp.org/ompp/omppLog"
 )
 
 // dbcopy config keys to get values from ini-file or command line arguments.
@@ -135,9 +135,11 @@ func mainBody(args []string) error {
 	_ = flag.String(copyToArgKey, "text", "copy to: `text`=db-to-text, db=text-to-db, db2db=db-to-db")
 	_ = flag.String(toDbConnectionStr, "", "output database connection string")
 	_ = flag.String(toDbDriverName, db.SQLiteDbDriver, "output database driver name")
-	_ = flag.Bool(zipArgKey, false, "create output or use as input model.zip")
 	_ = flag.String(inputDirArgKey, "", "input directory to read model .json and .csv files")
 	_ = flag.String(outputDirArgKey, "", "output directory for model .json and .csv files")
+	_ = flag.String(config.ParamDir, "", "path to parameters directory (workset directory)")
+	_ = flag.String(config.ParamDirShort, "", "path to parameters directory (short of "+config.ParamDir+")")
+	_ = flag.Bool(zipArgKey, false, "create output model.zip or use model.zip as input")
 	_ = flag.String(config.SetName, "", "workset name (set of model input parameters), if specified then copy only this workset")
 	_ = flag.String(config.SetNameShort, "", "workset name (short of "+config.SetName+")")
 	_ = flag.Int(config.SetId, 0, "workset id (set of model input parameters), if specified then copy only this workset")
@@ -145,12 +147,10 @@ func mainBody(args []string) error {
 	_ = flag.Int(config.RunId, 0, "model run id, if specified then copy only this run data")
 	_ = flag.String(config.TaskName, "", "modeling task name, if specified then copy only this modeling task data")
 	_ = flag.Int(config.TaskId, 0, "modeling task id, if specified then copy only this run modeling task data")
-	_ = flag.String(config.ParamDir, "", "path to parameters directory (workset directory)")
-	_ = flag.String(config.ParamDirShort, "", "path to parameters directory (short of "+config.ParamDir+")")
 	_ = flag.String(config.DoubleFormat, "%.15g", "convert to string format for float and double")
 	_ = flag.String(encodingArgKey, "", "code page to convert source file into utf-8, e.g.: windows-1252")
 
-	runOpts, logOpts, err := config.New()
+	runOpts, logOpts, err := config.New(encodingArgKey)
 	if err != nil {
 		return errors.New("invalid arguments: " + err.Error())
 	}
@@ -186,6 +186,9 @@ func mainBody(args []string) error {
 		default:
 			return errors.New("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
 		}
+		if err != nil {
+			return err
+		}
 	}
 
 	// copy single workset
@@ -199,6 +202,9 @@ func mainBody(args []string) error {
 			err = dbToDbWorkset(modelName, modelDigest, runOpts)
 		default:
 			return errors.New("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
+		}
+		if err != nil {
+			return err
 		}
 	}
 
@@ -214,6 +220,9 @@ func mainBody(args []string) error {
 		default:
 			return errors.New("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
 		}
+		if err != nil {
+			return err
+		}
 	}
 
 	// copy single modeling task
@@ -228,11 +237,12 @@ func mainBody(args []string) error {
 		default:
 			return errors.New("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
 		}
+		if err != nil {
+			return err
+		}
 	}
-	if err != nil {
-		return err
-	}
-	return nil
+
+	return err // return nil
 }
 
 // exitOnPanic log error message and exit with return = 2

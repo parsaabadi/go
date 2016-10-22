@@ -87,7 +87,13 @@ var optFs = []fullShort{
 	fullShort{ParamDir, ParamDirShort}}
 
 // New process command-line arguments and ini-file options.
-func New() (*RunOptions, *LogOptions, error) {
+//
+// encodingKey, if not empty, is a name of command-line option
+// to specify encoding (code page) of source text files,
+// for example: -dbcopy.CodePage=windows-1252.
+// If encoding value specified then ini-file and csv files converted from such encoding to utf-8.
+// If encoding not specified then auto-detection and default values are used (see helper.FileToUtf8())
+func New(encodingKey string) (*RunOptions, *LogOptions, error) {
 
 	runOpts := &RunOptions{
 		KeyValue:        make(map[string]string),
@@ -100,10 +106,19 @@ func New() (*RunOptions, *LogOptions, error) {
 
 	addStandardFlags(runOpts, logOpts) // add "standard" config options
 
-	// parse command line arguments and ini-file
+	// parse command line arguments
 	flag.Parse()
 
-	kvIni, err := helper.NewIni(runOpts.iniPath)
+	// retrive encoding name from command line
+	encName := ""
+	if encodingKey != "" {
+		if f := flag.Lookup(encodingKey); f != nil {
+			encName = f.Value.String()
+		}
+	}
+
+	// parse ini-file using encoding, if it is not empty
+	kvIni, err := NewIni(runOpts.iniPath, encName)
 	if err != nil {
 		return nil, nil, err
 	}

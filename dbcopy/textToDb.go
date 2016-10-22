@@ -17,7 +17,7 @@ import (
 	"go.openmpp.org/ompp/config"
 	"go.openmpp.org/ompp/db"
 	"go.openmpp.org/ompp/helper"
-	omppLog "go.openmpp.org/ompp/log"
+	 "go.openmpp.org/ompp/omppLog"
 )
 
 // copy model from text json and csv files into database

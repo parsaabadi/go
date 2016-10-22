@@ -10,7 +10,7 @@ import (
 
 	"go.openmpp.org/ompp/config"
 	"go.openmpp.org/ompp/db"
-	omppLog "go.openmpp.org/ompp/log"
+	 "go.openmpp.org/ompp/omppLog"
 )
 
 // copy model from source database to destination database

@@ -1,12 +1,14 @@
 // Copyright (c) 2016 OpenM++
 // This code is licensed under the MIT license (see LICENSE.txt for details)
 
-package helper
+package config
 
 import (
 	"errors"
 	"strconv"
 	"strings"
+
+	"go.openmpp.org/ompp/helper"
 )
 
 /*
@@ -30,16 +32,14 @@ Example:
    t w = the "# quick #" brown 'fox ; jumps' over    ; escaped: ; and # chars
    qts = " allow ' unbalanced quotes                 ; with comment
 */
-func NewIni(iniPath string) (map[string]string, error) {
+func NewIni(iniPath string, encodingName string) (map[string]string, error) {
 
 	if iniPath == "" {
 		return nil, nil // no ini-file
 	}
 
 	// read ini-file and convert to utf-8
-	// using default encoding rules for ini-file content:
-	// on Windows if ini-file is not utf-8 then windows-1252 assumed
-	s, err := FileToUtf8(iniPath, "")
+	s, err := helper.FileToUtf8(iniPath, encodingName)
 	if err != nil {
 		return nil, errors.New("reading ini-file file to utf-8 failed: " + err.Error())
 	}
@@ -146,7 +146,7 @@ func loadIni(iniContent string) (map[string]string, error) {
 
 		// append result to the map, unquote "value" if quotes balanced
 		if section != "" && key != "" {
-			kvIni[iniKey(section, key)] = UnQuote(val)
+			kvIni[iniKey(section, key)] = helper.UnQuote(val)
 		}
 		key, val = "", "" // reset state
 	}

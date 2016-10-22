@@ -97,10 +97,12 @@ func getWsRow(dbConn *sql.DB, query string) (*WorksetRow, error) {
 	err := SelectFirst(dbConn, query,
 		func(row *sql.Row) error {
 			var rId sql.NullInt64
+			nReadonly := 0
 			if err := row.Scan(
-				&setRow.SetId, &rId, &setRow.ModelId, &setRow.Name, &setRow.IsReadonly, &setRow.UpdateDateTime); err != nil {
+				&setRow.SetId, &rId, &setRow.ModelId, &setRow.Name, &nReadonly, &setRow.UpdateDateTime); err != nil {
 				return err
 			}
+			setRow.IsReadonly = nReadonly != 0 // oracle: smallint is float64
 			if rId.Valid {
 				setRow.BaseRunId = int(rId.Int64)
 			}
@@ -126,10 +128,13 @@ func getWsLst(dbConn *sql.DB, query string) ([]WorksetRow, error) {
 		func(rows *sql.Rows) error {
 			var r WorksetRow
 			var rId sql.NullInt64
+			nReadonly := 0
 			if err := rows.Scan(
-				&r.SetId, &rId, &r.ModelId, &r.Name, &r.IsReadonly, &r.UpdateDateTime); err != nil {
+				&r.SetId, &rId, &r.ModelId, &r.Name, &nReadonly, &r.UpdateDateTime); err != nil {
 				return err
 			}
+			r.IsReadonly = nReadonly != 0 // oracle: smallint is float64
+
 			if rId.Valid {
 				r.BaseRunId = int(rId.Int64)
 			}

@@ -172,7 +172,6 @@ func doWriteRunParameter(trx *sql.Tx, modelDef *ModelMeta, param *ParamMeta, run
 		if err != nil {
 			return err
 		}
-
 	} else { // insert new parameter values into model run
 
 		// make sql to insert parameter values into model run
@@ -182,9 +181,8 @@ func doWriteRunParameter(trx *sql.Tx, modelDef *ModelMeta, param *ParamMeta, run
 
 		// execute sql insert using put() above for each row
 		if err = TrxUpdateStatement(trx, q, put); err != nil {
-			return err
+			return errors.New("insert parameter failed: " + param.Name + " " + err.Error())
 		}
-
 	}
 
 	return nil
@@ -261,7 +259,7 @@ func doWriteSetParameter(trx *sql.Tx, param *ParamMeta, setId int, cellLst *list
 
 	// execute sql insert using put() above for each row
 	if err = TrxUpdateStatement(trx, q, put); err != nil {
-		return err
+		return errors.New("insert parameter failed: " + param.Name + " " + err.Error())
 	}
 
 	// update completed: reset readonly status to "read-write"

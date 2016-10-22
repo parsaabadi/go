@@ -2,7 +2,7 @@
 // This code is licensed under the MIT license (see LICENSE.txt for details)
 
 /*
-Package log to println messages to standard output and log file.
+Package omppLog to println messages to standard output and log file.
 It is intended for progress or error logging and should not be used for profiling (it is slow).
 
 Log can be enabled/disabled for two independent streams:
@@ -16,7 +16,7 @@ Log message by default prefixed with date-time: 2012-08-17 16:04:59.0148 ....
 It can be disabled by log setting "is no msg time" = true, i.e.:
   exeName -v -OpenM.LogNoMsgTime
 */
-package log
+package omppLog
 
 import (
 	"fmt"
@@ -43,7 +43,9 @@ func New(opts *config.LogOptions) {
 	theLock.Lock()
 	defer theLock.Unlock()
 
-	logOpts = *opts
+	if opts != nil {
+		logOpts = *opts
+	}
 	isFileEnabled = logOpts.IsFile // file may be enabled but not created
 	isFileCreated = false
 }

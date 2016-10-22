@@ -254,10 +254,14 @@ func GetModelGroup(dbConn *sql.DB, modelId int, langCode string) (*GroupMeta, er
 			" ORDER BY 1, 2",
 		func(rows *sql.Rows) error {
 			var r GroupLstRow
+			nParam := 0
+			nHidden := 0
 			if err := rows.Scan(
-				&r.ModelId, &r.GroupId, &r.IsParam, &r.Name, &r.IsHidden); err != nil {
+				&r.ModelId, &r.GroupId, &nParam, &r.Name, &nHidden); err != nil {
 				return err
 			}
+			r.IsParam = nParam != 0   // oracle: smallint is float64
+			r.IsHidden = nHidden != 0 // oracle: smallint is float64
 			meta.GroupLst = append(meta.GroupLst, r)
 			return nil
 		})

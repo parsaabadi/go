@@ -201,12 +201,14 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 			" ORDER BY 1, 2",
 		func(rows *sql.Rows) error {
 			var r ParamDicRow
+			nHidden := 0
 			if err := rows.Scan(
 				&r.ModelId, &r.ParamId, &r.ParamHid, &r.Name,
 				&r.Digest, &r.DbRunTable, &r.DbSetTable, &r.Rank,
-				&r.TypeId, &r.IsHidden, &r.NumCumulated); err != nil {
+				&r.TypeId, &nHidden, &r.NumCumulated); err != nil {
 				return err
 			}
+			r.IsHidden = nHidden != 0 // oracle: smallint is float64
 
 			k, ok := meta.TypeByKey(r.TypeId) // find parameter type
 			if !ok {
@@ -266,12 +268,17 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 			" ORDER BY 1, 2",
 		func(rows *sql.Rows) error {
 			var r TableDicRow
+			nSparse := 0
+			nUser := 0
 			if err := rows.Scan(
 				&r.ModelId, &r.TableId, &r.TableHid, &r.Name,
 				&r.Digest, &r.DbExprTable, &r.DbAccTable, &r.Rank,
-				&r.IsSparse, &r.IsUser, &r.ExprPos); err != nil {
+				&nSparse, &nUser, &r.ExprPos); err != nil {
 				return err
 			}
+			r.IsSparse = nSparse != 0 // oracle: smallint is float64 (thank you, oracle)
+			r.IsUser = nUser != 0     // oracle: smallint is float64 (for my job is security)
+
 			meta.Table = append(meta.Table, TableMeta{TableDicRow: r})
 			return nil
 		})
@@ -293,10 +300,12 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 			" ORDER BY 1, 2, 3",
 		func(rows *sql.Rows) error {
 			var r TableDimsRow
+			nTotal := 0
 			if err := rows.Scan(
-				&r.ModelId, &r.TableId, &r.DimId, &r.Name, &r.TypeId, &r.IsTotal, &r.DimSize); err != nil {
+				&r.ModelId, &r.TableId, &r.DimId, &r.Name, &r.TypeId, &nTotal, &r.DimSize); err != nil {
 				return err
 			}
+			r.IsTotal = nTotal != 0 // oracle: smallint is float64
 
 			idx, ok := meta.OutTableByKey(r.TableId) // find table row for that dimension
 			if !ok {
