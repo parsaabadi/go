@@ -54,11 +54,11 @@ func Open(dbConnStr, dbDriver string, isFacetRequired bool) (*sql.DB, Facet, err
 
 	// convert default SQLite connection string into sqlite3 format
 	// delete existing sqlite file if required
-	facet := EmptyFacet
+	facet := DefaultFacet
 	if dbDriver == "" || dbDriver == SQLiteDbDriver {
 		var err error
 		if dbConnStr, dbDriver, err = prepareSqlite(dbConnStr); err != nil {
-			return nil, EmptyFacet, err
+			return nil, DefaultFacet, err
 		}
 		facet = SqliteFacet
 	}
@@ -68,7 +68,15 @@ func Open(dbConnStr, dbDriver string, isFacetRequired bool) (*sql.DB, Facet, err
 
 	dbConn, err := sql.Open(dbDriver, dbConnStr)
 	if err != nil {
-		return nil, EmptyFacet, err
+		return nil, DefaultFacet, err
+	}
+
+	// determine db facet if requered and not defined by driver (example: odbc)
+	if isFacetRequired && facet == DefaultFacet {
+		facet = detectFacet(dbConn)
+	}
+	if isFacetRequired {
+		omppLog.LogSql(facet.String())
 	}
 
 	return dbConn, facet, nil
@@ -190,15 +198,6 @@ func SelectFirst(dbConn *sql.DB, query string, cvt func(row *sql.Row) error) err
 	return cvt(dbConn.QueryRow(query))
 }
 
-// TrxSelectFirst select first db row in transaction scope and pass it to cvt() for row.Scan()
-func TrxSelectFirst(dbTrx *sql.Tx, query string, cvt func(row *sql.Row) error) error {
-	if dbTrx == nil {
-		return errors.New("invalid database transaction")
-	}
-	omppLog.LogSql(query)
-	return cvt(dbTrx.QueryRow(query))
-}
-
 // SelectRows select db rows and pass each to cvt() for rows.Scan()
 func SelectRows(dbConn *sql.DB, query string, cvt func(rows *sql.Rows) error) error {
 
@@ -208,29 +207,6 @@ func SelectRows(dbConn *sql.DB, query string, cvt func(rows *sql.Rows) error) er
 	omppLog.LogSql(query)
 
 	rows, err := dbConn.Query(query) // query db rows
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	// process each row
-	for rows.Next() {
-		if err = cvt(rows); err != nil {
-			return err
-		}
-	}
-	return rows.Err()
-}
-
-// TrxSelectRows select db rows in transaction scope and pass each to cvt() for rows.Scan()
-func TrxSelectRows(dbTrx *sql.Tx, query string, cvt func(rows *sql.Rows) error) error {
-
-	if dbTrx == nil {
-		return errors.New("invalid database transaction")
-	}
-	omppLog.LogSql(query)
-
-	rows, err := dbTrx.Query(query) // query db rows
 	if err != nil {
 		return err
 	}
@@ -304,6 +280,38 @@ func Update(dbConn *sql.DB, query string) error {
 	return err
 }
 
+// TrxSelectRows select db rows in transaction scope and pass each to cvt() for rows.Scan()
+func TrxSelectRows(dbTrx *sql.Tx, query string, cvt func(rows *sql.Rows) error) error {
+
+	if dbTrx == nil {
+		return errors.New("invalid database transaction")
+	}
+	omppLog.LogSql(query)
+
+	rows, err := dbTrx.Query(query) // query db rows
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	// process each row
+	for rows.Next() {
+		if err = cvt(rows); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
+// TrxSelectFirst select first db row in transaction scope and pass it to cvt() for row.Scan()
+func TrxSelectFirst(dbTrx *sql.Tx, query string, cvt func(row *sql.Row) error) error {
+	if dbTrx == nil {
+		return errors.New("invalid database transaction")
+	}
+	omppLog.LogSql(query)
+	return cvt(dbTrx.QueryRow(query))
+}
+
 // TrxUpdate execute sql query in transaction scope
 func TrxUpdate(dbTrx *sql.Tx, query string) error {
 	if dbTrx == nil {
@@ -345,4 +353,105 @@ func TrxUpdateStatement(dbTrx *sql.Tx, query string, put func() (bool, []interfa
 		}
 	}
 	return nil
+}
+
+// detectFacet obtains db facet by quiering sql server.
+// It may not be always reliable and even not true facet.
+// It is better to use driver information to determine db facet.
+func detectFacet(dbConn *sql.DB) Facet {
+
+	facet := DefaultFacet
+
+	// check is it PostgreSQL
+	// check is it MySQL (not reliable) or MariaDB
+	// odbc driver bug (?): PostgreSQL 9.2 + odbc 9.5.400 fails forever after first query failed
+	// that means PostgreSQL facet detection must be first
+	_ = SelectRows(dbConn,
+		"SELECT LOWER(VERSION())",
+		func(rows *sql.Rows) error {
+			var s sql.NullString
+			if err := rows.Scan(&s); err != nil {
+				return err
+			}
+			if s.Valid {
+				v := s.String
+				if strings.Contains(v, "postgresql") {
+					facet = PgSqlFacet
+				}
+				if facet == DefaultFacet &&
+					(strings.Contains(v, "mysql") || strings.Contains(v, "mariadb") || strings.HasPrefix(v, "5.")) {
+					facet = MySqlFacet
+				}
+			}
+			return nil
+		})
+	if facet != DefaultFacet {
+		return facet
+	}
+
+	// check is it SQLite
+	_ = SelectRows(dbConn,
+		"SELECT COUNT(*) FROM sqlite_master",
+		func(rows *sql.Rows) error {
+			var n sql.NullInt64
+			if err := rows.Scan(&n); err != nil {
+				return err
+			}
+			if n.Valid {
+				facet = SqliteFacet
+			}
+			return nil
+		})
+	if facet != DefaultFacet {
+		return facet
+	}
+
+	// check is it MS SQL
+	_ = SelectRows(dbConn,
+		"SELECT LOWER(@@VERSION)",
+		func(rows *sql.Rows) error {
+			var s sql.NullString
+			if err := rows.Scan(&s); err != nil {
+				return err
+			}
+			if s.Valid {
+				facet = MsSqlFacet
+			}
+			return nil
+		})
+	if facet != DefaultFacet {
+		return facet
+	}
+
+	// check is it Oracle
+	_ = SelectRows(dbConn,
+		"SELECT LOWER(product) FROM product_component_version",
+		func(rows *sql.Rows) error {
+			var s sql.NullString
+			if err := rows.Scan(&s); err != nil {
+				return err
+			}
+			if s.Valid {
+				facet = OracleFacet
+			}
+			return nil
+		})
+	if facet != DefaultFacet {
+		return facet
+	}
+
+	// check is it IBM DB2
+	_ = SelectRows(dbConn,
+		"SELECT COUNT(*) FROM SYSIBMADM.ENV_PROD_INFO",
+		func(rows *sql.Rows) error {
+			var n sql.NullInt64
+			if err := rows.Scan(&n); err != nil {
+				return err
+			}
+			if n.Valid {
+				facet = Db2Facet
+			}
+			return nil
+		})
+	return facet
 }

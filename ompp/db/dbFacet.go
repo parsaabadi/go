@@ -9,14 +9,35 @@ import "strconv"
 type Facet uint8
 
 const (
-	EmptyFacet  Facet = iota // db facet undefined
-	SqliteFacet              // SQLite db facet
-	PgSqlFacet               // PostgreSQL db facet
-	MySqlFacet               // MySQL db facet
-	MsSqlFacet               // MS SQL db facet
-	Db2Facet                 // DB2 db facet
-	OracleFacet              // Oracle db facet
+	DefaultFacet Facet = iota // common default db facet
+	SqliteFacet               // SQLite db facet
+	PgSqlFacet                // PostgreSQL db facet
+	MySqlFacet                // MySQL db facet
+	MsSqlFacet                // MS SQL db facet
+	OracleFacet               // Oracle db facet
+	Db2Facet                  // DB2 db facet
 )
+
+// String is default printable value of db facet, Stringer implementation
+func (facet Facet) String() string {
+	switch facet {
+	case DefaultFacet:
+		return "Default db facet"
+	case SqliteFacet:
+		return "Sqlite db facet"
+	case PgSqlFacet:
+		return "PostgreSQL db facet"
+	case MySqlFacet:
+		return "MySQL db facet"
+	case MsSqlFacet:
+		return "MS SQL db facet"
+	case OracleFacet:
+		return "Oracle db facet"
+	case Db2Facet:
+		return "DB2 db facet"
+	}
+	return "Unknown db facet"
+}
 
 // bigintType return type name for BIGINT sql type
 func (facet Facet) bigintType() string {
