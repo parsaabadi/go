@@ -294,6 +294,19 @@ func makeSqlInsertParamValue(dbTable string, runSetCol string, dims []ParamDimsR
 // prepare put() closure to convert each cell into insert sql statement parameters
 func makePutInsertParamValue(param *ParamMeta, cellLst *list.List) func() (bool, []interface{}, error) {
 
+	// converter from value into db value:
+	// boolean is a special case because not all drivers correctly handle conversion to smallint
+	fv := func(src interface{}) interface{} { return src }
+
+	if param.typeOf.IsBool() {
+		fv = func(src interface{}) interface{} {
+			if is, ok := src.(bool); ok && is {
+				return 1
+			}
+			return 0
+		}
+	}
+
 	// for each cell put into row of sql statement parameters
 	row := make([]interface{}, param.Rank+1)
 	c := cellLst.Front()
@@ -319,7 +332,7 @@ func makePutInsertParamValue(param *ParamMeta, cellLst *list.List) func() (bool,
 		for k, e := range cell.DimIds {
 			row[k] = e
 		}
-		row[n] = cell.Value
+		row[n] = fv(cell.Value) // parameter value converted db value
 
 		// move to next input row and return current row to sql statement
 		c = c.Next()
