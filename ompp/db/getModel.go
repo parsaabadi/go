@@ -123,7 +123,7 @@ func GetModelById(dbConn *sql.DB, modelId int) (*ModelMeta, error) {
 		})
 	switch {
 	case err == sql.ErrNoRows:
-		return nil, errors.New("model id " + strconv.Itoa(modelId) + " not found")
+		return nil, errors.New("model not found, id: " + strconv.Itoa(modelId))
 	case err != nil:
 		return nil, err
 	}
