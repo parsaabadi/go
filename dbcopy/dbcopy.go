@@ -111,6 +111,7 @@ const (
 	toDbConnectionStr = "dbcopy.ToDatabase"       // output db connection string
 	toDbDriverName    = "dbcopy.ToDatabaseDriver" // output db driver name, ie: SQLite, odbc, sqlite3
 	encodingArgKey    = "dbcopy.CodePage"         // code page for converting source files, e.g. windows-1252
+	deleteArgKey      = "dbcopy.Delete"           // delete model or workset or model run from database
 )
 
 func main() {
@@ -133,6 +134,7 @@ func mainBody(args []string) error {
 	_ = flag.String(config.DbConnectionStr, "", "input database connection string")
 	_ = flag.String(config.DbDriverName, db.SQLiteDbDriver, "input database driver name")
 	_ = flag.String(copyToArgKey, "text", "copy to: `text`=db-to-text, db=text-to-db, db2db=db-to-db")
+	_ = flag.Bool(deleteArgKey, false, "delete from database: model or workset (set of model input parameters) or model run")
 	_ = flag.String(toDbConnectionStr, "", "output database connection string")
 	_ = flag.String(toDbDriverName, db.SQLiteDbDriver, "output database driver name")
 	_ = flag.String(inputDirArgKey, "", "input directory to read model .json and .csv files")
@@ -167,49 +169,30 @@ func mainBody(args []string) error {
 	omppLog.Log("Model ", modelName, " ", modelDigest)
 
 	// check run options:
-	// copy single run data, single workset, single task
-	// or entire model by default
-	isRun := runOpts.IsExist(config.RunName) || runOpts.IsExist(config.RunId)
-	isWs := runOpts.IsExist(config.SetName) || runOpts.IsExist(config.SetId)
-	isTask := runOpts.IsExist(config.TaskName) || runOpts.IsExist(config.TaskId)
+	// do delete model run, workset or entire model
+	// if not delete then copy: workset, model run data, modeilng task
+	// by default: copy entire model
+	isDel := runOpts.Bool(deleteArgKey)
 
-	// do copy operation: entire model by default
-	if !isRun && !isWs && !isTask {
+	switch {
 
-		switch strings.ToLower(runOpts.String(copyToArgKey)) {
-		case "text":
-			err = dbToText(modelName, modelDigest, runOpts)
-		case "db":
-			err = textToDb(modelName, runOpts)
-		case "db2db":
-			err = dbToDb(modelName, modelDigest, runOpts)
+	// do delete
+	case isDel:
+
+		switch {
+		case runOpts.IsExist(config.RunName) || runOpts.IsExist(config.RunId): // delete model run
+			err = dbDeleteRun(modelName, modelDigest, runOpts)
+		case runOpts.IsExist(config.SetName) || runOpts.IsExist(config.SetId): // delete workset
+			err = dbDeleteWorkset(modelName, modelDigest, runOpts)
+		case runOpts.IsExist(config.TaskName) || runOpts.IsExist(config.TaskId): // delete modeling task
+			err = dbDeleteTask(modelName, modelDigest, runOpts)
 		default:
-			return errors.New("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
+			err = dbDeleteModel(modelName, modelDigest, runOpts) // delete entrire model
 		}
-		if err != nil {
-			return err
-		}
-	}
 
-	// copy single workset
-	if isWs {
-		switch strings.ToLower(runOpts.String(copyToArgKey)) {
-		case "text":
-			err = dbToTextWorkset(modelName, modelDigest, runOpts)
-		case "db":
-			err = textToDbWorkset(modelName, modelDigest, runOpts)
-		case "db2db":
-			err = dbToDbWorkset(modelName, modelDigest, runOpts)
-		default:
-			return errors.New("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
-		}
-		if err != nil {
-			return err
-		}
-	}
+	// copy model run
+	case !isDel && (runOpts.IsExist(config.RunName) || runOpts.IsExist(config.RunId)):
 
-	// copy single model run
-	if isRun {
 		switch strings.ToLower(runOpts.String(copyToArgKey)) {
 		case "text":
 			err = dbToTextRun(modelName, modelDigest, runOpts)
@@ -220,13 +203,24 @@ func mainBody(args []string) error {
 		default:
 			return errors.New("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
 		}
-		if err != nil {
-			return err
-		}
-	}
 
-	// copy single modeling task
-	if isTask {
+	// copy workset
+	case !isDel && (runOpts.IsExist(config.SetName) || runOpts.IsExist(config.SetId)):
+
+		switch strings.ToLower(runOpts.String(copyToArgKey)) {
+		case "text":
+			err = dbToTextWorkset(modelName, modelDigest, runOpts)
+		case "db":
+			err = textToDbWorkset(modelName, modelDigest, runOpts)
+		case "db2db":
+			err = dbToDbWorkset(modelName, modelDigest, runOpts)
+		default:
+			return errors.New("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
+		}
+
+	// copy modeling task
+	case !isDel && (runOpts.IsExist(config.TaskName) || runOpts.IsExist(config.TaskId)):
+
 		switch strings.ToLower(runOpts.String(copyToArgKey)) {
 		case "text":
 			err = dbToTextTask(modelName, modelDigest, runOpts)
@@ -237,8 +231,18 @@ func mainBody(args []string) error {
 		default:
 			return errors.New("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
 		}
-		if err != nil {
-			return err
+
+	default: // copy entire model
+
+		switch strings.ToLower(runOpts.String(copyToArgKey)) {
+		case "text":
+			err = dbToText(modelName, modelDigest, runOpts)
+		case "db":
+			err = textToDb(modelName, runOpts)
+		case "db2db":
+			err = dbToDb(modelName, modelDigest, runOpts)
+		default:
+			return errors.New("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
 		}
 	}
 
