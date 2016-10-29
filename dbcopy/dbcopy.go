@@ -13,14 +13,15 @@ Only model name argument does not have default value and must be specified expli
   dbcopy -OpenM.ModelName modelOne
 
 There are 3 possible copy directions: "text", "db", "db2db" and default is "text".
+It is also possible to delete entire model or some model data from database (see dbcopy.Delete below).
 
-"text": read from database and save into metadata .json and .csv values (parameters and output tables):
+Copy to "text": read from database and save into metadata .json and .csv values (parameters and output tables):
   dbcopy -m modelOne
 
-"db": read from metadata .json and .csv values and insert or update database:
+Copy to "db": read from metadata .json and .csv values and insert or update database:
   dbcopy -m modelOne -dbcopy.To db
 
-"db2db": direct copy between two databases:
+Copy to "db2db": direct copy between two databases:
   dbcopy -m modelOne -dbcopy.To db2db -dbcopy.ToDatabase "Database=dst.sqlite;OpenMode=ReadWrite"
 
 By default entire model data is copied.
@@ -36,8 +37,8 @@ To copy only one model run results and input parameters:
   dbcopy -m modelOne -OpenM.RunName modelOne_2016_09_28_11_38_49_0945_101
 
 To copy only one modeling task metadata and run history:
-  dbcopy -m modelOne -OpenM.TaskName taskOne
   dbcopy -m modelOne -OpenM.TaskId 1
+  dbcopy -m modelOne -OpenM.TaskName taskOne
 
 It may be convenient to pack (unpack) text files into .zip archive:
   dbcopy -m modelOne -dbcopy.Zip=true
@@ -57,6 +58,15 @@ Also in case of input parameters you can use "-OpenM.ParamDir" or "-p" to specif
   dbcopy -m modelOne -OpenM.SetId 2 -OpenM.ParamDir two
   dbcopy -m modelOne -OpenM.SetId 2 -p two
   dbcopy -m redModel -s Default -p 101 -dbcopy.To db -dbcopy.ToDatabase "Database=dst.sqlite;OpenMode=ReadWrite"
+
+To delete from database entire model, model run results, set of input parameters or modeling task:
+  dbcopy -m modelOne -dbcopy.Delete
+  dbcopy -m modelOne -dbcopy.Delete -OpenM.RunId 101
+  dbcopy -m modelOne -dbcopy.Delete -OpenM.RunName modelOne_2016_09_28_11_38_49_0945_101
+  dbcopy -m modelOne -dbcopy.Delete -OpenM.SetId 2
+  dbcopy -m modelOne -dbcopy.Delete -s Default
+  dbcopy -m modelOne -dbcopy.Delete -OpenM.TaskId 1
+  dbcopy -m modelOne -dbcopy.Delete -OpenM.TaskName taskOne
 
 OpenM++ using hash digest to compare models, input parameters and output values.
 By default float and double values converted into text with "%.15g" format.
@@ -79,6 +89,8 @@ or skip default database driver name "SQLite":
 Other supported database drivers are "sqlite3" and "odbc":
   dbcopy -m modelOne -dbcopy.To db -dbcopy.ToDatabaseDriver odbc -dbcopy.ToDatabase "DSN=bigSql"
   dbcopy -m modelOne -dbcopy.To db -dbcopy.ToDatabaseDriver sqlite3 -dbcopy.ToDatabase "file:dst.sqlite?mode=rw"
+
+ODBC dbcopy tested with MySQL (MariaDB), PostgreSQL, Microsoft SQL, Oracle and DB2.
 
 Also dbcopy support OpenM++ standard log settings (described in wiki at http://www.openmpp.org/wiki/):
   -OpenM.LogToConsole: if true then log to standard output, default: true

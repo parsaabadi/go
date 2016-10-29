@@ -142,7 +142,7 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 			" AND RL.model_id <> MRL.model_id"+
 			" AND RL.model_id = "+smId+
 			" )"+
-			" ORDER BY 1, 2")
+			" ORDER BY 1, 3")
 	if err != nil {
 		return err
 	}
@@ -172,14 +172,14 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 			}
 		}
 
-		// re-base run values:
-		// update parameter value run id with new base run id
-		// if not same parameter and run id as before
+		// re-base run values in parameter value table and in run_parameter list
+		// if not same parameter and base run id as before
 		if hId == 0 || oldId == 0 || hId != rbArr[k].hId || oldId != rbArr[k].oldBase {
 
 			hId = rbArr[k].hId
 			oldId = rbArr[k].oldBase
 
+			// update parameter value run id with new base run id
 			err = TrxUpdate(trx,
 				"UPDATE "+tblName+
 					" SET run_id = "+strconv.Itoa(rbArr[k].newBase)+
@@ -187,16 +187,15 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 			if err != nil {
 				return err
 			}
-		}
 
-		// re-base run parameter record:
-		// set new base run id in run_paramter table
-		err = TrxUpdate(trx,
-			"UPDATE run_parameter SET base_run_id = "+strconv.Itoa(rbArr[k].newBase)+
-				" WHERE run_id = "+strconv.Itoa(rbArr[k].runId)+
-				" AND parameter_hid = "+strconv.Itoa(rbArr[k].hId))
-		if err != nil {
-			return err
+			// set new base run id in run_paramter table
+			err = TrxUpdate(trx,
+				"UPDATE run_parameter SET base_run_id = "+strconv.Itoa(rbArr[k].newBase)+
+					" WHERE base_run_id = "+strconv.Itoa(rbArr[k].oldBase)+
+					" AND parameter_hid = "+strconv.Itoa(rbArr[k].hId))
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -225,7 +224,7 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 			" AND RL.model_id <> MRL.model_id"+
 			" AND RL.model_id = "+smId+
 			" )"+
-			" ORDER BY 1, 2")
+			" ORDER BY 1, 3")
 	if err != nil {
 		return err
 	}
@@ -257,13 +256,15 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 		}
 
 		// re-base run values:
-		// update accumulators and expressions value run id with new base run id
-		// if not same output table and run id as before
+		// update run id in accumulators and expression tables with new base run id
+		// update output value base run id in run_table list
+		// if not same output table and base run id as before
 		if hId == 0 || oldId == 0 || hId != rbArr[k].hId || oldId != rbArr[k].oldBase {
 
 			hId = rbArr[k].hId
 			oldId = rbArr[k].oldBase
 
+			// update accumulators and expressions value run id with new base run id
 			err = TrxUpdate(trx,
 				"UPDATE "+eTbl+
 					" SET run_id = "+strconv.Itoa(rbArr[k].newBase)+
@@ -278,16 +279,15 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 			if err != nil {
 				return err
 			}
-		}
 
-		// re-base run output table record:
-		// set new base run id in run_table
-		err = TrxUpdate(trx,
-			"UPDATE run_table SET base_run_id = "+strconv.Itoa(rbArr[k].newBase)+
-				" WHERE run_id = "+strconv.Itoa(rbArr[k].runId)+
-				" AND table_hid = "+strconv.Itoa(rbArr[k].hId))
-		if err != nil {
-			return err
+			// set new base run id in run_table
+			err = TrxUpdate(trx,
+				"UPDATE run_table SET base_run_id = "+strconv.Itoa(rbArr[k].newBase)+
+					" WHERE base_run_id = "+strconv.Itoa(rbArr[k].oldBase)+
+					" AND table_hid = "+strconv.Itoa(rbArr[k].hId))
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -649,8 +649,7 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 	}
 
 	// delete model types:
-	// delete types metadata where type not shared between models and type is not built-in
-	sBltIn := strconv.Itoa(maxBuiltInTypeId)
+	// delete types metadata where type not shared between models
 	err = TrxUpdate(trx,
 		"DELETE FROM type_enum_txt"+
 			" WHERE EXISTS"+
@@ -658,7 +657,6 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 			" SELECT type_hid"+
 			" FROM model_type_dic M"+
 			" WHERE M.type_hid = type_enum_txt.type_hid AND M.model_id = "+smId+
-			" AND M.model_type_id > "+sBltIn+
 			" )"+
 			" AND NOT EXISTS"+
 			" ("+
@@ -677,7 +675,6 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 			" SELECT type_hid"+
 			" FROM model_type_dic M"+
 			" WHERE M.type_hid = type_enum_lst.type_hid AND M.model_id = "+smId+
-			" AND M.model_type_id > "+sBltIn+
 			" )"+
 			" AND NOT EXISTS"+
 			" ("+
@@ -696,7 +693,6 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 			" SELECT type_hid"+
 			" FROM model_type_dic M"+
 			" WHERE M.type_hid = type_dic_txt.type_hid AND M.model_id = "+smId+
-			" AND M.model_type_id > "+sBltIn+
 			" )"+
 			" AND NOT EXISTS"+
 			" ("+
@@ -719,12 +715,7 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 	// delete type master rows where type does not belong to any model
 	err = TrxUpdate(trx,
 		"DELETE FROM type_dic"+
-			" WHERE NOT EXISTS"+
-			" (SELECT type_hid FROM model_type_dic MT WHERE MT.type_hid = type_dic.type_hid)"+
-			" AND NOT EXISTS"+
-			" (SELECT type_hid FROM type_enum_lst EL WHERE EL.type_hid = type_dic.type_hid)"+
-			" AND NOT EXISTS"+
-			" (SELECT type_hid FROM type_dic_txt T WHERE T.type_hid = type_dic.type_hid)")
+			" WHERE NOT EXISTS (SELECT type_hid FROM model_type_dic MT WHERE MT.type_hid = type_dic.type_hid)")
 	if err != nil {
 		return err
 	}
