@@ -352,10 +352,18 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 	}
 
 	// write task metadata into json file
-	if err = toTaskJsonFile(srcDb, modelDef, meta, outDir); err != nil {
+	if err = toTaskJsonFile(srcDb, modelDef, meta, outDir, false, runOpts.String(config.DoubleFormat)); err != nil {
 		return err
 	}
 
+	// pack worksets metadata json and csv files into zip
+	if runOpts.Bool(zipArgKey) {
+		zipPath, err := helper.PackZip(outDir, "")
+		if err != nil {
+			return err
+		}
+		omppLog.Log("Packed ", zipPath)
+	}
 	return nil
 }
 
@@ -588,7 +596,7 @@ func toTaskJsonFileList(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) e
 
 	// read each task metadata and write into json files
 	for k := range tl {
-		if err := toTaskJsonFile(dbConn, modelDef, &tl[k], outDir); err != nil {
+		if err := toTaskJsonFile(dbConn, modelDef, &tl[k], outDir, true, ""); err != nil {
 			return err
 		}
 	}
@@ -596,7 +604,7 @@ func toTaskJsonFileList(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) e
 }
 
 // toTaskJsonFile convert modeling task and task run history to json and write into json file
-func toTaskJsonFile(dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.TaskMeta, outDir string) error {
+func toTaskJsonFile(dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.TaskMeta, outDir string, isMetaOnly bool, doubleFmt string) error {
 
 	// convert db rows into "public" format
 	omppLog.Log("Modeling task ", meta.Task.TaskId, " ", meta.Task.Name)
@@ -611,7 +619,147 @@ func toTaskJsonFile(dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.TaskMeta, o
 		outDir,
 		modelDef.Model.Name+".task."+strconv.Itoa(meta.Task.TaskId)+"."+helper.ToAlphaNumeric(meta.Task.Name)+".json"),
 		pub)
-	return err
+
+	// exit if only metadata only is required (if this is a part of model full copy)
+	if isMetaOnly {
+		return err
+	}
+
+	// save task body worksets
+	var wsIdLst []int
+	isSetNotFound := false
+	isSetNotReadOnly := false
+
+	for k := range meta.Set {
+
+		isNotFound, isNotReadOnly, err := worksetToTextById(dbConn, modelDef, meta.Set[k], outDir, doubleFmt)
+		if err != nil {
+			return err
+		}
+		isSetNotFound = isSetNotFound || isNotFound
+		isSetNotReadOnly = isSetNotReadOnly || isNotReadOnly
+
+		wsIdLst = append(wsIdLst, meta.Set[k])
+	}
+
+	// save worksets from model run history
+	for j := range meta.TaskRun {
+	nextSet:
+		for k := range meta.TaskRun[j].TaskRunSet {
+
+			// check is this workset already processed
+			setId := meta.TaskRun[j].TaskRunSet[k].SetId
+			isDone := false
+			for i := range wsIdLst {
+				isDone = setId == wsIdLst[i]
+				if isDone {
+					continue nextSet
+				}
+			}
+
+			// save workset metadata and parameter values into json and csv
+			isNotFound, isNotReadOnly, err := worksetToTextById(dbConn, modelDef, meta.Set[k], outDir, doubleFmt)
+			if err != nil {
+				return err
+			}
+			isSetNotFound = isSetNotFound || isNotFound
+			isSetNotReadOnly = isSetNotReadOnly || isNotReadOnly
+
+			wsIdLst = append(wsIdLst, setId)
+		}
+	}
+
+	// save runs from model run history
+	var runIdLst []int
+	isRunNotFound := false
+	isRunNotCompleted := false
+
+	for j := range meta.TaskRun {
+	nextRun:
+		for k := range meta.TaskRun[j].TaskRunSet {
+
+			// check is this run id already processed
+			runId := meta.TaskRun[j].TaskRunSet[k].RunId
+			isDone := false
+			for i := range runIdLst {
+				isDone = runId == runIdLst[i]
+				if isDone {
+					continue nextRun
+				}
+			}
+
+			// find model run metadata by id
+			runRow, err := db.GetRun(dbConn, runId)
+			if err != nil {
+				return err
+			}
+			if runRow == nil {
+				isRunNotFound = true
+				continue // skip: run not found
+			}
+
+			// run must be completed: status success, error or exit
+			if runRow.Status != db.DoneRunStatus && runRow.Status != db.ExitRunStatus && runRow.Status != db.ErrorRunStatus {
+				isRunNotCompleted = true
+				continue // skip: run not completed
+			}
+
+			rm, err := db.GetRunFull(dbConn, runRow, "") // get full model run metadata
+			if err != nil {
+				return err
+			}
+
+			// write model run metadata into json, parameters and output result values into csv files
+			if err = toRunTextFile(dbConn, modelDef, rm, outDir, doubleFmt); err != nil {
+				return err
+			}
+			runIdLst = append(runIdLst, runId)
+		}
+	}
+
+	// display warnings if any worksets or not readonly
+	// display warnings if any model runs not exists or not completed
+	if isSetNotFound {
+		omppLog.Log("Warning: task ", meta.Task.Name, " workset(s) not found, copy of task incomplete")
+	}
+	if isSetNotReadOnly {
+		omppLog.Log("Warning: task ", meta.Task.Name, " workset(s) not readonly, copy of task incomplete")
+	}
+	if isRunNotFound {
+		omppLog.Log("Warning: task ", meta.Task.Name, " model run(s) not found, copy of task run history incomplete")
+	}
+	if isRunNotCompleted {
+		omppLog.Log("Warning: task ", meta.Task.Name, " model run(s) not completed, copy of task run history incomplete")
+	}
+
+	return nil
+}
+
+// find workset by set id and save it's metadata to json and workset parameters to csv
+func worksetToTextById(dbConn *sql.DB, modelDef *db.ModelMeta, setId int, outDir string, doubleFmt string) (bool, bool, error) {
+
+	// get workset by id
+	wsRow, err := db.GetWorkset(dbConn, setId)
+	if err != nil {
+		return false, false, err
+	}
+	if wsRow == nil { // exit: workset not found
+		return true, false, nil
+	}
+	if !wsRow.IsReadonly { // exit: workset not readonly
+		return false, true, nil
+	}
+
+	wm, err := db.GetWorksetFull(dbConn, wsRow, "") // get full workset metadata
+	if err != nil {
+		return false, false, err
+	}
+
+	// write workset metadata into json and parameter values into csv files
+	if err = toWorksetTextFile(dbConn, modelDef, wm, outDir, doubleFmt); err != nil {
+		return false, false, err
+	}
+	return false, false, nil
 }
 
 // toCsvFile convert parameter or output table values and write into csvDir/fileName.csv file.
