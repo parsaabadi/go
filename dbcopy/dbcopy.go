@@ -59,6 +59,13 @@ Also in case of input parameters you can use "-OpenM.ParamDir" or "-p" to specif
   dbcopy -m modelOne -OpenM.SetId 2 -p two
   dbcopy -m redModel -s Default -p 101 -dbcopy.To db -dbcopy.ToDatabase "Database=dst.sqlite;OpenMode=ReadWrite"
 
+By default parameters and output results .csv files contain codes in dimension column(s), e.g.: Sex=[Male,Female].
+If you want to create csv files with numeric id's Sex=[0,1] instead then use ToIdCsv=true option:
+  dbcopy -m modelOne -dbcopy.ToIdCsv
+  dbcopy -m redModel -dbcopy.ToIdCsv -s Default
+  dbcopy -m modelOne -dbcopy.ToIdCsv -OpenM.RunId 101
+  dbcopy -m modelOne -dbcopy.ToIdCsv -OpenM.TaskName taskOne
+
 To delete from database entire model, model run results, set of input parameters or modeling task:
   dbcopy -m modelOne -dbcopy.Delete
   dbcopy -m modelOne -dbcopy.Delete -OpenM.RunId 101
@@ -79,7 +86,7 @@ is equivalent of:
   dbcopy -m modelOne -OpenM.DatabaseDriver SQLite -OpenM.Database "Database=modelOne.sqlite; Timeout=86400; OpenMode=ReadWrite;"
 
 Output database connection settings by default are the same as input database,
-which may not be suitable because you don't want to write into input database.
+which may not be suitable because you don't want to overwrite input database.
 
 To specify output database connection string and driver:
   dbcopy -m modelOne -dbcopy.To db -dbcopy.ToDatabaseDriver SQLite -dbcopy.ToDatabase "Database=dst.sqlite; Timeout=86400; OpenMode=ReadWrite;"
@@ -123,6 +130,7 @@ const (
 	toDbConnectionStr = "dbcopy.ToDatabase"       // output db connection string
 	toDbDriverName    = "dbcopy.ToDatabaseDriver" // output db driver name, ie: SQLite, odbc, sqlite3
 	encodingArgKey    = "dbcopy.CodePage"         // code page for converting source files, e.g. windows-1252
+	useIdCsvArgKey    = "dbcopy.ToIdCsv"          // if true then create csv files with enum id's default: enum code
 	deleteArgKey      = "dbcopy.Delete"           // delete model or workset or model run from database
 )
 
@@ -162,6 +170,7 @@ func mainBody(args []string) error {
 	_ = flag.String(config.TaskName, "", "modeling task name, if specified then copy only this modeling task data")
 	_ = flag.Int(config.TaskId, 0, "modeling task id, if specified then copy only this run modeling task data")
 	_ = flag.String(config.DoubleFormat, "%.15g", "convert to string format for float and double")
+	_ = flag.Bool(useIdCsvArgKey, false, "if true then create csv files with enum id's default: enum code")
 	_ = flag.String(encodingArgKey, "", "code page to convert source file into utf-8, e.g.: windows-1252")
 
 	runOpts, logOpts, err := config.New(encodingArgKey)
@@ -180,11 +189,26 @@ func mainBody(args []string) error {
 	}
 	omppLog.Log("Model ", modelName, " ", modelDigest)
 
-	// check run options:
+	// minimal validation of run options:
+	// to-database can be used only with "db" or "db2db"
+	// id csv is only for output
+	copyToArg := strings.ToLower(runOpts.String(copyToArgKey))
+	isDel := runOpts.Bool(deleteArgKey)
+
+	if isDel && runOpts.IsExist(copyToArgKey) {
+		return errors.New("dbcopy invalid arguments: " + deleteArgKey + " cannot be used with " + copyToArgKey)
+	}
+	if copyToArg != "db" && copyToArg != "db2db" &&
+		(runOpts.IsExist(toDbConnectionStr) || runOpts.IsExist(toDbDriverName)) {
+		return errors.New("dbcopy invalid arguments: output database can be specified only if " + copyToArgKey + "=db or =db2db")
+	}
+	if copyToArg != "text" && runOpts.IsExist(useIdCsvArgKey) {
+		return errors.New("dbcopy invalid arguments: " + useIdCsvArgKey + " can be used only if " + copyToArgKey + "=text")
+	}
+
 	// do delete model run, workset or entire model
 	// if not delete then copy: workset, model run data, modeilng task
 	// by default: copy entire model
-	isDel := runOpts.Bool(deleteArgKey)
 
 	switch {
 
@@ -205,7 +229,7 @@ func mainBody(args []string) error {
 	// copy model run
 	case !isDel && (runOpts.IsExist(config.RunName) || runOpts.IsExist(config.RunId)):
 
-		switch strings.ToLower(runOpts.String(copyToArgKey)) {
+		switch copyToArg {
 		case "text":
 			err = dbToTextRun(modelName, modelDigest, runOpts)
 		case "db":
@@ -213,13 +237,13 @@ func mainBody(args []string) error {
 		case "db2db":
 			err = dbToDbRun(modelName, modelDigest, runOpts)
 		default:
-			return errors.New("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
+			return errors.New("dbcopy invalid argument for copy-to: " + copyToArg)
 		}
 
 	// copy workset
 	case !isDel && (runOpts.IsExist(config.SetName) || runOpts.IsExist(config.SetId)):
 
-		switch strings.ToLower(runOpts.String(copyToArgKey)) {
+		switch copyToArg {
 		case "text":
 			err = dbToTextWorkset(modelName, modelDigest, runOpts)
 		case "db":
@@ -227,13 +251,13 @@ func mainBody(args []string) error {
 		case "db2db":
 			err = dbToDbWorkset(modelName, modelDigest, runOpts)
 		default:
-			return errors.New("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
+			return errors.New("dbcopy invalid argument for copy-to: " + copyToArg)
 		}
 
 	// copy modeling task
 	case !isDel && (runOpts.IsExist(config.TaskName) || runOpts.IsExist(config.TaskId)):
 
-		switch strings.ToLower(runOpts.String(copyToArgKey)) {
+		switch copyToArg {
 		case "text":
 			err = dbToTextTask(modelName, modelDigest, runOpts)
 		case "db":
@@ -241,12 +265,12 @@ func mainBody(args []string) error {
 		case "db2db":
 			err = dbToDbTask(modelName, modelDigest, runOpts)
 		default:
-			return errors.New("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
+			return errors.New("dbcopy invalid argument for copy-to: " + copyToArg)
 		}
 
 	default: // copy entire model
 
-		switch strings.ToLower(runOpts.String(copyToArgKey)) {
+		switch copyToArg {
 		case "text":
 			err = dbToText(modelName, modelDigest, runOpts)
 		case "db":
@@ -254,7 +278,7 @@ func mainBody(args []string) error {
 		case "db2db":
 			err = dbToDb(modelName, modelDigest, runOpts)
 		default:
-			return errors.New("dbcopy invalid argument for copy-to: " + runOpts.String(copyToArgKey))
+			return errors.New("dbcopy invalid argument for copy-to: " + copyToArg)
 		}
 	}
 

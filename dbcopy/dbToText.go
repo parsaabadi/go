@@ -55,12 +55,13 @@ func dbToText(modelName string, modelDigest string, runOpts *config.RunOptions) 
 
 	// write all model run data into csv files: parameters, output expressions and accumulators
 	dblFmt := runOpts.String(config.DoubleFormat)
-	if err = toRunTextFileList(srcDb, modelDef, outDir, dblFmt); err != nil {
+	isIdCsv := runOpts.Bool(useIdCsvArgKey)
+	if err = toRunTextFileList(srcDb, modelDef, outDir, dblFmt, isIdCsv); err != nil {
 		return err
 	}
 
 	// write all readonly workset data into csv files: input parameters
-	if err = toWorksetTextFileList(srcDb, modelDef, outDir, dblFmt); err != nil {
+	if err = toWorksetTextFileList(srcDb, modelDef, outDir, dblFmt, isIdCsv); err != nil {
 		return err
 	}
 
@@ -164,7 +165,8 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 
 	// write model run metadata into json, parameters and output result values into csv files
 	dblFmt := runOpts.String(config.DoubleFormat)
-	if err = toRunTextFile(srcDb, modelDef, meta, outDir, dblFmt); err != nil {
+	isIdCsv := runOpts.Bool(useIdCsvArgKey)
+	if err = toRunTextFile(srcDb, modelDef, meta, outDir, dblFmt, isIdCsv); err != nil {
 		return err
 	}
 
@@ -269,7 +271,8 @@ func dbToTextWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 
 	// write workset metadata into json and parameter values into csv files
 	dblFmt := runOpts.String(config.DoubleFormat)
-	if err = toWorksetTextFile(srcDb, modelDef, wm, outDir, dblFmt); err != nil {
+	isIdCsv := runOpts.Bool(useIdCsvArgKey)
+	if err = toWorksetTextFile(srcDb, modelDef, wm, outDir, dblFmt, isIdCsv); err != nil {
 		return err
 	}
 
@@ -368,6 +371,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 	var runIdLst []int
 	var isRunNotFound, isRunNotCompleted bool
 	dblFmt := runOpts.String(config.DoubleFormat)
+	isIdCsv := runOpts.Bool(useIdCsvArgKey)
 
 	for j := range meta.TaskRun {
 	nextRun:
@@ -404,7 +408,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 			}
 
 			// write model run metadata into json, parameters and output result values into csv files
-			if err = toRunTextFile(srcDb, modelDef, rm, outDir, dblFmt); err != nil {
+			if err = toRunTextFile(srcDb, modelDef, rm, outDir, dblFmt, isIdCsv); err != nil {
 				return err
 			}
 		}
@@ -444,7 +448,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 		}
 
 		// write workset metadata into json and parameter values into csv files
-		if err = toWorksetTextFile(dbConn, modelDef, wm, outDir, dblFmt); err != nil {
+		if err = toWorksetTextFile(dbConn, modelDef, wm, outDir, dblFmt, isIdCsv); err != nil {
 			return err
 		}
 		return nil
@@ -540,7 +544,8 @@ func toModelJsonFile(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) erro
 }
 
 // toRunTextFileList write all model runs parameters and output tables into csv files, each run in separate subdirectory
-func toRunTextFileList(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleFmt string) error {
+func toRunTextFileList(
+	dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleFmt string, isIdCsv bool) error {
 
 	// get all successfully completed model runs
 	rl, err := db.GetRunFullList(dbConn, modelDef.Model.ModelId, true, "")
@@ -550,7 +555,7 @@ func toRunTextFileList(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, do
 
 	// read all run parameters, output accumulators and expressions and dump it into csv files
 	for k := range rl {
-		err = toRunTextFile(dbConn, modelDef, &rl[k], outDir, doubleFmt)
+		err = toRunTextFile(dbConn, modelDef, &rl[k], outDir, doubleFmt, isIdCsv)
 		if err != nil {
 			return err
 		}
@@ -559,7 +564,8 @@ func toRunTextFileList(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, do
 }
 
 // toRunTextFile write model run metadata, parameters and output tables into csv files, in separate subdirectory
-func toRunTextFile(dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.RunMeta, outDir string, doubleFmt string) error {
+func toRunTextFile(
+	dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.RunMeta, outDir string, doubleFmt string, isIdCsv bool) error {
 
 	// convert db rows into "public" format
 	runId := meta.Run.RunId
@@ -595,7 +601,7 @@ func toRunTextFile(dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.RunMeta, out
 		}
 
 		var cp db.Cell
-		err = toCsvFile(csvDir, modelDef, modelDef.Param[j].Name, cp, cLst, doubleFmt)
+		err = toCsvFile(csvDir, modelDef, modelDef.Param[j].Name, cp, cLst, doubleFmt, isIdCsv)
 		if err != nil {
 			return err
 		}
@@ -614,7 +620,7 @@ func toRunTextFile(dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.RunMeta, out
 		}
 
 		var ec db.CellExpr
-		err = toCsvFile(csvDir, modelDef, modelDef.Table[j].Name, ec, cLst, doubleFmt)
+		err = toCsvFile(csvDir, modelDef, modelDef.Table[j].Name, ec, cLst, doubleFmt, isIdCsv)
 		if err != nil {
 			return err
 		}
@@ -628,7 +634,7 @@ func toRunTextFile(dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.RunMeta, out
 		}
 
 		var ac db.CellAcc
-		err = toCsvFile(csvDir, modelDef, modelDef.Table[j].Name, ac, cLst, doubleFmt)
+		err = toCsvFile(csvDir, modelDef, modelDef.Table[j].Name, ac, cLst, doubleFmt, isIdCsv)
 		if err != nil {
 			return err
 		}
@@ -642,7 +648,8 @@ func toRunTextFile(dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.RunMeta, out
 }
 
 // toWorksetTextFileList write all readonly worksets into csv files, each set in separate subdirectory
-func toWorksetTextFileList(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleFmt string) error {
+func toWorksetTextFileList(
+	dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleFmt string, isIdCsv bool) error {
 
 	// get all readonly worksets
 	wl, err := db.GetWorksetFullList(dbConn, modelDef.Model.ModelId, true, "")
@@ -652,7 +659,7 @@ func toWorksetTextFileList(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string
 
 	// read all workset parameters and dump it into csv files
 	for k := range wl {
-		err = toWorksetTextFile(dbConn, modelDef, &wl[k], outDir, doubleFmt)
+		err = toWorksetTextFile(dbConn, modelDef, &wl[k], outDir, doubleFmt, isIdCsv)
 		if err != nil {
 			return err
 		}
@@ -661,7 +668,8 @@ func toWorksetTextFileList(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string
 }
 
 // toWorksetTextFile write workset into csv file, in separate subdirectory
-func toWorksetTextFile(dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.WorksetMeta, outDir string, doubleFmt string) error {
+func toWorksetTextFile(
+	dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.WorksetMeta, outDir string, doubleFmt string, isIdCsv bool) error {
 
 	// convert db rows into "public" format
 	setId := meta.Set.SetId
@@ -697,7 +705,7 @@ func toWorksetTextFile(dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.WorksetM
 		}
 
 		var cp db.Cell
-		err = toCsvFile(csvDir, modelDef, modelDef.Param[j].Name, cp, cLst, doubleFmt)
+		err = toCsvFile(csvDir, modelDef, modelDef.Param[j].Name, cp, cLst, doubleFmt, isIdCsv)
 		if err != nil {
 			return err
 		}
@@ -747,39 +755,20 @@ func toTaskJsonFile(dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.TaskMeta, o
 	return err
 }
 
-// find workset by set id and save it's metadata to json and workset parameters to csv
-func worksetToTextById(dbConn *sql.DB, modelDef *db.ModelMeta, setId int, outDir string, doubleFmt string) (bool, bool, error) {
-
-	// get workset by id
-	wsRow, err := db.GetWorkset(dbConn, setId)
-	if err != nil {
-		return false, false, err
-	}
-	if wsRow == nil { // exit: workset not found
-		return true, false, nil
-	}
-	if !wsRow.IsReadonly { // exit: workset not readonly
-		return false, true, nil
-	}
-
-	wm, err := db.GetWorksetFull(dbConn, wsRow, "") // get full workset metadata
-	if err != nil {
-		return false, false, err
-	}
-
-	// write workset metadata into json and parameter values into csv files
-	if err = toWorksetTextFile(dbConn, modelDef, wm, outDir, doubleFmt); err != nil {
-		return false, false, err
-	}
-	return false, false, nil
-}
-
 // toCsvFile convert parameter or output table values and write into csvDir/fileName.csv file.
+// if isIdCsv is true then csv contains enum id's, default: enum code
 func toCsvFile(
-	csvDir string, modelDef *db.ModelMeta, name string, cell db.CsvConverter, cellLst *list.List, doubleFmt string) error {
+	csvDir string, modelDef *db.ModelMeta, name string, cell db.CsvConverter, cellLst *list.List, doubleFmt string, isIdCsv bool) error {
 
 	// converter from db cell to csv row []string
-	cvt, err := cell.CsvToRow(modelDef, name, doubleFmt)
+	var cvt func(interface{}, []string) error
+	var err error
+	if !isIdCsv {
+		cvt, err = cell.CsvToRow(modelDef, name, doubleFmt)
+	} else {
+		cvt, err = cell.CsvToIdRow(modelDef, name, doubleFmt)
+
+	}
 	if err != nil {
 		return err
 	}
