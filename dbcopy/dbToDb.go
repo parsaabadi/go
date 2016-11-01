@@ -10,7 +10,7 @@ import (
 
 	"go.openmpp.org/ompp/config"
 	"go.openmpp.org/ompp/db"
-	 "go.openmpp.org/ompp/omppLog"
+	"go.openmpp.org/ompp/omppLog"
 )
 
 // copy model from source database to destination database
@@ -166,7 +166,7 @@ func dbToDbRun(modelName string, modelDigest string, runOpts *config.RunOptions)
 		return err
 	}
 
-	// convert model run db rows into "public"" format
+	// convert model run db rows into "public" format
 	// and copy source model run metadata, parameter values, output results into destination database
 	pub, err := meta.ToPublic(srcDb, srcModel)
 	if err != nil {
@@ -287,7 +287,7 @@ func dbToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOpti
 		return err
 	}
 
-	// convert workset db rows into "public"" format
+	// convert workset db rows into "public" format
 	// and copy source workset metadata and parameters into destination database
 	pub, err := srcWs.ToPublic(srcDb, srcModel)
 	if err != nil {
@@ -400,7 +400,136 @@ func dbToDbTask(modelName string, modelDigest string, runOpts *config.RunOptions
 		return err
 	}
 
-	// convert task db rows into "public"" format
+	// copy to destiantion model runs from task run history
+	var runIdLst []int
+	var isRunNotFound, isRunNotCompleted bool
+	dblFmt := runOpts.String(config.DoubleFormat)
+
+	for j := range meta.TaskRun {
+	nextRun:
+		for k := range meta.TaskRun[j].TaskRunSet {
+
+			// check is this run id already processed
+			runId := meta.TaskRun[j].TaskRunSet[k].RunId
+			for i := range runIdLst {
+				if runId == runIdLst[i] {
+					continue nextRun
+				}
+			}
+			runIdLst = append(runIdLst, runId)
+
+			// find model run metadata by id
+			runRow, err := db.GetRun(srcDb, runId)
+			if err != nil {
+				return err
+			}
+			if runRow == nil {
+				isRunNotFound = true
+				continue // skip: run not found
+			}
+
+			// run must be completed: status success, error or exit
+			if runRow.Status != db.DoneRunStatus && runRow.Status != db.ExitRunStatus && runRow.Status != db.ErrorRunStatus {
+				isRunNotCompleted = true
+				continue // skip: run not completed
+			}
+
+			rm, err := db.GetRunFull(srcDb, runRow, "") // get full model run metadata
+			if err != nil {
+				return err
+			}
+
+			// convert model run db rows into "public" format
+			// and copy source model run metadata, parameter values, output results into destination database
+			runPub, err := rm.ToPublic(srcDb, srcModel)
+			if err != nil {
+				return err
+			}
+			_, err = copyRunDbToDb(srcDb, dstDb, srcModel, dstModel, rm.Run.RunId, runPub, dstLang, dblFmt)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// find workset by set id and save it's metadata to json and workset parameters to csv
+	var wsIdLst []int
+	var isSetNotFound, isSetNotReadOnly bool
+
+	var fws = func(dbConn *sql.DB, setId int) error {
+
+		// check is workset already processed
+		for i := range wsIdLst {
+			if setId == wsIdLst[i] {
+				return nil
+			}
+		}
+		wsIdLst = append(wsIdLst, setId)
+
+		// get workset by id
+		wsRow, err := db.GetWorkset(dbConn, setId)
+		if err != nil {
+			return err
+		}
+		if wsRow == nil { // exit: workset not found
+			isSetNotFound = true
+			return nil
+		}
+		if !wsRow.IsReadonly { // exit: workset not readonly
+			isSetNotReadOnly = true
+			return nil
+		}
+
+		wm, err := db.GetWorksetFull(dbConn, wsRow, "") // get full workset metadata
+		if err != nil {
+			return err
+		}
+
+		// convert workset db rows into "public" format
+		// and copy source workset metadata and parameters into destination database
+		setPub, err := wm.ToPublic(srcDb, srcModel)
+		if err != nil {
+			return err
+		}
+		_, err = copyWorksetDbToDb(srcDb, dstDb, srcModel, dstModel, wm.Set.SetId, setPub, dstLang)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	// save task body worksets
+	for k := range meta.Set {
+		if err = fws(srcDb, meta.Set[k]); err != nil {
+			return err
+		}
+	}
+
+	// save worksets from model run history
+	for j := range meta.TaskRun {
+		for k := range meta.TaskRun[j].TaskRunSet {
+			if err = fws(srcDb, meta.TaskRun[j].TaskRunSet[k].SetId); err != nil {
+				return err
+			}
+		}
+	}
+
+	// display warnings if any worksets not found or not readonly
+	// display warnings if any model runs not exists or not completed
+	if isSetNotFound {
+		omppLog.Log("Warning: task ", meta.Task.Name, " workset(s) not found, copy of task incomplete")
+	}
+	if isSetNotReadOnly {
+		omppLog.Log("Warning: task ", meta.Task.Name, " workset(s) not readonly, copy of task incomplete")
+	}
+	if isRunNotFound {
+		omppLog.Log("Warning: task ", meta.Task.Name, " model run(s) not found, copy of task run history incomplete")
+	}
+	if isRunNotCompleted {
+		omppLog.Log("Warning: task ", meta.Task.Name, " model run(s) not completed, copy of task run history incomplete")
+	}
+
+	// convert task db rows into "public" format
 	// and copy source task metadata into destination database
 	pub, err := meta.ToPublic(srcDb, srcModel)
 	if err != nil {
