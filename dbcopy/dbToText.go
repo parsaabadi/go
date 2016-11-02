@@ -21,7 +21,7 @@ import (
 func dbToText(modelName string, modelDigest string, runOpts *config.RunOptions) error {
 
 	// open source database connection and check is it valid
-	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(config.DbConnectionStr), runOpts.String(config.DbDriverName))
+	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(dbConnStrArgKey), runOpts.String(dbDriverArgKey))
 	srcDb, _, err := db.Open(cs, dn, false)
 	if err != nil {
 		return err
@@ -53,7 +53,7 @@ func dbToText(modelName string, modelDigest string, runOpts *config.RunOptions) 
 	}
 
 	// write all model run data into csv files: parameters, output expressions and accumulators
-	dblFmt := runOpts.String(config.DoubleFormat)
+	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
 	if err = toRunTextFileList(srcDb, modelDef, outDir, dblFmt, isIdCsv); err != nil {
 		return err

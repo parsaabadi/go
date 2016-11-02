@@ -20,11 +20,11 @@ import (
 func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOptions) error {
 
 	// get model run name and id
-	runName := runOpts.String(config.RunName)
-	runId := runOpts.Int(config.RunId, 0)
+	runName := runOpts.String(runNameArgKey)
+	runId := runOpts.Int(runIdArgKey, 0)
 
 	// conflicting options: use run id if positive else use run name
-	if runOpts.IsExist(config.RunName) && runOpts.IsExist(config.RunId) {
+	if runOpts.IsExist(runNameArgKey) && runOpts.IsExist(runIdArgKey) {
 		if runId > 0 {
 			omppLog.Log("dbcopy options conflict. Using run id: ", runId, " ignore run name: ", runName)
 			runName = ""
@@ -35,11 +35,11 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 	}
 
 	if runId < 0 || runId == 0 && runName == "" {
-		return errors.New("dbcopy invalid argument(s) for run id: " + runOpts.String(config.RunId) + " and/or run name: " + runOpts.String(config.RunName))
+		return errors.New("dbcopy invalid argument(s) for run id: " + runOpts.String(runIdArgKey) + " and/or run name: " + runOpts.String(runNameArgKey))
 	}
 
 	// open source database connection and check is it valid
-	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(config.DbConnectionStr), runOpts.String(config.DbDriverName))
+	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(dbConnStrArgKey), runOpts.String(dbDriverArgKey))
 	srcDb, _, err := db.Open(cs, dn, false)
 	if err != nil {
 		return err
@@ -98,7 +98,7 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 	}
 
 	// write model run metadata into json, parameters and output result values into csv files
-	dblFmt := runOpts.String(config.DoubleFormat)
+	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
 	if err = toRunTextFile(srcDb, modelDef, meta, outDir, dblFmt, isIdCsv); err != nil {
 		return err

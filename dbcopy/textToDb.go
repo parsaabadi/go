@@ -27,15 +27,15 @@ func textToDb(modelName string, runOpts *config.RunOptions) error {
 	}
 
 	// get connection string and driver name
-	cs := runOpts.String(toDbConnectionStr)
+	cs := runOpts.String(toDbConnStrArgKey)
 	// use OpenM options if DBCopy ouput database not defined
-	//	if cs == "" && runOpts.IsExist(config.DbConnectionStr) {
-	//		cs = runOpts.String(config.DbConnectionStr)
+	//	if cs == "" && runOpts.IsExist(dbConnStrArgKey) {
+	//		cs = runOpts.String(dbConnStrArgKey)
 	//	}
 
-	dn := runOpts.String(toDbDriverName)
-	if dn == "" && runOpts.IsExist(config.DbDriverName) {
-		dn = runOpts.String(config.DbDriverName)
+	dn := runOpts.String(toDbDriverArgKey)
+	if dn == "" && runOpts.IsExist(dbDriverArgKey) {
+		dn = runOpts.String(dbDriverArgKey)
 	}
 
 	cs, dn = db.IfEmptyMakeDefault(modelName, cs, dn)
@@ -83,7 +83,7 @@ func textToDb(modelName string, runOpts *config.RunOptions) error {
 	// parameters, output expressions and accumulators
 	encName := runOpts.String(encodingArgKey)
 
-	if err = fromRunTextListToDb(dstDb, modelDef, langDef, inpDir, runOpts.String(config.DoubleFormat), encName); err != nil {
+	if err = fromRunTextListToDb(dstDb, modelDef, langDef, inpDir, runOpts.String(doubleFormatArgKey), encName); err != nil {
 		return err
 	}
 

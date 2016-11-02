@@ -17,11 +17,11 @@ import (
 func dbToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOptions) error {
 
 	// get workset name and id
-	setName := runOpts.String(config.SetName)
-	setId := runOpts.Int(config.SetId, 0)
+	setName := runOpts.String(setNameArgKey)
+	setId := runOpts.Int(setIdArgKey, 0)
 
 	// conflicting options: use set id if positive else use set name
-	if runOpts.IsExist(config.SetName) && runOpts.IsExist(config.SetId) {
+	if runOpts.IsExist(setNameArgKey) && runOpts.IsExist(setIdArgKey) {
 		if setId > 0 {
 			omppLog.Log("dbcopy options conflict. Using set id: ", setId, " ignore set name: ", setName)
 			setName = ""
@@ -32,14 +32,14 @@ func dbToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOpti
 	}
 
 	if setId < 0 || setId == 0 && setName == "" {
-		return errors.New("dbcopy invalid argument(s) for set id: " + runOpts.String(config.SetId) + " and/or set name: " + runOpts.String(config.SetName))
+		return errors.New("dbcopy invalid argument(s) for set id: " + runOpts.String(setIdArgKey) + " and/or set name: " + runOpts.String(setNameArgKey))
 	}
 
 	// validate source and destination
-	inpConnStr := runOpts.String(config.DbConnectionStr)
-	inpDriver := runOpts.String(config.DbDriverName)
-	outConnStr := runOpts.String(toDbConnectionStr)
-	outDriver := runOpts.String(toDbDriverName)
+	inpConnStr := runOpts.String(dbConnStrArgKey)
+	inpDriver := runOpts.String(dbDriverArgKey)
+	outConnStr := runOpts.String(toDbConnStrArgKey)
+	outDriver := runOpts.String(toDbDriverArgKey)
 
 	if inpConnStr == outConnStr && inpDriver == outDriver {
 		return errors.New("source same as destination: cannot overwrite model in database")

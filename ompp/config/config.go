@@ -19,23 +19,8 @@ import (
 
 // Standard config keys to get values from ini-file or command line arguments
 const (
-	OptionsFile      = "OpenM.OptionsFile"    // ini-file path
-	OptionsFileShort = "ini"                  // ini-file path (short form)
-	DbConnectionStr  = "OpenM.Database"       // db connection string
-	DbDriverName     = "OpenM.DatabaseDriver" // db driver name, ie: SQLite, odbc, sqlite3
-	ModelName        = "OpenM.ModelName"      // model name
-	ModelNameShort   = "m"                    // model name (short form)
-	ModelDigest      = "OpenM.ModelDigest"    // model hash digest
-	SetName          = "OpenM.SetName"        // workset name
-	SetNameShort     = "s"                    // workset name (short form)
-	SetId            = "OpenM.SetId"          // workset id, workset is a set of model input parameters
-	RunName          = "OpenM.RunName"        // model run name
-	RunId            = "OpenM.RunId"          // model run id
-	TaskName         = "OpenM.TaskName"       // modeling task name
-	TaskId           = "OpenM.TaskId"         // modeling task id
-	ParamDir         = "OpenM.ParamDir"       // path to workset parameters directory
-	ParamDirShort    = "p"                    // path to workset parameters directory (short form)
-	DoubleFormat     = "OpenM.DoubleFormat"   // convert to string format for float and double
+	OptionsFile      = "OpenM.OptionsFile" // ini-file path
+	OptionsFileShort = "ini"               // ini-file path (short form)
 )
 
 /* Log config keys.
@@ -74,17 +59,11 @@ type LogOptions struct {
 	TimeStamp   string // log timestamp string, ie: 20120817_160459_0148
 }
 
-// fullShort is pair of full option name and short option name
-type fullShort struct {
-	full  string // full option name
-	short string // short option name
+// FullShort is pair of full option name and short option name
+type FullShort struct {
+	Full  string // full option name
+	Short string // short option name
 }
-
-// standard pairs of full and short names
-var optFs = []fullShort{
-	fullShort{ModelName, ModelNameShort},
-	fullShort{SetName, SetNameShort},
-	fullShort{ParamDir, ParamDirShort}}
 
 // New process command-line arguments and ini-file options.
 //
@@ -93,7 +72,7 @@ var optFs = []fullShort{
 // for example: -dbcopy.CodePage=windows-1252.
 // If encoding value specified then ini-file and csv files converted from such encoding to utf-8.
 // If encoding not specified then auto-detection and default values are used (see helper.FileToUtf8())
-func New(encodingKey string) (*RunOptions, *LogOptions, error) {
+func New(encodingKey string, optFs []FullShort) (*RunOptions, *LogOptions, error) {
 
 	runOpts := &RunOptions{
 		KeyValue:        make(map[string]string),
@@ -137,8 +116,8 @@ func New(encodingKey string) (*RunOptions, *LogOptions, error) {
 			return
 		}
 		for _, fs := range optFs {
-			if f.Name == fs.full || f.Name == fs.short {
-				runOpts.KeyValue[fs.full] = f.Value.String()
+			if f.Name == fs.Full || f.Name == fs.Short {
+				runOpts.KeyValue[fs.Full] = f.Value.String()
 				return
 			}
 		}
@@ -158,8 +137,8 @@ func New(encodingKey string) (*RunOptions, *LogOptions, error) {
 			n = LogToConsole
 		}
 		for _, fs := range optFs {
-			if n == fs.short {
-				n = fs.full
+			if n == fs.Short {
+				n = fs.Full
 			}
 		}
 		if runOpts.DefaultKeyValue[n] == "" {

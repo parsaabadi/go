@@ -10,7 +10,7 @@ Command line arguments take precedence over ini-file options.
 
 Only model name argument does not have default value and must be specified explicitly:
   dbcopy -m modelOne
-  dbcopy -OpenM.ModelName modelOne
+  dbcopy -dbcopy.ModelName modelOne
 
 There are 3 possible copy directions: "text", "db", "db2db" and default is "text".
 It is also possible to delete entire model or some model data from database (see dbcopy.Delete below).
@@ -29,21 +29,21 @@ It is also possible to copy only: model run results and input parameters,
 set of input parameters (workset), modeling task metadata and run history.
 
 To copy only one set of input parameters:
-  dbcopy -m redModel -OpenM.SetName Default
+  dbcopy -m redModel -dbcopy.SetName Default
   dbcopy -m redModel -s Default
 
 To copy only one model run results and input parameters:
-  dbcopy -m modelOne -OpenM.RunId 101
-  dbcopy -m modelOne -OpenM.RunName modelOne_2016_09_28_11_38_49_0945_101
+  dbcopy -m modelOne -dbcopy.RunId 101
+  dbcopy -m modelOne -dbcopy.RunName modelOne_2016_09_28_11_38_49_0945_101
 
 To copy only one modeling task metadata and run history:
-  dbcopy -m modelOne -OpenM.TaskId 1
-  dbcopy -m modelOne -OpenM.TaskName taskOne
+  dbcopy -m modelOne -dbcopy.TaskId 1
+  dbcopy -m modelOne -dbcopy.TaskName taskOne
 
 It may be convenient to pack (unpack) text files into .zip archive:
   dbcopy -m modelOne -dbcopy.Zip=true
   dbcopy -m modelOne -dbcopy.Zip
-  dbcopy -m redModel -OpenM.SetName Default -dbcopy.Zip
+  dbcopy -m redModel -dbcopy.SetName Default -dbcopy.Zip
 
 By default model name is used to create output directory for text files or as input directory to import from.
 It may be a problem on Linux if current directory already contains executable "modelName".
@@ -58,36 +58,36 @@ To avoid path conflicts InputDir and OutputDir combined with model name, model r
 For example:
   dbcopy -m redModel -dbcopy.OutputDir red -s Default
 will place "Default" input set of parameters into directory one/redModel.set.Default.
-You can override this rul by using "-OpenM.ParamDir" or "-p" to specify exact location of parameters set:
-  dbcopy -m modelOne -OpenM.SetId 2 -OpenM.ParamDir two
-  dbcopy -m modelOne -OpenM.SetId 2 -p two
+If neccesary you can specify exact directory for input parameters by using "-dbcopy.ParamDir" or "-p":
+  dbcopy -m modelOne -dbcopy.SetId 2 -dbcopy.ParamDir two
+  dbcopy -m modelOne -dbcopy.SetId 2 -p two
   dbcopy -m redModel -s Default -p 101 -dbcopy.To db -dbcopy.ToDatabase "Database=dst.sqlite;OpenMode=ReadWrite"
 
 By default parameters and output results .csv files contain codes in dimension column(s), e.g.: Sex=[Male,Female].
 If you want to create csv files with numeric id's Sex=[0,1] instead then use ToIdCsv=true option:
   dbcopy -m modelOne -dbcopy.ToIdCsv
   dbcopy -m redModel -dbcopy.ToIdCsv -s Default
-  dbcopy -m modelOne -dbcopy.ToIdCsv -OpenM.RunId 101
-  dbcopy -m modelOne -dbcopy.ToIdCsv -OpenM.TaskName taskOne
+  dbcopy -m modelOne -dbcopy.ToIdCsv -dbcopy.RunId 101
+  dbcopy -m modelOne -dbcopy.ToIdCsv -dbcopy.TaskName taskOne
 
 To delete from database entire model, model run results, set of input parameters or modeling task:
   dbcopy -m modelOne -dbcopy.Delete
-  dbcopy -m modelOne -dbcopy.Delete -OpenM.RunId 101
-  dbcopy -m modelOne -dbcopy.Delete -OpenM.RunName modelOne_2016_09_28_11_38_49_0945_101
-  dbcopy -m modelOne -dbcopy.Delete -OpenM.SetId 2
+  dbcopy -m modelOne -dbcopy.Delete -dbcopy.RunId 101
+  dbcopy -m modelOne -dbcopy.Delete -dbcopy.RunName modelOne_2016_09_28_11_38_49_0945_101
+  dbcopy -m modelOne -dbcopy.Delete -dbcopy.SetId 2
   dbcopy -m modelOne -dbcopy.Delete -s Default
-  dbcopy -m modelOne -dbcopy.Delete -OpenM.TaskId 1
-  dbcopy -m modelOne -dbcopy.Delete -OpenM.TaskName taskOne
+  dbcopy -m modelOne -dbcopy.Delete -dbcopy.TaskId 1
+  dbcopy -m modelOne -dbcopy.Delete -dbcopy.TaskName taskOne
 
 OpenM++ using hash digest to compare models, input parameters and output values.
 By default float and double values converted into text with "%.15g" format.
 It is possible to specify other format for float values digest calculation:
-  dbcopy -m redModel -OpenM.DoubleFormat "%.7G" -dbcopy.To db -dbcopy.ToDatabase "Database=dst.sqlite;OpenMode=ReadWrite"
+  dbcopy -m redModel -dbcopy.DoubleFormat "%.7G" -dbcopy.To db -dbcopy.ToDatabase "Database=dst.sqlite;OpenMode=ReadWrite"
 
 By default dbcopy using SQLite database connection:
   dbcopy -m modelOne
 is equivalent of:
-  dbcopy -m modelOne -OpenM.DatabaseDriver SQLite -OpenM.Database "Database=modelOne.sqlite; Timeout=86400; OpenMode=ReadWrite;"
+  dbcopy -m modelOne -dbcopy.DatabaseDriver SQLite -dbcopy.Database "Database=modelOne.sqlite; Timeout=86400; OpenMode=ReadWrite;"
 
 Output database connection settings by default are the same as input database,
 which may not be suitable because you don't want to overwrite input database.
@@ -127,15 +127,30 @@ import (
 
 // dbcopy config keys to get values from ini-file or command line arguments.
 const (
-	copyToArgKey      = "dbcopy.To"               // copy to: text=db-to-text, db=text-to-db, db2db=db-to-db
-	zipArgKey         = "dbcopy.Zip"              // create output or use as input model.zip
-	inputDirArgKey    = "dbcopy.InputDir"         // input dir to read model .json and .csv files
-	outputDirArgKey   = "dbcopy.OutputDir"        // output dir to write model .json and .csv files
-	toDbConnectionStr = "dbcopy.ToDatabase"       // output db connection string
-	toDbDriverName    = "dbcopy.ToDatabaseDriver" // output db driver name, ie: SQLite, odbc, sqlite3
-	encodingArgKey    = "dbcopy.CodePage"         // code page for converting source files, e.g. windows-1252
-	useIdCsvArgKey    = "dbcopy.ToIdCsv"          // if true then create csv files with enum id's default: enum code
-	deleteArgKey      = "dbcopy.Delete"           // delete model or workset or model run from database
+	copyToArgKey       = "dbcopy.To"               // copy to: text=db-to-text, db=text-to-db, db2db=db-to-db
+	deleteArgKey       = "dbcopy.Delete"           // delete model or workset or model run from database
+	modelNameArgKey    = "dbcopy.ModelName"        // model name
+	modelNameShortKey  = "m"                       // model name (short form)
+	modelDigestArgKey  = "dbcopy.ModelDigest"      // model hash digest
+	setNameArgKey      = "dbcopy.SetName"          // workset name
+	setNameShortKey    = "s"                       // workset name (short form)
+	setIdArgKey        = "dbcopy.SetId"            // workset id, workset is a set of model input parameters
+	runNameArgKey      = "dbcopy.RunName"          // model run name
+	runIdArgKey        = "dbcopy.RunId"            // model run id
+	taskNameArgKey     = "dbcopy.TaskName"         // modeling task name
+	taskIdArgKey       = "dbcopy.TaskId"           // modeling task id
+	dbConnStrArgKey    = "dbcopy.Database"         // db connection string
+	dbDriverArgKey     = "dbcopy.DatabaseDriver"   // db driver name, ie: SQLite, odbc, sqlite3
+	toDbConnStrArgKey  = "dbcopy.ToDatabase"       // output db connection string
+	toDbDriverArgKey   = "dbcopy.ToDatabaseDriver" // output db driver name, ie: SQLite, odbc, sqlite3
+	inputDirArgKey     = "dbcopy.InputDir"         // input dir to read model .json and .csv files
+	outputDirArgKey    = "dbcopy.OutputDir"        // output dir to write model .json and .csv files
+	paramDirArgKey     = "dbcopy.ParamDir"         // path to workset parameters directory
+	paramDirShortKey   = "p"                       // path to workset parameters directory (short form)
+	zipArgKey          = "dbcopy.Zip"              // create output or use as input model.zip
+	doubleFormatArgKey = "dbcopy.DoubleFormat"     // convert to string format for float and double
+	useIdCsvArgKey     = "dbcopy.ToIdCsv"          // if true then create csv files with enum id's default: enum code
+	encodingArgKey     = "dbcopy.CodePage"         // code page for converting source files, e.g. windows-1252
 )
 
 func main() {
@@ -151,42 +166,50 @@ func main() {
 
 func mainBody(args []string) error {
 
-	// parse command line arguments and ini-file
-	_ = flag.String(config.ModelName, "", "model name")
-	_ = flag.String(config.ModelNameShort, "", "model name (short of "+config.ModelName+")")
-	_ = flag.String(config.ModelDigest, "", "model hash digest")
-	_ = flag.String(config.DbConnectionStr, "", "input database connection string")
-	_ = flag.String(config.DbDriverName, db.SQLiteDbDriver, "input database driver name")
+	// set dbcopy command line argument keys and ini-file keys
 	_ = flag.String(copyToArgKey, "text", "copy to: `text`=db-to-text, db=text-to-db, db2db=db-to-db")
 	_ = flag.Bool(deleteArgKey, false, "delete from database: model or workset (set of model input parameters) or model run")
-	_ = flag.String(toDbConnectionStr, "", "output database connection string")
-	_ = flag.String(toDbDriverName, db.SQLiteDbDriver, "output database driver name")
+	_ = flag.String(modelNameArgKey, "", "model name")
+	_ = flag.String(modelNameShortKey, "", "model name (short of "+modelNameArgKey+")")
+	_ = flag.String(modelDigestArgKey, "", "model hash digest")
+	_ = flag.String(setNameArgKey, "", "workset name (set of model input parameters), if specified then copy only this workset")
+	_ = flag.String(setNameShortKey, "", "workset name (short of "+setNameArgKey+")")
+	_ = flag.Int(setIdArgKey, 0, "workset id (set of model input parameters), if specified then copy only this workset")
+	_ = flag.String(runNameArgKey, "", "model run name, if specified then copy only this run data")
+	_ = flag.Int(runIdArgKey, 0, "model run id, if specified then copy only this run data")
+	_ = flag.String(taskNameArgKey, "", "modeling task name, if specified then copy only this modeling task data")
+	_ = flag.Int(taskIdArgKey, 0, "modeling task id, if specified then copy only this run modeling task data")
+	_ = flag.String(dbConnStrArgKey, "", "input database connection string")
+	_ = flag.String(dbDriverArgKey, db.SQLiteDbDriver, "input database driver name")
+	_ = flag.String(toDbConnStrArgKey, "", "output database connection string")
+	_ = flag.String(toDbDriverArgKey, db.SQLiteDbDriver, "output database driver name")
 	_ = flag.String(inputDirArgKey, "", "input directory to read model .json and .csv files")
 	_ = flag.String(outputDirArgKey, "", "output directory for model .json and .csv files")
-	_ = flag.String(config.ParamDir, "", "path to parameters directory (workset directory)")
-	_ = flag.String(config.ParamDirShort, "", "path to parameters directory (short of "+config.ParamDir+")")
+	_ = flag.String(paramDirArgKey, "", "path to parameters directory (workset directory)")
+	_ = flag.String(paramDirShortKey, "", "path to parameters directory (short of "+paramDirArgKey+")")
 	_ = flag.Bool(zipArgKey, false, "create output model.zip or use model.zip as input")
-	_ = flag.String(config.SetName, "", "workset name (set of model input parameters), if specified then copy only this workset")
-	_ = flag.String(config.SetNameShort, "", "workset name (short of "+config.SetName+")")
-	_ = flag.Int(config.SetId, 0, "workset id (set of model input parameters), if specified then copy only this workset")
-	_ = flag.String(config.RunName, "", "model run name, if specified then copy only this run data")
-	_ = flag.Int(config.RunId, 0, "model run id, if specified then copy only this run data")
-	_ = flag.String(config.TaskName, "", "modeling task name, if specified then copy only this modeling task data")
-	_ = flag.Int(config.TaskId, 0, "modeling task id, if specified then copy only this run modeling task data")
-	_ = flag.String(config.DoubleFormat, "%.15g", "convert to string format for float and double")
+	_ = flag.String(doubleFormatArgKey, "%.15g", "convert to string format for float and double")
 	_ = flag.Bool(useIdCsvArgKey, false, "if true then create csv files with enum id's default: enum code")
 	_ = flag.String(encodingArgKey, "", "code page to convert source file into utf-8, e.g.: windows-1252")
 
-	runOpts, logOpts, err := config.New(encodingArgKey)
+	// pairs of full and short argument names to map short name to full name
+	var optFs = []config.FullShort{
+		config.FullShort{modelNameArgKey, modelNameShortKey},
+		config.FullShort{setNameArgKey, setNameShortKey},
+		config.FullShort{paramDirArgKey, paramDirShortKey},
+	}
+
+	// parse command line arguments and ini-file
+	runOpts, logOpts, err := config.New(encodingArgKey, optFs)
 	if err != nil {
 		return errors.New("invalid arguments: " + err.Error())
 	}
 
-	omppLog.New(logOpts) // adjust log options
+	omppLog.New(logOpts) // adjust log options according to command line arguments or ini-values
 
 	// model name or model digest is required
-	modelName := runOpts.String(config.ModelName)
-	modelDigest := runOpts.String(config.ModelDigest)
+	modelName := runOpts.String(modelNameArgKey)
+	modelDigest := runOpts.String(modelDigestArgKey)
 
 	if modelName == "" && modelDigest == "" {
 		return errors.New("invalid (empty) model name and model digest")
@@ -203,7 +226,7 @@ func mainBody(args []string) error {
 		return errors.New("dbcopy invalid arguments: " + deleteArgKey + " cannot be used with " + copyToArgKey)
 	}
 	if copyToArg != "db" && copyToArg != "db2db" &&
-		(runOpts.IsExist(toDbConnectionStr) || runOpts.IsExist(toDbDriverName)) {
+		(runOpts.IsExist(toDbConnStrArgKey) || runOpts.IsExist(toDbDriverArgKey)) {
 		return errors.New("dbcopy invalid arguments: output database can be specified only if " + copyToArgKey + "=db or =db2db")
 	}
 	if copyToArg != "text" && runOpts.IsExist(useIdCsvArgKey) {
@@ -220,18 +243,18 @@ func mainBody(args []string) error {
 	case isDel:
 
 		switch {
-		case runOpts.IsExist(config.RunName) || runOpts.IsExist(config.RunId): // delete model run
+		case runOpts.IsExist(runNameArgKey) || runOpts.IsExist(runIdArgKey): // delete model run
 			err = dbDeleteRun(modelName, modelDigest, runOpts)
-		case runOpts.IsExist(config.SetName) || runOpts.IsExist(config.SetId): // delete workset
+		case runOpts.IsExist(setNameArgKey) || runOpts.IsExist(setIdArgKey): // delete workset
 			err = dbDeleteWorkset(modelName, modelDigest, runOpts)
-		case runOpts.IsExist(config.TaskName) || runOpts.IsExist(config.TaskId): // delete modeling task
+		case runOpts.IsExist(taskNameArgKey) || runOpts.IsExist(taskIdArgKey): // delete modeling task
 			err = dbDeleteTask(modelName, modelDigest, runOpts)
 		default:
 			err = dbDeleteModel(modelName, modelDigest, runOpts) // delete entrire model
 		}
 
 	// copy model run
-	case !isDel && (runOpts.IsExist(config.RunName) || runOpts.IsExist(config.RunId)):
+	case !isDel && (runOpts.IsExist(runNameArgKey) || runOpts.IsExist(runIdArgKey)):
 
 		switch copyToArg {
 		case "text":
@@ -245,7 +268,7 @@ func mainBody(args []string) error {
 		}
 
 	// copy workset
-	case !isDel && (runOpts.IsExist(config.SetName) || runOpts.IsExist(config.SetId)):
+	case !isDel && (runOpts.IsExist(setNameArgKey) || runOpts.IsExist(setIdArgKey)):
 
 		switch copyToArg {
 		case "text":
@@ -259,7 +282,7 @@ func mainBody(args []string) error {
 		}
 
 	// copy modeling task
-	case !isDel && (runOpts.IsExist(config.TaskName) || runOpts.IsExist(config.TaskId)):
+	case !isDel && (runOpts.IsExist(taskNameArgKey) || runOpts.IsExist(taskIdArgKey)):
 
 		switch copyToArg {
 		case "text":

@@ -20,11 +20,11 @@ import (
 func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptions) error {
 
 	// get task name and id
-	taskName := runOpts.String(config.TaskName)
-	taskId := runOpts.Int(config.TaskId, 0)
+	taskName := runOpts.String(taskNameArgKey)
+	taskId := runOpts.Int(taskIdArgKey, 0)
 
 	// conflicting options: use task id if positive else use task name
-	if runOpts.IsExist(config.TaskName) && runOpts.IsExist(config.TaskId) {
+	if runOpts.IsExist(taskNameArgKey) && runOpts.IsExist(taskIdArgKey) {
 		if taskId > 0 {
 			omppLog.Log("dbcopy options conflict. Using task id: ", taskId, " ignore task name: ", taskName)
 			taskName = ""
@@ -35,11 +35,11 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 	}
 
 	if taskId < 0 || taskId == 0 && taskName == "" {
-		return errors.New("dbcopy invalid argument(s) for task id: " + runOpts.String(config.TaskId) + " and/or task name: " + runOpts.String(config.TaskName))
+		return errors.New("dbcopy invalid argument(s) for task id: " + runOpts.String(taskIdArgKey) + " and/or task name: " + runOpts.String(taskNameArgKey))
 	}
 
 	// open source database connection and check is it valid
-	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(config.DbConnectionStr), runOpts.String(config.DbDriverName))
+	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(dbConnStrArgKey), runOpts.String(dbDriverArgKey))
 	srcDb, _, err := db.Open(cs, dn, false)
 	if err != nil {
 		return err
@@ -98,7 +98,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 	// save runs from model run history
 	var runIdLst []int
 	var isRunNotFound, isRunNotCompleted bool
-	dblFmt := runOpts.String(config.DoubleFormat)
+	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
 
 	for j := range meta.TaskRun {

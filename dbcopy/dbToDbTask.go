@@ -17,11 +17,11 @@ import (
 func dbToDbTask(modelName string, modelDigest string, runOpts *config.RunOptions) error {
 
 	// get task name and id
-	taskName := runOpts.String(config.TaskName)
-	taskId := runOpts.Int(config.TaskId, 0)
+	taskName := runOpts.String(taskNameArgKey)
+	taskId := runOpts.Int(taskIdArgKey, 0)
 
 	// conflicting options: use task id if positive else use task name
-	if runOpts.IsExist(config.TaskName) && runOpts.IsExist(config.TaskId) {
+	if runOpts.IsExist(taskNameArgKey) && runOpts.IsExist(taskIdArgKey) {
 		if taskId > 0 {
 			omppLog.Log("dbcopy options conflict. Using task id: ", taskId, " ignore task name: ", taskName)
 			taskName = ""
@@ -32,14 +32,14 @@ func dbToDbTask(modelName string, modelDigest string, runOpts *config.RunOptions
 	}
 
 	if taskId < 0 || taskId == 0 && taskName == "" {
-		return errors.New("dbcopy invalid argument(s) for task id: " + runOpts.String(config.TaskId) + " and/or task name: " + runOpts.String(config.TaskName))
+		return errors.New("dbcopy invalid argument(s) for task id: " + runOpts.String(taskIdArgKey) + " and/or task name: " + runOpts.String(taskNameArgKey))
 	}
 
 	// validate source and destination
-	inpConnStr := runOpts.String(config.DbConnectionStr)
-	inpDriver := runOpts.String(config.DbDriverName)
-	outConnStr := runOpts.String(toDbConnectionStr)
-	outDriver := runOpts.String(toDbDriverName)
+	inpConnStr := runOpts.String(dbConnStrArgKey)
+	inpDriver := runOpts.String(dbDriverArgKey)
+	outConnStr := runOpts.String(toDbConnStrArgKey)
+	outDriver := runOpts.String(toDbDriverArgKey)
 
 	if inpConnStr == outConnStr && inpDriver == outDriver {
 		return errors.New("source same as destination: cannot overwrite model in database")
@@ -116,7 +116,7 @@ func dbToDbTask(modelName string, modelDigest string, runOpts *config.RunOptions
 	// copy to destiantion model runs from task run history
 	var runIdLst []int
 	var isRunNotFound, isRunNotCompleted bool
-	dblFmt := runOpts.String(config.DoubleFormat)
+	dblFmt := runOpts.String(doubleFormatArgKey)
 
 	for j := range meta.TaskRun {
 	nextRun:

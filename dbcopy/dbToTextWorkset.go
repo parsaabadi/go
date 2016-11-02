@@ -20,11 +20,11 @@ import (
 func dbToTextWorkset(modelName string, modelDigest string, runOpts *config.RunOptions) error {
 
 	// get workset name and id
-	setName := runOpts.String(config.SetName)
-	setId := runOpts.Int(config.SetId, 0)
+	setName := runOpts.String(setNameArgKey)
+	setId := runOpts.Int(setIdArgKey, 0)
 
 	// conflicting options: use set id if positive else use set name
-	if runOpts.IsExist(config.SetName) && runOpts.IsExist(config.SetId) {
+	if runOpts.IsExist(setNameArgKey) && runOpts.IsExist(setIdArgKey) {
 		if setId > 0 {
 			omppLog.Log("dbcopy options conflict. Using set id: ", setId, " ignore set name: ", setName)
 			setName = ""
@@ -35,11 +35,11 @@ func dbToTextWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 	}
 
 	if setId < 0 || setId == 0 && setName == "" {
-		return errors.New("dbcopy invalid argument(s) for set id: " + runOpts.String(config.SetId) + " and/or set name: " + runOpts.String(config.SetName))
+		return errors.New("dbcopy invalid argument(s) for set id: " + runOpts.String(setIdArgKey) + " and/or set name: " + runOpts.String(setNameArgKey))
 	}
 
 	// open source database connection and check is it valid
-	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(config.DbConnectionStr), runOpts.String(config.DbDriverName))
+	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(dbConnStrArgKey), runOpts.String(dbDriverArgKey))
 	srcDb, _, err := db.Open(cs, dn, false)
 	if err != nil {
 		return err
@@ -61,8 +61,8 @@ func dbToTextWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 	// "root" directory for workset metadata
 	// later this "root" combined with modelName.set.name or modelName.set.id
 	outDir := ""
-	if runOpts.IsExist(config.ParamDir) {
-		outDir = filepath.Clean(runOpts.String(config.ParamDir))
+	if runOpts.IsExist(paramDirArgKey) {
+		outDir = filepath.Clean(runOpts.String(paramDirArgKey))
 	} else {
 		if setId > 0 {
 			outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".set."+strconv.Itoa(setId))
@@ -106,7 +106,7 @@ func dbToTextWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 	}
 
 	// write workset metadata into json and parameter values into csv files
-	dblFmt := runOpts.String(config.DoubleFormat)
+	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
 	if err = toWorksetTextFile(srcDb, modelDef, wm, outDir, dblFmt, isIdCsv); err != nil {
 		return err

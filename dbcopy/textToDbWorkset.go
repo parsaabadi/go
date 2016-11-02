@@ -26,19 +26,19 @@ func textToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 	}
 
 	// get workset name and id
-	setName := runOpts.String(config.SetName)
-	setId := runOpts.Int(config.SetId, 0)
+	setName := runOpts.String(setNameArgKey)
+	setId := runOpts.Int(setIdArgKey, 0)
 
 	if setId < 0 || setId == 0 && setName == "" {
-		return errors.New("dbcopy invalid argument(s) for set id: " + runOpts.String(config.SetId) + " and/or set name: " + runOpts.String(config.SetName))
+		return errors.New("dbcopy invalid argument(s) for set id: " + runOpts.String(setIdArgKey) + " and/or set name: " + runOpts.String(setNameArgKey))
 	}
 
 	// root for workset data: input directory or name of input.zip
 	// it is parameter directory (if specified) or input directory/modelName.set.id
 	// for csv files this "root" combined with subdirectory: root/set.id.setName
 	inpDir := ""
-	if runOpts.IsExist(config.ParamDir) {
-		inpDir = filepath.Clean(runOpts.String(config.ParamDir))
+	if runOpts.IsExist(paramDirArgKey) {
+		inpDir = filepath.Clean(runOpts.String(paramDirArgKey))
 	} else {
 		if setId > 0 {
 			inpDir = filepath.Join(runOpts.String(inputDirArgKey), modelName+".set."+strconv.Itoa(setId))
@@ -66,7 +66,7 @@ func textToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 	var metaPath string
 	var csvDir string
 
-	if runOpts.IsExist(config.SetName) && runOpts.IsExist(config.SetId) { // both: set id and name
+	if runOpts.IsExist(setNameArgKey) && runOpts.IsExist(setIdArgKey) { // both: set id and name
 
 		metaPath = filepath.Join(inpDir,
 			modelName+".set."+strconv.Itoa(setId)+"."+helper.ToAlphaNumeric(setName)+".json")
@@ -86,10 +86,10 @@ func textToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 
 		// make path search patterns for metadata json and csv directory
 		var cp string
-		if runOpts.IsExist(config.SetName) && !runOpts.IsExist(config.SetId) { // set name only
+		if runOpts.IsExist(setNameArgKey) && !runOpts.IsExist(setIdArgKey) { // set name only
 			cp = "set.[0-9]*." + helper.ToAlphaNumeric(setName)
 		}
-		if !runOpts.IsExist(config.SetName) && runOpts.IsExist(config.SetId) { // set id only
+		if !runOpts.IsExist(setNameArgKey) && runOpts.IsExist(setIdArgKey) { // set id only
 			cp = "set." + strconv.Itoa(setId) + ".*"
 		}
 		mp := modelName + "." + cp + ".json"
@@ -143,15 +143,15 @@ func textToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 	}
 
 	// get connection string and driver name
-	cs := runOpts.String(toDbConnectionStr)
+	cs := runOpts.String(toDbConnStrArgKey)
 	// use OpenM options if DBCopy ouput database not defined
-	//	if cs == "" && runOpts.IsExist(config.DbConnectionStr) {
-	//		cs = runOpts.String(config.DbConnectionStr)
+	//	if cs == "" && runOpts.IsExist(dbConnStrArgKey) {
+	//		cs = runOpts.String(dbConnStrArgKey)
 	//	}
 
-	dn := runOpts.String(toDbDriverName)
-	if dn == "" && runOpts.IsExist(config.DbDriverName) {
-		dn = runOpts.String(config.DbDriverName)
+	dn := runOpts.String(toDbDriverArgKey)
+	if dn == "" && runOpts.IsExist(dbDriverArgKey) {
+		dn = runOpts.String(dbDriverArgKey)
 	}
 
 	cs, dn = db.IfEmptyMakeDefault(modelName, cs, dn)

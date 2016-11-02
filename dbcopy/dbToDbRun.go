@@ -17,11 +17,11 @@ import (
 func dbToDbRun(modelName string, modelDigest string, runOpts *config.RunOptions) error {
 
 	// get model run name and id
-	runName := runOpts.String(config.RunName)
-	runId := runOpts.Int(config.RunId, 0)
+	runName := runOpts.String(runNameArgKey)
+	runId := runOpts.Int(runIdArgKey, 0)
 
 	// conflicting options: use run id if positive else use run name
-	if runOpts.IsExist(config.RunName) && runOpts.IsExist(config.RunId) {
+	if runOpts.IsExist(runNameArgKey) && runOpts.IsExist(runIdArgKey) {
 		if runId > 0 {
 			omppLog.Log("dbcopy options conflict. Using run id: ", runId, " ignore model run name: ", runName)
 			runName = ""
@@ -32,14 +32,14 @@ func dbToDbRun(modelName string, modelDigest string, runOpts *config.RunOptions)
 	}
 
 	if runId < 0 || runId == 0 && runName == "" {
-		return errors.New("dbcopy invalid argument(s) for model run id: " + runOpts.String(config.RunId) + " and/or name: " + runOpts.String(config.RunName))
+		return errors.New("dbcopy invalid argument(s) for model run id: " + runOpts.String(runIdArgKey) + " and/or name: " + runOpts.String(runNameArgKey))
 	}
 
 	// validate source and destination
-	inpConnStr := runOpts.String(config.DbConnectionStr)
-	inpDriver := runOpts.String(config.DbDriverName)
-	outConnStr := runOpts.String(toDbConnectionStr)
-	outDriver := runOpts.String(toDbDriverName)
+	inpConnStr := runOpts.String(dbConnStrArgKey)
+	inpDriver := runOpts.String(dbDriverArgKey)
+	outConnStr := runOpts.String(toDbConnStrArgKey)
+	outDriver := runOpts.String(toDbDriverArgKey)
 
 	if inpConnStr == outConnStr && inpDriver == outDriver {
 		return errors.New("source same as destination: cannot overwrite model in database")
@@ -125,7 +125,7 @@ func dbToDbRun(modelName string, modelDigest string, runOpts *config.RunOptions)
 	if err != nil {
 		return err
 	}
-	dblFmt := runOpts.String(config.DoubleFormat)
+	dblFmt := runOpts.String(doubleFormatArgKey)
 
 	_, err = copyRunDbToDb(srcDb, dstDb, srcModel, dstModel, meta.Run.RunId, pub, dstLang, dblFmt)
 	if err != nil {

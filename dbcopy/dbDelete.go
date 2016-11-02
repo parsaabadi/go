@@ -16,7 +16,7 @@ import (
 func dbDeleteModel(modelName string, modelDigest string, runOpts *config.RunOptions) error {
 
 	// open source database connection and check is it valid
-	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(config.DbConnectionStr), runOpts.String(config.DbDriverName))
+	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(dbConnStrArgKey), runOpts.String(dbDriverArgKey))
 	srcDb, _, err := db.Open(cs, dn, false)
 	if err != nil {
 		return err
@@ -51,11 +51,11 @@ func dbDeleteModel(modelName string, modelDigest string, runOpts *config.RunOpti
 func dbDeleteRun(modelName string, modelDigest string, runOpts *config.RunOptions) error {
 
 	// get model run name and id
-	runName := runOpts.String(config.RunName)
-	runId := runOpts.Int(config.RunId, 0)
+	runName := runOpts.String(runNameArgKey)
+	runId := runOpts.Int(runIdArgKey, 0)
 
 	// conflicting options: use run id if positive else use run name
-	if runOpts.IsExist(config.RunName) && runOpts.IsExist(config.RunId) {
+	if runOpts.IsExist(runNameArgKey) && runOpts.IsExist(runIdArgKey) {
 		if runId > 0 {
 			omppLog.Log("dbcopy options conflict. Using run id: ", runId, " ignore run name: ", runName)
 			runName = ""
@@ -66,11 +66,11 @@ func dbDeleteRun(modelName string, modelDigest string, runOpts *config.RunOption
 	}
 
 	if runId < 0 || runId == 0 && runName == "" {
-		return errors.New("dbcopy invalid argument(s) for run id: " + runOpts.String(config.RunId) + " and/or run name: " + runOpts.String(config.RunName))
+		return errors.New("dbcopy invalid argument(s) for run id: " + runOpts.String(runIdArgKey) + " and/or run name: " + runOpts.String(runNameArgKey))
 	}
 
 	// open source database connection and check is it valid
-	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(config.DbConnectionStr), runOpts.String(config.DbDriverName))
+	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(dbConnStrArgKey), runOpts.String(dbDriverArgKey))
 	srcDb, _, err := db.Open(cs, dn, false)
 	if err != nil {
 		return err
@@ -133,11 +133,11 @@ func dbDeleteRun(modelName string, modelDigest string, runOpts *config.RunOption
 func dbDeleteWorkset(modelName string, modelDigest string, runOpts *config.RunOptions) error {
 
 	// get workset name and id
-	setName := runOpts.String(config.SetName)
-	setId := runOpts.Int(config.SetId, 0)
+	setName := runOpts.String(setNameArgKey)
+	setId := runOpts.Int(setIdArgKey, 0)
 
 	// conflicting options: use set id if positive else use set name
-	if runOpts.IsExist(config.SetName) && runOpts.IsExist(config.SetId) {
+	if runOpts.IsExist(setNameArgKey) && runOpts.IsExist(setIdArgKey) {
 		if setId > 0 {
 			omppLog.Log("dbcopy options conflict. Using set id: ", setId, " ignore set name: ", setName)
 			setName = ""
@@ -148,11 +148,11 @@ func dbDeleteWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 	}
 
 	if setId < 0 || setId == 0 && setName == "" {
-		return errors.New("dbcopy invalid argument(s) for set id: " + runOpts.String(config.SetId) + " and/or set name: " + runOpts.String(config.SetName))
+		return errors.New("dbcopy invalid argument(s) for set id: " + runOpts.String(setIdArgKey) + " and/or set name: " + runOpts.String(setNameArgKey))
 	}
 
 	// open source database connection and check is it valid
-	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(config.DbConnectionStr), runOpts.String(config.DbDriverName))
+	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(dbConnStrArgKey), runOpts.String(dbDriverArgKey))
 	srcDb, _, err := db.Open(cs, dn, false)
 	if err != nil {
 		return err
@@ -215,11 +215,11 @@ func dbDeleteWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 func dbDeleteTask(modelName string, modelDigest string, runOpts *config.RunOptions) error {
 
 	// get task name and id
-	taskName := runOpts.String(config.TaskName)
-	taskId := runOpts.Int(config.TaskId, 0)
+	taskName := runOpts.String(taskNameArgKey)
+	taskId := runOpts.Int(taskIdArgKey, 0)
 
 	// conflicting options: use task id if positive else use task name
-	if runOpts.IsExist(config.TaskName) && runOpts.IsExist(config.TaskId) {
+	if runOpts.IsExist(taskNameArgKey) && runOpts.IsExist(taskIdArgKey) {
 		if taskId > 0 {
 			omppLog.Log("dbcopy options conflict. Using task id: ", taskId, " ignore task name: ", taskName)
 			taskName = ""
@@ -230,11 +230,11 @@ func dbDeleteTask(modelName string, modelDigest string, runOpts *config.RunOptio
 	}
 
 	if taskId < 0 || taskId == 0 && taskName == "" {
-		return errors.New("dbcopy invalid argument(s) for task id: " + runOpts.String(config.TaskId) + " and/or task name: " + runOpts.String(config.TaskName))
+		return errors.New("dbcopy invalid argument(s) for task id: " + runOpts.String(taskIdArgKey) + " and/or task name: " + runOpts.String(taskNameArgKey))
 	}
 
 	// open source database connection and check is it valid
-	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(config.DbConnectionStr), runOpts.String(config.DbDriverName))
+	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(dbConnStrArgKey), runOpts.String(dbDriverArgKey))
 	srcDb, _, err := db.Open(cs, dn, false)
 	if err != nil {
 		return err

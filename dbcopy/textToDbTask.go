@@ -26,11 +26,11 @@ func textToDbTask(modelName string, modelDigest string, runOpts *config.RunOptio
 	}
 
 	// get modeling task name and id
-	taskName := runOpts.String(config.TaskName)
-	taskId := runOpts.Int(config.TaskId, 0)
+	taskName := runOpts.String(taskNameArgKey)
+	taskId := runOpts.Int(taskIdArgKey, 0)
 
 	if taskId < 0 || taskId == 0 && taskName == "" {
-		return errors.New("dbcopy invalid argument(s) for modeling task id: " + runOpts.String(config.TaskId) + " and/or name: " + runOpts.String(config.TaskName))
+		return errors.New("dbcopy invalid argument(s) for modeling task id: " + runOpts.String(taskIdArgKey) + " and/or name: " + runOpts.String(taskNameArgKey))
 	}
 
 	// deirectory for task metadata: it is input directory/modelName
@@ -44,7 +44,7 @@ func textToDbTask(modelName string, modelDigest string, runOpts *config.RunOptio
 	// get model task metadata json path by task id or task name or both
 	var metaPath string
 
-	if runOpts.IsExist(config.TaskName) && runOpts.IsExist(config.TaskId) { // both: task id and name
+	if runOpts.IsExist(taskNameArgKey) && runOpts.IsExist(taskIdArgKey) { // both: task id and name
 
 		metaPath = filepath.Join(inpDir,
 			modelName+".task."+strconv.Itoa(taskId)+"."+helper.ToAlphaNumeric(taskName)+".json")
@@ -53,10 +53,10 @@ func textToDbTask(modelName string, modelDigest string, runOpts *config.RunOptio
 
 		// make path search patterns for metadata json file
 		var mp string
-		if runOpts.IsExist(config.TaskName) && !runOpts.IsExist(config.TaskId) { // task name only
+		if runOpts.IsExist(taskNameArgKey) && !runOpts.IsExist(taskIdArgKey) { // task name only
 			mp = modelName + ".task.[0-9]*." + helper.ToAlphaNumeric(taskName) + ".json"
 		}
-		if !runOpts.IsExist(config.TaskName) && runOpts.IsExist(config.TaskId) { // task id only
+		if !runOpts.IsExist(taskNameArgKey) && runOpts.IsExist(taskIdArgKey) { // task id only
 			mp = modelName + ".task." + strconv.Itoa(taskId) + ".*.json"
 		}
 
@@ -83,15 +83,15 @@ func textToDbTask(modelName string, modelDigest string, runOpts *config.RunOptio
 	}
 
 	// get connection string and driver name
-	cs := runOpts.String(toDbConnectionStr)
+	cs := runOpts.String(toDbConnStrArgKey)
 	// use OpenM options if DBCopy ouput database not defined
-	//	if cs == "" && runOpts.IsExist(config.DbConnectionStr) {
-	//		cs = runOpts.String(config.DbConnectionStr)
+	//	if cs == "" && runOpts.IsExist(dbConnStrArgKey) {
+	//		cs = runOpts.String(dbConnStrArgKey)
 	//	}
 
-	dn := runOpts.String(toDbDriverName)
-	if dn == "" && runOpts.IsExist(config.DbDriverName) {
-		dn = runOpts.String(config.DbDriverName)
+	dn := runOpts.String(toDbDriverArgKey)
+	if dn == "" && runOpts.IsExist(dbDriverArgKey) {
+		dn = runOpts.String(dbDriverArgKey)
 	}
 
 	cs, dn = db.IfEmptyMakeDefault(modelName, cs, dn)

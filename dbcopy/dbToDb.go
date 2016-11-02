@@ -15,10 +15,10 @@ import (
 func dbToDb(modelName string, modelDigest string, runOpts *config.RunOptions) error {
 
 	// validate source and destination
-	inpConnStr := runOpts.String(config.DbConnectionStr)
-	inpDriver := runOpts.String(config.DbDriverName)
-	outConnStr := runOpts.String(toDbConnectionStr)
-	outDriver := runOpts.String(toDbDriverName)
+	inpConnStr := runOpts.String(dbConnStrArgKey)
+	inpDriver := runOpts.String(dbDriverArgKey)
+	outConnStr := runOpts.String(toDbConnStrArgKey)
+	outDriver := runOpts.String(toDbDriverArgKey)
 
 	if inpConnStr == outConnStr && inpDriver == outDriver {
 		return errors.New("source same as destination: cannot overwrite model in database")
@@ -51,7 +51,7 @@ func dbToDb(modelName string, modelDigest string, runOpts *config.RunOptions) er
 	}
 
 	// get source model metadata and languages, make a deep copy to use for destination database writing
-	err = copyDbToDb(srcDb, dstDb, dbFacet, modelName, modelDigest, runOpts.String(config.DoubleFormat))
+	err = copyDbToDb(srcDb, dstDb, dbFacet, modelName, modelDigest, runOpts.String(doubleFormatArgKey))
 	if err != nil {
 		return err
 	}

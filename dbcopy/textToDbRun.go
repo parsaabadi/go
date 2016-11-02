@@ -26,11 +26,11 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 	}
 
 	// get model run name and id
-	runName := runOpts.String(config.RunName)
-	runId := runOpts.Int(config.RunId, 0)
+	runName := runOpts.String(runNameArgKey)
+	runId := runOpts.Int(runIdArgKey, 0)
 
 	if runId < 0 || runId == 0 && runName == "" {
-		return errors.New("dbcopy invalid argument(s) for model run id: " + runOpts.String(config.RunId) + " and/or name: " + runOpts.String(config.RunName))
+		return errors.New("dbcopy invalid argument(s) for model run id: " + runOpts.String(runIdArgKey) + " and/or name: " + runOpts.String(runNameArgKey))
 	}
 
 	// root for run data: input directory or name of input.zip
@@ -59,7 +59,7 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 	var metaPath string
 	var csvDir string
 
-	if runOpts.IsExist(config.RunName) && runOpts.IsExist(config.RunId) { // both: run id and name
+	if runOpts.IsExist(runNameArgKey) && runOpts.IsExist(runIdArgKey) { // both: run id and name
 
 		metaPath = filepath.Join(inpDir,
 			modelName+".run."+strconv.Itoa(runId)+"."+helper.ToAlphaNumeric(runName)+".json")
@@ -70,10 +70,10 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 
 		// make path search patterns for metadata json and csv directory
 		var cp string
-		if runOpts.IsExist(config.RunName) && !runOpts.IsExist(config.RunId) { // run name only
+		if runOpts.IsExist(runNameArgKey) && !runOpts.IsExist(runIdArgKey) { // run name only
 			cp = "run.[0-9]*." + helper.ToAlphaNumeric(runName)
 		}
-		if !runOpts.IsExist(config.RunName) && runOpts.IsExist(config.RunId) { // run id only
+		if !runOpts.IsExist(runNameArgKey) && runOpts.IsExist(runIdArgKey) { // run id only
 			cp = "run." + strconv.Itoa(runId) + ".*"
 		}
 		mp := modelName + "." + cp + ".json"
@@ -115,15 +115,15 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 	}
 
 	// get connection string and driver name
-	cs := runOpts.String(toDbConnectionStr)
+	cs := runOpts.String(toDbConnStrArgKey)
 	// use OpenM options if DBCopy ouput database not defined
-	//	if cs == "" && runOpts.IsExist(config.DbConnectionStr) {
-	//		cs = runOpts.String(config.DbConnectionStr)
+	//	if cs == "" && runOpts.IsExist(dbConnStrArgKey) {
+	//		cs = runOpts.String(dbConnStrArgKey)
 	//	}
 
-	dn := runOpts.String(toDbDriverName)
-	if dn == "" && runOpts.IsExist(config.DbDriverName) {
-		dn = runOpts.String(config.DbDriverName)
+	dn := runOpts.String(toDbDriverArgKey)
+	if dn == "" && runOpts.IsExist(dbDriverArgKey) {
+		dn = runOpts.String(dbDriverArgKey)
 	}
 
 	cs, dn = db.IfEmptyMakeDefault(modelName, cs, dn)
