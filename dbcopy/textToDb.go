@@ -29,11 +29,11 @@ func textToDb(modelName string, runOpts *config.RunOptions) error {
 	}
 
 	// get connection string and driver name
-	// use OpenM options if DBCopy ouput database not defined
 	cs := runOpts.String(toDbConnectionStr)
-	if cs == "" && runOpts.IsExist(config.DbConnectionStr) {
-		cs = runOpts.String(config.DbConnectionStr)
-	}
+	// use OpenM options if DBCopy ouput database not defined
+	//	if cs == "" && runOpts.IsExist(config.DbConnectionStr) {
+	//		cs = runOpts.String(config.DbConnectionStr)
+	//	}
 
 	dn := runOpts.String(toDbDriverName)
 	if dn == "" && runOpts.IsExist(config.DbDriverName) {
@@ -199,11 +199,11 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 	}
 
 	// get connection string and driver name
-	// use OpenM options if DBCopy ouput database not defined
 	cs := runOpts.String(toDbConnectionStr)
-	if cs == "" && runOpts.IsExist(config.DbConnectionStr) {
-		cs = runOpts.String(config.DbConnectionStr)
-	}
+	// use OpenM options if DBCopy ouput database not defined
+	//	if cs == "" && runOpts.IsExist(config.DbConnectionStr) {
+	//		cs = runOpts.String(config.DbConnectionStr)
+	//	}
 
 	dn := runOpts.String(toDbDriverName)
 	if dn == "" && runOpts.IsExist(config.DbDriverName) {
@@ -271,14 +271,13 @@ func textToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 	// for csv files this "root" combined with subdirectory: root/set.id.setName
 	inpDir := ""
 	if runOpts.IsExist(config.ParamDir) {
-		inpDir = runOpts.String(config.ParamDir)
+		inpDir = filepath.Clean(runOpts.String(config.ParamDir))
 	} else {
-		inpDir = runOpts.String(inputDirArgKey)
-	}
-	if setId > 0 {
-		inpDir = filepath.Join(inpDir, modelName+".set."+strconv.Itoa(setId))
-	} else {
-		inpDir = filepath.Join(inpDir, modelName+".set."+setName)
+		if setId > 0 {
+			inpDir = filepath.Join(runOpts.String(inputDirArgKey), modelName+".set."+strconv.Itoa(setId))
+		} else {
+			inpDir = filepath.Join(runOpts.String(inputDirArgKey), modelName+".set."+setName)
+		}
 	}
 
 	// unzip if required and use unzipped directory as "root" input diretory
@@ -287,6 +286,9 @@ func textToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 		omppLog.Log("Unpack ", base, ".zip")
 
 		outDir := runOpts.String(outputDirArgKey)
+		if outDir == "" {
+			outDir = filepath.Dir(inpDir)
+		}
 		if err := helper.UnpackZip(inpDir+".zip", outDir); err != nil {
 			return err
 		}
@@ -374,11 +376,11 @@ func textToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 	}
 
 	// get connection string and driver name
-	// use OpenM options if DBCopy ouput database not defined
 	cs := runOpts.String(toDbConnectionStr)
-	if cs == "" && runOpts.IsExist(config.DbConnectionStr) {
-		cs = runOpts.String(config.DbConnectionStr)
-	}
+	// use OpenM options if DBCopy ouput database not defined
+	//	if cs == "" && runOpts.IsExist(config.DbConnectionStr) {
+	//		cs = runOpts.String(config.DbConnectionStr)
+	//	}
 
 	dn := runOpts.String(toDbDriverName)
 	if dn == "" && runOpts.IsExist(config.DbDriverName) {
@@ -491,11 +493,11 @@ func textToDbTask(modelName string, modelDigest string, runOpts *config.RunOptio
 	}
 
 	// get connection string and driver name
-	// use OpenM options if DBCopy ouput database not defined
 	cs := runOpts.String(toDbConnectionStr)
-	if cs == "" && runOpts.IsExist(config.DbConnectionStr) {
-		cs = runOpts.String(config.DbConnectionStr)
-	}
+	// use OpenM options if DBCopy ouput database not defined
+	//	if cs == "" && runOpts.IsExist(config.DbConnectionStr) {
+	//		cs = runOpts.String(config.DbConnectionStr)
+	//	}
 
 	dn := runOpts.String(toDbDriverName)
 	if dn == "" && runOpts.IsExist(config.DbDriverName) {

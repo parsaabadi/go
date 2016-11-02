@@ -230,7 +230,11 @@ func dbToTextWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 	if runOpts.IsExist(config.ParamDir) {
 		outDir = filepath.Clean(runOpts.String(config.ParamDir))
 	} else {
-		outDir = runOpts.String(outputDirArgKey)
+		if setId > 0 {
+			outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".set."+strconv.Itoa(setId))
+		} else {
+			outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".set."+setName)
+		}
 	}
 
 	// get workset metadata by id or name
@@ -242,7 +246,6 @@ func dbToTextWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 		if wsRow == nil {
 			return errors.New("workset not found, set id: " + strconv.Itoa(setId))
 		}
-		outDir = filepath.Join(outDir, modelName+".set."+strconv.Itoa(setId))
 	} else {
 		if wsRow, err = db.GetWorksetByName(srcDb, modelDef.Model.ModelId, setName); err != nil {
 			return err
@@ -250,7 +253,6 @@ func dbToTextWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 		if wsRow == nil {
 			return errors.New("workset not found: " + setName)
 		}
-		outDir = filepath.Join(outDir, modelName+".set."+setName)
 	}
 
 	wm, err := db.GetWorksetFull(srcDb, wsRow, "") // get full workset metadata

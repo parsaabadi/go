@@ -283,7 +283,7 @@ func addStandardFlags(runOpts *RunOptions, logOpts *LogOptions) {
 func adjustLogOptions(runOpts *RunOptions, logOpts *LogOptions) {
 
 	// if log file path is not empty then LogToFile must be true
-	if logOpts.LogPath != "" || logOpts.IsFile || runOpts.Bool(LogToFile) {
+	if logOpts.LogPath != "" || logOpts.IsFile || runOpts.Bool(LogToFile) || runOpts.Bool(LogSql) {
 		logOpts.IsFile = true
 		runOpts.KeyValue[LogToFile] = strconv.FormatBool(logOpts.IsFile)
 	}

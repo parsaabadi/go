@@ -54,7 +54,11 @@ To specify output or input directory for text files:
   dbcopy -m redModel -dbcopy.InputDir red -dbcopy.To db -dbcopy.ToDatabase "Database=dst.sqlite;OpenMode=ReadWrite"
   dbcopy -m redModel -dbcopy.OutputDir red -s Default
 
-Also in case of input parameters you can use "-OpenM.ParamDir" or "-p" to specify input or output directory:
+To avoid path conflicts InputDir and OutputDir combined with model name, model run name or name of input parameters set.
+For example:
+  dbcopy -m redModel -dbcopy.OutputDir red -s Default
+will place "Default" input set of parameters into directory one/redModel.set.Default.
+You can override this rul by using "-OpenM.ParamDir" or "-p" to specify exact location of parameters set:
   dbcopy -m modelOne -OpenM.SetId 2 -OpenM.ParamDir two
   dbcopy -m modelOne -OpenM.SetId 2 -p two
   dbcopy -m redModel -s Default -p 101 -dbcopy.To db -dbcopy.ToDatabase "Database=dst.sqlite;OpenMode=ReadWrite"
