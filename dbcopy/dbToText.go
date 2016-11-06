@@ -48,24 +48,24 @@ func dbToText(modelName string, modelDigest string, runOpts *config.RunOptions) 
 	}
 
 	// write model definition to json file
-	if err = toModelJsonFile(srcDb, modelDef, outDir); err != nil {
+	if err = toModelJson(srcDb, modelDef, outDir); err != nil {
 		return err
 	}
 
 	// write all model run data into csv files: parameters, output expressions and accumulators
 	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
-	if err = toRunTextFileList(srcDb, modelDef, outDir, dblFmt, isIdCsv); err != nil {
+	if err = toRunListText(srcDb, modelDef, outDir, dblFmt, isIdCsv); err != nil {
 		return err
 	}
 
 	// write all readonly workset data into csv files: input parameters
-	if err = toWorksetTextFileList(srcDb, modelDef, outDir, dblFmt, isIdCsv); err != nil {
+	if err = toWorksetListText(srcDb, modelDef, outDir, dblFmt, isIdCsv); err != nil {
 		return err
 	}
 
 	// write all modeling tasks and task run history to json files
-	if err = toTaskJsonFileList(srcDb, modelDef, outDir); err != nil {
+	if err = toTaskListJson(srcDb, modelDef, outDir); err != nil {
 		return err
 	}
 
@@ -81,8 +81,8 @@ func dbToText(modelName string, modelDigest string, runOpts *config.RunOptions) 
 	return nil
 }
 
-// toModelJsonFile convert model metadata to json and write into json files.
-func toModelJsonFile(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
+// toModelJson convert model metadata to json and write into json files.
+func toModelJson(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 
 	// get list of languages
 	langDef, err := db.GetLanguages(dbConn)
@@ -96,7 +96,7 @@ func toModelJsonFile(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) erro
 		return err
 	}
 
-	// get model parameter and output table groups (description and notes) in all languages
+	// get model parameter and output table groups and group text (description and notes) in all languages
 	modelGroup, err := db.GetModelGroup(dbConn, modelDef.Model.ModelId, "")
 	if err != nil {
 		return err
@@ -128,9 +128,9 @@ func toModelJsonFile(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) erro
 	return nil
 }
 
-// toCsvFile convert parameter or output table values and write into csvDir/fileName.csv file.
+// toCsvCellFile convert parameter or output table values and write into csvDir/fileName.csv file.
 // if isIdCsv is true then csv contains enum id's, default: enum code
-func toCsvFile(
+func toCsvCellFile(
 	csvDir string, modelDef *db.ModelMeta, name string, cell db.CsvConverter, cellLst *list.List, doubleFmt string, isIdCsv bool) error {
 
 	// converter from db cell to csv row []string
@@ -161,7 +161,7 @@ func toCsvFile(
 	wr := csv.NewWriter(f)
 
 	// write header line: column names
-	cs, err := cell.CsvHeader(modelDef, name, false)
+	cs, err := cell.CsvHeader(modelDef, name, isIdCsv)
 	if err != nil {
 		return err
 	}

@@ -91,7 +91,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 	}
 
 	// write task metadata into json file
-	if err = toTaskJsonFile(srcDb, modelDef, meta, outDir); err != nil {
+	if err = toTaskJson(srcDb, modelDef, meta, outDir); err != nil {
 		return err
 	}
 
@@ -136,7 +136,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 			}
 
 			// write model run metadata into json, parameters and output result values into csv files
-			if err = toRunTextFile(srcDb, modelDef, rm, outDir, dblFmt, isIdCsv); err != nil {
+			if err = toRunText(srcDb, modelDef, rm, outDir, dblFmt, isIdCsv); err != nil {
 				return err
 			}
 		}
@@ -176,7 +176,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 		}
 
 		// write workset metadata into json and parameter values into csv files
-		if err = toWorksetTextFile(dbConn, modelDef, wm, outDir, dblFmt, isIdCsv); err != nil {
+		if err = toWorksetText(dbConn, modelDef, wm, outDir, dblFmt, isIdCsv); err != nil {
 			return err
 		}
 		return nil
@@ -224,8 +224,8 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 	return nil
 }
 
-// toTaskJsonFileList convert all successfully completed tasks and tasks run history to json and write into json files
-func toTaskJsonFileList(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
+// toTaskListJson convert all successfully completed tasks and tasks run history to json and write into json files
+func toTaskListJson(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 
 	// get all modeling tasks and successfully completed tasks run history
 	tl, err := db.GetTaskFullList(dbConn, modelDef.Model.ModelId, true, "")
@@ -235,15 +235,15 @@ func toTaskJsonFileList(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) e
 
 	// read each task metadata and write into json files
 	for k := range tl {
-		if err := toTaskJsonFile(dbConn, modelDef, &tl[k], outDir); err != nil {
+		if err := toTaskJson(dbConn, modelDef, &tl[k], outDir); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// toTaskJsonFile convert modeling task and task run history to json and write into json file
-func toTaskJsonFile(dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.TaskMeta, outDir string) error {
+// toTaskJson convert modeling task and task run history to json and write into json file
+func toTaskJson(dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.TaskMeta, outDir string) error {
 
 	// convert db rows into "public" format
 	omppLog.Log("Modeling task ", meta.Task.TaskId, " ", meta.Task.Name)

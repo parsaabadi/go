@@ -12,7 +12,7 @@ Only model name argument does not have default value and must be specified expli
   dbcopy -m modelOne
   dbcopy -dbcopy.ModelName modelOne
 
-There are 3 possible copy directions: "text", "db", "db2db" and default is "text".
+There are 4 possible copy directions: "text", "db", "db2db", "csv" and default is "text".
 It is also possible to delete entire model or some model data from database (see dbcopy.Delete below).
 
 Copy to "text": read from database and save into metadata .json and .csv values (parameters and output tables):
@@ -23,6 +23,9 @@ Copy to "db": read from metadata .json and .csv values and insert or update data
 
 Copy to "db2db": direct copy between two databases:
   dbcopy -m modelOne -dbcopy.To db2db -dbcopy.ToDatabase "Database=dst.sqlite;OpenMode=ReadWrite"
+
+Copy to "csv": read entire model from database and save .csv files:
+  dbcopy -m modelOne -dbcopy.To csv
 
 By default entire model data is copied.
 It is also possible to copy only: model run results and input parameters,
@@ -64,11 +67,11 @@ If neccesary you can specify exact directory for input parameters by using "-dbc
   dbcopy -m redModel -s Default -p 101 -dbcopy.To db -dbcopy.ToDatabase "Database=dst.sqlite;OpenMode=ReadWrite"
 
 By default parameters and output results .csv files contain codes in dimension column(s), e.g.: Sex=[Male,Female].
-If you want to create csv files with numeric id's Sex=[0,1] instead then use ToIdCsv=true option:
-  dbcopy -m modelOne -dbcopy.ToIdCsv
-  dbcopy -m redModel -dbcopy.ToIdCsv -s Default
-  dbcopy -m modelOne -dbcopy.ToIdCsv -dbcopy.RunId 101
-  dbcopy -m modelOne -dbcopy.ToIdCsv -dbcopy.TaskName taskOne
+If you want to create csv files with numeric id's Sex=[0,1] instead then use IdCsv=true option:
+  dbcopy -m modelOne -dbcopy.IdCsv
+  dbcopy -m redModel -dbcopy.IdCsv -s Default
+  dbcopy -m modelOne -dbcopy.IdCsv -dbcopy.RunId 101
+  dbcopy -m modelOne -dbcopy.IdCsv -dbcopy.TaskName taskOne
 
 To delete from database entire model, model run results, set of input parameters or modeling task:
   dbcopy -m modelOne -dbcopy.Delete
@@ -149,7 +152,7 @@ const (
 	paramDirShortKey   = "p"                       // path to workset parameters directory (short form)
 	zipArgKey          = "dbcopy.Zip"              // create output or use as input model.zip
 	doubleFormatArgKey = "dbcopy.DoubleFormat"     // convert to string format for float and double
-	useIdCsvArgKey     = "dbcopy.ToIdCsv"          // if true then create csv files with enum id's default: enum code
+	useIdCsvArgKey     = "dbcopy.IdCsv"            // if true then create csv files with enum id's default: enum code
 	encodingArgKey     = "dbcopy.CodePage"         // code page for converting source files, e.g. windows-1252
 )
 
@@ -167,7 +170,7 @@ func main() {
 func mainBody(args []string) error {
 
 	// set dbcopy command line argument keys and ini-file keys
-	_ = flag.String(copyToArgKey, "text", "copy to: `text`=db-to-text, db=text-to-db, db2db=db-to-db")
+	_ = flag.String(copyToArgKey, "text", "copy to: `text`=db-to-text, db=text-to-db, db2db=db-to-db, csv=db-to-csv")
 	_ = flag.Bool(deleteArgKey, false, "delete from database: model or workset (set of model input parameters) or model run")
 	_ = flag.String(modelNameArgKey, "", "model name")
 	_ = flag.String(modelNameShortKey, "", "model name (short of "+modelNameArgKey+")")
@@ -229,8 +232,8 @@ func mainBody(args []string) error {
 		(runOpts.IsExist(toDbConnStrArgKey) || runOpts.IsExist(toDbDriverArgKey)) {
 		return errors.New("dbcopy invalid arguments: output database can be specified only if " + copyToArgKey + "=db or =db2db")
 	}
-	if copyToArg != "text" && runOpts.IsExist(useIdCsvArgKey) {
-		return errors.New("dbcopy invalid arguments: " + useIdCsvArgKey + " can be used only if " + copyToArgKey + "=text")
+	if copyToArg != "text" && copyToArg != "csv" && runOpts.IsExist(useIdCsvArgKey) {
+		return errors.New("dbcopy invalid arguments: " + useIdCsvArgKey + " can be used only if " + copyToArgKey + "=text or =csv")
 	}
 
 	// do delete model run, workset or entire model
@@ -300,6 +303,8 @@ func mainBody(args []string) error {
 		switch copyToArg {
 		case "text":
 			err = dbToText(modelName, modelDigest, runOpts)
+		case "csv":
+			err = dbToCsv(modelName, modelDigest, runOpts)
 		case "db":
 			err = textToDb(modelName, runOpts)
 		case "db2db":

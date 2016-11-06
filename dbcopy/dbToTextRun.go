@@ -100,7 +100,7 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 	// write model run metadata into json, parameters and output result values into csv files
 	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
-	if err = toRunTextFile(srcDb, modelDef, meta, outDir, dblFmt, isIdCsv); err != nil {
+	if err = toRunText(srcDb, modelDef, meta, outDir, dblFmt, isIdCsv); err != nil {
 		return err
 	}
 
@@ -116,8 +116,8 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 	return nil
 }
 
-// toRunTextFileList write all model runs parameters and output tables into csv files, each run in separate subdirectory
-func toRunTextFileList(
+// toRunListText write all model runs parameters and output tables into csv files, each run in separate subdirectory
+func toRunListText(
 	dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleFmt string, isIdCsv bool) error {
 
 	// get all successfully completed model runs
@@ -128,7 +128,7 @@ func toRunTextFileList(
 
 	// read all run parameters, output accumulators and expressions and dump it into csv files
 	for k := range rl {
-		err = toRunTextFile(dbConn, modelDef, &rl[k], outDir, doubleFmt, isIdCsv)
+		err = toRunText(dbConn, modelDef, &rl[k], outDir, doubleFmt, isIdCsv)
 		if err != nil {
 			return err
 		}
@@ -136,8 +136,8 @@ func toRunTextFileList(
 	return nil
 }
 
-// toRunTextFile write model run metadata, parameters and output tables into csv files, in separate subdirectory
-func toRunTextFile(
+// toRunText write model run metadata, parameters and output tables into csv files, in separate subdirectory
+func toRunText(
 	dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.RunMeta, outDir string, doubleFmt string, isIdCsv bool) error {
 
 	// convert db rows into "public" format
@@ -174,7 +174,7 @@ func toRunTextFile(
 		}
 
 		var cp db.Cell
-		err = toCsvFile(csvDir, modelDef, modelDef.Param[j].Name, cp, cLst, doubleFmt, isIdCsv)
+		err = toCsvCellFile(csvDir, modelDef, layout.Name, cp, cLst, doubleFmt, isIdCsv)
 		if err != nil {
 			return err
 		}
@@ -193,7 +193,7 @@ func toRunTextFile(
 		}
 
 		var ec db.CellExpr
-		err = toCsvFile(csvDir, modelDef, modelDef.Table[j].Name, ec, cLst, doubleFmt, isIdCsv)
+		err = toCsvCellFile(csvDir, modelDef, layout.Name, ec, cLst, doubleFmt, isIdCsv)
 		if err != nil {
 			return err
 		}
@@ -207,7 +207,7 @@ func toRunTextFile(
 		}
 
 		var ac db.CellAcc
-		err = toCsvFile(csvDir, modelDef, modelDef.Table[j].Name, ac, cLst, doubleFmt, isIdCsv)
+		err = toCsvCellFile(csvDir, modelDef, layout.Name, ac, cLst, doubleFmt, isIdCsv)
 		if err != nil {
 			return err
 		}

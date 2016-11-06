@@ -86,7 +86,7 @@ func copyDbToDb(
 		return err
 	}
 
-	// source: get model parameter and output table groups (description and notes) in all languages
+	// source: get model parameter and output table groups and group text (description and notes) in all languages
 	modelGroup, err := db.GetModelGroup(srcDb, srcModel.Model.ModelId, "")
 	if err != nil {
 		return err

@@ -108,7 +108,7 @@ func dbToTextWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 	// write workset metadata into json and parameter values into csv files
 	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
-	if err = toWorksetTextFile(srcDb, modelDef, wm, outDir, dblFmt, isIdCsv); err != nil {
+	if err = toWorksetText(srcDb, modelDef, wm, outDir, dblFmt, isIdCsv); err != nil {
 		return err
 	}
 
@@ -124,8 +124,8 @@ func dbToTextWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 	return nil
 }
 
-// toWorksetTextFileList write all readonly worksets into csv files, each set in separate subdirectory
-func toWorksetTextFileList(
+// toWorksetListText write all readonly worksets into csv files, each set in separate subdirectory
+func toWorksetListText(
 	dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleFmt string, isIdCsv bool) error {
 
 	// get all readonly worksets
@@ -136,7 +136,7 @@ func toWorksetTextFileList(
 
 	// read all workset parameters and dump it into csv files
 	for k := range wl {
-		err = toWorksetTextFile(dbConn, modelDef, &wl[k], outDir, doubleFmt, isIdCsv)
+		err = toWorksetText(dbConn, modelDef, &wl[k], outDir, doubleFmt, isIdCsv)
 		if err != nil {
 			return err
 		}
@@ -144,8 +144,8 @@ func toWorksetTextFileList(
 	return nil
 }
 
-// toWorksetTextFile write workset into csv file, in separate subdirectory
-func toWorksetTextFile(
+// toWorksetText write workset into csv file, in separate subdirectory
+func toWorksetText(
 	dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.WorksetMeta, outDir string, doubleFmt string, isIdCsv bool) error {
 
 	// convert db rows into "public" format
@@ -182,7 +182,7 @@ func toWorksetTextFile(
 		}
 
 		var cp db.Cell
-		err = toCsvFile(csvDir, modelDef, modelDef.Param[j].Name, cp, cLst, doubleFmt, isIdCsv)
+		err = toCsvCellFile(csvDir, modelDef, layout.Name, cp, cLst, doubleFmt, isIdCsv)
 		if err != nil {
 			return err
 		}
