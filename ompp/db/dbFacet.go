@@ -12,7 +12,7 @@ const (
 	DefaultFacet Facet = iota // common default db facet
 	SqliteFacet               // SQLite db facet
 	PgSqlFacet                // PostgreSQL db facet
-	MySqlFacet                // MySQL db facet
+	MySqlFacet                // MySQL and MariaDB facet
 	MsSqlFacet                // MS SQL db facet
 	OracleFacet               // Oracle db facet
 	Db2Facet                  // DB2 db facet
