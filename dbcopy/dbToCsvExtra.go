@@ -42,41 +42,34 @@ func toLanguageCsv(dbConn *sql.DB, outDir string) error {
 		return errors.New("failed to write languages into csv " + err.Error())
 	}
 
+	// convert language words map to array of (id,key,value) rows
+	var kvArr [][]string
+	k := 0
+	for j := range langDef.Lang {
+		for key, val := range langDef.Lang[j].Words {
+			kvArr = append(kvArr, make([]string, 3))
+			kvArr[k][0] = strconv.Itoa(langDef.Lang[j].LangId)
+			kvArr[k][1] = key
+			kvArr[k][2] = val
+			k++
+		}
+	}
+
 	// write language word rows into csv
 	row = make([]string, 3)
 
 	idx = 0
-	j := 0
 	err = toCsvFile(
 		outDir,
 		"lang_word.csv",
 		[]string{"lang_id", "word_code", "word_value"},
 		func() (bool, []string, error) {
-
-			if idx < 0 || idx >= len(langDef.Lang) { // end of language rows
-				return true, row, nil
+			if 0 <= idx && idx < len(kvArr) {
+				row = kvArr[idx]
+				idx++
+				return false, row, nil
 			}
-
-			// if end of current language words then find next language with word list
-			if j < 0 || j >= len(langDef.Lang[idx].Word) {
-				j = 0
-				for {
-					idx++
-					if idx < 0 || idx >= len(langDef.Lang) { // end of language rows
-						return true, row, nil
-					}
-					if len(langDef.Lang[idx].Word) > 0 {
-						break
-					}
-				}
-			}
-
-			// make language word []string row
-			row[0] = strconv.Itoa(langDef.Lang[idx].Word[j].LangId)
-			row[1] = langDef.Lang[idx].Word[j].WordCode
-			row[2] = langDef.Lang[idx].Word[j].Value
-			j++
-			return false, row, nil
+			return true, row, nil // end of language word rows
 		})
 	if err != nil {
 		return errors.New("failed to write language words into csv " + err.Error())
@@ -195,6 +188,15 @@ func toModelProfileCsv(dbConn *sql.DB, modelName string, outDir string) error {
 		return err
 	}
 
+	// convert options map to array of (key,value) rows
+	kvArr := make([][2]string, len(modelProfile.Opts))
+	k := 0
+	for key, val := range modelProfile.Opts {
+		kvArr[k][0] = key
+		kvArr[k][1] = val
+		k++
+	}
+
 	// write profile options into csv
 	row := make([]string, 3)
 	row[0] = modelProfile.Name
@@ -205,20 +207,12 @@ func toModelProfileCsv(dbConn *sql.DB, modelName string, outDir string) error {
 		"profile_option.csv",
 		[]string{"profile_name", "option_key", "option_value"},
 		func() (bool, []string, error) {
-
-			if 0 <= idx && idx < len(modelProfile.Opts) { // if not all options done yet
-				k := 0
-				for key, val := range modelProfile.Opts { // loop over options (key,value)
-					if k++; k < idx {
-						continue // skip: that option already processed
-					}
-					row[1] = key
-					row[2] = val
-					idx++
-					return false, row, nil
-				}
+			if 0 <= idx && idx < len(kvArr) {
+				row[1] = kvArr[idx][0]
+				row[2] = kvArr[idx][1]
+				idx++
+				return false, row, nil
 			}
-
 			return true, row, nil // end of profile rows
 		})
 	if err != nil {

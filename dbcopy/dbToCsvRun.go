@@ -111,48 +111,34 @@ func toRunListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleF
 		return errors.New("failed to write model run text into csv " + err.Error())
 	}
 
+	// convert run option map to array of (id,key,value) rows
+	var kvArr [][]string
+	k := 0
+	for j := range rl {
+		for key, val := range rl[j].Opts {
+			kvArr = append(kvArr, make([]string, 3))
+			kvArr[k][0] = strconv.Itoa(rl[j].Run.RunId)
+			kvArr[k][1] = key
+			kvArr[k][2] = val
+			k++
+		}
+	}
+
 	// write model run option rows into csv
 	row = make([]string, 3)
 
 	idx = 0
-	rpi := 0
 	err = toCsvFile(
 		outDir,
 		"run_option.csv",
 		[]string{"run_id", "option_key", "option_value"},
 		func() (bool, []string, error) {
-
-			if idx < 0 || idx >= len(rl) { // end of run rows
-				return true, row, nil
-			}
-
-			// if end of current run options then find next run with option rows
-			if rpi < 0 || rpi >= len(rl[idx].Opts) {
-				rpi = 0
-				for {
-					idx++
-					if idx < 0 || idx >= len(rl) { // end of run rows
-						return true, row, nil
-					}
-					if len(rl[idx].Opts) > 0 {
-						break
-					}
-				}
-			}
-
-			// make run options []string row
-			k := 0
-			for key, val := range rl[idx].Opts { // loop over options (key,value)
-				if k++; k < rpi {
-					continue // skip: that option already processed
-				}
-				row[0] = strconv.Itoa(rl[idx].Run.RunId)
-				row[1] = key
-				row[2] = val
-				rpi++
+			if 0 <= idx && idx < len(kvArr) {
+				row = kvArr[idx]
+				idx++
 				return false, row, nil
 			}
-			return true, row, nil // it is an error to be there
+			return true, row, nil // end of run rows
 		})
 	if err != nil {
 		return errors.New("failed to write model run text into csv " + err.Error())

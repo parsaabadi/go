@@ -95,7 +95,7 @@ func GetLanguages(dbConn *sql.DB) (*LangMeta, error) {
 			if err := rows.Scan(&r.LangId, &r.LangCode, &r.Name); err != nil {
 				return err
 			}
-			langDef.Lang = append(langDef.Lang, langWord{LangLstRow: r})
+			langDef.Lang = append(langDef.Lang, langWord{LangLstRow: r, Words: make(map[string]string)})
 			return nil
 		})
 	if err != nil {
@@ -106,17 +106,18 @@ func GetLanguages(dbConn *sql.DB) (*LangMeta, error) {
 	}
 	langDef.updateInternals() // update internal maps from id and code to index of language
 
-	// select lang_word rows into list
+	// select lang_word rows into (key, value) map for each language
 	err = SelectRows(dbConn,
 		"SELECT lang_id, word_code, word_value FROM lang_word ORDER BY 1, 2",
 		func(rows *sql.Rows) error {
 
-			var r WordRow
-			err := rows.Scan(&r.LangId, &r.WordCode, &r.Value)
+			var langId int
+			var code, val string
+			err := rows.Scan(&langId, &code, &val)
 
 			if err == nil {
-				if i, ok := langDef.idIndex[r.LangId]; ok { // ignore if lang_id not exist, assume updated lang_lst between selects
-					langDef.Lang[i].Word = append(langDef.Lang[i].Word, r)
+				if i, ok := langDef.idIndex[langId]; ok { // ignore if lang_id not exist, assume updated lang_lst between selects
+					langDef.Lang[i].Words[code] = val
 				}
 			}
 			return err

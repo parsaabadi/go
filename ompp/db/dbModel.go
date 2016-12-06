@@ -99,8 +99,18 @@ type LangMeta struct {
 
 // langWord is language and words in that language
 type langWord struct {
-	LangLstRow           // lang_lst db-table row
-	Word       []WordRow // lang_word db-table rows for the language
+	LangLstRow                   // lang_lst db-table row
+	Words      map[string]string // lang_word db-table rows as (code, value) map
+}
+
+// LangLstRow is db row of lang_lst table.
+//
+// LangId is db-unique id of the language.
+// LangCode is unique language code: EN, FR.
+type LangLstRow struct {
+	LangId   int    // lang_id   INT          NOT NULL
+	LangCode string // lang_code VARCHAR(32)  NOT NULL
+	Name     string // lang_name VARCHAR(255) NOT NULL
 }
 
 // NameLangNote is a name and notes by language,
@@ -121,23 +131,6 @@ type descrNote struct {
 type langNote struct {
 	LangCode string // lang_code VARCHAR(32)  NOT NULL
 	Note     string // note      VARCHAR(32000)
-}
-
-// LangLstRow is db row of lang_lst table.
-//
-// LangId is db-unique id of the language.
-// LangCode is unique language code: EN, FR.
-type LangLstRow struct {
-	LangId   int    // lang_id   INT          NOT NULL
-	LangCode string // lang_code VARCHAR(32)  NOT NULL
-	Name     string // lang_name VARCHAR(255) NOT NULL
-}
-
-// WordRow is db row of lang_word table
-type WordRow struct {
-	LangId   int    // lang_id    INT          NOT NULL
-	WordCode string // word_code  VARCHAR(255) NOT NULL
-	Value    string // word_value VARCHAR(255) NOT NULL
 }
 
 // ModelDicRow is db row of model_dic table.

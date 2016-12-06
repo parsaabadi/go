@@ -120,7 +120,7 @@ func doUpdateLanguage(trx *sql.Tx, langDef *LangMeta) error {
 		}
 
 		// update lang_word for that language
-		if err = doUpdateWord(trx, langDef.Lang[idx].LangId, langDef.Lang[idx].Word); err != nil {
+		if err = doUpdateWord(trx, langDef.Lang[idx].LangId, langDef.Lang[idx].Words); err != nil {
 			return err
 		}
 	}
@@ -130,8 +130,7 @@ func doUpdateLanguage(trx *sql.Tx, langDef *LangMeta) error {
 
 // doUpdateWord insert new or update existing language words in lang_word table.
 // It does update as part of transaction
-// Language id of wordRs[i].LangId are updated with langId, which expected to be actual id from database
-func doUpdateWord(trx *sql.Tx, langId int, wordRs []WordRow) error {
+func doUpdateWord(trx *sql.Tx, langId int, wordRs map[string]string) error {
 
 	// source is empty: nothing to do, exit
 	if len(wordRs) <= 0 {
@@ -140,17 +139,15 @@ func doUpdateWord(trx *sql.Tx, langId int, wordRs []WordRow) error {
 
 	// for each word:
 	// if language id and word code exist then update else insert into lang_word
-	for idx := range wordRs {
-
-		wordRs[idx].LangId = langId // set language id
+	for code, val := range wordRs {
 
 		// check if this language word already exist
 		// "SELECT COUNT(*) FROM lang_word WHERE lang_id = 0 AND word_code = 'EN'
 		cnt := 0
 		err := TrxSelectFirst(trx,
 			"SELECT COUNT(*) FROM lang_word"+
-				" WHERE lang_id = "+strconv.Itoa(wordRs[idx].LangId)+
-				" AND word_code = "+toQuoted(wordRs[idx].WordCode),
+				" WHERE lang_id = "+strconv.Itoa(langId)+
+				" AND word_code = "+toQuoted(code),
 			func(row *sql.Row) error {
 				return row.Scan(&cnt)
 			})
@@ -164,9 +161,9 @@ func doUpdateWord(trx *sql.Tx, langId int, wordRs []WordRow) error {
 			// UPDATE lang_word SET word_value = 'Max' WHERE lang_id = 0 AND word_code = 'max'
 			err = TrxUpdate(trx,
 				"UPDATE lang_word"+
-					" SET word_value = "+toQuoted(wordRs[idx].Value)+
-					" WHERE lang_id = "+strconv.Itoa(wordRs[idx].LangId)+
-					" AND word_code = "+toQuoted(wordRs[idx].WordCode))
+					" SET word_value = "+toQuoted(val)+
+					" WHERE lang_id = "+strconv.Itoa(langId)+
+					" AND word_code = "+toQuoted(code))
 			if err != nil {
 				return err
 			}
@@ -177,9 +174,9 @@ func doUpdateWord(trx *sql.Tx, langId int, wordRs []WordRow) error {
 			err = TrxUpdate(trx,
 				"INSERT INTO lang_word (lang_id, word_code, word_value)"+
 					" VALUES ("+
-					strconv.Itoa(wordRs[idx].LangId)+", "+
-					toQuoted(wordRs[idx].WordCode)+", "+
-					toQuoted(wordRs[idx].Value)+")")
+					strconv.Itoa(langId)+", "+
+					toQuoted(code)+", "+
+					toQuoted(val)+")")
 			if err != nil {
 				return err
 			}
