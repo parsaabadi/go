@@ -23,14 +23,11 @@ import (
 // Model run serached by:
 // if run digest not empty then by digest;
 // else if run status is error then by run_name, sub_count, sub_completed, status, create_dt.
-func (pub *TaskPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangMeta) (*TaskMeta, bool, bool, error) {
+func (pub *TaskPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskMeta, bool, bool, error) {
 
 	// validate parameters
 	if modelDef == nil {
 		return nil, false, false, errors.New("invalid (empty) model metadata")
-	}
-	if langDef == nil {
-		return nil, false, false, errors.New("invalid (empty) language list")
 	}
 	if pub.ModelName == "" && pub.ModelDigest == "" {
 		return nil, false, false, errors.New("invalid (empty) model name and digest, modeling task: " + pub.Name)
@@ -56,7 +53,6 @@ func (pub *TaskPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta, langDef *Lan
 	// use task id default zero
 	for k := range pub.Txt {
 		meta.Txt[k].LangCode = pub.Txt[k].LangCode
-		meta.Txt[k].LangId = langDef.IdByCode(pub.Txt[k].LangCode)
 		meta.Txt[k].Descr = pub.Txt[k].Descr
 		meta.Txt[k].Note = pub.Txt[k].Note
 	}
@@ -207,11 +203,14 @@ func (pub *TaskPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta, langDef *Lan
 //
 // Model id, task id, run id, set id updated with actual database id's.
 // Remove non-existing worksets and model runs from task
-func (meta *TaskMeta) UpdateTask(dbConn *sql.DB, modelDef *ModelMeta) error {
+func (meta *TaskMeta) UpdateTask(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangMeta) error {
 
 	// validate parameters
 	if modelDef == nil {
 		return errors.New("invalid (empty) model metadata")
+	}
+	if langDef == nil {
+		return errors.New("invalid (empty) language list")
 	}
 	if meta.Task.ModelId != modelDef.Model.ModelId {
 		return errors.New("model task: " + strconv.Itoa(meta.Task.TaskId) + " " + meta.Task.Name + " invalid model id " + strconv.Itoa(meta.Task.ModelId) + " expected: " + strconv.Itoa(modelDef.Model.ModelId))
@@ -222,7 +221,7 @@ func (meta *TaskMeta) UpdateTask(dbConn *sql.DB, modelDef *ModelMeta) error {
 	if err != nil {
 		return err
 	}
-	if err = doUpdateOrInsertTask(trx, modelDef, meta); err != nil {
+	if err = doUpdateOrInsertTask(trx, modelDef, meta, langDef); err != nil {
 		trx.Rollback()
 		return err
 	}
@@ -235,7 +234,7 @@ func (meta *TaskMeta) UpdateTask(dbConn *sql.DB, modelDef *ModelMeta) error {
 // It does update as part of transaction
 // Model id, task id, run id, set id updated with actual database id's.
 // Remove non-existing worksets and model runs from task
-func doUpdateOrInsertTask(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta) error {
+func doUpdateOrInsertTask(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta, langDef *LangMeta) error {
 
 	smId := strconv.Itoa(modelDef.Model.ModelId)
 
@@ -298,7 +297,7 @@ func doUpdateOrInsertTask(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta) erro
 		meta.Task.TaskId = taskId // update task id with actual value
 
 		// insert new task
-		if err = doInsertTask(trx, modelDef, meta); err != nil {
+		if err = doInsertTask(trx, modelDef, meta, langDef); err != nil {
 			return err
 		}
 
@@ -306,7 +305,7 @@ func doUpdateOrInsertTask(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta) erro
 
 		meta.Task.TaskId = taskId // update task id with actual value
 
-		if err = doUpdateTask(trx, modelDef, meta); err != nil {
+		if err = doUpdateTask(trx, modelDef, meta, langDef); err != nil {
 			return err
 		}
 	}
@@ -318,7 +317,7 @@ func doUpdateOrInsertTask(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta) erro
 // It does update as part of transaction
 // Task id, run id, set id updated with actual database id's.
 // Remove non-existing worksets and model runs from task
-func doInsertTask(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta) error {
+func doInsertTask(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta, langDef *LangMeta) error {
 
 	stId := strconv.Itoa(meta.Task.TaskId)
 
@@ -333,7 +332,7 @@ func doInsertTask(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta) error {
 	}
 
 	// insert new rows into task body tables: task_txt, task_set, task_run_lst, task_run_set
-	if err = doInsertTaskBody(trx, modelDef, meta); err != nil {
+	if err = doInsertTaskBody(trx, modelDef, meta, langDef); err != nil {
 		return err
 	}
 	return nil
@@ -343,7 +342,7 @@ func doInsertTask(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta) error {
 // It does update as part of transaction
 // Task id, run id, set id updated with actual database id's.
 // Remove non-existing worksets and model runs from task
-func doUpdateTask(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta) error {
+func doUpdateTask(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta, langDef *LangMeta) error {
 
 	// update with unique name
 	stId := strconv.Itoa(meta.Task.TaskId)
@@ -375,7 +374,7 @@ func doUpdateTask(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta) error {
 	}
 
 	// insert new rows into task body tables: task_txt, task_set, task_run_lst, task_run_set
-	if err = doInsertTaskBody(trx, modelDef, meta); err != nil {
+	if err = doInsertTaskBody(trx, modelDef, meta, langDef); err != nil {
 		return err
 	}
 
@@ -392,25 +391,28 @@ func doUpdateTask(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta) error {
 // doInsertTaskBody insert new rows into task body tables: task_txt, task_set, task_run_lst, task_run_set
 // It does update as part of transaction
 // Task id and task run id updated with actual database id's.
-func doInsertTaskBody(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta) error {
+func doInsertTaskBody(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta, langDef *LangMeta) error {
 
 	stId := strconv.Itoa(meta.Task.TaskId)
 
 	// update task text (description and notes)
 	for j := range meta.Txt {
 
-		// update task id and language id
+		// update task id
 		meta.Txt[j].TaskId = meta.Task.TaskId
 
-		// insert into task_txt
-		err := TrxUpdate(trx,
-			"INSERT INTO task_txt (task_id, lang_id, descr, note) VALUES ("+
-				stId+", "+
-				strconv.Itoa(meta.Txt[j].LangId)+", "+
-				toQuoted(meta.Txt[j].Descr)+", "+
-				toQuotedOrNull(meta.Txt[j].Note)+")")
-		if err != nil {
-			return err
+		// if language code valid then insert into task_txt
+		if lId, ok := langDef.IdByCode(meta.Txt[j].LangCode); ok {
+
+			err := TrxUpdate(trx,
+				"INSERT INTO task_txt (task_id, lang_id, descr, note) VALUES ("+
+					stId+", "+
+					strconv.Itoa(lId)+", "+
+					toQuoted(meta.Txt[j].Descr)+", "+
+					toQuotedOrNull(meta.Txt[j].Note)+")")
+			if err != nil {
+				return err
+			}
 		}
 	}
 

@@ -18,7 +18,7 @@ func (meta *LangMeta) updateInternals() {
 	meta.codeIndex = make(map[string]int, len(meta.Lang))
 
 	for k := range meta.Lang {
-		meta.idIndex[meta.Lang[k].LangId] = k     // index of lang_id in result []language slice
+		meta.idIndex[meta.Lang[k].langId] = k     // index of lang_id in result []language slice
 		meta.codeIndex[meta.Lang[k].LangCode] = k // index of lang_code in result []language slice
 	}
 }

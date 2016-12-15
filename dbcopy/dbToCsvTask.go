@@ -43,14 +43,14 @@ func toTaskListCsv(dbConn *sql.DB, modelId int, outDir string) error {
 	}
 
 	// write task text rows into csv
-	row = make([]string, 5)
+	row = make([]string, 4)
 
 	idx = 0
 	j := 0
 	err = toCsvFile(
 		outDir,
 		"task_txt.csv",
-		[]string{"task_id", "lang_id", "lang_code", "descr", "note"},
+		[]string{"task_id", "lang_code", "descr", "note"},
 		func() (bool, []string, error) {
 
 			if idx < 0 || idx >= len(tl) { // end of task rows
@@ -73,14 +73,13 @@ func toTaskListCsv(dbConn *sql.DB, modelId int, outDir string) error {
 
 			// make task text []string row
 			row[0] = strconv.Itoa(tl[idx].Txt[j].TaskId)
-			row[1] = strconv.Itoa(tl[idx].Txt[j].LangId)
-			row[2] = tl[idx].Txt[j].LangCode
-			row[3] = tl[idx].Txt[j].Descr
+			row[1] = tl[idx].Txt[j].LangCode
+			row[2] = tl[idx].Txt[j].Descr
 
 			if tl[idx].Txt[j].Note == "" { // empty "" string is NULL
-				row[4] = "NULL"
+				row[3] = "NULL"
 			} else {
-				row[4] = tl[idx].Txt[j].Note
+				row[3] = tl[idx].Txt[j].Note
 			}
 			j++
 			return false, row, nil

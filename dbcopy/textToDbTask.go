@@ -398,7 +398,7 @@ func fromTaskJsonToDb(
 	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, pubMeta *db.TaskPub) (int, error) {
 
 	// convert from "public" format into destination db rows
-	meta, isSetNotFound, isTaskRunNotFound, err := pubMeta.FromPublic(dbConn, modelDef, langDef)
+	meta, isSetNotFound, isTaskRunNotFound, err := pubMeta.FromPublic(dbConn, modelDef)
 	if err != nil {
 		return 0, err
 	}
@@ -410,7 +410,7 @@ func fromTaskJsonToDb(
 	}
 
 	// save modeling task metadata
-	err = meta.UpdateTask(dbConn, modelDef)
+	err = meta.UpdateTask(dbConn, modelDef, langDef)
 	if err != nil {
 		return 0, err
 	}

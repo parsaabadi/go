@@ -29,9 +29,10 @@ func GetModelTextList(dbConn *sql.DB, langCode string) ([]ModelTxtRow, error) {
 	err := SelectRows(dbConn, q,
 		func(rows *sql.Rows) error {
 			var r ModelTxtRow
+			var lId int
 			var note sql.NullString
 			if err := rows.Scan(
-				&r.ModelId, &r.LangId, &r.LangCode, &r.Descr, &note); err != nil {
+				&r.ModelId, &lId, &r.LangCode, &r.Descr, &note); err != nil {
 				return err
 			}
 			if note.Valid {
@@ -47,7 +48,6 @@ func GetModelTextList(dbConn *sql.DB, langCode string) ([]ModelTxtRow, error) {
 }
 
 // GetModelText return model text metadata: description and notes.
-//
 // If langCode not empty then only specified language selected else all languages.
 func GetModelText(dbConn *sql.DB, modelId int, langCode string) (*ModelTxtMeta, error) {
 
@@ -67,7 +67,7 @@ func GetModelText(dbConn *sql.DB, modelId int, langCode string) (*ModelTxtMeta, 
 	}
 
 	// make where clause parts:
-	// WHERE T.model_id = 1234 AND L.lang_code = 'EN'
+	// WHERE M.model_id = 1234 AND L.lang_code = 'EN'
 	where := " WHERE M.model_id = " + strconv.Itoa(modelId)
 	if langCode != "" {
 		where += " AND L.lang_code = " + toQuoted(langCode)
@@ -83,9 +83,10 @@ func GetModelText(dbConn *sql.DB, modelId int, langCode string) (*ModelTxtMeta, 
 			" ORDER BY 1, 2",
 		func(rows *sql.Rows) error {
 			var r ModelTxtRow
+			var lId int
 			var note sql.NullString
 			if err := rows.Scan(
-				&r.ModelId, &r.LangId, &r.LangCode, &r.Descr, &note); err != nil {
+				&r.ModelId, &lId, &r.LangCode, &r.Descr, &note); err != nil {
 				return err
 			}
 			if note.Valid {
@@ -109,9 +110,10 @@ func GetModelText(dbConn *sql.DB, modelId int, langCode string) (*ModelTxtMeta, 
 			" ORDER BY 1, 2, 3",
 		func(rows *sql.Rows) error {
 			var r TypeTxtRow
+			var lId int
 			var note sql.NullString
 			if err := rows.Scan(
-				&r.ModelId, &r.TypeId, &r.LangId, &r.LangCode, &r.Descr, &note); err != nil {
+				&r.ModelId, &r.TypeId, &lId, &r.LangCode, &r.Descr, &note); err != nil {
 				return err
 			}
 			if note.Valid {
@@ -135,9 +137,10 @@ func GetModelText(dbConn *sql.DB, modelId int, langCode string) (*ModelTxtMeta, 
 			" ORDER BY 1, 2, 3, 4",
 		func(rows *sql.Rows) error {
 			var r TypeEnumTxtRow
+			var lId int
 			var note sql.NullString
 			if err := rows.Scan(
-				&r.ModelId, &r.TypeId, &r.EnumId, &r.LangId, &r.LangCode, &r.Descr, &note); err != nil {
+				&r.ModelId, &r.TypeId, &r.EnumId, &lId, &r.LangCode, &r.Descr, &note); err != nil {
 				return err
 			}
 			if note.Valid {
@@ -161,9 +164,10 @@ func GetModelText(dbConn *sql.DB, modelId int, langCode string) (*ModelTxtMeta, 
 			" ORDER BY 1, 2, 3",
 		func(rows *sql.Rows) error {
 			var r ParamTxtRow
+			var lId int
 			var note sql.NullString
 			if err := rows.Scan(
-				&r.ModelId, &r.ParamId, &r.LangId, &r.LangCode, &r.Descr, &note); err != nil {
+				&r.ModelId, &r.ParamId, &lId, &r.LangCode, &r.Descr, &note); err != nil {
 				return err
 			}
 			if note.Valid {
@@ -187,9 +191,10 @@ func GetModelText(dbConn *sql.DB, modelId int, langCode string) (*ModelTxtMeta, 
 			" ORDER BY 1, 2, 3, 4",
 		func(rows *sql.Rows) error {
 			var r ParamDimsTxtRow
+			var lId int
 			var note sql.NullString
 			if err := rows.Scan(
-				&r.ModelId, &r.ParamId, &r.DimId, &r.LangId, &r.LangCode, &r.Descr, &note); err != nil {
+				&r.ModelId, &r.ParamId, &r.DimId, &lId, &r.LangCode, &r.Descr, &note); err != nil {
 				return err
 			}
 			if note.Valid {
@@ -213,9 +218,10 @@ func GetModelText(dbConn *sql.DB, modelId int, langCode string) (*ModelTxtMeta, 
 			" ORDER BY 1, 2, 3",
 		func(rows *sql.Rows) error {
 			var r TableTxtRow
+			var lId int
 			var note, exnote sql.NullString
 			if err := rows.Scan(
-				&r.ModelId, &r.TableId, &r.LangId, &r.LangCode, &r.Descr, &note, &r.ExprDescr, &exnote); err != nil {
+				&r.ModelId, &r.TableId, &lId, &r.LangCode, &r.Descr, &note, &r.ExprDescr, &exnote); err != nil {
 				return err
 			}
 			if note.Valid {
@@ -242,9 +248,10 @@ func GetModelText(dbConn *sql.DB, modelId int, langCode string) (*ModelTxtMeta, 
 			" ORDER BY 1, 2, 3, 4",
 		func(rows *sql.Rows) error {
 			var r TableDimsTxtRow
+			var lId int
 			var note sql.NullString
 			if err := rows.Scan(
-				&r.ModelId, &r.TableId, &r.DimId, &r.LangId, &r.LangCode, &r.Descr, &note); err != nil {
+				&r.ModelId, &r.TableId, &r.DimId, &lId, &r.LangCode, &r.Descr, &note); err != nil {
 				return err
 			}
 			if note.Valid {
@@ -268,9 +275,10 @@ func GetModelText(dbConn *sql.DB, modelId int, langCode string) (*ModelTxtMeta, 
 			" ORDER BY 1, 2, 3, 4",
 		func(rows *sql.Rows) error {
 			var r TableAccTxtRow
+			var lId int
 			var note sql.NullString
 			if err := rows.Scan(
-				&r.ModelId, &r.TableId, &r.AccId, &r.LangId, &r.LangCode, &r.Descr, &note); err != nil {
+				&r.ModelId, &r.TableId, &r.AccId, &lId, &r.LangCode, &r.Descr, &note); err != nil {
 				return err
 			}
 			if note.Valid {
@@ -294,9 +302,10 @@ func GetModelText(dbConn *sql.DB, modelId int, langCode string) (*ModelTxtMeta, 
 			" ORDER BY 1, 2, 3, 4",
 		func(rows *sql.Rows) error {
 			var r TableExprTxtRow
+			var lId int
 			var note sql.NullString
 			if err := rows.Scan(
-				&r.ModelId, &r.TableId, &r.ExprId, &r.LangId, &r.LangCode, &r.Descr, &note); err != nil {
+				&r.ModelId, &r.TableId, &r.ExprId, &lId, &r.LangCode, &r.Descr, &note); err != nil {
 				return err
 			}
 			if note.Valid {

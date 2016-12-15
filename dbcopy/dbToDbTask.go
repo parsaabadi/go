@@ -297,7 +297,7 @@ func copyTaskDbToDb(
 	}
 
 	// destination: convert from "public" format into destination db rows
-	dstTask, isSetNotFound, isTaskRunNotFound, err := pub.FromPublic(dstDb, dstModel, dstLang)
+	dstTask, isSetNotFound, isTaskRunNotFound, err := pub.FromPublic(dstDb, dstModel)
 	if err != nil {
 		return 0, err
 	}
@@ -309,7 +309,7 @@ func copyTaskDbToDb(
 	}
 
 	// destination: save modeling task metadata
-	err = dstTask.UpdateTask(dstDb, dstModel)
+	err = dstTask.UpdateTask(dstDb, dstModel, dstLang)
 	if err != nil {
 		return 0, err
 	}

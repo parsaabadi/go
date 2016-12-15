@@ -173,9 +173,10 @@ func getWsText(dbConn *sql.DB, query string) ([]WorksetTxtRow, error) {
 	err := SelectRows(dbConn, query,
 		func(rows *sql.Rows) error {
 			var r WorksetTxtRow
+			var lId int
 			var note sql.NullString
 			if err := rows.Scan(
-				&r.SetId, &r.LangId, &r.LangCode, &r.Descr, &note); err != nil {
+				&r.SetId, &lId, &r.LangCode, &r.Descr, &note); err != nil {
 				return err
 			}
 			if note.Valid {
@@ -285,9 +286,10 @@ func getWsParamText(dbConn *sql.DB, query string) ([]WorksetParamTxtRow, error) 
 	err := SelectRows(dbConn, query,
 		func(rows *sql.Rows) error {
 			var r WorksetParamTxtRow
+			var lId int
 			var note sql.NullString
 			if err := rows.Scan(
-				&r.SetId, &r.ParamHid, &r.LangId, &r.LangCode, &note); err != nil {
+				&r.SetId, &r.ParamHid, &lId, &r.LangCode, &note); err != nil {
 				return err
 			}
 			if note.Valid {

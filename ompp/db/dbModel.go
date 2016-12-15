@@ -72,6 +72,13 @@ type ModelTxtMeta struct {
 	TableExprTxt []TableExprTxtRow // output table expression text rows: table_expr_txt join to model_table_dic
 }
 
+// ModelWordMeta is language-specific portion of model metadata db rows.
+type ModelWordMeta struct {
+	ModelName   string          // model name for text metadata
+	ModelDigest string          // model digest for text metadata
+	ModelWord   []modelLangWord // language and db rows of model_word in that language
+}
+
 // GroupMeta is db rows to describe parent-child groups of model parameters and output tables.
 type GroupMeta struct {
 	ModelName   string        // model name for group metadata
@@ -97,20 +104,26 @@ type LangMeta struct {
 	codeIndex map[string]int // language code index
 }
 
+// LangLstRow is db row of lang_lst table.
+//
+// langId is db-unique id of the language.
+// LangCode is unique language code: EN, FR.
+type LangLstRow struct {
+	langId   int    // lang_id   INT          NOT NULL
+	LangCode string // lang_code VARCHAR(32)  NOT NULL
+	Name     string // lang_name VARCHAR(255) NOT NULL
+}
+
 // langWord is language and words in that language
 type langWord struct {
 	LangLstRow                   // lang_lst db-table row
 	Words      map[string]string // lang_word db-table rows as (code, value) map
 }
 
-// LangLstRow is db row of lang_lst table.
-//
-// LangId is db-unique id of the language.
-// LangCode is unique language code: EN, FR.
-type LangLstRow struct {
-	LangId   int    // lang_id   INT          NOT NULL
-	LangCode string // lang_code VARCHAR(32)  NOT NULL
-	Name     string // lang_name VARCHAR(255) NOT NULL
+// modelLangWord is language and db rows of model_word in that language
+type modelLangWord struct {
+	LangCode string            // lang_code    VARCHAR(32)  NOT NULL
+	Words    map[string]string // model_word db-table rows as (code, value) map
 }
 
 // NameLangNote is a name and notes by language,
@@ -137,18 +150,18 @@ type langNote struct {
 //
 // ModelId (model_dic.model_id) is db-unique id of the model, use digest to find same model in other db.
 type ModelDicRow struct {
-	ModelId        int    // model_id         INT          NOT NULL
-	Name           string // model_name       VARCHAR(255) NOT NULL
-	Digest         string // model_digest     VARCHAR(32)  NOT NULL
-	Type           int    // model_type       INT          NOT NULL
-	Version        string // model_ver        VARCHAR(32)  NOT NULL
-	CreateDateTime string // create_dt        VARCHAR(32)  NOT NULL
+	ModelId         int    // model_id         INT          NOT NULL
+	Name            string // model_name       VARCHAR(255) NOT NULL
+	Digest          string // model_digest     VARCHAR(32)  NOT NULL
+	Type            int    // model_type       INT          NOT NULL
+	Version         string // model_ver        VARCHAR(32)  NOT NULL
+	CreateDateTime  string // create_dt        VARCHAR(32)  NOT NULL
+	DefaultLangCode string // model default language code
 }
 
 // ModelTxtRow is db row of model_dic_txt join to model_dic
 type ModelTxtRow struct {
 	ModelId  int    // model_id     INT          NOT NULL
-	LangId   int    // lang_id      INT          NOT NULL
 	LangCode string // lang_code    VARCHAR(32)  NOT NULL
 	Descr    string // descr        VARCHAR(255) NOT NULL
 	Note     string // note         VARCHAR(32000)
@@ -172,7 +185,6 @@ type TypeDicRow struct {
 type TypeTxtRow struct {
 	ModelId  int    // model_id      INT          NOT NULL
 	TypeId   int    // model_type_id INT          NOT NULL
-	LangId   int    // lang_id       INT          NOT NULL
 	LangCode string // lang_code     VARCHAR(32)  NOT NULL
 	Descr    string // descr         VARCHAR(255) NOT NULL
 	Note     string // note          VARCHAR(32000)
@@ -191,7 +203,6 @@ type TypeEnumTxtRow struct {
 	ModelId  int    // model_id      INT          NOT NULL
 	TypeId   int    // model_type_id INT          NOT NULL
 	EnumId   int    // enum_id       INT          NOT NULL
-	LangId   int    // lang_id       INT          NOT NULL
 	LangCode string // lang_code     VARCHAR(32)  NOT NULL
 	Descr    string // descr         VARCHAR(255) NOT NULL
 	Note     string // note          VARCHAR(32000)
@@ -219,7 +230,6 @@ type ParamDicRow struct {
 type ParamTxtRow struct {
 	ModelId  int    // model_id           INT          NOT NULL
 	ParamId  int    // model_parameter_id INT          NOT NULL
-	LangId   int    // lang_id            INT          NOT NULL
 	LangCode string // lang_code          VARCHAR(32)  NOT NULL
 	Descr    string // descr              VARCHAR(255) NOT NULL
 	Note     string // note               VARCHAR(32000)
@@ -241,7 +251,6 @@ type ParamDimsTxtRow struct {
 	ModelId  int    // model_id           INT          NOT NULL
 	ParamId  int    // model_parameter_id INT          NOT NULL
 	DimId    int    // dim_id             INT          NOT NULL
-	LangId   int    // lang_id            INT          NOT NULL
 	LangCode string // lang_code          VARCHAR(32)  NOT NULL
 	Descr    string // descr              VARCHAR(255) NOT NULL
 	Note     string // note               VARCHAR(32000)
@@ -269,7 +278,6 @@ type TableDicRow struct {
 type TableTxtRow struct {
 	ModelId   int    // model_id       INT          NOT NULL
 	TableId   int    // model_table_id INT          NOT NULL
-	LangId    int    // lang_id        INT          NOT NULL
 	LangCode  string // lang_code      VARCHAR(32)  NOT NULL
 	Descr     string // descr          VARCHAR(255) NOT NULL
 	Note      string // note           VARCHAR(32000)
@@ -294,7 +302,6 @@ type TableDimsTxtRow struct {
 	ModelId  int    // model_id       INT          NOT NULL
 	TableId  int    // model_table_id INT          NOT NULL
 	DimId    int    // dim_id         INT          NOT NULL
-	LangId   int    // lang_id        INT          NOT NULL
 	LangCode string // lang_code      VARCHAR(32)  NOT NULL
 	Descr    string // descr          VARCHAR(255) NOT NULL
 	Note     string // note           VARCHAR(32000)
@@ -314,7 +321,6 @@ type TableAccTxtRow struct {
 	ModelId  int    // model_id       INT          NOT NULL
 	TableId  int    // model_table_id INT          NOT NULL
 	AccId    int    // acc_id         INT          NOT NULL
-	LangId   int    // lang_id        INT          NOT NULL
 	LangCode string // lang_code      VARCHAR(32)  NOT NULL
 	Descr    string // descr          VARCHAR(255) NOT NULL
 	Note     string // note           VARCHAR(32000)
@@ -336,7 +342,6 @@ type TableExprTxtRow struct {
 	ModelId  int    // model_id       INT          NOT NULL
 	TableId  int    // model_table_id INT          NOT NULL
 	ExprId   int    // expr_id        INT           NOT NULL
-	LangId   int    // lang_id        INT          NOT NULL
 	LangCode string // lang_code      VARCHAR(32)  NOT NULL
 	Descr    string // descr          VARCHAR(255) NOT NULL
 	Note     string // note           VARCHAR(32000)
@@ -364,7 +369,6 @@ type GroupPcRow struct {
 type GroupTxtRow struct {
 	ModelId  int    // model_id  INT          NOT NULL
 	GroupId  int    // group_id  INT          NOT NULL
-	LangId   int    // lang_id   INT          NOT NULL
 	LangCode string // lang_code VARCHAR(32)  NOT NULL
 	Descr    string // descr     VARCHAR(255) NOT NULL
 	Note     string // note      VARCHAR(32000)

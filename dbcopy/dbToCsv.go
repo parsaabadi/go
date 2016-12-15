@@ -60,6 +60,11 @@ func dbToCsv(modelName string, modelDigest string, runOpts *config.RunOptions) e
 		return err
 	}
 
+	// write model language-specific strings into csv file
+	if err = toModelWordCsv(srcDb, modelDef.Model.ModelId, outDir); err != nil {
+		return err
+	}
+
 	// write model text (description and notes) into csv file
 	if err = toModelTextCsv(srcDb, modelDef.Model.ModelId, outDir); err != nil {
 		return err
@@ -108,19 +113,20 @@ func dbToCsv(modelName string, modelDigest string, runOpts *config.RunOptions) e
 func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 
 	// write model master row into csv
-	row := make([]string, 6)
+	row := make([]string, 7)
 	row[0] = strconv.Itoa(modelDef.Model.ModelId)
 	row[1] = modelDef.Model.Name
 	row[2] = modelDef.Model.Digest
 	row[3] = strconv.Itoa(modelDef.Model.Type)
 	row[4] = modelDef.Model.Version
 	row[5] = modelDef.Model.CreateDateTime
+	row[6] = modelDef.Model.DefaultLangCode
 
 	idx := 0
 	err := toCsvFile(
 		outDir,
 		"model_dic.csv",
-		[]string{"model_id", "model_name", "model_digest", "model_type", "model_ver", "create_dt"},
+		[]string{"model_id", "model_name", "model_digest", "model_type", "model_ver", "create_dt", "default_lang_code"},
 		func() (bool, []string, error) {
 			if idx == 0 { // only one model_dic row exist
 				idx++

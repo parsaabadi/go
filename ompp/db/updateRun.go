@@ -15,14 +15,11 @@ import (
 )
 
 // FromPublic convert model run metadata from "public" format (coming from json import-export) into db rows.
-func (pub *RunPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangMeta) (*RunMeta, error) {
+func (pub *RunPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunMeta, error) {
 
 	// validate parameters
 	if modelDef == nil {
 		return nil, errors.New("invalid (empty) model metadata")
-	}
-	if langDef == nil {
-		return nil, errors.New("invalid (empty) language list")
 	}
 	if pub.ModelName == "" && pub.ModelDigest == "" {
 		return nil, errors.New("invalid (empty) model name and digest, model run: " + pub.Name + " " + pub.CreateDateTime)
@@ -57,7 +54,6 @@ func (pub *RunPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta, langDef *Lang
 	// use run id default zero
 	for k := range pub.Txt {
 		meta.Txt[k].LangCode = pub.Txt[k].LangCode
-		meta.Txt[k].LangId = langDef.IdByCode(pub.Txt[k].LangCode)
 		meta.Txt[k].Descr = pub.Txt[k].Descr
 		meta.Txt[k].Note = pub.Txt[k].Note
 	}
@@ -85,7 +81,6 @@ func (pub *RunPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta, langDef *Lang
 			for j := range pub.ParamTxt[k].Txt {
 				meta.ParamTxt[k].Txt[j].ParamHid = meta.ParamTxt[k].ParamHid
 				meta.ParamTxt[k].Txt[j].LangCode = pub.ParamTxt[k].Txt[j].LangCode
-				meta.ParamTxt[k].Txt[j].LangId = langDef.IdByCode(pub.ParamTxt[k].Txt[j].LangCode)
 				meta.ParamTxt[k].Txt[j].Note = pub.ParamTxt[k].Txt[j].Note
 			}
 		}
@@ -103,11 +98,14 @@ func (pub *RunPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta, langDef *Lang
 // else if status is error then by run_name, sub_count, sub_completed, status, create_dt.
 //
 // It return "is found" flag and update metadata with actual run id in database.
-func (meta *RunMeta) UpdateRun(dbConn *sql.DB, modelDef *ModelMeta) (bool, error) {
+func (meta *RunMeta) UpdateRun(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangMeta) (bool, error) {
 
 	// validate parameters
 	if modelDef == nil {
 		return false, errors.New("invalid (empty) model metadata")
+	}
+	if langDef == nil {
+		return false, errors.New("invalid (empty) language list")
 	}
 	if meta.Run.ModelId != modelDef.Model.ModelId {
 		return false, errors.New("model run: " + strconv.Itoa(meta.Run.RunId) + " " + meta.Run.Name + " invalid model id " + strconv.Itoa(meta.Run.ModelId) + " expected: " + strconv.Itoa(modelDef.Model.ModelId))
@@ -177,7 +175,7 @@ func (meta *RunMeta) UpdateRun(dbConn *sql.DB, modelDef *ModelMeta) (bool, error
 	if err != nil {
 		return false, err
 	}
-	err = doInsertRun(trx, modelDef, meta)
+	err = doInsertRun(trx, modelDef, meta, langDef)
 	if err != nil {
 		trx.Rollback()
 		return false, err
@@ -338,7 +336,7 @@ func doUpdateRunDigest(trx *sql.Tx, runId int) (string, error) {
 // doInsertRun insert new model run metadata in database.
 // It does update as part of transaction
 // Run status must be completed (success, exit or error) otherwise error returned.
-func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, meta *RunMeta) error {
+func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, meta *RunMeta, langDef *LangMeta) error {
 
 	// validate: run must be completed
 	if meta.Run.Status != DoneRunStatus && meta.Run.Status != ExitRunStatus && meta.Run.Status != ErrorRunStatus {
@@ -411,15 +409,18 @@ func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, meta *RunMeta) error {
 
 		meta.Txt[j].RunId = runId // update run id
 
-		// insert into run_txt
-		err = TrxUpdate(trx,
-			"INSERT INTO run_txt (run_id, lang_id, descr, note) VALUES ("+
-				srId+", "+
-				strconv.Itoa(meta.Txt[j].LangId)+", "+
-				toQuoted(meta.Txt[j].Descr)+", "+
-				toQuotedOrNull(meta.Txt[j].Note)+")")
-		if err != nil {
-			return err
+		// if language code valid then insert into run_txt
+		if lId, ok := langDef.IdByCode(meta.Txt[j].LangCode); ok {
+
+			err = TrxUpdate(trx,
+				"INSERT INTO run_txt (run_id, lang_id, descr, note) VALUES ("+
+					srId+", "+
+					strconv.Itoa(lId)+", "+
+					toQuoted(meta.Txt[j].Descr)+", "+
+					toQuotedOrNull(meta.Txt[j].Note)+")")
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -443,15 +444,18 @@ func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, meta *RunMeta) error {
 
 			meta.ParamTxt[k].Txt[j].RunId = runId // update run id
 
-			// insert into run_parameter_txt
-			err = TrxUpdate(trx,
-				"INSERT INTO run_parameter_txt (run_id, parameter_hid, lang_id, note) VALUES ("+
-					srId+", "+
-					strconv.Itoa(meta.ParamTxt[k].ParamHid)+", "+
-					strconv.Itoa(meta.ParamTxt[k].Txt[j].LangId)+", "+
-					toQuotedOrNull(meta.ParamTxt[k].Txt[j].Note)+")")
-			if err != nil {
-				return err
+			// if language code valid then insert into run_parameter_txt
+			if lId, ok := langDef.IdByCode(meta.ParamTxt[k].Txt[j].LangCode); ok {
+
+				err = TrxUpdate(trx,
+					"INSERT INTO run_parameter_txt (run_id, parameter_hid, lang_id, note) VALUES ("+
+						srId+", "+
+						strconv.Itoa(meta.ParamTxt[k].ParamHid)+", "+
+						strconv.Itoa(lId)+", "+
+						toQuotedOrNull(meta.ParamTxt[k].Txt[j].Note)+")")
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -463,7 +467,11 @@ func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, meta *RunMeta) error {
 //
 // Run id of the input txt db rows updated with runId value.
 // If run not exist or status is not completed (success, exit, error) then function does nothing.
-func UpdateRunText(dbConn *sql.DB, runId int, txt []RunTxtRow) error {
+func UpdateRunText(dbConn *sql.DB, runId int, txt []RunTxtRow, langDef *LangMeta) error {
+
+	if langDef == nil {
+		return errors.New("invalid (empty) language list")
+	}
 
 	// check run status: if not completed then exit
 	var st string
@@ -491,7 +499,7 @@ func UpdateRunText(dbConn *sql.DB, runId int, txt []RunTxtRow) error {
 	if err != nil {
 		return err
 	}
-	err = doUpdateRunText(trx, runId, txt)
+	err = doUpdateRunText(trx, runId, txt, langDef)
 	if err != nil {
 		trx.Rollback()
 		return err
@@ -504,7 +512,7 @@ func UpdateRunText(dbConn *sql.DB, runId int, txt []RunTxtRow) error {
 // doUpdateRunText update run_txt table of existing run_id.
 // It does update as part of transaction.
 // Run id of the input txt db rows updated with runId value.
-func doUpdateRunText(trx *sql.Tx, runId int, txt []RunTxtRow) error {
+func doUpdateRunText(trx *sql.Tx, runId int, txt []RunTxtRow, langDef *LangMeta) error {
 
 	// delete existing run text
 	srId := strconv.Itoa(runId)
@@ -519,14 +527,18 @@ func doUpdateRunText(trx *sql.Tx, runId int, txt []RunTxtRow) error {
 
 		txt[k].RunId = runId // update run id
 
-		err = TrxUpdate(trx,
-			"INSERT INTO run_txt (run_id, lang_id, descr, note) VALUES ("+
-				srId+", "+
-				strconv.Itoa(txt[k].LangId)+", "+
-				toQuoted(txt[k].Descr)+", "+
-				toQuotedOrNull(txt[k].Note)+")")
-		if err != nil {
-			return err
+		// if language code valid then insert new run_txt db rows
+		if lId, ok := langDef.IdByCode(txt[k].LangCode); ok {
+
+			err = TrxUpdate(trx,
+				"INSERT INTO run_txt (run_id, lang_id, descr, note) VALUES ("+
+					srId+", "+
+					strconv.Itoa(lId)+", "+
+					toQuoted(txt[k].Descr)+", "+
+					toQuotedOrNull(txt[k].Note)+")")
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil

@@ -86,6 +86,12 @@ func copyDbToDb(
 		return err
 	}
 
+	// source: get model laguage-specific strings in all languages
+	mwDef, err := db.GetModelWord(srcDb, srcModel.Model.ModelId, "")
+	if err != nil {
+		return err
+	}
+
 	// source: get model parameter and output table groups and group text (description and notes) in all languages
 	modelGroup, err := db.GetModelGroup(srcDb, srcModel.Model.ModelId, "")
 	if err != nil {
@@ -134,6 +140,11 @@ func copyDbToDb(
 
 	// destination: insert or update model text data (description and notes)
 	if err = db.UpdateModelText(dstDb, dstModel, dstLang, modelTxt); err != nil {
+		return err
+	}
+
+	// destination: insert or update model language-specific strings
+	if err = db.UpdateModelWord(dstDb, dstModel, dstLang, mwDef); err != nil {
 		return err
 	}
 

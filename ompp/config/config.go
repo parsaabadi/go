@@ -72,7 +72,13 @@ type FullShort struct {
 // for example: -dbcopy.CodePage=windows-1252.
 // If encoding value specified then ini-file and csv files converted from such encoding to utf-8.
 // If encoding not specified then auto-detection and default values are used (see helper.FileToUtf8())
-func New(encodingKey string, optFs []FullShort) (*RunOptions, *LogOptions, error) {
+//
+// Return
+// 1. *RunOptions: is merge of command line key=value and ini-file section.key=value options.
+// 2. *LogOptions: openM++ log file settings, also merge of command line and ini-file.
+// 3. Args []string: remaining command line arguments, after last recognized key=value
+// 4. error or nil on success
+func New(encodingKey string, optFs []FullShort) (*RunOptions, *LogOptions, []string, error) {
 
 	runOpts := &RunOptions{
 		KeyValue:        make(map[string]string),
@@ -87,6 +93,7 @@ func New(encodingKey string, optFs []FullShort) (*RunOptions, *LogOptions, error
 
 	// parse command line arguments
 	flag.Parse()
+	extrArgs := flag.Args()
 
 	// retrive encoding name from command line
 	encName := ""
@@ -99,7 +106,7 @@ func New(encodingKey string, optFs []FullShort) (*RunOptions, *LogOptions, error
 	// parse ini-file using encoding, if it is not empty
 	kvIni, err := NewIni(runOpts.iniPath, encName)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, extrArgs, err
 	}
 	if kvIni != nil {
 		runOpts.KeyValue = kvIni
@@ -148,7 +155,7 @@ func New(encodingKey string, optFs []FullShort) (*RunOptions, *LogOptions, error
 
 	// adjust log settings
 	adjustLogOptions(runOpts, logOpts)
-	return runOpts, logOpts, nil
+	return runOpts, logOpts, extrArgs, nil
 }
 
 // IsExist return true if key is defined as command line argument or ini-file option.
@@ -272,7 +279,7 @@ func adjustLogOptions(runOpts *RunOptions, logOpts *LogOptions) {
 
 		logOpts.LogPath = runOpts.String(LogFilePath) // use log file path from ini-file
 
-		//use exeName.log as default
+		// use exeName.log as default
 		if logOpts.LogPath == "" {
 			_, exeName := filepath.Split(os.Args[0])
 			ext := filepath.Ext(exeName)

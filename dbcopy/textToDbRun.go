@@ -244,13 +244,13 @@ func fromRunTextToDb(
 	}
 
 	// destination: convert from "public" format into destination db rows
-	meta, err := pub.FromPublic(dbConn, modelDef, langDef)
+	meta, err := pub.FromPublic(dbConn, modelDef)
 	if err != nil {
 		return 0, 0, err
 	}
 
 	// save model run
-	isExist, err = meta.UpdateRun(dbConn, modelDef)
+	isExist, err = meta.UpdateRun(dbConn, modelDef, langDef)
 	if err != nil {
 		return 0, 0, err
 	}

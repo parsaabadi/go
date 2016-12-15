@@ -31,104 +31,6 @@ func OpenmppSchemaVersion(dbConn *sql.DB) (int, error) {
 	return nVer, nil
 }
 
-// IdByCode return language id by language code or first language if code not found
-func (langDef *LangMeta) IdByCode(langCode string) int {
-	return langDef.Lang[langDef.codeIndex[langCode]].LangId
-}
-
-// CodeIdId return language code by language id or first language if id not found
-func (langDef *LangMeta) CodeById(langId int) string {
-	return langDef.Lang[langDef.idIndex[langId]].LangCode
-}
-
-// DefaultLanguage return first model language: select min(lang_id) from model_dic_txt.
-func DefaultLanguage(dbConn *sql.DB, modelId int) (*LangLstRow, error) {
-
-	// get first language from model text
-	var langRow LangLstRow
-	isNoTxt := false
-
-	err := SelectFirst(dbConn,
-		"SELECT"+
-			" L.lang_id, L.lang_code, lang_name FROM lang_lst L"+
-			" WHERE L.lang_id ="+
-			" (SELECT MIN(M.lang_id) FROM model_dic_txt M WHERE M.model_id = "+strconv.Itoa(modelId)+")",
-		func(row *sql.Row) error {
-			return row.Scan(&langRow.LangId, &langRow.LangCode, &langRow.Name)
-		})
-	switch {
-	case err == sql.ErrNoRows:
-		isNoTxt = true
-	case err != nil:
-		return nil, err
-	}
-
-	// if no model text found then select first from language list
-	if isNoTxt {
-		err = SelectFirst(dbConn,
-			"SELECT"+
-				" L.lang_id, L.lang_code, lang_name FROM lang_lst L"+
-				" WHERE L.lang_id = (SELECT MIN(M.lang_id) FROM lang_lst M)",
-			func(row *sql.Row) error {
-				return row.Scan(&langRow.LangId, &langRow.LangCode, &langRow.Name)
-			})
-		switch {
-		case err == sql.ErrNoRows:
-			return nil, errors.New("invalid database: no language(s) found")
-		case err != nil:
-			return nil, err
-		}
-	}
-
-	return &langRow, nil
-}
-
-// GetLanguages return language rows from lang_lst join to lang_word tables and map from lang_code to lang_id.
-func GetLanguages(dbConn *sql.DB) (*LangMeta, error) {
-
-	// select lang_lst rows, build index maps
-	langDef := LangMeta{idIndex: make(map[int]int), codeIndex: make(map[string]int)}
-
-	err := SelectRows(dbConn, "SELECT lang_id, lang_code, lang_name FROM lang_lst ORDER BY 1",
-		func(rows *sql.Rows) error {
-			var r LangLstRow
-			if err := rows.Scan(&r.LangId, &r.LangCode, &r.Name); err != nil {
-				return err
-			}
-			langDef.Lang = append(langDef.Lang, langWord{LangLstRow: r, Words: make(map[string]string)})
-			return nil
-		})
-	if err != nil {
-		return nil, err
-	}
-	if len(langDef.Lang) <= 0 {
-		return nil, errors.New("invalid database: no language(s) found")
-	}
-	langDef.updateInternals() // update internal maps from id and code to index of language
-
-	// select lang_word rows into (key, value) map for each language
-	err = SelectRows(dbConn,
-		"SELECT lang_id, word_code, word_value FROM lang_word ORDER BY 1, 2",
-		func(rows *sql.Rows) error {
-
-			var langId int
-			var code, val string
-			err := rows.Scan(&langId, &code, &val)
-
-			if err == nil {
-				if i, ok := langDef.idIndex[langId]; ok { // ignore if lang_id not exist, assume updated lang_lst between selects
-					langDef.Lang[i].Words[code] = val
-				}
-			}
-			return err
-		})
-	if err != nil {
-		return nil, err
-	}
-
-	return &langDef, nil
-}
-
 // GetProfileList return profile names: profile_lst table rows.
 //
 // Profile is a named group of (key, value) options, similar to ini-file.
@@ -154,13 +56,6 @@ func GetProfileList(dbConn *sql.DB) ([]string, error) {
 	return rs, nil
 }
 
-// GetRunOptions return run_option table rows as (key, value) map.
-func GetRunOptions(dbConn *sql.DB, runId int) (map[string]string, error) {
-
-	return getOpts(dbConn,
-		"SELECT option_key, option_value FROM run_option WHERE run_id = "+strconv.Itoa(runId))
-}
-
 // GetProfile return profile_option table rows as (key, value) map.
 //
 // Profile is a named group of (key, value) options, similar to ini-file.
@@ -177,6 +72,13 @@ func GetProfile(dbConn *sql.DB, name string) (*ProfileMeta, error) {
 	meta.Opts = kv
 
 	return &meta, nil
+}
+
+// GetRunOptions return run_option table rows as (key, value) map.
+func GetRunOptions(dbConn *sql.DB, runId int) (map[string]string, error) {
+
+	return getOpts(dbConn,
+		"SELECT option_key, option_value FROM run_option WHERE run_id = "+strconv.Itoa(runId))
 }
 
 // getOpts return option table (profile_option or run_option) rows as (key, value) map.
@@ -226,7 +128,6 @@ func getRunOpts(dbConn *sql.DB, query string) (map[int]map[string]string, error)
 }
 
 // GetModelGroup return db rows of model parent-child groups of parameters and output tables.
-//
 // If langCode not empty then only specified language selected else all languages.
 func GetModelGroup(dbConn *sql.DB, modelId int, langCode string) (*GroupMeta, error) {
 
@@ -316,9 +217,10 @@ func GetModelGroup(dbConn *sql.DB, modelId int, langCode string) (*GroupMeta, er
 	err = SelectRows(dbConn, q,
 		func(rows *sql.Rows) error {
 			var r GroupTxtRow
+			var lId int
 			var note sql.NullString
 			if err := rows.Scan(
-				&r.ModelId, &r.GroupId, &r.LangId, &r.LangCode, &r.Descr, &note); err != nil {
+				&r.ModelId, &r.GroupId, &lId, &r.LangCode, &r.Descr, &note); err != nil {
 				return err
 			}
 			if note.Valid {

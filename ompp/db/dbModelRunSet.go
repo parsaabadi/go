@@ -65,7 +65,6 @@ type RunRow struct {
 // RunTxtRow is db row of run_txt
 type RunTxtRow struct {
 	RunId    int    // run_id    INT          NOT NULL
-	LangId   int    // lang_id   INT          NOT NULL
 	LangCode string // lang_code VARCHAR(32)  NOT NULL
 	Descr    string // descr     VARCHAR(255) NOT NULL
 	Note     string // note      VARCHAR(32000)
@@ -81,7 +80,6 @@ type runParam struct {
 type RunParamTxtRow struct {
 	RunId    int    // run_id        INT         NOT NULL
 	ParamHid int    // parameter_hid INT         NOT NULL
-	LangId   int    // lang_id       INT         NOT NULL
 	LangCode string // lang_code     VARCHAR(32) NOT NULL
 	Note     string // note          VARCHAR(32000)
 }
@@ -144,7 +142,6 @@ type worksetParam struct {
 // WorksetTxtRow is db row of workset_txt
 type WorksetTxtRow struct {
 	SetId    int    // set_id    INT          NOT NULL
-	LangId   int    // lang_id   INT          NOT NULL
 	LangCode string // lang_code VARCHAR(32)  NOT NULL
 	Descr    string // descr     VARCHAR(255) NOT NULL
 	Note     string // note      VARCHAR(32000)
@@ -154,7 +151,6 @@ type WorksetTxtRow struct {
 type WorksetParamTxtRow struct {
 	SetId    int    // set_id        INT NOT NULL
 	ParamHid int    // parameter_hid INT NOT NULL
-	LangId   int    // lang_id       INT NOT NULL
 	LangCode string // lang_code VARCHAR(32)  NOT NULL
 	Note     string // note          VARCHAR(32000), -- parameter value note
 }
@@ -198,7 +194,6 @@ type TaskRow struct {
 // TaskTxtRow is db row of task_txt
 type TaskTxtRow struct {
 	TaskId   int    // task_id  INT           NOT NULL
-	LangId   int    // lang_id   INT          NOT NULL
 	LangCode string // lang_code VARCHAR(32)  NOT NULL
 	Descr    string // descr     VARCHAR(255) NOT NULL
 	Note     string // note      VARCHAR(32000)

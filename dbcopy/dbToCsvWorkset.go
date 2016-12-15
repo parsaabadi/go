@@ -62,14 +62,14 @@ func toWorksetListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, dou
 	}
 
 	// write workset text rows into csv
-	row = make([]string, 5)
+	row = make([]string, 4)
 
 	idx = 0
 	j := 0
 	err = toCsvFile(
 		outDir,
 		"workset_txt.csv",
-		[]string{"set_id", "lang_id", "lang_code", "descr", "note"},
+		[]string{"set_id", "lang_code", "descr", "note"},
 		func() (bool, []string, error) {
 
 			if idx < 0 || idx >= len(wl) { // end of workset rows
@@ -92,14 +92,13 @@ func toWorksetListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, dou
 
 			// make workset text []string row
 			row[0] = strconv.Itoa(wl[idx].Txt[j].SetId)
-			row[1] = strconv.Itoa(wl[idx].Txt[j].LangId)
-			row[2] = wl[idx].Txt[j].LangCode
-			row[3] = wl[idx].Txt[j].Descr
+			row[1] = wl[idx].Txt[j].LangCode
+			row[2] = wl[idx].Txt[j].Descr
 
 			if wl[idx].Txt[j].Note == "" { // empty "" string is NULL
-				row[4] = "NULL"
+				row[3] = "NULL"
 			} else {
-				row[4] = wl[idx].Txt[j].Note
+				row[3] = wl[idx].Txt[j].Note
 			}
 			j++
 			return false, row, nil
@@ -148,7 +147,7 @@ func toWorksetListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, dou
 	}
 
 	// write workset parameter text (parameter value notes) rows into csv
-	row = make([]string, 5)
+	row = make([]string, 4)
 
 	idx = 0
 	pix := 0
@@ -156,7 +155,7 @@ func toWorksetListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, dou
 	err = toCsvFile(
 		outDir,
 		"workset_parameter_txt.csv",
-		[]string{"set_id", "parameter_hid", "lang_id", "lang_id", "note"},
+		[]string{"set_id", "parameter_hid", "lang_code", "note"},
 		func() (bool, []string, error) {
 
 			if idx < 0 || idx >= len(wl) { // end of workset rows
@@ -190,13 +189,12 @@ func toWorksetListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, dou
 			// make workset parameter text []string row
 			row[0] = strconv.Itoa(wl[idx].Param[pix].Txt[j].SetId)
 			row[1] = strconv.Itoa(wl[idx].Param[pix].Txt[j].ParamHid)
-			row[2] = strconv.Itoa(wl[idx].Param[pix].Txt[j].LangId)
-			row[3] = wl[idx].Param[pix].Txt[j].LangCode
+			row[2] = wl[idx].Param[pix].Txt[j].LangCode
 
 			if wl[idx].Param[pix].Txt[j].Note == "" { // empty "" string is NULL
-				row[4] = "NULL"
+				row[3] = "NULL"
 			} else {
-				row[4] = wl[idx].Param[pix].Txt[j].Note
+				row[3] = wl[idx].Param[pix].Txt[j].Note
 			}
 			j++
 			return false, row, nil

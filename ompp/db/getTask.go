@@ -179,9 +179,10 @@ func getTaskText(dbConn *sql.DB, query string) ([]TaskTxtRow, error) {
 	err := SelectRows(dbConn, query,
 		func(rows *sql.Rows) error {
 			var r TaskTxtRow
+			var lId int
 			var note sql.NullString
 			if err := rows.Scan(
-				&r.TaskId, &r.LangId, &r.LangCode, &r.Descr, &note); err != nil {
+				&r.TaskId, &lId, &r.LangCode, &r.Descr, &note); err != nil {
 				return err
 			}
 			if note.Valid {

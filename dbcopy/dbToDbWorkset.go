@@ -174,7 +174,7 @@ func copyWorksetDbToDb(
 
 	// destination: convert from "public" format into destination db rows
 	// display warning if base run not found in destination database
-	dstWs, err := pub.FromPublic(dstDb, dstModel, dstLang)
+	dstWs, err := pub.FromPublic(dstDb, dstModel)
 	if err != nil {
 		return 0, err
 	}
@@ -186,7 +186,7 @@ func copyWorksetDbToDb(
 	isReadonly := pub.IsReadonly
 	dstWs.Set.IsReadonly = false
 
-	err = dstWs.UpdateWorkset(dstDb, dstModel)
+	err = dstWs.UpdateWorkset(dstDb, dstModel, dstLang)
 	if err != nil {
 		return 0, err
 	}

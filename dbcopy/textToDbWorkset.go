@@ -307,7 +307,7 @@ func fromWorksetTextToDb(
 
 	// destination: convert from "public" format into destination db rows
 	// display warning if base run not found in destination database
-	ws, err := pub.FromPublic(dbConn, modelDef, langDef)
+	ws, err := pub.FromPublic(dbConn, modelDef)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -319,7 +319,7 @@ func fromWorksetTextToDb(
 	isReadonly := pub.IsReadonly
 	ws.Set.IsReadonly = false
 
-	err = ws.UpdateWorkset(dbConn, modelDef)
+	err = ws.UpdateWorkset(dbConn, modelDef, langDef)
 	if err != nil {
 		return 0, 0, err
 	}

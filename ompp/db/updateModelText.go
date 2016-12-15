@@ -50,33 +50,34 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 	smId := strconv.Itoa(modelDef.Model.ModelId)
 	for idx := range modelTxt.ModelTxt {
 
-		// update model id and language id
+		// update model id
 		modelTxt.ModelTxt[idx].ModelId = modelDef.Model.ModelId
-		modelTxt.ModelTxt[idx].LangId = langDef.IdByCode(modelTxt.ModelTxt[idx].LangCode)
 
-		// delete and insert into model_dic_txt
-		err := TrxUpdate(trx,
-			"DELETE FROM model_dic_txt WHERE model_id = "+smId+" AND lang_id = "+strconv.Itoa(modelTxt.ModelTxt[idx].LangId))
-		if err != nil {
-			return err
-		}
-		err = TrxUpdate(trx,
-			"INSERT INTO model_dic_txt (model_id, lang_id, descr, note) VALUES ("+
-				smId+", "+
-				strconv.Itoa(modelTxt.ModelTxt[idx].LangId)+", "+
-				toQuoted(modelTxt.ModelTxt[idx].Descr)+", "+
-				toQuotedOrNull(modelTxt.ModelTxt[idx].Note)+")")
-		if err != nil {
-			return err
+		// if language code valid then delete and insert into model_dic_txt
+		if lId, ok := langDef.IdByCode(modelTxt.ModelTxt[idx].LangCode); ok {
+
+			err := TrxUpdate(trx,
+				"DELETE FROM model_dic_txt WHERE model_id = "+smId+" AND lang_id = "+strconv.Itoa(lId))
+			if err != nil {
+				return err
+			}
+			err = TrxUpdate(trx,
+				"INSERT INTO model_dic_txt (model_id, lang_id, descr, note) VALUES ("+
+					smId+", "+
+					strconv.Itoa(lId)+", "+
+					toQuoted(modelTxt.ModelTxt[idx].Descr)+", "+
+					toQuotedOrNull(modelTxt.ModelTxt[idx].Note)+")")
+			if err != nil {
+				return err
+			}
 		}
 	}
 
 	// update type_dic_txt and ids
 	for idx := range modelTxt.TypeTxt {
 
-		// update model id and language id
+		// update model id
 		modelTxt.TypeTxt[idx].ModelId = modelDef.Model.ModelId
-		modelTxt.TypeTxt[idx].LangId = langDef.IdByCode(modelTxt.TypeTxt[idx].LangCode)
 
 		// find type Hid
 		k, ok := modelDef.TypeByKey(modelTxt.TypeTxt[idx].TypeId)
@@ -85,31 +86,33 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 		}
 		hId := modelDef.Type[k].TypeHid
 
-		// delete and insert into type_dic_txt
-		err := TrxUpdate(trx,
-			"DELETE FROM type_dic_txt"+
-				" WHERE type_hid = "+strconv.Itoa(hId)+
-				" AND lang_id = "+strconv.Itoa(modelTxt.TypeTxt[idx].LangId))
-		if err != nil {
-			return err
-		}
-		err = TrxUpdate(trx,
-			"INSERT INTO type_dic_txt (type_hid, lang_id, descr, note) VALUES ("+
-				strconv.Itoa(hId)+", "+
-				strconv.Itoa(modelTxt.TypeTxt[idx].LangId)+", "+
-				toQuoted(modelTxt.TypeTxt[idx].Descr)+", "+
-				toQuotedOrNull(modelTxt.TypeTxt[idx].Note)+")")
-		if err != nil {
-			return err
+		// if language code valid then delete and insert into type_dic_txt
+		if lId, ok := langDef.IdByCode(modelTxt.TypeTxt[idx].LangCode); ok {
+
+			err := TrxUpdate(trx,
+				"DELETE FROM type_dic_txt"+
+					" WHERE type_hid = "+strconv.Itoa(hId)+
+					" AND lang_id = "+strconv.Itoa(lId))
+			if err != nil {
+				return err
+			}
+			err = TrxUpdate(trx,
+				"INSERT INTO type_dic_txt (type_hid, lang_id, descr, note) VALUES ("+
+					strconv.Itoa(hId)+", "+
+					strconv.Itoa(lId)+", "+
+					toQuoted(modelTxt.TypeTxt[idx].Descr)+", "+
+					toQuotedOrNull(modelTxt.TypeTxt[idx].Note)+")")
+			if err != nil {
+				return err
+			}
 		}
 	}
 
 	// update type_enum_txt and ids
 	for idx := range modelTxt.TypeEnumTxt {
 
-		// update model id and language id
+		// update model id
 		modelTxt.TypeEnumTxt[idx].ModelId = modelDef.Model.ModelId
-		modelTxt.TypeEnumTxt[idx].LangId = langDef.IdByCode(modelTxt.TypeEnumTxt[idx].LangCode)
 
 		// find type Hid
 		k, ok := modelDef.TypeByKey(modelTxt.TypeEnumTxt[idx].TypeId)
@@ -118,33 +121,35 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 		}
 		hId := modelDef.Type[k].TypeHid
 
-		// delete and insert into type_enum_txt
-		err := TrxUpdate(trx,
-			"DELETE FROM type_enum_txt"+
-				" WHERE type_hid = "+strconv.Itoa(hId)+
-				" AND enum_id = "+strconv.Itoa(modelTxt.TypeEnumTxt[idx].EnumId)+
-				" AND lang_id = "+strconv.Itoa(modelTxt.TypeEnumTxt[idx].LangId))
-		if err != nil {
-			return err
-		}
-		err = TrxUpdate(trx,
-			"INSERT INTO type_enum_txt (type_hid, enum_id, lang_id, descr, note) VALUES ("+
-				strconv.Itoa(hId)+", "+
-				strconv.Itoa(modelTxt.TypeEnumTxt[idx].EnumId)+", "+
-				strconv.Itoa(modelTxt.TypeEnumTxt[idx].LangId)+", "+
-				toQuoted(modelTxt.TypeEnumTxt[idx].Descr)+", "+
-				toQuotedOrNull(modelTxt.TypeEnumTxt[idx].Note)+")")
-		if err != nil {
-			return err
+		// if language code valid then delete and insert into type_enum_txt
+		if lId, ok := langDef.IdByCode(modelTxt.TypeEnumTxt[idx].LangCode); ok {
+
+			err := TrxUpdate(trx,
+				"DELETE FROM type_enum_txt"+
+					" WHERE type_hid = "+strconv.Itoa(hId)+
+					" AND enum_id = "+strconv.Itoa(modelTxt.TypeEnumTxt[idx].EnumId)+
+					" AND lang_id = "+strconv.Itoa(lId))
+			if err != nil {
+				return err
+			}
+			err = TrxUpdate(trx,
+				"INSERT INTO type_enum_txt (type_hid, enum_id, lang_id, descr, note) VALUES ("+
+					strconv.Itoa(hId)+", "+
+					strconv.Itoa(modelTxt.TypeEnumTxt[idx].EnumId)+", "+
+					strconv.Itoa(lId)+", "+
+					toQuoted(modelTxt.TypeEnumTxt[idx].Descr)+", "+
+					toQuotedOrNull(modelTxt.TypeEnumTxt[idx].Note)+")")
+			if err != nil {
+				return err
+			}
 		}
 	}
 
 	// update parameter_dic_txt and ids
 	for idx := range modelTxt.ParamTxt {
 
-		// update model id and language id
+		// update model id
 		modelTxt.ParamTxt[idx].ModelId = modelDef.Model.ModelId
-		modelTxt.ParamTxt[idx].LangId = langDef.IdByCode(modelTxt.ParamTxt[idx].LangCode)
 
 		// find parameter Hid
 		hId := modelDef.ParamHidById(modelTxt.ParamTxt[idx].ParamId)
@@ -152,31 +157,33 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 			return errors.New("invalid parameter id " + strconv.Itoa(modelTxt.ParamTxt[idx].ParamId))
 		}
 
-		// delete and insert into parameter_dic_txt
-		err := TrxUpdate(trx,
-			"DELETE FROM parameter_dic_txt"+
-				" WHERE parameter_hid = "+strconv.Itoa(hId)+
-				" AND lang_id = "+strconv.Itoa(modelTxt.ParamTxt[idx].LangId))
-		if err != nil {
-			return err
-		}
-		err = TrxUpdate(trx,
-			"INSERT INTO parameter_dic_txt (parameter_hid, lang_id, descr, note) VALUES ("+
-				strconv.Itoa(hId)+", "+
-				strconv.Itoa(modelTxt.ParamTxt[idx].LangId)+", "+
-				toQuoted(modelTxt.ParamTxt[idx].Descr)+", "+
-				toQuotedOrNull(modelTxt.ParamTxt[idx].Note)+")")
-		if err != nil {
-			return err
+		// if language code valid then delete and insert into parameter_dic_txt
+		if lId, ok := langDef.IdByCode(modelTxt.ParamTxt[idx].LangCode); ok {
+
+			err := TrxUpdate(trx,
+				"DELETE FROM parameter_dic_txt"+
+					" WHERE parameter_hid = "+strconv.Itoa(hId)+
+					" AND lang_id = "+strconv.Itoa(lId))
+			if err != nil {
+				return err
+			}
+			err = TrxUpdate(trx,
+				"INSERT INTO parameter_dic_txt (parameter_hid, lang_id, descr, note) VALUES ("+
+					strconv.Itoa(hId)+", "+
+					strconv.Itoa(lId)+", "+
+					toQuoted(modelTxt.ParamTxt[idx].Descr)+", "+
+					toQuotedOrNull(modelTxt.ParamTxt[idx].Note)+")")
+			if err != nil {
+				return err
+			}
 		}
 	}
 
 	// update parameter_dims_txt and ids
 	for idx := range modelTxt.ParamDimsTxt {
 
-		// update model id and language id
+		// update model id
 		modelTxt.ParamDimsTxt[idx].ModelId = modelDef.Model.ModelId
-		modelTxt.ParamDimsTxt[idx].LangId = langDef.IdByCode(modelTxt.ParamDimsTxt[idx].LangCode)
 
 		// find parameter Hid
 		hId := modelDef.ParamHidById(modelTxt.ParamDimsTxt[idx].ParamId)
@@ -184,33 +191,35 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 			return errors.New("invalid parameter id " + strconv.Itoa(modelTxt.ParamDimsTxt[idx].ParamId))
 		}
 
-		// delete and insert into parameter_dims_txt
-		err := TrxUpdate(trx,
-			"DELETE FROM parameter_dims_txt"+
-				" WHERE parameter_hid = "+strconv.Itoa(hId)+
-				" AND dim_id = "+strconv.Itoa(modelTxt.ParamDimsTxt[idx].DimId)+
-				" AND lang_id = "+strconv.Itoa(modelTxt.ParamDimsTxt[idx].LangId))
-		if err != nil {
-			return err
-		}
-		err = TrxUpdate(trx,
-			"INSERT INTO parameter_dims_txt (parameter_hid, dim_id, lang_id, descr, note) VALUES ("+
-				strconv.Itoa(hId)+", "+
-				strconv.Itoa(modelTxt.ParamDimsTxt[idx].DimId)+", "+
-				strconv.Itoa(modelTxt.ParamDimsTxt[idx].LangId)+", "+
-				toQuoted(modelTxt.ParamDimsTxt[idx].Descr)+", "+
-				toQuotedOrNull(modelTxt.ParamDimsTxt[idx].Note)+")")
-		if err != nil {
-			return err
+		// if language code valid then delete and insert into parameter_dims_txt
+		if lId, ok := langDef.IdByCode(modelTxt.ParamDimsTxt[idx].LangCode); ok {
+
+			err := TrxUpdate(trx,
+				"DELETE FROM parameter_dims_txt"+
+					" WHERE parameter_hid = "+strconv.Itoa(hId)+
+					" AND dim_id = "+strconv.Itoa(modelTxt.ParamDimsTxt[idx].DimId)+
+					" AND lang_id = "+strconv.Itoa(lId))
+			if err != nil {
+				return err
+			}
+			err = TrxUpdate(trx,
+				"INSERT INTO parameter_dims_txt (parameter_hid, dim_id, lang_id, descr, note) VALUES ("+
+					strconv.Itoa(hId)+", "+
+					strconv.Itoa(modelTxt.ParamDimsTxt[idx].DimId)+", "+
+					strconv.Itoa(lId)+", "+
+					toQuoted(modelTxt.ParamDimsTxt[idx].Descr)+", "+
+					toQuotedOrNull(modelTxt.ParamDimsTxt[idx].Note)+")")
+			if err != nil {
+				return err
+			}
 		}
 	}
 
 	// update table_dic_txt and ids
 	for idx := range modelTxt.TableTxt {
 
-		// update model id and language id
+		// update model id
 		modelTxt.TableTxt[idx].ModelId = modelDef.Model.ModelId
-		modelTxt.TableTxt[idx].LangId = langDef.IdByCode(modelTxt.TableTxt[idx].LangCode)
 
 		// find output table Hid
 		hId := modelDef.OutTableHidById(modelTxt.TableTxt[idx].TableId)
@@ -218,33 +227,35 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 			return errors.New("invalid output table id " + strconv.Itoa(modelTxt.TableTxt[idx].TableId))
 		}
 
-		// delete and insert into table_dic_txt
-		err := TrxUpdate(trx,
-			"DELETE FROM table_dic_txt"+
-				" WHERE table_hid = "+strconv.Itoa(hId)+
-				" AND lang_id = "+strconv.Itoa(modelTxt.TableTxt[idx].LangId))
-		if err != nil {
-			return err
-		}
-		err = TrxUpdate(trx,
-			"INSERT INTO table_dic_txt (table_hid, lang_id, descr, note, expr_descr, expr_note) VALUES ("+
-				strconv.Itoa(hId)+", "+
-				strconv.Itoa(modelTxt.TableTxt[idx].LangId)+", "+
-				toQuoted(modelTxt.TableTxt[idx].Descr)+", "+
-				toQuotedOrNull(modelTxt.TableTxt[idx].Note)+", "+
-				toQuoted(modelTxt.TableTxt[idx].ExprDescr)+", "+
-				toQuotedOrNull(modelTxt.TableTxt[idx].ExprNote)+")")
-		if err != nil {
-			return err
+		// if language code valid then delete and insert into table_dic_txt
+		if lId, ok := langDef.IdByCode(modelTxt.TableTxt[idx].LangCode); ok {
+
+			err := TrxUpdate(trx,
+				"DELETE FROM table_dic_txt"+
+					" WHERE table_hid = "+strconv.Itoa(hId)+
+					" AND lang_id = "+strconv.Itoa(lId))
+			if err != nil {
+				return err
+			}
+			err = TrxUpdate(trx,
+				"INSERT INTO table_dic_txt (table_hid, lang_id, descr, note, expr_descr, expr_note) VALUES ("+
+					strconv.Itoa(hId)+", "+
+					strconv.Itoa(lId)+", "+
+					toQuoted(modelTxt.TableTxt[idx].Descr)+", "+
+					toQuotedOrNull(modelTxt.TableTxt[idx].Note)+", "+
+					toQuoted(modelTxt.TableTxt[idx].ExprDescr)+", "+
+					toQuotedOrNull(modelTxt.TableTxt[idx].ExprNote)+")")
+			if err != nil {
+				return err
+			}
 		}
 	}
 
 	// update table_dims_txt and ids
 	for idx := range modelTxt.TableDimsTxt {
 
-		// update model id and language id
+		// update model id
 		modelTxt.TableDimsTxt[idx].ModelId = modelDef.Model.ModelId
-		modelTxt.TableDimsTxt[idx].LangId = langDef.IdByCode(modelTxt.TableDimsTxt[idx].LangCode)
 
 		// find output table Hid
 		hId := modelDef.OutTableHidById(modelTxt.TableDimsTxt[idx].TableId)
@@ -252,33 +263,35 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 			return errors.New("invalid output table id " + strconv.Itoa(modelTxt.TableDimsTxt[idx].TableId))
 		}
 
-		// delete and insert into table_dims_txt
-		err := TrxUpdate(trx,
-			"DELETE FROM table_dims_txt"+
-				" WHERE table_hid = "+strconv.Itoa(hId)+
-				" AND dim_id = "+strconv.Itoa(modelTxt.TableDimsTxt[idx].DimId)+
-				" AND lang_id = "+strconv.Itoa(modelTxt.TableDimsTxt[idx].LangId))
-		if err != nil {
-			return err
-		}
-		err = TrxUpdate(trx,
-			"INSERT INTO table_dims_txt (table_hid, dim_id, lang_id, descr, note) VALUES ("+
-				strconv.Itoa(hId)+", "+
-				strconv.Itoa(modelTxt.TableDimsTxt[idx].DimId)+", "+
-				strconv.Itoa(modelTxt.TableDimsTxt[idx].LangId)+", "+
-				toQuoted(modelTxt.TableDimsTxt[idx].Descr)+", "+
-				toQuotedOrNull(modelTxt.TableDimsTxt[idx].Note)+")")
-		if err != nil {
-			return err
+		// if language code valid then delete and insert into table_dims_txt
+		if lId, ok := langDef.IdByCode(modelTxt.TableDimsTxt[idx].LangCode); ok {
+
+			err := TrxUpdate(trx,
+				"DELETE FROM table_dims_txt"+
+					" WHERE table_hid = "+strconv.Itoa(hId)+
+					" AND dim_id = "+strconv.Itoa(modelTxt.TableDimsTxt[idx].DimId)+
+					" AND lang_id = "+strconv.Itoa(lId))
+			if err != nil {
+				return err
+			}
+			err = TrxUpdate(trx,
+				"INSERT INTO table_dims_txt (table_hid, dim_id, lang_id, descr, note) VALUES ("+
+					strconv.Itoa(hId)+", "+
+					strconv.Itoa(modelTxt.TableDimsTxt[idx].DimId)+", "+
+					strconv.Itoa(lId)+", "+
+					toQuoted(modelTxt.TableDimsTxt[idx].Descr)+", "+
+					toQuotedOrNull(modelTxt.TableDimsTxt[idx].Note)+")")
+			if err != nil {
+				return err
+			}
 		}
 	}
 
 	// update table_acc_txt and ids
 	for idx := range modelTxt.TableAccTxt {
 
-		// update model id and language id
+		// update model id
 		modelTxt.TableAccTxt[idx].ModelId = modelDef.Model.ModelId
-		modelTxt.TableAccTxt[idx].LangId = langDef.IdByCode(modelTxt.TableAccTxt[idx].LangCode)
 
 		// find output table Hid
 		hId := modelDef.OutTableHidById(modelTxt.TableAccTxt[idx].TableId)
@@ -286,33 +299,35 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 			return errors.New("invalid output table id " + strconv.Itoa(modelTxt.TableAccTxt[idx].TableId))
 		}
 
-		// delete and insert into table_acc_txt
-		err := TrxUpdate(trx,
-			"DELETE FROM table_acc_txt"+
-				" WHERE table_hid = "+strconv.Itoa(hId)+
-				" AND acc_id = "+strconv.Itoa(modelTxt.TableAccTxt[idx].AccId)+
-				" AND lang_id = "+strconv.Itoa(modelTxt.TableAccTxt[idx].LangId))
-		if err != nil {
-			return err
-		}
-		err = TrxUpdate(trx,
-			"INSERT INTO table_acc_txt (table_hid, acc_id, lang_id, descr, note) VALUES ("+
-				strconv.Itoa(hId)+", "+
-				strconv.Itoa(modelTxt.TableAccTxt[idx].AccId)+", "+
-				strconv.Itoa(modelTxt.TableAccTxt[idx].LangId)+", "+
-				toQuoted(modelTxt.TableAccTxt[idx].Descr)+", "+
-				toQuotedOrNull(modelTxt.TableAccTxt[idx].Note)+")")
-		if err != nil {
-			return err
+		// if language code valid then delete and insert into table_acc_txt
+		if lId, ok := langDef.IdByCode(modelTxt.TableAccTxt[idx].LangCode); ok {
+
+			err := TrxUpdate(trx,
+				"DELETE FROM table_acc_txt"+
+					" WHERE table_hid = "+strconv.Itoa(hId)+
+					" AND acc_id = "+strconv.Itoa(modelTxt.TableAccTxt[idx].AccId)+
+					" AND lang_id = "+strconv.Itoa(lId))
+			if err != nil {
+				return err
+			}
+			err = TrxUpdate(trx,
+				"INSERT INTO table_acc_txt (table_hid, acc_id, lang_id, descr, note) VALUES ("+
+					strconv.Itoa(hId)+", "+
+					strconv.Itoa(modelTxt.TableAccTxt[idx].AccId)+", "+
+					strconv.Itoa(lId)+", "+
+					toQuoted(modelTxt.TableAccTxt[idx].Descr)+", "+
+					toQuotedOrNull(modelTxt.TableAccTxt[idx].Note)+")")
+			if err != nil {
+				return err
+			}
 		}
 	}
 
 	// update table_expr_txt and ids
 	for idx := range modelTxt.TableExprTxt {
 
-		// update model id and language id
+		// update model id
 		modelTxt.TableExprTxt[idx].ModelId = modelDef.Model.ModelId
-		modelTxt.TableExprTxt[idx].LangId = langDef.IdByCode(modelTxt.TableExprTxt[idx].LangCode)
 
 		// find output table Hid
 		hId := modelDef.OutTableHidById(modelTxt.TableExprTxt[idx].TableId)
@@ -320,24 +335,27 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 			return errors.New("invalid output table id " + strconv.Itoa(modelTxt.TableExprTxt[idx].TableId))
 		}
 
-		// delete and insert into table_expr_txt
-		err := TrxUpdate(trx,
-			"DELETE FROM table_expr_txt"+
-				" WHERE table_hid = "+strconv.Itoa(hId)+
-				" AND expr_id = "+strconv.Itoa(modelTxt.TableExprTxt[idx].ExprId)+
-				" AND lang_id = "+strconv.Itoa(modelTxt.TableExprTxt[idx].LangId))
-		if err != nil {
-			return err
-		}
-		err = TrxUpdate(trx,
-			"INSERT INTO table_expr_txt (table_hid, expr_id, lang_id, descr, note) VALUES ("+
-				strconv.Itoa(hId)+", "+
-				strconv.Itoa(modelTxt.TableExprTxt[idx].ExprId)+", "+
-				strconv.Itoa(modelTxt.TableExprTxt[idx].LangId)+", "+
-				toQuoted(modelTxt.TableExprTxt[idx].Descr)+", "+
-				toQuotedOrNull(modelTxt.TableExprTxt[idx].Note)+")")
-		if err != nil {
-			return err
+		// if language code valid then delete and insert into table_expr_txt
+		if lId, ok := langDef.IdByCode(modelTxt.TableExprTxt[idx].LangCode); ok {
+
+			err := TrxUpdate(trx,
+				"DELETE FROM table_expr_txt"+
+					" WHERE table_hid = "+strconv.Itoa(hId)+
+					" AND expr_id = "+strconv.Itoa(modelTxt.TableExprTxt[idx].ExprId)+
+					" AND lang_id = "+strconv.Itoa(lId))
+			if err != nil {
+				return err
+			}
+			err = TrxUpdate(trx,
+				"INSERT INTO table_expr_txt (table_hid, expr_id, lang_id, descr, note) VALUES ("+
+					strconv.Itoa(hId)+", "+
+					strconv.Itoa(modelTxt.TableExprTxt[idx].ExprId)+", "+
+					strconv.Itoa(lId)+", "+
+					toQuoted(modelTxt.TableExprTxt[idx].Descr)+", "+
+					toQuotedOrNull(modelTxt.TableExprTxt[idx].Note)+")")
+			if err != nil {
+				return err
+			}
 		}
 	}
 

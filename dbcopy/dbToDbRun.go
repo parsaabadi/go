@@ -179,13 +179,13 @@ func copyRunDbToDb(
 	}
 
 	// destination: convert from "public" format into destination db rows
-	dstRun, err := pub.FromPublic(dstDb, dstModel, dstLang)
+	dstRun, err := pub.FromPublic(dstDb, dstModel)
 	if err != nil {
 		return 0, err
 	}
 
 	// destination: save model run metadata
-	isExist, err := dstRun.UpdateRun(dstDb, dstModel)
+	isExist, err := dstRun.UpdateRun(dstDb, dstModel, dstLang)
 	if err != nil {
 		return 0, err
 	}

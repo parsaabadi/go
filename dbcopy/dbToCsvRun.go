@@ -65,14 +65,14 @@ func toRunListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleF
 	}
 
 	// write model run text rows into csv
-	row = make([]string, 5)
+	row = make([]string, 4)
 
 	idx = 0
 	j := 0
 	err = toCsvFile(
 		outDir,
 		"run_txt.csv",
-		[]string{"run_id", "lang_id", "lang_code", "descr", "note"},
+		[]string{"run_id", "lang_code", "descr", "note"},
 		func() (bool, []string, error) {
 
 			if idx < 0 || idx >= len(rl) { // end of run rows
@@ -95,14 +95,13 @@ func toRunListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleF
 
 			// make model run text []string row
 			row[0] = strconv.Itoa(rl[idx].Txt[j].RunId)
-			row[1] = strconv.Itoa(rl[idx].Txt[j].LangId)
-			row[2] = rl[idx].Txt[j].LangCode
-			row[3] = rl[idx].Txt[j].Descr
+			row[1] = rl[idx].Txt[j].LangCode
+			row[2] = rl[idx].Txt[j].Descr
 
 			if rl[idx].Txt[j].Note == "" { // empty "" string is NULL
-				row[4] = "NULL"
+				row[3] = "NULL"
 			} else {
-				row[4] = rl[idx].Txt[j].Note
+				row[3] = rl[idx].Txt[j].Note
 			}
 			j++
 			return false, row, nil
@@ -145,7 +144,7 @@ func toRunListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleF
 	}
 
 	// write parameter value notes rows into csv
-	row = make([]string, 5)
+	row = make([]string, 4)
 
 	idx = 0
 	pix := 0
@@ -153,7 +152,7 @@ func toRunListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleF
 	err = toCsvFile(
 		outDir,
 		"run_parameter_txt.csv",
-		[]string{"run_id", "parameter_hid", "lang_id", "lang_id", "note"},
+		[]string{"run_id", "parameter_hid", "lang_code", "note"},
 		func() (bool, []string, error) {
 
 			if idx < 0 || idx >= len(rl) { // end of model run rows
@@ -187,13 +186,12 @@ func toRunListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleF
 			// make run parameter text []string row
 			row[0] = strconv.Itoa(rl[idx].ParamTxt[pix].Txt[j].RunId)
 			row[1] = strconv.Itoa(rl[idx].ParamTxt[pix].Txt[j].ParamHid)
-			row[2] = strconv.Itoa(rl[idx].ParamTxt[pix].Txt[j].LangId)
-			row[3] = rl[idx].ParamTxt[pix].Txt[j].LangCode
+			row[2] = rl[idx].ParamTxt[pix].Txt[j].LangCode
 
 			if rl[idx].ParamTxt[pix].Txt[j].Note == "" { // empty "" string is NULL
-				row[4] = "NULL"
+				row[3] = "NULL"
 			} else {
-				row[4] = rl[idx].ParamTxt[pix].Txt[j].Note
+				row[3] = rl[idx].ParamTxt[pix].Txt[j].Note
 			}
 			j++
 			return false, row, nil

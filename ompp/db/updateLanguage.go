@@ -10,7 +10,6 @@ import (
 )
 
 // UpdateLanguage insert new or update existing language and words in lang_lst and lang_word tables.
-//
 // Language ids updated with actual id's from database
 func UpdateLanguage(dbConn *sql.DB, langDef *LangMeta) error {
 
@@ -33,9 +32,41 @@ func UpdateLanguage(dbConn *sql.DB, langDef *LangMeta) error {
 	// rebuild language id index
 	langDef.idIndex = make(map[int]int, len(langDef.Lang))
 	for k := range langDef.Lang {
-		langDef.idIndex[langDef.Lang[k].LangId] = k
+		langDef.idIndex[langDef.Lang[k].langId] = k
 	}
 
+	trx.Commit()
+	return nil
+}
+
+// UpdateModelWord insert new or update existing model language-specific strings in model_lang_word table.
+func UpdateModelWord(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangMeta, mwDef *ModelWordMeta) error {
+
+	// source is empty: nothing to do, exit
+	if mwDef == nil || len(mwDef.ModelWord) <= 0 {
+		return nil
+	}
+
+	// validate parameters
+	if modelDef == nil {
+		return errors.New("invalid (empty) model metadata")
+	}
+	if langDef == nil {
+		return errors.New("invalid (empty) language list")
+	}
+	if mwDef.ModelName != modelDef.Model.Name || mwDef.ModelDigest != modelDef.Model.Digest {
+		return errors.New("invalid model name " + mwDef.ModelName + " or digest " + mwDef.ModelDigest + " expected: " + modelDef.Model.Name + " " + modelDef.Model.Digest)
+	}
+
+	// do update in transaction scope
+	trx, err := dbConn.Begin()
+	if err != nil {
+		return err
+	}
+	if err = doUpdateModelWord(trx, modelDef.Model.ModelId, langDef, mwDef); err != nil {
+		trx.Rollback()
+		return err
+	}
 	trx.Commit()
 	return nil
 }
@@ -49,45 +80,25 @@ func doUpdateLanguage(trx *sql.Tx, langDef *LangMeta) error {
 	// if language code exist then update else insert into lang_lst
 	for idx := range langDef.Lang {
 
-		// get new language id
-		// UPDATE id_lst SET id_value =
-		//   CASE
-		//     WHEN 0 = (SELECT COUNT(*) FROM lang_lst WHERE lang_code = 'EN')
-		//       THEN id_value + 1
-		//     ELSE id_value
-		//   END
-		// WHERE id_key = 'lang_id'
-		err := TrxUpdate(trx,
-			"UPDATE id_lst SET id_value ="+
-				" CASE"+
-				" WHEN 0 = (SELECT COUNT(*) FROM lang_lst WHERE lang_code = "+toQuoted(langDef.Lang[idx].LangCode)+")"+
-				" THEN id_value + 1"+
-				" ELSE id_value"+
-				" END"+
-				" WHERE id_key = 'lang_id'")
-		if err != nil {
-			return err
-		}
-
 		// check if this language already exist
-		langDef.Lang[idx].LangId = -1
-		err = TrxSelectFirst(trx,
+		langDef.Lang[idx].langId = -1
+		err := TrxSelectFirst(trx,
 			"SELECT lang_id FROM lang_lst WHERE lang_code = "+toQuoted(langDef.Lang[idx].LangCode),
 			func(row *sql.Row) error {
-				return row.Scan(&langDef.Lang[idx].LangId)
+				return row.Scan(&langDef.Lang[idx].langId)
 			})
 		if err != nil && err != sql.ErrNoRows {
 			return err
 		}
 
 		// if language exist then update else insert into lang_lst
-		if langDef.Lang[idx].LangId >= 0 {
+		if langDef.Lang[idx].langId >= 0 {
 
 			// UPDATE lang_lst SET lang_name = 'English' WHERE lang_id = 0
 			err = TrxUpdate(trx,
 				"UPDATE lang_lst"+
 					" SET lang_name = "+toQuoted(langDef.Lang[idx].Name)+
-					" WHERE lang_id = "+strconv.Itoa(langDef.Lang[idx].LangId))
+					" WHERE lang_id = "+strconv.Itoa(langDef.Lang[idx].langId))
 			if err != nil {
 				return err
 			}
@@ -95,10 +106,14 @@ func doUpdateLanguage(trx *sql.Tx, langDef *LangMeta) error {
 		} else { // insert into lang_lst
 
 			// get new language id
+			err = TrxUpdate(trx, "UPDATE id_lst SET id_value = id_value + 1 WHERE id_key = 'lang_id'")
+			if err != nil {
+				return err
+			}
 			err = TrxSelectFirst(trx,
 				"SELECT id_value FROM id_lst WHERE id_key = 'lang_id'",
 				func(row *sql.Row) error {
-					return row.Scan(&langDef.Lang[idx].LangId)
+					return row.Scan(&langDef.Lang[idx].langId)
 				})
 			switch {
 			case err == sql.ErrNoRows:
@@ -111,7 +126,7 @@ func doUpdateLanguage(trx *sql.Tx, langDef *LangMeta) error {
 			err = TrxUpdate(trx,
 				"INSERT INTO lang_lst (lang_id, lang_code, lang_name)"+
 					" VALUES ("+
-					strconv.Itoa(langDef.Lang[idx].LangId)+", "+
+					strconv.Itoa(langDef.Lang[idx].langId)+", "+
 					toQuoted(langDef.Lang[idx].LangCode)+", "+
 					toQuoted(langDef.Lang[idx].Name)+")")
 			if err != nil {
@@ -120,7 +135,7 @@ func doUpdateLanguage(trx *sql.Tx, langDef *LangMeta) error {
 		}
 
 		// update lang_word for that language
-		if err = doUpdateWord(trx, langDef.Lang[idx].LangId, langDef.Lang[idx].Words); err != nil {
+		if err = doUpdateWord(trx, langDef.Lang[idx].langId, langDef.Lang[idx].Words); err != nil {
 			return err
 		}
 	}
@@ -141,6 +156,11 @@ func doUpdateWord(trx *sql.Tx, langId int, wordRs map[string]string) error {
 	// if language id and word code exist then update else insert into lang_word
 	for code, val := range wordRs {
 
+		// skip word if code is "" empty
+		if code == "" {
+			continue
+		}
+
 		// check if this language word already exist
 		// "SELECT COUNT(*) FROM lang_word WHERE lang_id = 0 AND word_code = 'EN'
 		cnt := 0
@@ -155,8 +175,8 @@ func doUpdateWord(trx *sql.Tx, langId int, wordRs map[string]string) error {
 			return err
 		}
 
-		// if language word exist then update else insert into lang_word
-		if cnt > 0 {
+		// if language word exist and new value not empty then update else insert into lang_word
+		if cnt > 0 && val != "" {
 
 			// UPDATE lang_word SET word_value = 'Max' WHERE lang_id = 0 AND word_code = 'max'
 			err = TrxUpdate(trx,
@@ -179,6 +199,44 @@ func doUpdateWord(trx *sql.Tx, langId int, wordRs map[string]string) error {
 					toQuoted(val)+")")
 			if err != nil {
 				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// doUpdateLanguage insert new or update existing language and words in lang_lst and lang_word tables.
+// It does update as part of transaction
+// Language ids updated with actual id's from database
+func doUpdateModelWord(trx *sql.Tx, modelId int, langDef *LangMeta, mwDef *ModelWordMeta) error {
+
+	// update model_word and ids
+	smId := strconv.Itoa(modelId)
+	for idx := range mwDef.ModelWord {
+
+		// if language code valid then delete and insert into model_word
+		if lId, ok := langDef.IdByCode(mwDef.ModelWord[idx].LangCode); ok {
+
+			err := TrxUpdate(trx,
+				"DELETE FROM model_word WHERE model_id = "+smId+" AND lang_id = "+strconv.Itoa(lId))
+			if err != nil {
+				return err
+			}
+
+			for code, val := range mwDef.ModelWord[idx].Words {
+				if code == "" {
+					continue // skip word if code is "" empty
+				}
+				err = TrxUpdate(trx,
+					"INSERT INTO model_word (model_id, lang_id, word_code, word_value) VALUES ("+
+						smId+", "+
+						strconv.Itoa(lId)+", "+
+						toQuoted(code)+", "+
+						toQuoted(val)+")")
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}

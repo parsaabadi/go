@@ -30,7 +30,8 @@ func toLanguageCsv(dbConn *sql.DB, outDir string) error {
 		[]string{"lang_id", "lang_code", "lang_name"},
 		func() (bool, []string, error) {
 			if 0 <= idx && idx < len(langDef.Lang) {
-				row[0] = strconv.Itoa(langDef.Lang[idx].LangId)
+				lId, _ := langDef.IdByCode(langDef.Lang[idx].LangCode)
+				row[0] = strconv.Itoa(lId)
 				row[1] = langDef.Lang[idx].LangCode
 				row[2] = langDef.Lang[idx].Name
 				idx++
@@ -48,7 +49,8 @@ func toLanguageCsv(dbConn *sql.DB, outDir string) error {
 	for j := range langDef.Lang {
 		for key, val := range langDef.Lang[j].Words {
 			kvArr = append(kvArr, make([]string, 3))
-			kvArr[k][0] = strconv.Itoa(langDef.Lang[j].LangId)
+			lId, _ := langDef.IdByCode(langDef.Lang[j].LangCode)
+			kvArr[k][0] = strconv.Itoa(lId)
 			kvArr[k][1] = key
 			kvArr[k][2] = val
 			k++
@@ -73,6 +75,53 @@ func toLanguageCsv(dbConn *sql.DB, outDir string) error {
 		})
 	if err != nil {
 		return errors.New("failed to write language words into csv " + err.Error())
+	}
+
+	return nil
+}
+
+// toModelWordCsv writes list of model language-specific strings into csv file.
+func toModelWordCsv(dbConn *sql.DB, modelId int, outDir string) error {
+
+	// get list of model words
+	mwDef, err := db.GetModelWord(dbConn, modelId, "")
+	if err != nil {
+		return err
+	}
+
+	// convert model words map to array of rows
+	var mwArr [][]string
+	k := 0
+	for j := range mwDef.ModelWord {
+		for key, val := range mwDef.ModelWord[j].Words {
+			mwArr = append(mwArr, make([]string, 4))
+			mwArr[k][0] = strconv.Itoa(modelId)
+			mwArr[k][1] = mwDef.ModelWord[j].LangCode
+			mwArr[k][2] = key
+			mwArr[k][3] = val
+			k++
+		}
+	}
+
+	// write  model words rows into csv
+	row := make([]string, 4)
+	row[0] = strconv.Itoa(modelId)
+
+	idx := 0
+	err = toCsvFile(
+		outDir,
+		"model_word.csv",
+		[]string{"model_id", "lang_code", "word_code", "word_value"},
+		func() (bool, []string, error) {
+			if 0 <= idx && idx < len(mwArr) {
+				row = mwArr[idx]
+				idx++
+				return false, row, nil
+			}
+			return true, row, nil // end of model word rows
+		})
+	if err != nil {
+		return errors.New("failed to write model words into csv " + err.Error())
 	}
 
 	return nil
@@ -146,26 +195,25 @@ func toModelGroupCsv(dbConn *sql.DB, modelId int, outDir string) error {
 	}
 
 	// write group text rows into csv
-	row = make([]string, 6)
+	row = make([]string, 5)
 	row[0] = strconv.Itoa(modelId)
 
 	idx = 0
 	err = toCsvFile(
 		outDir,
 		"group_txt.csv",
-		[]string{"model_id", "group_id", "lang_id", "lang_code", "descr", "note"},
+		[]string{"model_id", "group_id", "lang_code", "descr", "note"},
 		func() (bool, []string, error) {
 
 			if 0 <= idx && idx < len(modelGroup.GroupTxt) {
 				row[1] = strconv.Itoa(modelGroup.GroupTxt[idx].GroupId)
-				row[2] = strconv.Itoa(modelGroup.GroupTxt[idx].LangId)
-				row[3] = modelGroup.GroupTxt[idx].LangCode
-				row[4] = modelGroup.GroupTxt[idx].Descr
+				row[2] = modelGroup.GroupTxt[idx].LangCode
+				row[3] = modelGroup.GroupTxt[idx].Descr
 
 				if modelGroup.GroupTxt[idx].Note == "" { // empty "" string is NULL
-					row[5] = "NULL"
+					row[4] = "NULL"
 				} else {
-					row[5] = modelGroup.GroupTxt[idx].Note
+					row[4] = modelGroup.GroupTxt[idx].Note
 				}
 				idx++
 				return false, row, nil

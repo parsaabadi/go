@@ -34,14 +34,11 @@ func UpdateWorksetReadonly(dbConn *sql.DB, setId int, isReadonly bool) error {
 }
 
 // FromPublic convert workset metadata from "public" format (coming from json import-export) into db rows.
-func (pub *WorksetPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangMeta) (*WorksetMeta, error) {
+func (pub *WorksetPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*WorksetMeta, error) {
 
 	// validate parameters
 	if modelDef == nil {
 		return nil, errors.New("invalid (empty) model metadata")
-	}
-	if langDef == nil {
-		return nil, errors.New("invalid (empty) language list")
 	}
 	if pub.Name == "" {
 		return nil, errors.New("invalid (empty) workset name")
@@ -84,7 +81,6 @@ func (pub *WorksetPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta, langDef *
 	// use set id default zero
 	for k := range pub.Txt {
 		ws.Txt[k].LangCode = pub.Txt[k].LangCode
-		ws.Txt[k].LangId = langDef.IdByCode(pub.Txt[k].LangCode)
 		ws.Txt[k].Descr = pub.Txt[k].Descr
 		ws.Txt[k].Note = pub.Txt[k].Note
 	}
@@ -107,7 +103,6 @@ func (pub *WorksetPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta, langDef *
 			for j := range pub.Param[k].Txt {
 				ws.Param[k].Txt[j].ParamHid = ws.Param[k].ParamHid
 				ws.Param[k].Txt[j].LangCode = pub.Param[k].Txt[j].LangCode
-				ws.Param[k].Txt[j].LangId = langDef.IdByCode(pub.Param[k].Txt[j].LangCode)
 				ws.Param[k].Txt[j].Note = pub.Param[k].Txt[j].Note
 			}
 		}
@@ -119,11 +114,14 @@ func (pub *WorksetPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta, langDef *
 // UpdateWorkset insert new or update existing workset metadata in database.
 //
 // Set name is used to find workset and set id updated with actual database value
-func (meta *WorksetMeta) UpdateWorkset(dbConn *sql.DB, modelDef *ModelMeta) error {
+func (meta *WorksetMeta) UpdateWorkset(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangMeta) error {
 
 	// validate parameters
 	if modelDef == nil {
 		return errors.New("invalid (empty) model metadata")
+	}
+	if langDef == nil {
+		return errors.New("invalid (empty) language list")
 	}
 	if meta.Set.Name == "" {
 		return errors.New("invalid (empty) workset name")
@@ -137,7 +135,7 @@ func (meta *WorksetMeta) UpdateWorkset(dbConn *sql.DB, modelDef *ModelMeta) erro
 	if err != nil {
 		return err
 	}
-	err = doUpdateOrInsertWorkset(trx, modelDef, meta)
+	err = doUpdateOrInsertWorkset(trx, modelDef, meta, langDef)
 	if err != nil {
 		trx.Rollback()
 		return err
@@ -150,7 +148,7 @@ func (meta *WorksetMeta) UpdateWorkset(dbConn *sql.DB, modelDef *ModelMeta) erro
 // doUpdateOrInsertWorkset insert new or update existing workset metadata in database.
 // It does update as part of transaction
 // Set name is used to find workset and set id updated with actual database value
-func doUpdateOrInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta) error {
+func doUpdateOrInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, langDef *LangMeta) error {
 
 	smId := strconv.Itoa(modelDef.Model.ModelId)
 
@@ -214,7 +212,7 @@ func doUpdateOrInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta
 		meta.Set.SetId = setId // update set id with actual value
 
 		// insert new workset
-		err = doInsertWorkset(trx, modelDef, meta)
+		err = doInsertWorkset(trx, modelDef, meta, langDef)
 		if err != nil {
 			return err
 		}
@@ -223,7 +221,7 @@ func doUpdateOrInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta
 
 		meta.Set.SetId = setId // workset exist, id may be different
 
-		err = doUpdateWorkset(trx, modelDef, meta)
+		err = doUpdateWorkset(trx, modelDef, meta, langDef)
 		if err != nil {
 			return err
 		}
@@ -235,7 +233,7 @@ func doUpdateOrInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta
 // doInsertWorkset insert new workset metadata in database.
 // It does update as part of transaction
 // Set id updated with actual database id of that workset
-func doInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta) error {
+func doInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, langDef *LangMeta) error {
 
 	// if workset based on existing run then base run id must be positive
 	sbId := ""
@@ -266,7 +264,7 @@ func doInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta) error 
 	}
 
 	// insert new rows into workset body tables: workset_txt, workset_parameter, workset_parameter_txt
-	if err = doInsertWorksetBody(trx, modelDef, meta); err != nil {
+	if err = doInsertWorksetBody(trx, modelDef, meta, langDef); err != nil {
 		return err
 	}
 	return err
@@ -276,7 +274,7 @@ func doInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta) error 
 // It does update as part of transaction
 // Set id updated with actual database id of that workset
 // It does delete existing parameter values which are not in the list of workset parameters.
-func doUpdateWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta) error {
+func doUpdateWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, langDef *LangMeta) error {
 
 	// if workset based on existing run then base run id must be positive
 	sbId := ""
@@ -356,7 +354,7 @@ hidLoop:
 	}
 
 	// insert new rows into workset body tables: workset_txt, workset_parameter, workset_parameter_txt
-	if err = doInsertWorksetBody(trx, modelDef, meta); err != nil {
+	if err = doInsertWorksetBody(trx, modelDef, meta, langDef); err != nil {
 		return err
 	}
 	return nil
@@ -365,7 +363,7 @@ hidLoop:
 // doInsertWorksetBody insert into workset metadata tables: workset_txt, workset_parameter, workset_parameter_txt
 // It does update as part of transaction
 // Set id updated with actual database id of that workset
-func doInsertWorksetBody(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta) error {
+func doInsertWorksetBody(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, langDef *LangMeta) error {
 
 	sId := strconv.Itoa(meta.Set.SetId)
 
@@ -374,15 +372,18 @@ func doInsertWorksetBody(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta) er
 
 		meta.Txt[j].SetId = meta.Set.SetId // update set id
 
-		// insert into workset_txt
-		err := TrxUpdate(trx,
-			"INSERT INTO workset_txt (set_id, lang_id, descr, note) VALUES ("+
-				sId+", "+
-				strconv.Itoa(meta.Txt[j].LangId)+", "+
-				toQuoted(meta.Txt[j].Descr)+", "+
-				toQuotedOrNull(meta.Txt[j].Note)+")")
-		if err != nil {
-			return err
+		// if language code valid then insert into workset_txt
+		if lId, ok := langDef.IdByCode(meta.Txt[j].LangCode); ok {
+
+			err := TrxUpdate(trx,
+				"INSERT INTO workset_txt (set_id, lang_id, descr, note) VALUES ("+
+					sId+", "+
+					strconv.Itoa(lId)+", "+
+					toQuoted(meta.Txt[j].Descr)+", "+
+					toQuotedOrNull(meta.Txt[j].Note)+")")
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -402,15 +403,18 @@ func doInsertWorksetBody(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta) er
 
 			meta.Param[k].Txt[j].SetId = meta.Set.SetId // update set id
 
-			// insert into workset_parameter_txt
-			err := TrxUpdate(trx,
-				"INSERT INTO workset_parameter_txt (set_id, parameter_hid, lang_id, note) VALUES ("+
-					sId+", "+
-					strconv.Itoa(meta.Param[k].ParamHid)+", "+
-					strconv.Itoa(meta.Param[k].Txt[j].LangId)+", "+
-					toQuotedOrNull(meta.Param[k].Txt[j].Note)+")")
-			if err != nil {
-				return err
+			// if language code valid then insert into workset_parameter_txt
+			if lId, ok := langDef.IdByCode(meta.Param[k].Txt[j].LangCode); ok {
+
+				err := TrxUpdate(trx,
+					"INSERT INTO workset_parameter_txt (set_id, parameter_hid, lang_id, note) VALUES ("+
+						sId+", "+
+						strconv.Itoa(meta.Param[k].ParamHid)+", "+
+						strconv.Itoa(lId)+", "+
+						toQuotedOrNull(meta.Param[k].Txt[j].Note)+")")
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}

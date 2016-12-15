@@ -16,13 +16,16 @@ func GetModelList(dbConn *sql.DB) ([]ModelDicRow, error) {
 
 	err := SelectRows(dbConn,
 		"SELECT"+
-			" M.model_id, M.model_name, M.model_digest, M.model_type, M.model_ver, M.create_dt"+
+			" M.model_id, M.model_name, M.model_digest, M.model_type,"+
+			" M.model_ver, M.create_dt, L.lang_code"+
 			" FROM model_dic M"+
+			" INNER JOIN lang_lst L ON (L.lang_id = M.default_lang_id)"+
 			" ORDER BY 1",
 		func(rows *sql.Rows) error {
 			var r ModelDicRow
 			if err := rows.Scan(
-				&r.ModelId, &r.Name, &r.Digest, &r.Type, &r.Version, &r.CreateDateTime); err != nil {
+				&r.ModelId, &r.Name, &r.Digest, &r.Type,
+				&r.Version, &r.CreateDateTime, &r.DefaultLangCode); err != nil {
 				return err
 			}
 			modelRs = append(modelRs, r)
@@ -113,13 +116,16 @@ func GetModelById(dbConn *sql.DB, modelId int) (*ModelMeta, error) {
 
 	err := SelectFirst(dbConn,
 		"SELECT"+
-			" M.model_id, M.model_name, M.model_digest, M.model_type, M.model_ver, M.create_dt"+
+			" M.model_id, M.model_name, M.model_digest, M.model_type,"+
+			" M.model_ver, M.create_dt, L.lang_code"+
 			" FROM model_dic M"+
+			" INNER JOIN lang_lst L ON (L.lang_id = M.default_lang_id)"+
 			" WHERE M.model_id = "+strconv.Itoa(modelId)+
 			" ORDER BY 1",
 		func(row *sql.Row) error {
 			return row.Scan(
-				&modelRow.ModelId, &modelRow.Name, &modelRow.Digest, &modelRow.Type, &modelRow.Version, &modelRow.CreateDateTime)
+				&modelRow.ModelId, &modelRow.Name, &modelRow.Digest, &modelRow.Type,
+				&modelRow.Version, &modelRow.CreateDateTime, &modelRow.DefaultLangCode)
 		})
 	switch {
 	case err == sql.ErrNoRows:

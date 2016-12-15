@@ -13,8 +13,9 @@ import (
 	"go.openmpp.org/ompp/helper"
 )
 
-// UpdateModel insert new or update existing model metadata in database.
+// UpdateModel insert new model metadata in database.
 //
+// If model with same digest already exist then call simply existing model metadata (no changes made in database).
 // Parameters and output tables Hid's and db table names updated with actual database values
 // If new model inserted then modelDef updated with actual id's (model id, parameter Hid...)
 // If parameter (output table) not exist then create db tables for parameter values (output table values)
@@ -48,7 +49,7 @@ func UpdateModel(dbConn *sql.DB, dbFacet Facet, modelDef *ModelMeta) error {
 	if err != nil {
 		return err
 	}
-	if err = doUpdateModel(trx, dbFacet, modelDef); err != nil {
+	if err = doInsertModel(trx, dbFacet, modelDef); err != nil {
 		trx.Rollback()
 		return err
 	}
@@ -56,16 +57,30 @@ func UpdateModel(dbConn *sql.DB, dbFacet Facet, modelDef *ModelMeta) error {
 	return nil
 }
 
-// doUpdateModel insert new or update existing model metadata in database.
+// doInsertModel insert new existing model metadata in database.
 // It does update as part of transaction
 // Parameters and output tables Hid's and db table names updated with actual database values
 // If new model inserted then modelDef updated with actual id's (model id, parameter Hid...)
 // If parameter (output table) not exist then create db tables for parameter values (output table values)
 // If db table names is "" empty or too long then make db table names for parameter values (output table values)
-func doUpdateModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
+func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
+
+	// find default model language id by code
+	var dlId int
+	err := TrxSelectFirst(trx,
+		"SELECT lang_id FROM lang_lst WHERE lang_code = "+toQuoted(modelDef.Model.DefaultLangCode),
+		func(row *sql.Row) error {
+			return row.Scan(&dlId)
+		})
+	switch {
+	case err == sql.ErrNoRows:
+		return errors.New("invalid default model language: " + modelDef.Model.DefaultLangCode)
+	case err != nil:
+		return err
+	}
 
 	// get new model id
-	err := TrxUpdate(trx,
+	err = TrxUpdate(trx,
 		"UPDATE id_lst SET id_value = id_value + 1 WHERE id_key = 'model_id'")
 	if err != nil {
 		return err
@@ -85,19 +100,20 @@ func doUpdateModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 
 	// insert model_dic row with new model id
 	// INSERT INTO model_dic
-	//   (model_id, model_name, model_digest, model_type, model_ver, create_dt)
+	//   (model_id, model_name, model_digest, model_type, model_ver, create_dt, default_lang_id)
 	// VALUES
 	//   (1234, 'modelOne', '1234abcd', 0, '1.0.0.0', '2012-08-17 16:04:59.0148')
 	err = TrxUpdate(trx,
 		"INSERT INTO model_dic"+
-			" (model_id, model_name, model_digest, model_type, model_ver, create_dt)"+
+			" (model_id, model_name, model_digest, model_type, model_ver, create_dt, default_lang_id)"+
 			" VALUES ("+
 			smId+", "+
 			toQuoted(modelDef.Model.Name)+", "+
 			toQuoted(modelDef.Model.Digest)+", "+
 			strconv.Itoa(modelDef.Model.Type)+", "+
 			toQuoted(modelDef.Model.Version)+", "+
-			toQuoted(modelDef.Model.CreateDateTime)+")")
+			toQuoted(modelDef.Model.CreateDateTime)+", "+
+			strconv.Itoa(dlId)+")")
 	if err != nil {
 		return err
 	}

@@ -67,6 +67,22 @@ func (dst *LangMeta) FromJson(srcJson []byte) (bool, error) {
 	return true, nil
 }
 
+// IdByCode return language id by language code or first language if code not found
+func (langDef *LangMeta) IdByCode(langCode string) (int, bool) {
+	if i, ok := langDef.codeIndex[langCode]; ok {
+		return langDef.Lang[i].langId, true
+	}
+	return langDef.Lang[0].langId, false
+}
+
+// CodeIdId return language code by language id or first language if id not found
+func (langDef *LangMeta) CodeById(langId int) (string, bool) {
+	if i, ok := langDef.idIndex[langId]; ok {
+		return langDef.Lang[i].LangCode, true
+	}
+	return langDef.Lang[0].LangCode, false
+}
+
 // TypeByKey return index of type by key: typeId
 func (meta *ModelMeta) TypeByKey(typeId int) (int, bool) {
 

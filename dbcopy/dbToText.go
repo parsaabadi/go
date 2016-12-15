@@ -96,6 +96,12 @@ func toModelJson(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 		return err
 	}
 
+	// get model language-specific strings in all languages
+	mwDef, err := db.GetModelWord(dbConn, modelDef.Model.ModelId, "")
+	if err != nil {
+		return err
+	}
+
 	// get model parameter and output table groups and group text (description and notes) in all languages
 	modelGroup, err := db.GetModelGroup(dbConn, modelDef.Model.ModelId, "")
 	if err != nil {
@@ -117,6 +123,9 @@ func toModelJson(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 		return err
 	}
 	if err := helper.ToJsonFile(filepath.Join(outDir, modelName+".text.json"), &modelTxt); err != nil {
+		return err
+	}
+	if err := helper.ToJsonFile(filepath.Join(outDir, modelName+".word.json"), &mwDef); err != nil {
 		return err
 	}
 	if err := helper.ToJsonFile(filepath.Join(outDir, modelName+".group.json"), &modelGroup); err != nil {

@@ -217,9 +217,10 @@ func getRunText(dbConn *sql.DB, query string) ([]RunTxtRow, error) {
 	err := SelectRows(dbConn, query,
 		func(rows *sql.Rows) error {
 			var r RunTxtRow
+			var lId int
 			var note sql.NullString
 			if err := rows.Scan(
-				&r.RunId, &r.LangId, &r.LangCode, &r.Descr, &note); err != nil {
+				&r.RunId, &lId, &r.LangCode, &r.Descr, &note); err != nil {
 				return err
 			}
 			if note.Valid {
@@ -280,9 +281,10 @@ func getRunParamText(dbConn *sql.DB, query string) ([]RunParamTxtRow, error) {
 	err := SelectRows(dbConn, query,
 		func(rows *sql.Rows) error {
 			var r RunParamTxtRow
+			var lId int
 			var note sql.NullString
 			if err := rows.Scan(
-				&r.RunId, &r.ParamHid, &r.LangId, &r.LangCode, &note); err != nil {
+				&r.RunId, &r.ParamHid, &lId, &r.LangCode, &note); err != nil {
 				return err
 			}
 			if note.Valid {

@@ -178,6 +178,18 @@ func fromLangTextJsonToDb(dbConn *sql.DB, modelDef *db.ModelMeta, inpDir string)
 		}
 	}
 
+	// restore model language-specific strings from json and if exist then update db table
+	var mwDef db.ModelWordMeta
+	isExist, err = helper.FromJsonFile(filepath.Join(inpDir, modelDef.Model.Name+".word.json"), &mwDef)
+	if err != nil {
+		return nil, err
+	}
+	if isExist {
+		if err = db.UpdateModelWord(dbConn, modelDef, langDef, &mwDef); err != nil {
+			return nil, err
+		}
+	}
+
 	// restore model groups and groups text (description, notes) from json and if exist then update db tables
 	var modelGroup db.GroupMeta
 	isExist, err = helper.FromJsonFile(filepath.Join(inpDir, modelDef.Model.Name+".group.json"), &modelGroup)

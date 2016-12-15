@@ -139,20 +139,22 @@ func doUpdateGroupAll(trx *sql.Tx, modelId int, langDef *LangMeta, modelGroup *G
 	// insert new groups text (description and notes) into group_txt
 	for idx := range modelGroup.GroupTxt {
 
-		// update model id and language id
+		// update model id
 		modelGroup.GroupTxt[idx].ModelId = modelId
-		modelGroup.GroupTxt[idx].LangId = langDef.IdByCode(modelGroup.GroupTxt[idx].LangCode)
 
-		err = TrxUpdate(trx,
-			"INSERT INTO group_txt (model_id, group_id, lang_id, descr, note)"+
-				" VALUES ("+
-				smId+", "+
-				strconv.Itoa(modelGroup.GroupTxt[idx].GroupId)+", "+
-				strconv.Itoa(modelGroup.GroupTxt[idx].LangId)+", "+
-				toQuoted(modelGroup.GroupTxt[idx].Descr)+", "+
-				toQuotedOrNull(modelGroup.GroupTxt[idx].Note)+")")
-		if err != nil {
-			return err
+		// if language code valid then update text info
+		if lId, ok := langDef.IdByCode(modelGroup.GroupTxt[idx].LangCode); ok {
+			err = TrxUpdate(trx,
+				"INSERT INTO group_txt (model_id, group_id, lang_id, descr, note)"+
+					" VALUES ("+
+					smId+", "+
+					strconv.Itoa(modelGroup.GroupTxt[idx].GroupId)+", "+
+					strconv.Itoa(lId)+", "+
+					toQuoted(modelGroup.GroupTxt[idx].Descr)+", "+
+					toQuotedOrNull(modelGroup.GroupTxt[idx].Note)+")")
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -169,29 +171,32 @@ func doUpdateGroupText(trx *sql.Tx, modelId int, langDef *LangMeta, groupTxt []G
 
 	for idx := range groupTxt {
 
-		// update model id and language id
+		// update model id
 		groupTxt[idx].ModelId = modelId
-		groupTxt[idx].LangId = langDef.IdByCode(groupTxt[idx].LangCode)
 
-		// delete and insert into group_txt
-		err := TrxUpdate(trx,
-			"DELETE FROM group_txt"+
-				" WHERE model_id = "+smId+
-				" AND group_id = "+strconv.Itoa(groupTxt[idx].GroupId)+
-				" AND lang_id = "+strconv.Itoa(groupTxt[idx].LangId))
-		if err != nil {
-			return err
-		}
-		err = TrxUpdate(trx,
-			"INSERT INTO group_txt (model_id, group_id, lang_id, descr, note)"+
-				" VALUES ("+
-				smId+", "+
-				strconv.Itoa(groupTxt[idx].GroupId)+", "+
-				strconv.Itoa(groupTxt[idx].LangId)+", "+
-				toQuoted(groupTxt[idx].Descr)+", "+
-				toQuotedOrNull(groupTxt[idx].Note)+")")
-		if err != nil {
-			return err
+		// if language code valid then update text info
+		if lId, ok := langDef.IdByCode(groupTxt[idx].LangCode); ok {
+
+			// delete and insert into group_txt
+			err := TrxUpdate(trx,
+				"DELETE FROM group_txt"+
+					" WHERE model_id = "+smId+
+					" AND group_id = "+strconv.Itoa(groupTxt[idx].GroupId)+
+					" AND lang_id = "+strconv.Itoa(lId))
+			if err != nil {
+				return err
+			}
+			err = TrxUpdate(trx,
+				"INSERT INTO group_txt (model_id, group_id, lang_id, descr, note)"+
+					" VALUES ("+
+					smId+", "+
+					strconv.Itoa(groupTxt[idx].GroupId)+", "+
+					strconv.Itoa(lId)+", "+
+					toQuoted(groupTxt[idx].Descr)+", "+
+					toQuotedOrNull(groupTxt[idx].Note)+")")
+			if err != nil {
+				return err
+			}
 		}
 	}
 
