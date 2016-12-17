@@ -31,6 +31,7 @@ k=4
 dsn = "DSN='server'; UID='user'; PWD='pas#word';" ; quoted value
 	# escaping test
 t w = the "# quick #" brown 'fox ; jumps' over    ; escaped: ; and # chars
+" key "" 'quoted' here " = some value
 qts = " allow ' unbalanced quotes                 ; with comment  
 end = ; last line without cr/lf end of line `
 
@@ -58,7 +59,7 @@ end = ; last line without cr/lf end of line `
 	checkString := func(section, key, expected string) {
 		val, ok := kvIni[iniKey(section, key)]
 		if !ok {
-			t.Errorf("not found [%s]%s", section, key)
+			t.Errorf("not found [%s]:%s:", section, key)
 		}
 		if val != expected {
 			t.Errorf("[%s]%s=%s: NOT :%s:", section, key, expected, val)
@@ -71,6 +72,7 @@ end = ; last line without cr/lf end of line `
 	checkString("replace", "k", "4")
 	checkString("escape", "dsn", `DSN='server'; UID='user'; PWD='pas#word';`)
 	checkString("escape", "t w", `the "# quick #" brown 'fox ; jumps' over`)
+	checkString("escape", ` key "" 'quoted' here `, `some value`)
 	checkString("escape", "qts", `" allow ' unbalanced quotes`)
 	checkString("escape", "end", "")
 }

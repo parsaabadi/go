@@ -17,8 +17,9 @@ It is very light and able to parse:
   dsn = "DSN='server'; UID='user'; PWD='pas#word';"   ; comments are # here
 
 Section and key trimed and cannot contain comments ; or # chars inside.
-Values trimed and unquoted, multi-line values not supported.
-Value escaped with "double" or 'single' quotes can include spaces or ; or # chars
+Key and values trimed and "unquoted".
+Multi-line values not supported.
+Key or value escaped with "double" or 'single' quotes can include spaces or ; or # chars
 
 Example:
   ; comments can start from ; or
@@ -30,6 +31,7 @@ Example:
    nul =
    dsn = "DSN='server'; UID='user'; PWD='pas#word';" ; quoted value
    t w = the "# quick #" brown 'fox ; jumps' over    ; escaped: ; and # chars
+   " key "" 'quoted' here " = some value
    qts = " allow ' unbalanced quotes                 ; with comment
 */
 func NewIni(iniPath string, encodingName string) (map[string]string, error) {
@@ -105,20 +107,42 @@ func loadIni(iniContent string) (map[string]string, error) {
 			continue
 		}
 
-		// split key = and value ; with comment
-		nEq := strings.IndexRune(line, '=')
-		nRem := strings.IndexAny(line, ";#")
-		if nEq < 1 || nRem > 0 && nRem < nEq {
+		// get key: find first = outside of "quote" or 'single quote'
+		isQuote := false
+		var cQuote rune
+		nEq := 0
+		for k, c := range line {
+
+			if !isQuote && (c == '"' || c == '\'') || isQuote && c == cQuote { // open or close quotes
+				isQuote = !isQuote
+				if isQuote {
+					cQuote = c // opening quote
+				} else {
+					cQuote = 0 // quote closed
+				}
+				continue
+			}
+			if !isQuote && c == '=' { // if outside of quote: check key=
+				nEq = k
+				break // found end of key=
+			}
+			if !isQuote && (c == ';' || c == '#') { // comment outside of quotes
+				break
+			}
+		}
+		if nEq < 1 || nEq >= len(line) {
 			return nil, errors.New("line " + strconv.Itoa(nLine) + ": expected key=...")
 		}
-		key = strings.TrimSpace(line[:nEq])
+
+		// split key = and value ; with comment
+		key = helper.UnQuote(line[:nEq])
 		val = line[nEq+1:]
 
 		// split value and ; optional # comment
-		isQuote := false
-		nRem = 0
+		isQuote = false
+		cQuote = 0
 		nQuote := 0
-		var cQuote rune
+		nRem := 0
 		for k, c := range val {
 
 			if c == ';' || c == '#' { // potential comment started
