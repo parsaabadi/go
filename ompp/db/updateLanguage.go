@@ -233,7 +233,7 @@ func doUpdateModelWord(trx *sql.Tx, modelId int, langDef *LangMeta, mwDef *Model
 						smId+", "+
 						strconv.Itoa(lId)+", "+
 						toQuoted(code)+", "+
-						toQuoted(val)+")")
+						toQuotedOrNull(val)+")")
 				if err != nil {
 					return err
 				}

@@ -93,8 +93,12 @@ func GetModelWord(dbConn *sql.DB, modelId int, langCode string) (*ModelWordMeta,
 
 			var mId, lId int
 			var lCode, wCode, wVal string
-			if err := rows.Scan(&mId, &lId, &lCode, &wCode, &wVal); err != nil {
+			var srcVal sql.NullString
+			if err := rows.Scan(&mId, &lId, &lCode, &wCode, &srcVal); err != nil {
 				return err
+			}
+			if srcVal.Valid {
+				wVal = srcVal.String
 			}
 
 			for k := range meta.ModelWord {

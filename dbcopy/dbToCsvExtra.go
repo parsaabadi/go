@@ -94,11 +94,17 @@ func toModelWordCsv(dbConn *sql.DB, modelId int, outDir string) error {
 	k := 0
 	for j := range mwDef.ModelWord {
 		for key, val := range mwDef.ModelWord[j].Words {
+
 			mwArr = append(mwArr, make([]string, 4))
 			mwArr[k][0] = strconv.Itoa(modelId)
 			mwArr[k][1] = mwDef.ModelWord[j].LangCode
 			mwArr[k][2] = key
-			mwArr[k][3] = val
+
+			if val == "" { // empty "" string is NULL
+				mwArr[k][3] = "NULL"
+			} else {
+				mwArr[k][3] = val
+			}
 			k++
 		}
 	}
