@@ -649,10 +649,11 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 	}
 
 	// delete model types:
-	// delete types metadata where type not shared between models
+	// delete types metadata where type is not built-in and not shared between models
 	err = TrxUpdate(trx,
 		"DELETE FROM type_enum_txt"+
-			" WHERE EXISTS"+
+			" WHERE type_hid > "+strconv.Itoa(maxBuiltInTypeId)+
+			" AND EXISTS"+
 			" ("+
 			" SELECT type_hid"+
 			" FROM model_type_dic M"+
@@ -670,7 +671,8 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 
 	err = TrxUpdate(trx,
 		"DELETE FROM type_enum_lst"+
-			" WHERE EXISTS"+
+			" WHERE type_hid > "+strconv.Itoa(maxBuiltInTypeId)+
+			" AND EXISTS"+
 			" ("+
 			" SELECT type_hid"+
 			" FROM model_type_dic M"+
@@ -688,7 +690,8 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 
 	err = TrxUpdate(trx,
 		"DELETE FROM type_dic_txt"+
-			" WHERE EXISTS"+
+			" WHERE type_hid > "+strconv.Itoa(maxBuiltInTypeId)+
+			" AND EXISTS"+
 			" ("+
 			" SELECT type_hid"+
 			" FROM model_type_dic M"+
@@ -712,10 +715,11 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 	}
 
 	// delete model types:
-	// delete type master rows where type does not belong to any model
+	// delete type master rows where type is not built-in and not belong to any model
 	err = TrxUpdate(trx,
 		"DELETE FROM type_dic"+
-			" WHERE NOT EXISTS (SELECT type_hid FROM model_type_dic MT WHERE MT.type_hid = type_dic.type_hid)")
+			" WHERE type_hid > "+strconv.Itoa(maxBuiltInTypeId)+
+			" AND NOT EXISTS (SELECT type_hid FROM model_type_dic MT WHERE MT.type_hid = type_dic.type_hid)")
 	if err != nil {
 		return err
 	}

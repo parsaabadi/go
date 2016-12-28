@@ -3,7 +3,7 @@
 
 package db
 
-// maxBuiltInTypeId is max type id for openM++ built-in types, ie: int, double, logical
+// maxBuiltInTypeId is max type id and Hid for openM++ built-in types, ie: int, double, logical
 const maxBuiltInTypeId = 100
 
 // totalEnumCode is predefined enum code for "total" enum
