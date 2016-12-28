@@ -39,7 +39,7 @@ func UpdateLanguage(dbConn *sql.DB, langDef *LangMeta) error {
 	return nil
 }
 
-// UpdateModelWord insert new or update existing model language-specific strings in model_lang_word table.
+// UpdateModelWord insert new or update existing model language-specific strings in model_word table.
 func UpdateModelWord(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangMeta, mwDef *ModelWordMeta) error {
 
 	// source is empty: nothing to do, exit
@@ -206,9 +206,8 @@ func doUpdateWord(trx *sql.Tx, langId int, wordRs map[string]string) error {
 	return nil
 }
 
-// doUpdateLanguage insert new or update existing language and words in lang_lst and lang_word tables.
+// doUpdateModelWord insert new or update existing model language-specific strings in model_word table.
 // It does update as part of transaction
-// Language ids updated with actual id's from database
 func doUpdateModelWord(trx *sql.Tx, modelId int, langDef *LangMeta, mwDef *ModelWordMeta) error {
 
 	// update model_word and ids

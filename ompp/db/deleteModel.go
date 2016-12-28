@@ -721,7 +721,7 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 	}
 
 	// delete model language-specific message rows
-	err = TrxUpdate(trx, "DELETE FROM model_lang_word WHERE model_id = "+smId)
+	err = TrxUpdate(trx, "DELETE FROM model_word WHERE model_id = "+smId)
 	if err != nil {
 		return err
 	}
