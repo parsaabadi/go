@@ -31,14 +31,15 @@ Log can be enabled/disabled for two independent streams:
     exeName.log => exeName_20120817_160459_0148.1234.log
 */
 const (
-	LogToConsole      = "OpenM.LogToConsole"    // if true then log to standard output
-	LogToConsoleShort = "v"                     // if true then log to standard output (short form)
-	LogToFile         = "OpenM.LogToFile"       // if true then log to file
-	LogFilePath       = "OpenM.LogFilePath"     // log file path, default = current/dir/exeName.log
-	LogUseTs          = "OpenM.LogUseTimeStamp" // if true then use time-stamp in log file name
-	LogUsePid         = "OpenM.LogUsePidStamp"  // if true then use pid-stamp in log file name
-	LogNoMsgTime      = "OpenM.LogNoMsgTime"    // if true then do not prefix log messages with date-time
-	LogSql            = "OpenM.LogSql"          // if true then log sql statements into log file
+	LogToConsole      = "OpenM.LogToConsole"     // if true then log to standard output
+	LogToConsoleShort = "v"                      // if true then log to standard output (short form)
+	LogToFile         = "OpenM.LogToFile"        // if true then log to file
+	LogFilePath       = "OpenM.LogFilePath"      // log file path, default = current/dir/exeName.log
+	LogUseTs          = "OpenM.LogUseTimeStamp"  // if true then use time-stamp in log file name
+	LogUsePid         = "OpenM.LogUsePidStamp"   // if true then use pid-stamp in log file name
+	LogUseDaily       = "OpenM.LogUseDailyStamp" // if true then use daily-stamp in log file name
+	LogNoMsgTime      = "OpenM.LogNoMsgTime"     // if true then do not prefix log messages with date-time
+	LogSql            = "OpenM.LogSql"           // if true then log sql statements into log file
 )
 
 // RunOptions is (key,value) map of command line arguments and ini-file.
@@ -57,6 +58,7 @@ type LogOptions struct {
 	IsNoMsgTime bool   // if true then do not prefix log messages with date-time
 	IsLogSql    bool   // if true then log sql statements
 	TimeStamp   string // log timestamp string, ie: 20120817_160459_0148
+	IsDaily     bool   // if true then use daily log file names, ie: exeName_20120817.log
 }
 
 // FullShort is pair of full option name and short option name
@@ -258,6 +260,7 @@ func addStandardFlags(runOpts *RunOptions, logOpts *LogOptions) {
 	flag.StringVar(&logOpts.LogPath, LogFilePath, "", "path to log file")
 	_ = flag.Bool(LogUseTs, false, "if true then use time-stamp in log file name")
 	_ = flag.Bool(LogUsePid, false, "if true then use pid-stamp in log file name")
+	_ = flag.Bool(LogUseDaily, false, "if true then use daily-stamp in log file name")
 	flag.BoolVar(&logOpts.IsNoMsgTime, LogNoMsgTime, false, "if true then do not prefix log messages with date-time")
 	flag.BoolVar(&logOpts.IsLogSql, LogSql, false, "if true then log sql statements into log file")
 }
@@ -316,4 +319,7 @@ func adjustLogOptions(runOpts *RunOptions, logOpts *LogOptions) {
 		logOpts.LogPath = filepath.Join(dir, fName+ext)
 	}
 	runOpts.KeyValue[LogFilePath] = logOpts.LogPath // update value of log file name in run options
+
+	// log daily option: enabled only if file log enabled and no time-stamp
+	logOpts.IsDaily = logOpts.IsFile && !isTs && runOpts.Bool(LogUseDaily)
 }
