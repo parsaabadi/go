@@ -9,10 +9,10 @@ import (
 	"strconv"
 )
 
-// GetModelTextList return list of the models text: model_dic_txt table rows.
+// GetModelTextById return model_dic_txt table rows by model id.
 //
 // If langCode not empty then only specified language selected else all languages.
-func GetModelTextList(dbConn *sql.DB, langCode string) ([]ModelTxtRow, error) {
+func GetModelTextById(dbConn *sql.DB, modelId int, langCode string) ([]ModelTxtRow, error) {
 
 	// select db rows from model_dic_txt
 	var txtLst []ModelTxtRow
@@ -20,9 +20,10 @@ func GetModelTextList(dbConn *sql.DB, langCode string) ([]ModelTxtRow, error) {
 	q := "SELECT" +
 		" M.model_id, M.lang_id, L.lang_code, M.descr, M.note" +
 		" FROM model_dic_txt M" +
-		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)"
+		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)" +
+		" WHERE M.model_id = " + strconv.Itoa(modelId)
 	if langCode != "" {
-		q += " WHERE L.lang_code = " + toQuoted(langCode)
+		q += " AND L.lang_code = " + toQuoted(langCode)
 	}
 	q += " ORDER BY 1, 2"
 

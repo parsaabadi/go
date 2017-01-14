@@ -89,9 +89,15 @@ func IfEmptyMakeDefault(modelName, dbConnStr, dbDriver string) (string, string) 
 		dbDriver = SQLiteDbDriver
 	}
 	if dbDriver == SQLiteDbDriver && (dbConnStr == "" && modelName != "") {
-		dbConnStr = "Database=" + modelName + ".sqlite; Timeout=" + strconv.Itoa(SQLiteTimeout) + "; OpenMode=ReadWrite;"
+		dbConnStr = MakeSqliteDefault(modelName + ".sqlite")
 	}
 	return dbConnStr, dbDriver
+}
+
+// MakeSqliteDefault return default SQLite connection string based on model.sqlite file path:
+//   Database=model.sqlite; Timeout=86400; OpenMode=ReadWrite;
+func MakeSqliteDefault(modelSqlitePath string) string {
+	return "Database=" + modelSqlitePath + "; Timeout=" + strconv.Itoa(SQLiteTimeout) + "; OpenMode=ReadWrite;"
 }
 
 // Convert SQLite connection string into "sqlite3" format and delete existing db.slite file if required.
