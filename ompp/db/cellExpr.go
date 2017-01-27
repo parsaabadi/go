@@ -11,9 +11,9 @@ import (
 
 // CellExpr is value of output table expression.
 type CellExpr struct {
-	Cell        // dimension and value
-	IsNull bool // if true then value is NULL
-	ExprId int  // output table expression id
+	CellValue      // dimensions and value
+	IsNull    bool // if true then value is NULL
+	ExprId    int  // output table expression id
 }
 
 // CsvFileName return file name of csv file to store output table expression rows
@@ -39,7 +39,7 @@ func (CellExpr) CsvFileName(modelDef *ModelMeta, name string) (string, error) {
 // CsvHeader retrun first line for csv file: column names.
 // It is like: expr_name,dim0,dim1,expr_value
 // or if isIdHeader is true: expr_id,dim0,dim1,expr_value
-func (CellExpr) CsvHeader(modelDef *ModelMeta, name string, isIdHeader bool) ([]string, error) {
+func (CellExpr) CsvHeader(modelDef *ModelMeta, name string, isIdHeader bool, valueName string) ([]string, error) {
 
 	// validate parameters
 	if modelDef == nil {
@@ -77,7 +77,9 @@ func (CellExpr) CsvHeader(modelDef *ModelMeta, name string, isIdHeader bool) ([]
 // Converter simply does Sprint() for each dimension item id, expression id and value.
 // Converter will retrun error if len(row) not equal to number of fields in csv record.
 // Double format string is used if parameter type is float, double, long double
-func (CellExpr) CsvToIdRow(modelDef *ModelMeta, name string, doubleFmt string) (func(interface{}, []string) error, error) {
+func (CellExpr) CsvToIdRow(
+	modelDef *ModelMeta, name string, doubleFmt string, valueName string) (
+	func(interface{}, []string) error, error) {
 
 	cvt := func(src interface{}, row []string) error {
 
@@ -119,7 +121,9 @@ func (CellExpr) CsvToIdRow(modelDef *ModelMeta, name string, doubleFmt string) (
 // Converter will retrun error if len(row) not equal to number of fields in csv record.
 // Double format string is used if parameter type is float, double, long double.
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
-func (CellExpr) CsvToRow(modelDef *ModelMeta, name string, doubleFmt string) (func(interface{}, []string) error, error) {
+func (CellExpr) CsvToRow(
+	modelDef *ModelMeta, name string, doubleFmt string, valueName string) (
+	func(interface{}, []string) error, error) {
 
 	// validate parameters
 	if modelDef == nil {
@@ -191,7 +195,9 @@ func (CellExpr) CsvToRow(modelDef *ModelMeta, name string, doubleFmt string) (fu
 //
 // It does retrun error if len(row) not equal to number of fields in cell db-record.
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
-func (CellExpr) CsvToCell(modelDef *ModelMeta, name string) (func(row []string) (interface{}, error), error) {
+func (CellExpr) CsvToCell(
+	modelDef *ModelMeta, name string, valueName string) (
+	func(row []string) (interface{}, error), error) {
 
 	// validate parameters
 	if modelDef == nil {
@@ -224,7 +230,7 @@ func (CellExpr) CsvToCell(modelDef *ModelMeta, name string) (func(row []string) 
 	cvt := func(row []string) (interface{}, error) {
 
 		// make conversion buffer and check input csv row size
-		cell := CellExpr{Cell: Cell{DimIds: make([]int, table.Rank)}}
+		cell := CellExpr{CellValue: CellValue{cellDims: cellDims{DimIds: make([]int, table.Rank)}}}
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {

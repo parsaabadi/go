@@ -265,9 +265,9 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 	// select db rows from table_dic join to model_table_dic
 	err = SelectRows(dbConn,
 		"SELECT"+
-			" M.model_id, M.model_table_id, D.table_hid, D.table_name, D.table_digest,"+
-			" D.db_expr_table, D.db_acc_table, D.table_rank, D.is_sparse,"+
-			" M.is_user, M.expr_dim_pos"+
+			" M.model_id, M.model_table_id, D.table_hid, D.table_name,"+
+			" D.table_digest, D.table_rank, D.is_sparse, M.is_user,"+
+			" D.db_expr_table, D.db_acc_table, D.db_acc_all_view, M.expr_dim_pos"+
 			" FROM table_dic D"+
 			" INNER JOIN model_table_dic M ON (M.table_hid = D.table_hid)"+
 			" WHERE M.model_id = "+smId+
@@ -278,8 +278,8 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 			nUser := 0
 			if err := rows.Scan(
 				&r.ModelId, &r.TableId, &r.TableHid, &r.Name,
-				&r.Digest, &r.DbExprTable, &r.DbAccTable, &r.Rank,
-				&nSparse, &nUser, &r.ExprPos); err != nil {
+				&r.Digest, &r.Rank, &nSparse, &nUser,
+				&r.DbExprTable, &r.DbAccTable, &r.DbAccAllView, &r.ExprPos); err != nil {
 				return err
 			}
 			r.IsSparse = nSparse != 0 // oracle: smallint is float64 (thank you, oracle)
@@ -333,17 +333,19 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 	// select db rows from table_acc join to model_table_dic
 	err = SelectRows(dbConn,
 		"SELECT"+
-			" M.model_id, M.model_table_id, D.acc_id, D.acc_name, D.acc_expr"+
+			" M.model_id, M.model_table_id, D.acc_id, D.acc_name, D.is_derived, D.acc_expr"+
 			" FROM table_acc D"+
 			" INNER JOIN model_table_dic M ON (M.table_hid = D.table_hid)"+
 			" WHERE M.model_id = "+smId+
 			" ORDER BY 1, 2, 3",
 		func(rows *sql.Rows) error {
 			var r TableAccRow
+			nIs := 0
 			if err := rows.Scan(
-				&r.ModelId, &r.TableId, &r.AccId, &r.Name, &r.AccExpr); err != nil {
+				&r.ModelId, &r.TableId, &r.AccId, &r.Name, &nIs, &r.AccExpr); err != nil {
 				return err
 			}
+			r.IsDerived = nIs != 0 // oracle: smallint is float64
 
 			idx, ok := meta.OutTableByKey(r.TableId) // find table row for that accumulator
 			if !ok {

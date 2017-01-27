@@ -456,20 +456,24 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 			}
 
 			// INSERT INTO table_dic
-			//   (table_hid, table_name, table_digest, db_expr_table, db_acc_table, table_rank, is_sparse)
+			//   (table_hid, table_name, table_digest, table_rank,
+			//   is_sparse, db_expr_table, db_acc_table, db_acc_all_view)
 			// VALUES
 			//   (2, 'salarySex', '0887a6494df', 'salarySex', '2012820', 2, 1)
 			err = TrxUpdate(trx,
 				"INSERT INTO table_dic"+
-					" (table_hid, table_name, table_digest, db_expr_table, db_acc_table, table_rank, is_sparse)"+
+					" (table_hid, table_name, table_digest, table_rank,"+
+					" is_sparse, db_expr_table, db_acc_table, db_acc_all_view)"+
 					" VALUES ("+
 					strconv.Itoa(modelDef.Table[idx].TableHid)+", "+
 					toQuoted(modelDef.Table[idx].Name)+", "+
 					toQuoted(modelDef.Table[idx].Digest)+", "+
+					strconv.Itoa(modelDef.Table[idx].Rank)+", "+
+					toBoolStr(modelDef.Table[idx].IsSparse)+", "+
 					toQuoted(modelDef.Table[idx].DbExprTable)+", "+
 					toQuoted(modelDef.Table[idx].DbAccTable)+", "+
-					strconv.Itoa(modelDef.Table[idx].Rank)+", "+
-					toBoolStr(modelDef.Table[idx].IsSparse)+")")
+					toQuoted(modelDef.Table[idx].DbAccAllView)+
+					")")
 			if err != nil {
 				return err
 			}
@@ -496,17 +500,19 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 				}
 			}
 
-			// INSERT INTO table_acc (table_hid, acc_id, acc_name, acc_expr) VALUES (2, 0, 'acc0', 'value_sum()')
+			// INSERT INTO table_acc (table_hid, acc_id, acc_name, is_derived, acc_expr)
+			// VALUES (2, 4, 'acc4', 1, 'acc0 + acc1')
 			for j := range modelDef.Table[idx].Acc {
 
 				modelDef.Table[idx].Acc[j].ModelId = modelDef.Model.ModelId // update model id with db value
 
 				err = TrxUpdate(trx,
-					"INSERT INTO table_acc (table_hid, acc_id, acc_name, acc_expr)"+
+					"INSERT INTO table_acc (table_hid, acc_id, acc_name, is_derived, acc_expr)"+
 						" VALUES ("+
 						strconv.Itoa(modelDef.Table[idx].TableHid)+", "+
 						strconv.Itoa(modelDef.Table[idx].Acc[j].AccId)+", "+
 						toQuoted(modelDef.Table[idx].Acc[j].Name)+", "+
+						toBoolStr(modelDef.Table[idx].Acc[j].IsDerived)+", "+
 						toQuoted(modelDef.Table[idx].Acc[j].AccExpr)+")")
 				if err != nil {
 					return err
@@ -545,6 +551,16 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 				return err
 			}
 			err = TrxUpdate(trx, aSql)
+			if err != nil {
+				return err
+			}
+
+			// create db views: output table all accumulators view
+			avSql, err := outTableCreateAccAllView(dbFacet, &modelDef.Table[idx])
+			if err != nil {
+				return err
+			}
+			err = TrxUpdate(trx, avSql)
 			if err != nil {
 				return err
 			}
@@ -683,6 +699,87 @@ func outTableCreateTable(dbFacet Facet, meta *TableMeta) (string, string, error)
 		"PRIMARY KEY (run_id, acc_id, sub_id"+keyPart+")"+
 		")")
 	return eSql, aSql, nil
+}
+
+// outTableCreateAccAllView return create view for all accumulators view:
+//
+// CREATE VIEW salarySex_d_2012820
+// AS
+// SELECT
+//   A.run_id, A.sub_id, A.dim0, A.dim1,
+//   acc0,
+//   acc1,
+//   (acc0 + acc1) AS acc2
+// FROM salarySex_a_2012820 A
+// INNER JOIN
+// (
+//   SELECT run_id, sub_id, dim0, dim1, acc_value AS acc0
+//   FROM salarySex_a_2012820
+//   WHERE acc_id = 0
+// ) B0
+// ON (B0.run_id = A.run_id AND B0.sub_id = A.sub_id AND B0.dim0 = A.dim0 AND B0.dim1 = A.dim1)
+// INNER JOIN
+// (
+//   SELECT run_id, sub_id, dim0, dim1, acc_value AS acc1
+//   FROM salarySex_a_2012820
+//   WHERE acc_id = 1
+// ) B1
+// ON (B1.run_id = A.run_id AND B1.sub_id = A.sub_id AND B1.dim0 = A.dim0 AND B1.dim1 = A.dim1)
+// WHERE A.acc_id = 0
+//
+func outTableCreateAccAllView(dbFacet Facet, meta *TableMeta) (string, error) {
+
+	sql := "SELECT A.run_id, A.sub_id"
+
+	for k := range meta.Dim {
+		sql += ", A." + meta.Dim[k].Name
+	}
+
+	for k := range meta.Acc {
+		if !meta.Acc[k].IsDerived {
+			sql += ", " + meta.Acc[k].Name
+		} else {
+			sql += ", (" + meta.Acc[k].AccExpr + ") AS " + meta.Acc[k].Name
+		}
+	}
+
+	sql += " FROM " + meta.DbAccTable + " A"
+
+	for k := range meta.Acc {
+		if meta.Acc[k].IsDerived {
+			continue
+		}
+
+		al := "B" + strconv.Itoa(meta.Acc[k].AccId) // join alias: B0
+
+		// INNER JOIN
+		// (
+		//   SELECT run_id, sub_id, dim0, dim1, acc_value AS acc0
+		//   FROM salarySex_a_2012820
+		//   WHERE acc_id = 0
+		// ) B0
+		sql += " INNER JOIN" +
+			" (SELECT run_id, sub_id, "
+		for j := range meta.Dim {
+			sql += meta.Dim[j].Name + ", "
+		}
+		sql += "acc_value AS " + meta.Acc[k].Name +
+			" FROM " + meta.DbAccTable +
+			" WHERE acc_id = " + strconv.Itoa(meta.Acc[k].AccId) +
+			" ) " + al
+
+		// ON (B0.run_id = A.run_id AND B0.sub_id = A.sub_id AND B0.dim0 = A.dim0 AND B0.dim1 = A.dim1)
+		sql += " ON (" +
+			al + ".run_id = A.run_id AND " + al + ".sub_id = A.sub_id"
+		for j := range meta.Dim {
+			sql += " AND " + al + "." + meta.Dim[j].Name + " = A." + meta.Dim[j].Name
+		}
+		sql += ")"
+	}
+
+	sql += " WHERE A.acc_id = 0"
+
+	return dbFacet.createViewIfNotExist(meta.DbAccAllView, sql), nil
 }
 
 // return prefix and suffix for parameter value db tables or output table value db tables.

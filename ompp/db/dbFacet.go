@@ -94,3 +94,19 @@ func (facet Facet) createTableIfNotExist(tableName string, bodySql string) strin
 	}
 	return "CREATE TABLE " + tableName + " " + bodySql
 }
+
+// createViewIfNotExist return sql statement to create view if not exists
+func (facet Facet) createViewIfNotExist(viewName string, bodySql string) string {
+
+	switch facet {
+	case SqliteFacet:
+		return "CREATE VIEW IF NOT EXISTS " + viewName + " AS " + bodySql
+	case PgSqlFacet, MySqlFacet:
+		return "CREATE OR REPLACE VIEW " + viewName + " AS " + bodySql
+	case MsSqlFacet:
+		return "CREATE VIEW " + viewName + " AS " + bodySql
+	case OracleFacet, Db2Facet:
+		return "CREATE OR REPLACE VIEW " + viewName + " AS " + bodySql
+	}
+	return "CREATE VIEW " + viewName + " AS " + bodySql
+}

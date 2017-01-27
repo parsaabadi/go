@@ -268,7 +268,7 @@ func fromRunTextToDb(
 	for j := range modelDef.Param {
 
 		// read parameter values from csv file
-		var cell db.Cell
+		var cell db.CellValue
 		cLst, err := fromCsvFile(csvDir, modelDef, modelDef.Param[j].Name, &cell, encodingName)
 		if err != nil {
 			return 0, 0, err

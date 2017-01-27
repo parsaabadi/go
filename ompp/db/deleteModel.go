@@ -359,15 +359,16 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 	// delete model output tables:
 	// build list of model output tables where table not shared between models
 	type outTbl struct {
-		hId  int    // table Hid
-		expr string // expressions db-table name
-		acc  string // accumulators db-table name
+		hId    int    // table Hid
+		expr   string // expressions db table
+		acc    string // accumulators db table
+		accAll string // all accumulators db view
 	}
 	var tblArr []outTbl
 
 	err = TrxSelectRows(trx,
 		"SELECT"+
-			" D.table_hid, D.db_expr_table, D.db_acc_table"+
+			" D.table_hid, D.db_expr_table, D.db_acc_table, D.db_acc_all_view"+
 			" FROM table_dic D"+
 			" WHERE EXISTS"+
 			" ("+
@@ -383,7 +384,7 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 			" )",
 		func(rows *sql.Rows) error {
 			var r outTbl
-			if err := rows.Scan(&r.hId, &r.expr, &r.acc); err != nil {
+			if err := rows.Scan(&r.hId, &r.expr, &r.acc, &r.accAll); err != nil {
 				return err
 			}
 			tblArr = append(tblArr, r)
@@ -742,9 +743,14 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 		return err
 	}
 
-	// drop db-tables for accumulators and expressions
+	// drop db tables and views for accumulators and expressions
 	// where output table not shared between models
 	for k := range tblArr {
+
+		err = TrxUpdate(trx, "DROP VIEW "+tblArr[k].accAll)
+		if err != nil {
+			return err
+		}
 
 		err = TrxUpdate(trx, "DROP TABLE "+tblArr[k].expr)
 		if err != nil {

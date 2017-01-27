@@ -36,7 +36,6 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadLayout) (*
 	}
 
 	// find expression or accumulator id by name
-	nExtraCol := 1
 	valId := -1
 
 	if layout.ValueName != "" {
@@ -52,8 +51,6 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadLayout) (*
 				return nil, errors.New("output table accumulator not found: " + layout.Name + " " + layout.ValueName)
 			}
 
-			nExtraCol = 2 // extra columns: acc_id, sub_id
-
 		} else { // find expression
 
 			for i := range table.Expr {
@@ -64,9 +61,14 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadLayout) (*
 			if valId < 0 {
 				return nil, errors.New("output table expression not found: " + layout.Name + " " + layout.ValueName)
 			}
-
-			nExtraCol = 1 // extra column: expr_id
 		}
+
+	}
+
+	// number of accumulator value columns: acc_value or acc0, acc1, acc2...
+	accCount := 1
+	if layout.IsAccum && layout.IsAllAccum && layout.ValueName == "" {
+		accCount = len(table.Acc)
 	}
 
 	// check if model run exist and model run completed
@@ -105,26 +107,55 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadLayout) (*
 	//   AND dim1 IN (10, 20, 30, 40)
 	//   ORDER BY 1, 2, 3, 4
 	//
+	// or all accumulators view:
+	//
+	//   SELECT sub_id, dim0, dim1, acc0, acc1
+	//   FROM salarySex_d2012_820
+	//   WHERE run_id =
+	//   (
+	//     SELECT base_run_id FROM run_table WHERE run_id = 2 AND table_hid = 12345
+	//   )
+	//   AND dim1 IN (10, 20, 30, 40)
+	//   ORDER BY 1, 2, 3
+	//
 	q := "SELECT"
+
 	if layout.IsAccum {
-		q += " acc_id, sub_id, "
+		if !layout.IsAllAccum {
+			q += " acc_id,"
+		}
+		q += " sub_id"
 	} else {
-		q += " expr_id, "
+		q += " expr_id"
 	}
+
 	for k := range table.Dim {
-		q += table.Dim[k].Name + ", "
+		q += ", " + table.Dim[k].Name
 	}
-	if layout.IsAccum {
-		q += " acc_value FROM " + table.DbAccTable
+
+	if !layout.IsAccum {
+		q += ", expr_value FROM " + table.DbExprTable
 	} else {
-		q += " expr_value FROM " + table.DbExprTable
+		if !layout.IsAllAccum {
+			q += ", acc_value FROM " + table.DbAccTable
+		} else {
+			if layout.ValueName != "" {
+				q += ", " + layout.ValueName
+			} else {
+				for k := range table.Acc {
+					q += ", " + table.Acc[k].Name
+				}
+			}
+			q += " FROM " + table.DbAccAllView
+		}
 	}
+
 	q += " WHERE run_id =" +
 		" (SELECT base_run_id FROM run_table" +
 		" WHERE run_id = " + strconv.Itoa(layout.FromId) +
 		" AND table_hid = " + strconv.Itoa(table.TableHid) + ")"
 
-	if valId >= 0 {
+	if !layout.IsAllAccum && valId >= 0 {
 		if layout.IsAccum {
 			q += " AND acc_id = " + strconv.Itoa(valId)
 		} else {
@@ -156,47 +187,84 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadLayout) (*
 		q += " AND " + f
 	}
 
-	// append order by
+	// append order by expr_id or acc_id, sub_id or sub_id
+	nExtraCol := 1
+	if layout.IsAllAccum && !layout.IsAllAccum {
+		nExtraCol = 2 // extra columns: acc_id, sub_id
+	}
 	q += makeOrderBy(table.Rank, layout.OrderBy, nExtraCol)
 
-	// prepare db-row conversion buffer
-	var nv, ns int
+	// prepare db-row conversion buffer:
+	// acc_id, sub_id, expr_id, dimensions, value or []values
+	var n1, n2 int
 	d := make([]int, table.Rank)
 	var vf sql.NullFloat64
+	fa := make([]sql.NullFloat64, accCount)
 	var scanBuf []interface{}
 
-	scanBuf = append(scanBuf, &nv)
-	if layout.IsAccum {
-		scanBuf = append(scanBuf, &ns)
+	scanBuf = append(scanBuf, &n1)
+	if layout.IsAccum && !layout.IsAllAccum {
+		scanBuf = append(scanBuf, &n2)
 	}
 	for k := 0; k < table.Rank; k++ {
 		scanBuf = append(scanBuf, &d[k])
 	}
-	scanBuf = append(scanBuf, &vf)
+	if !layout.IsAccum || !layout.IsAllAccum {
+		scanBuf = append(scanBuf, &vf)
+	} else {
+		for k := 0; k < accCount; k++ {
+			scanBuf = append(scanBuf, &fa[k])
+		}
+	}
 
 	// select cells:
-	// expr_id or acc_id and sub_id, dimension(s) enum ids, value and null status
+	// expr_id or or sub_id or acc_id and sub_id, dimension(s) enum ids
+	// value or all accumulator values and null status
 	cLst, err := SelectToList(dbConn, q, layout.Offset, layout.Size,
 		func(rows *sql.Rows) (interface{}, error) {
+
 			if err := rows.Scan(scanBuf...); err != nil {
 				return nil, err
 			}
+
 			// make new cell from conversion buffer
 			if layout.IsAccum {
-				var ca = CellAcc{Cell: Cell{DimIds: make([]int, table.Rank)}}
-				ca.AccId = nv
-				ca.SubId = ns
-				copy(ca.DimIds, d)
-				ca.IsNull = !vf.Valid
-				ca.Value = 0.0
-				if !ca.IsNull {
-					ca.Value = vf.Float64
+
+				if !layout.IsAllAccum {
+					var ca = CellAcc{CellValue: CellValue{cellDims: cellDims{DimIds: make([]int, table.Rank)}}}
+					ca.AccId = n1
+					ca.SubId = n2
+					copy(ca.DimIds, d)
+					ca.IsNull = !vf.Valid
+					ca.Value = 0.0
+					if !ca.IsNull {
+						ca.Value = vf.Float64
+					}
+					return ca, nil
 				}
-				return ca, nil
+				// else all accumulators
+
+				var cl = CellAllAcc{
+					cellDims: cellDims{DimIds: make([]int, table.Rank)},
+					IsNull:   make([]bool, accCount),
+					Value:    make([]float64, accCount)}
+
+				cl.SubId = n1
+				copy(cl.DimIds, d)
+
+				for k := 0; k < accCount; k++ {
+					cl.IsNull[k] = !fa[k].Valid
+					cl.Value[k] = 0.0
+					if !cl.IsNull[k] {
+						cl.Value[k] = fa[k].Float64
+					}
+				}
+				return cl, nil
 			}
-			// else
-			var ce = CellExpr{Cell: Cell{DimIds: make([]int, table.Rank)}}
-			ce.ExprId = nv
+			// else output table expression
+
+			var ce = CellExpr{CellValue: CellValue{cellDims: cellDims{DimIds: make([]int, table.Rank)}}}
+			ce.ExprId = n1
 			copy(ce.DimIds, d)
 			ce.IsNull = !vf.Valid
 			ce.Value = 0.0

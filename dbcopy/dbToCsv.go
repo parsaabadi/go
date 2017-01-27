@@ -281,7 +281,7 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 	}
 
 	// write output table rows into csv
-	row = make([]string, 11)
+	row = make([]string, 12)
 	row[0] = strconv.Itoa(modelDef.Model.ModelId)
 
 	idx = 0
@@ -290,20 +290,21 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 		"table_dic.csv",
 		[]string{
 			"model_id", "model_table_id", "table_hid", "table_name",
-			"table_digest", "db_expr_table", "db_acc_table", "is_user",
-			"table_rank", "is_sparse", "expr_dim_pos"},
+			"table_digest", "is_user", "table_rank", "is_sparse",
+			"db_expr_table", "db_acc_table", "db_acc_table", "expr_dim_pos"},
 		func() (bool, []string, error) {
 			if 0 <= idx && idx < len(modelDef.Table) {
 				row[1] = strconv.Itoa(modelDef.Table[idx].TableId)
 				row[2] = strconv.Itoa(modelDef.Table[idx].TableHid)
 				row[3] = modelDef.Table[idx].Name
 				row[4] = modelDef.Table[idx].Digest
-				row[5] = modelDef.Table[idx].DbExprTable
-				row[6] = modelDef.Table[idx].DbAccTable
-				row[7] = strconv.FormatBool(modelDef.Table[idx].IsUser)
-				row[8] = strconv.Itoa(modelDef.Table[idx].Rank)
-				row[9] = strconv.FormatBool(modelDef.Table[idx].IsSparse)
-				row[10] = strconv.Itoa(modelDef.Table[idx].ExprPos)
+				row[5] = strconv.FormatBool(modelDef.Table[idx].IsUser)
+				row[6] = strconv.Itoa(modelDef.Table[idx].Rank)
+				row[7] = strconv.FormatBool(modelDef.Table[idx].IsSparse)
+				row[8] = modelDef.Table[idx].DbExprTable
+				row[9] = modelDef.Table[idx].DbAccTable
+				row[10] = modelDef.Table[idx].DbAccAllView
+				row[11] = strconv.Itoa(modelDef.Table[idx].ExprPos)
 				idx++
 				return false, row, nil
 			}
@@ -358,7 +359,7 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 	}
 
 	// write output tables accumulator rows into csv
-	row = make([]string, 5)
+	row = make([]string, 6)
 	row[0] = strconv.Itoa(modelDef.Model.ModelId)
 
 	idx = 0
@@ -366,7 +367,7 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 	err = toCsvFile(
 		outDir,
 		"table_acc.csv",
-		[]string{"model_id", "model_table_id", "acc_id", "acc_name", "acc_expr"},
+		[]string{"model_id", "model_table_id", "acc_id", "acc_name", "is_derived", "acc_expr"},
 		func() (bool, []string, error) {
 
 			if idx < 0 || idx >= len(modelDef.Table) { // end of output table rows
@@ -391,7 +392,8 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 			row[1] = strconv.Itoa(modelDef.Table[idx].Acc[j].TableId)
 			row[2] = strconv.Itoa(modelDef.Table[idx].Acc[j].AccId)
 			row[3] = modelDef.Table[idx].Acc[j].Name
-			row[4] = modelDef.Table[idx].Acc[j].AccExpr
+			row[4] = strconv.FormatBool(modelDef.Table[idx].Acc[j].IsDerived)
+			row[5] = modelDef.Table[idx].Acc[j].AccExpr
 			j++
 			return false, row, nil
 		})

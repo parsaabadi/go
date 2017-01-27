@@ -261,17 +261,18 @@ type ParamDimsTxtRow struct {
 // TableHid (table_dic.table_hid) is db-unique id of the output table, use digest to find same table in other db.
 // TableId (model_table_dic.model_table_id) is model-unique output table id, assigned by model compiler.
 type TableDicRow struct {
-	ModelId     int    // model_id       INT          NOT NULL
-	TableId     int    // model_table_id INT          NOT NULL
-	TableHid    int    // table_hid      INT          NOT NULL, -- unique table id
-	Name        string // table_name     VARCHAR(255) NOT NULL
-	Digest      string // table_digest   VARCHAR(32)  NOT NULL
-	DbExprTable string // db_expr_table  VARCHAR(64)  NOT NULL
-	DbAccTable  string // db_acc_table   VARCHAR(64)  NOT NULL
-	IsUser      bool   // is_user        SMALLINT     NOT NULL
-	Rank        int    // table_rank     INT          NOT NULL
-	IsSparse    bool   // is_sparse      SMALLINT     NOT NULL
-	ExprPos     int    // expr_dim_pos   INT          NOT NULL
+	ModelId      int    // model_id        INT          NOT NULL
+	TableId      int    // model_table_id  INT          NOT NULL
+	TableHid     int    // table_hid       INT          NOT NULL, -- unique table id
+	Name         string // table_name      VARCHAR(255) NOT NULL
+	Digest       string // table_digest    VARCHAR(32)  NOT NULL
+	IsUser       bool   // is_user         SMALLINT     NOT NULL
+	Rank         int    // table_rank      INT          NOT NULL
+	IsSparse     bool   // is_sparse       SMALLINT     NOT NULL
+	DbExprTable  string // db_expr_table   VARCHAR(64)  NOT NULL
+	DbAccTable   string // db_acc_table    VARCHAR(64)  NOT NULL
+	DbAccAllView string // db_acc_all_view VARCHAR(64)  NOT NULL
+	ExprPos      int    // expr_dim_pos    INT          NOT NULL
 }
 
 // TableTxtRow is db row of table_dic_txt join to model_table_dic table
@@ -309,11 +310,12 @@ type TableDimsTxtRow struct {
 
 // TableAccRow is db row of table_acc join to model_table_dic table
 type TableAccRow struct {
-	ModelId int    // model_id       INT          NOT NULL
-	TableId int    // model_table_id INT          NOT NULL
-	AccId   int    // acc_id         INT          NOT NULL
-	Name    string // acc_name       VARCHAR(8)   NOT NULL
-	AccExpr string // acc_expr       VARCHAR(255) NOT NULL
+	ModelId   int    // model_id       INT          NOT NULL
+	TableId   int    // model_table_id INT          NOT NULL
+	AccId     int    // acc_id         INT          NOT NULL
+	Name      string // acc_name       VARCHAR(8)   NOT NULL
+	IsDerived bool   // is_derived     SMALLINT     NOT NULL
+	AccExpr   string // acc_expr       VARCHAR(255) NOT NULL
 }
 
 // TableAccTxtRow is db row of table_acc_txt join to model_table_dic table

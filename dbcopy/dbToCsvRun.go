@@ -233,8 +233,8 @@ func toRunCsv(
 			return errors.New("missing run parameter values " + layout.Name + " run id: " + strconv.Itoa(layout.FromId))
 		}
 
-		var cp db.Cell
-		err = toCsvCellFile(csvDir, modelDef, layout.Name, cp, cLst, doubleFmt, isIdCsv)
+		var pc db.CellValue
+		err = toCsvCellFile(csvDir, modelDef, layout.Name, pc, cLst, doubleFmt, isIdCsv, "")
 		if err != nil {
 			return err
 		}
@@ -246,6 +246,7 @@ func toRunCsv(
 		// write output table expression values into csv file
 		layout.Name = modelDef.Table[j].Name
 		layout.IsAccum = false
+		layout.IsAllAccum = false
 
 		cLst, err := db.ReadOutputTable(dbConn, modelDef, layout)
 		if err != nil {
@@ -253,13 +254,14 @@ func toRunCsv(
 		}
 
 		var ec db.CellExpr
-		err = toCsvCellFile(csvDir, modelDef, layout.Name, ec, cLst, doubleFmt, isIdCsv)
+		err = toCsvCellFile(csvDir, modelDef, layout.Name, ec, cLst, doubleFmt, isIdCsv, "")
 		if err != nil {
 			return err
 		}
 
 		// write output table accumulators into csv file
 		layout.IsAccum = true
+		layout.IsAllAccum = false
 
 		cLst, err = db.ReadOutputTable(dbConn, modelDef, layout)
 		if err != nil {
@@ -267,7 +269,22 @@ func toRunCsv(
 		}
 
 		var ac db.CellAcc
-		err = toCsvCellFile(csvDir, modelDef, layout.Name, ac, cLst, doubleFmt, isIdCsv)
+		err = toCsvCellFile(csvDir, modelDef, layout.Name, ac, cLst, doubleFmt, isIdCsv, "")
+		if err != nil {
+			return err
+		}
+
+		// write all accumulators view into csv file
+		layout.IsAccum = true
+		layout.IsAllAccum = true
+
+		cLst, err = db.ReadOutputTable(dbConn, modelDef, layout)
+		if err != nil {
+			return err
+		}
+
+		var al db.CellAllAcc
+		err = toCsvCellFile(csvDir, modelDef, layout.Name, al, cLst, doubleFmt, isIdCsv, "")
 		if err != nil {
 			return err
 		}

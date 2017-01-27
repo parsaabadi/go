@@ -204,7 +204,7 @@ func digestParameter(modelDef *ModelMeta, param *ParamMeta, cellLst *list.List, 
 	}
 
 	// append digest of accumulator(s) cells
-	var pc Cell
+	var pc CellValue
 	if err = digestCells(hMd5, modelDef, param.Name, pc, cellLst, doubleFmt); err != nil {
 		return "", err
 	}
@@ -318,7 +318,7 @@ func makePutInsertParamValue(param *ParamMeta, cellLst *list.List) func() (bool,
 		}
 
 		// convert and check input row
-		cell, ok := c.Value.(Cell)
+		cell, ok := c.Value.(CellValue)
 		if !ok {
 			return false, nil, errors.New("invalid type, expected: parameter cell (internal error)")
 		}

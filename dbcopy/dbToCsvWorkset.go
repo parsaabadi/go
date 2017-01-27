@@ -240,8 +240,8 @@ func toWorksetCsv(
 			return errors.New("missing workset parameter values " + layout.Name + " set id: " + strconv.Itoa(layout.FromId))
 		}
 
-		var cp db.Cell
-		err = toCsvCellFile(csvDir, modelDef, layout.Name, cp, cLst, doubleFmt, isIdCsv)
+		var pc db.CellValue
+		err = toCsvCellFile(csvDir, modelDef, layout.Name, pc, cLst, doubleFmt, isIdCsv, "")
 		if err != nil {
 			return err
 		}

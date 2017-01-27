@@ -162,7 +162,7 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadLayout) (*li
 	var v interface{}
 	var vb bool
 	var vs string
-	var fc func(c *Cell)
+	var fc func(c *CellValue)
 
 	var scanBuf []interface{}
 	for k := 0; k < param.Rank; k++ {
@@ -171,13 +171,13 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadLayout) (*li
 	switch {
 	case param.typeOf.IsBool():
 		scanBuf = append(scanBuf, &vb)
-		fc = func(c *Cell) { copy(c.DimIds, d); c.Value = vb }
+		fc = func(c *CellValue) { copy(c.DimIds, d); c.Value = vb }
 	case param.typeOf.IsString():
 		scanBuf = append(scanBuf, &vs)
-		fc = func(c *Cell) { copy(c.DimIds, d); c.Value = vs }
+		fc = func(c *CellValue) { copy(c.DimIds, d); c.Value = vs }
 	default:
 		scanBuf = append(scanBuf, &v)
-		fc = func(c *Cell) { copy(c.DimIds, d); c.Value = v }
+		fc = func(c *CellValue) { copy(c.DimIds, d); c.Value = v }
 	}
 
 	// select parameter cells: dimension(s) enum ids and parameter value
@@ -186,7 +186,7 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadLayout) (*li
 			if err := rows.Scan(scanBuf...); err != nil {
 				return nil, err
 			}
-			var c = Cell{DimIds: make([]int, param.Rank)} // make new cell from conversion buffer
+			var c = CellValue{cellDims: cellDims{DimIds: make([]int, param.Rank)}} // make new cell from conversion buffer
 			fc(&c)
 			return c, nil
 		})

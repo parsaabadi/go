@@ -210,7 +210,7 @@ func fromCsvFile(
 	csvDir string, modelDef *db.ModelMeta, name string, cell db.CsvConverter, encodingName string) (*list.List, error) {
 
 	// converter from csv row []string to db cell
-	cvt, err := cell.CsvToCell(modelDef, name)
+	cvt, err := cell.CsvToCell(modelDef, name, "")
 	if err != nil {
 		return nil, errors.New("invalid converter from csv row: " + err.Error())
 	}

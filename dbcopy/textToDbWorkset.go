@@ -334,7 +334,7 @@ func fromWorksetTextToDb(
 	for j := range pub.Param {
 
 		// read parameter values from csv file
-		var cell db.Cell
+		var cell db.CellValue
 		cLst, err := fromCsvFile(csvDir, modelDef, pub.Param[j].Name, &cell, encodingName)
 		if err != nil {
 			return 0, 0, err

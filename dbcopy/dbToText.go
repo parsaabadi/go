@@ -140,15 +140,22 @@ func toModelJson(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 // toCsvCellFile convert parameter or output table values and write into csvDir/fileName.csv file.
 // if isIdCsv is true then csv contains enum id's, default: enum code
 func toCsvCellFile(
-	csvDir string, modelDef *db.ModelMeta, name string, cell db.CsvConverter, cellLst *list.List, doubleFmt string, isIdCsv bool) error {
+	csvDir string,
+	modelDef *db.ModelMeta,
+	name string,
+	cell db.CsvConverter,
+	cellLst *list.List,
+	doubleFmt string,
+	isIdCsv bool,
+	valueName string) error {
 
 	// converter from db cell to csv row []string
 	var cvt func(interface{}, []string) error
 	var err error
 	if !isIdCsv {
-		cvt, err = cell.CsvToRow(modelDef, name, doubleFmt)
+		cvt, err = cell.CsvToRow(modelDef, name, doubleFmt, valueName)
 	} else {
-		cvt, err = cell.CsvToIdRow(modelDef, name, doubleFmt)
+		cvt, err = cell.CsvToIdRow(modelDef, name, doubleFmt, valueName)
 
 	}
 	if err != nil {
@@ -170,7 +177,7 @@ func toCsvCellFile(
 	wr := csv.NewWriter(f)
 
 	// write header line: column names
-	cs, err := cell.CsvHeader(modelDef, name, isIdCsv)
+	cs, err := cell.CsvHeader(modelDef, name, isIdCsv, valueName)
 	if err != nil {
 		return err
 	}

@@ -23,16 +23,17 @@ type WriteLayout struct {
 // For output table if ValueName is not empty then only accumulator or output expression
 // with that name selected (i.e: "acc1" or "expr4") else all output table accumulators (expressions) selected.
 type ReadLayout struct {
-	Name      string          // parameter name or output table name
-	ValueName string          // only for output table: if not empty then expression or accumulator name to select
-	FromId    int             // run id or set id to select input parameter or output table values
-	IsFromSet bool            // only for parameter: if true then select from workset else from model run
-	IsEditSet bool            // only for parameter: if true then workset must be editable (readonly = false) else must be readonly
-	IsAccum   bool            // only for output table: if true then select output table accumulator else expression
-	Offset    int64           // first row to return from select, zero-based ofsset
-	Size      int64           // max row count to select, if <= 0 then all rows
-	Filter    []FilterColumn  // dimension filters; final WHERE join filters by AND
-	OrderBy   []OrderByColumn // order by columnns, if empty then dimension id ascending order is used
+	Name       string          // parameter name or output table name
+	ValueName  string          // only for output table: if not empty then expression or accumulator name to select
+	FromId     int             // run id or set id to select input parameter or output table values
+	IsFromSet  bool            // only for parameter: if true then select from workset else from model run
+	IsEditSet  bool            // only for parameter: if true then workset must be editable (readonly = false) else must be readonly
+	IsAccum    bool            // only for output table: if true then select output table accumulator else expression
+	IsAllAccum bool            // only for accumulators: if true then select from all accumulators view else from accumulators table
+	Offset     int64           // first row to return from select, zero-based ofsset
+	Size       int64           // max row count to select, if <= 0 then all rows
+	Filter     []FilterColumn  // dimension filters; final WHERE join filters by AND
+	OrderBy    []OrderByColumn // order by columnns, if empty then dimension id ascending order is used
 }
 
 // Select filter operations for dimension enum ids.
