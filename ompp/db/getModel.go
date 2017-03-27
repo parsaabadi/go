@@ -333,7 +333,7 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 	// select db rows from table_acc join to model_table_dic
 	err = SelectRows(dbConn,
 		"SELECT"+
-			" M.model_id, M.model_table_id, D.acc_id, D.acc_name, D.is_derived, D.acc_expr"+
+			" M.model_id, M.model_table_id, D.acc_id, D.acc_name, D.is_derived, D.acc_src, D.acc_sql"+
 			" FROM table_acc D"+
 			" INNER JOIN model_table_dic M ON (M.table_hid = D.table_hid)"+
 			" WHERE M.model_id = "+smId+
@@ -342,7 +342,7 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 			var r TableAccRow
 			nIs := 0
 			if err := rows.Scan(
-				&r.ModelId, &r.TableId, &r.AccId, &r.Name, &nIs, &r.AccExpr); err != nil {
+				&r.ModelId, &r.TableId, &r.AccId, &r.Name, &nIs, &r.SrcAcc, &r.AccSql); err != nil {
 				return err
 			}
 			r.IsDerived = nIs != 0 // oracle: smallint is float64

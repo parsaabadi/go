@@ -45,9 +45,9 @@ func (pub *RunPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunMeta, er
 			UpdateDateTime: pub.UpdateDateTime,
 			Digest:         pub.Digest,
 		},
-		Txt:      make([]RunTxtRow, len(pub.Txt)),
-		Opts:     make(map[string]string, len(pub.Opts)),
-		ParamTxt: make([]runParam, len(pub.ParamTxt)),
+		Txt:   make([]RunTxtRow, len(pub.Txt)),
+		Opts:  make(map[string]string, len(pub.Opts)),
+		Param: make([]runParam, len(pub.Param)),
 	}
 
 	// model run description and notes: run_txt rows
@@ -65,23 +65,24 @@ func (pub *RunPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunMeta, er
 
 	// run parameters value notes: run_parameter_txt rows
 	// use set id default zero
-	for k := range pub.ParamTxt {
+	for k := range pub.Param {
 
 		// find model parameter index by name
-		idx, ok := modelDef.ParamByName(pub.ParamTxt[k].Name)
+		idx, ok := modelDef.ParamByName(pub.Param[k].Name)
 		if !ok {
-			return nil, errors.New("model run: " + pub.Name + " parameter " + pub.ParamTxt[k].Name + " not found")
+			return nil, errors.New("model run: " + pub.Name + " parameter " + pub.Param[k].Name + " not found")
 		}
-		meta.ParamTxt[k].ParamHid = modelDef.Param[idx].ParamHid
+		meta.Param[k].ParamHid = modelDef.Param[idx].ParamHid
+		meta.Param[k].SubCount = pub.Param[k].SubCount
 
 		// workset parameter value notes, use set id default zero
-		if len(pub.ParamTxt[k].Txt) > 0 {
-			meta.ParamTxt[k].Txt = make([]RunParamTxtRow, len(pub.ParamTxt[k].Txt))
+		if len(pub.Param[k].Txt) > 0 {
+			meta.Param[k].Txt = make([]RunParamTxtRow, len(pub.Param[k].Txt))
 
-			for j := range pub.ParamTxt[k].Txt {
-				meta.ParamTxt[k].Txt[j].ParamHid = meta.ParamTxt[k].ParamHid
-				meta.ParamTxt[k].Txt[j].LangCode = pub.ParamTxt[k].Txt[j].LangCode
-				meta.ParamTxt[k].Txt[j].Note = pub.ParamTxt[k].Txt[j].Note
+			for j := range pub.Param[k].Txt {
+				meta.Param[k].Txt[j].ParamHid = meta.Param[k].ParamHid
+				meta.Param[k].Txt[j].LangCode = pub.Param[k].Txt[j].LangCode
+				meta.Param[k].Txt[j].Note = pub.Param[k].Txt[j].Note
 			}
 		}
 	}
@@ -161,9 +162,9 @@ func (meta *RunMeta) UpdateRun(dbConn *sql.DB, modelDef *ModelMeta, langDef *Lan
 		for k := range meta.Txt {
 			meta.Txt[k].RunId = dstId
 		}
-		for k := range meta.ParamTxt {
-			for j := range meta.ParamTxt[k].Txt {
-				meta.ParamTxt[k].Txt[j].RunId = dstId
+		for k := range meta.Param {
+			for j := range meta.Param[k].Txt {
+				meta.Param[k].Txt[j].RunId = dstId
 			}
 		}
 		return true, nil
@@ -439,20 +440,20 @@ func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, meta *RunMeta, langDef *LangM
 	}
 
 	// update parameter run text: parameter run value notes
-	for k := range meta.ParamTxt {
-		for j := range meta.ParamTxt[k].Txt {
+	for k := range meta.Param {
+		for j := range meta.Param[k].Txt {
 
-			meta.ParamTxt[k].Txt[j].RunId = runId // update run id
+			meta.Param[k].Txt[j].RunId = runId // update run id
 
 			// if language code valid then insert into run_parameter_txt
-			if lId, ok := langDef.IdByCode(meta.ParamTxt[k].Txt[j].LangCode); ok {
+			if lId, ok := langDef.IdByCode(meta.Param[k].Txt[j].LangCode); ok {
 
 				err = TrxUpdate(trx,
 					"INSERT INTO run_parameter_txt (run_id, parameter_hid, lang_id, note) VALUES ("+
 						srId+", "+
-						strconv.Itoa(meta.ParamTxt[k].ParamHid)+", "+
+						strconv.Itoa(meta.Param[k].ParamHid)+", "+
 						strconv.Itoa(lId)+", "+
-						toQuotedOrNull(meta.ParamTxt[k].Txt[j].Note)+")")
+						toQuotedOrNull(meta.Param[k].Txt[j].Note)+")")
 				if err != nil {
 					return err
 				}

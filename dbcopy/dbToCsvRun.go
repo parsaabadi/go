@@ -143,6 +143,46 @@ func toRunListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleF
 		return errors.New("failed to write model run text into csv " + err.Error())
 	}
 
+	// write run parameter rows into csv
+	row = make([]string, 3)
+
+	idx = 0
+	j = 0
+	err = toCsvFile(
+		outDir,
+		"run_parameter.csv",
+		[]string{"run_id", "parameter_hid", "sub_count"},
+		func() (bool, []string, error) {
+
+			if idx < 0 || idx >= len(rl) { // end of model run rows
+				return true, row, nil
+			}
+
+			// if end of current run parameters then find next run with parameter rows
+			if j < 0 || j >= len(rl[idx].Param) {
+				j = 0
+				for {
+					idx++
+					if idx < 0 || idx >= len(rl) { // end of run rows
+						return true, row, nil
+					}
+					if len(rl[idx].Param) > 0 {
+						break
+					}
+				}
+			}
+
+			// make run parameter []string row
+			row[0] = strconv.Itoa(rl[idx].Run.RunId)
+			row[1] = strconv.Itoa(rl[idx].Param[j].ParamHid)
+			row[2] = strconv.Itoa(rl[idx].Param[j].SubCount)
+			j++
+			return false, row, nil
+		})
+	if err != nil {
+		return errors.New("failed to write run parameters into csv " + err.Error())
+	}
+
 	// write parameter value notes rows into csv
 	row = make([]string, 4)
 
@@ -160,38 +200,38 @@ func toRunListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleF
 			}
 
 			// if end of current run parameter text then find next run with parameter text rows
-			if pix < 0 || pix >= len(rl[idx].ParamTxt) || j < 0 || j >= len(rl[idx].ParamTxt[pix].Txt) {
+			if pix < 0 || pix >= len(rl[idx].Param) || j < 0 || j >= len(rl[idx].Param[pix].Txt) {
 
 				j = 0
 				for {
-					if 0 <= pix && pix < len(rl[idx].ParamTxt) {
+					if 0 <= pix && pix < len(rl[idx].Param) {
 						pix++
 					}
-					if pix < 0 || pix >= len(rl[idx].ParamTxt) {
+					if pix < 0 || pix >= len(rl[idx].Param) {
 						idx++
 						pix = 0
 					}
 					if idx < 0 || idx >= len(rl) { // end of model run rows
 						return true, row, nil
 					}
-					if pix >= len(rl[idx].ParamTxt) { // end of run parameter text rows for that run
+					if pix >= len(rl[idx].Param) { // end of run parameter text rows for that run
 						continue
 					}
-					if len(rl[idx].ParamTxt[pix].Txt) > 0 {
+					if len(rl[idx].Param[pix].Txt) > 0 {
 						break
 					}
 				}
 			}
 
 			// make run parameter text []string row
-			row[0] = strconv.Itoa(rl[idx].ParamTxt[pix].Txt[j].RunId)
-			row[1] = strconv.Itoa(rl[idx].ParamTxt[pix].Txt[j].ParamHid)
-			row[2] = rl[idx].ParamTxt[pix].Txt[j].LangCode
+			row[0] = strconv.Itoa(rl[idx].Param[pix].Txt[j].RunId)
+			row[1] = strconv.Itoa(rl[idx].Param[pix].Txt[j].ParamHid)
+			row[2] = rl[idx].Param[pix].Txt[j].LangCode
 
-			if rl[idx].ParamTxt[pix].Txt[j].Note == "" { // empty "" string is NULL
+			if rl[idx].Param[pix].Txt[j].Note == "" { // empty "" string is NULL
 				row[3] = "NULL"
 			} else {
-				row[3] = rl[idx].ParamTxt[pix].Txt[j].Note
+				row[3] = rl[idx].Param[pix].Txt[j].Note
 			}
 			j++
 			return false, row, nil
@@ -233,7 +273,7 @@ func toRunCsv(
 			return errors.New("missing run parameter values " + layout.Name + " run id: " + strconv.Itoa(layout.FromId))
 		}
 
-		var pc db.CellValue
+		var pc db.CellParam
 		err = toCsvCellFile(csvDir, modelDef, layout.Name, pc, cLst, doubleFmt, isIdCsv, "")
 		if err != nil {
 			return err

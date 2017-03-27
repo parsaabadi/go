@@ -11,10 +11,10 @@ import (
 
 // CellAcc is value of output table accumulator.
 type CellAcc struct {
-	CellValue      // dimensions and value
+	cellValue      // dimensions and value
 	IsNull    bool // if true then value is NULL
 	AccId     int  // output table accumulator id
-	SubId     int  // output table subsample id
+	SubId     int  // output table subvalue id
 }
 
 // CsvFileName return file name of csv file to store output table accumulator rows
@@ -77,7 +77,7 @@ func (CellAcc) CsvHeader(modelDef *ModelMeta, name string, isIdHeader bool, valu
 
 // CsvToIdRow return converter from output table cell (acc_id, sub_id, dimensions, value) to csv row []string.
 //
-// Converter simply does Sprint() for each dimension item id, accumulator id, subsample number and value.
+// Converter simply does Sprint() for each dimension item id, accumulator id, subvalue number and value.
 // Converter will retrun error if len(row) not equal to number of fields in csv record.
 // Double format string is used if parameter type is float, double, long double
 func (CellAcc) CsvToIdRow(
@@ -201,7 +201,7 @@ func (CellAcc) CsvToRow(
 // It does retrun error if len(row) not equal to number of fields in cell db-record.
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
 func (CellAcc) CsvToCell(
-	modelDef *ModelMeta, name string, valueName string) (
+	modelDef *ModelMeta, name string, subCount int, valueName string) (
 	func(row []string) (interface{}, error), error) {
 
 	// validate parameters
@@ -235,7 +235,7 @@ func (CellAcc) CsvToCell(
 	cvt := func(row []string) (interface{}, error) {
 
 		// make conversion buffer and check input csv row size
-		cell := CellAcc{CellValue: CellValue{cellDims: cellDims{DimIds: make([]int, table.Rank)}}}
+		cell := CellAcc{cellValue: cellValue{cellDims: cellDims{DimIds: make([]int, table.Rank)}}}
 
 		n := len(cell.DimIds)
 		if len(row) != n+3 {
@@ -254,12 +254,15 @@ func (CellAcc) CsvToCell(
 			return nil, errors.New("invalid accumulator name: " + row[0] + " output table: " + name)
 		}
 
-		// subsample number
-		i, err := strconv.Atoi(row[1])
+		// subvalue number
+		nSub, err := strconv.Atoi(row[1])
 		if err != nil {
 			return nil, err
 		}
-		cell.SubId = i
+		if nSub < 0 || nSub >= subCount {
+			return nil, errors.New("invalid sub-value id: " + strconv.Itoa(nSub) + " output table: " + name)
+		}
+		cell.SubId = nSub
 
 		// convert dimensions: enum code to enum id or integer value for simple type dimension
 		for k := range cell.DimIds {

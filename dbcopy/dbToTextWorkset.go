@@ -181,7 +181,7 @@ func toWorksetText(
 			return errors.New("missing workset parameter values " + layout.Name + " set id: " + strconv.Itoa(layout.FromId))
 		}
 
-		var pc db.CellValue
+		var pc db.CellParam
 		err = toCsvCellFile(csvDir, modelDef, layout.Name, pc, cLst, doubleFmt, isIdCsv, "")
 		if err != nil {
 			return err

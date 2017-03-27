@@ -207,10 +207,10 @@ func fromLangTextJsonToDb(dbConn *sql.DB, modelDef *db.ModelMeta, inpDir string)
 
 // fromCsvFile read parameter or output table csv file and convert it to list of db cells
 func fromCsvFile(
-	csvDir string, modelDef *db.ModelMeta, name string, cell db.CsvConverter, encodingName string) (*list.List, error) {
+	csvDir string, modelDef *db.ModelMeta, name string, subCount int, cell db.CsvConverter, encodingName string) (*list.List, error) {
 
 	// converter from csv row []string to db cell
-	cvt, err := cell.CsvToCell(modelDef, name, "")
+	cvt, err := cell.CsvToCell(modelDef, name, subCount, "")
 	if err != nil {
 		return nil, errors.New("invalid converter from csv row: " + err.Error())
 	}

@@ -173,7 +173,7 @@ func toRunText(
 			return errors.New("missing run parameter values " + layout.Name + " run id: " + strconv.Itoa(layout.FromId))
 		}
 
-		var pc db.CellValue
+		var pc db.CellParam
 		err = toCsvCellFile(csvDir, modelDef, layout.Name, pc, cLst, doubleFmt, isIdCsv, "")
 		if err != nil {
 			return err

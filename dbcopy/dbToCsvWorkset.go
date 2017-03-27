@@ -108,14 +108,14 @@ func toWorksetListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, dou
 	}
 
 	// write workset parameter rows into csv
-	row = make([]string, 2)
+	row = make([]string, 3)
 
 	idx = 0
 	j = 0
 	err = toCsvFile(
 		outDir,
 		"workset_parameter.csv",
-		[]string{"set_id", "parameter_hid"},
+		[]string{"set_id", "parameter_hid", "sub_count"},
 		func() (bool, []string, error) {
 
 			if idx < 0 || idx >= len(wl) { // end of workset rows
@@ -139,6 +139,7 @@ func toWorksetListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, dou
 			// make workset parameter []string row
 			row[0] = strconv.Itoa(wl[idx].Set.SetId)
 			row[1] = strconv.Itoa(wl[idx].Param[j].ParamHid)
+			row[2] = strconv.Itoa(wl[idx].Param[j].SubCount)
 			j++
 			return false, row, nil
 		})
@@ -240,7 +241,7 @@ func toWorksetCsv(
 			return errors.New("missing workset parameter values " + layout.Name + " set id: " + strconv.Itoa(layout.FromId))
 		}
 
-		var pc db.CellValue
+		var pc db.CellParam
 		err = toCsvCellFile(csvDir, modelDef, layout.Name, pc, cLst, doubleFmt, isIdCsv, "")
 		if err != nil {
 			return err

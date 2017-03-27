@@ -22,27 +22,34 @@ const (
 
 // RunMeta is metadata of model run: name, status, run options, description, notes.
 type RunMeta struct {
-	Run      RunRow            // model run master row: run_lst
-	Txt      []RunTxtRow       // run text rows: run_txt
-	Opts     map[string]string // options used to run the model: run_option
-	ParamTxt []runParam        // run parameters text: name and value notes by language
+	Run   RunRow            // model run master row: run_lst
+	Txt   []RunTxtRow       // run text rows: run_txt
+	Opts  map[string]string // options used to run the model: run_option
+	Param []runParam        // run parameters: parameter_hid, sub-value count, run_parameter_txt table rows
 }
 
-// RunMeta is "public" model run metadata for json import-export
+// RunPub is "public" model run metadata for json import-export
 type RunPub struct {
 	ModelName      string            // model name for that run
 	ModelDigest    string            // model digest for that run
 	Name           string            // run_name      VARCHAR(255) NOT NULL
-	SubCount       int               // sub_count     INT          NOT NULL, -- subsamples count
-	SubStarted     int               // sub_started   INT          NOT NULL, -- number of subsamples started
-	SubCompleted   int               // sub_completed INT          NOT NULL, -- number of subsamples completed
+	SubCount       int               // sub_count     INT          NOT NULL, -- subvalue count
+	SubStarted     int               // sub_started   INT          NOT NULL, -- number of subvalues started
+	SubCompleted   int               // sub_completed INT          NOT NULL, -- number of subvalues completed
 	CreateDateTime string            // create_dt     VARCHAR(32)  NOT NULL, -- start date-time
 	Status         string            // status        VARCHAR(1)   NOT NULL, -- run status: i=init p=progress s=success x=exit e=error(failed)
 	UpdateDateTime string            // update_dt     VARCHAR(32)  NOT NULL, -- last update date-time
 	Digest         string            // run_digest    VARCHAR(32)  NULL,     -- digest of the run
 	Txt            []descrNote       // run text: description and notes by language
 	Opts           map[string]string // options used to run the model: run_option
-	ParamTxt       []NameLangNote    // run parameters text: name and value notes by language
+	Param          []ParamRunSetPub  // run parameters: name, sub-value count and value notes by language
+}
+
+// ParamRunSetPub is "public" run or workset parameter metadata for json import-export
+type ParamRunSetPub struct {
+	Name     string     // parameter name
+	SubCount int        // number of parameter sub-values
+	Txt      []langNote // parameter value notes by language
 }
 
 // RunRow is model run row: run_lst table row.
@@ -53,9 +60,9 @@ type RunRow struct {
 	RunId          int    // run_id        INT          NOT NULL, -- unique run id
 	ModelId        int    // model_id      INT          NOT NULL
 	Name           string // run_name      VARCHAR(255) NOT NULL
-	SubCount       int    // sub_count     INT          NOT NULL, -- subsamples count
-	SubStarted     int    // sub_started   INT          NOT NULL, -- number of subsamples started
-	SubCompleted   int    // sub_completed INT          NOT NULL, -- number of subsamples completed
+	SubCount       int    // sub_count     INT          NOT NULL, -- subvalue count
+	SubStarted     int    // sub_started   INT          NOT NULL, -- number of subvalues started
+	SubCompleted   int    // sub_completed INT          NOT NULL, -- number of subvalues completed
 	CreateDateTime string // create_dt     VARCHAR(32)  NOT NULL, -- start date-time
 	Status         string // status        VARCHAR(1)   NOT NULL, -- run status: i=init p=progress s=success x=exit e=error(failed)
 	UpdateDateTime string // update_dt     VARCHAR(32)  NOT NULL, -- last update date-time
@@ -70,9 +77,10 @@ type RunTxtRow struct {
 	Note     string // note      VARCHAR(32000)
 }
 
-// RunParam is a holder for run parameter Hid and run_parameter_txt rows
+// RunParam is a holder for run parameter Hid, subvalue count and run_parameter_txt rows
 type runParam struct {
 	ParamHid int              // parameter_hid INT NOT NULL
+	SubCount int              // number of parameter sub-values
 	Txt      []RunParamTxtRow // run_parameter_txt table rows
 }
 
@@ -108,19 +116,19 @@ type RunParamTxtRow struct {
 type WorksetMeta struct {
 	Set   WorksetRow      // workset master row: workset_lst
 	Txt   []WorksetTxtRow // workset text rows: workset_txt
-	Param []worksetParam  // workset parameter: parameter_hid and workset_parameter_txt rows
+	Param []worksetParam  // workset parameter: parameter_hid, sub-value count and workset_parameter_txt rows
 }
 
 // WorksetPub is "public" workset metadata for json import-export
 type WorksetPub struct {
-	ModelName      string         // model name for that workset
-	ModelDigest    string         // model digest for that workset
-	Name           string         // workset name: set_name VARCHAR(255) NOT NULL
-	BaseRunDigest  string         // if not empty then digest of the base run
-	IsReadonly     bool           // readonly flag
-	UpdateDateTime string         // last update date-time
-	Txt            []descrNote    // workset text: description and notes by language
-	Param          []NameLangNote // workset parameters: name and text (value notes by language)
+	ModelName      string           // model name for that workset
+	ModelDigest    string           // model digest for that workset
+	Name           string           // workset name: set_name VARCHAR(255) NOT NULL
+	BaseRunDigest  string           // if not empty then digest of the base run
+	IsReadonly     bool             // readonly flag
+	UpdateDateTime string           // last update date-time
+	Txt            []descrNote      // workset text: description and notes by language
+	Param          []ParamRunSetPub // workset parameters: name and text (value notes by language)
 }
 
 // WorksetRow is workset_lst table row.
@@ -133,9 +141,10 @@ type WorksetRow struct {
 	UpdateDateTime string // update_dt    VARCHAR(32)  NOT NULL, -- last update date-time
 }
 
-// WorksetParam is a holder for workset parameter Hid and workset_parameter_txt rows
+// WorksetParam is a holder for workset parameter Hid, sub-value count and workset_parameter_txt rows
 type worksetParam struct {
 	ParamHid int                  // parameter_hid INT NOT NULL
+	SubCount int                  // number of parameter sub-values
 	Txt      []WorksetParamTxtRow // workset_parameter_txt table rows
 }
 
@@ -209,7 +218,7 @@ type TaskTxtRow struct {
 type TaskRunRow struct {
 	TaskRunId      int    // task_run_id INT         NOT NULL, -- unique task run id
 	TaskId         int    // task_id     INT         NOT NULL
-	SubCount       int    // sub_count   INT         NOT NULL, -- subsamples count of task run
+	SubCount       int    // sub_count   INT         NOT NULL, -- subvalue count of task run
 	CreateDateTime string // create_dt   VARCHAR(32) NOT NULL, -- start date-time
 	Status         string // status      VARCHAR(1)  NOT NULL, -- task status: i=init p=progress w=wait s=success x=exit e=error(failed)
 	UpdateDateTime string // update_dt   VARCHAR(32) NOT NULL, -- last update date-time
@@ -236,7 +245,7 @@ type TaskPub struct {
 
 // taskRunPub is "public" metadata of task run history.
 type taskRunPub struct {
-	SubCount       int             // sub_count   INT         NOT NULL, -- subsamples count of task run
+	SubCount       int             // sub_count   INT         NOT NULL, -- subvalue count of task run
 	CreateDateTime string          // create_dt   VARCHAR(32) NOT NULL, -- start date-time
 	Status         string          // status      VARCHAR(1)  NOT NULL, -- task status: i=init p=progress w=wait s=success x=exit e=error(failed)
 	UpdateDateTime string          // update_dt   VARCHAR(32) NOT NULL, -- last update date-time
@@ -252,7 +261,7 @@ type taskRunSetPub struct {
 	SetName string   // workset name
 	Run     struct { // "public" link to model run
 		Name           string // run_name      VARCHAR(255) NOT NULL
-		SubCompleted   int    // sub_completed INT          NOT NULL, -- number of subsamples completed
+		SubCompleted   int    // sub_completed INT          NOT NULL, -- number of subvalues completed
 		CreateDateTime string // create_dt     VARCHAR(32)  NOT NULL, -- start date-time
 		Status         string // status        VARCHAR(1)   NOT NULL, -- run status: i=init p=progress s=success x=exit e=error(failed)
 		Digest         string // run_digest    VARCHAR(32)  NULL,     -- digest of the run

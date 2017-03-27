@@ -268,8 +268,8 @@ func fromRunTextToDb(
 	for j := range modelDef.Param {
 
 		// read parameter values from csv file
-		var cell db.CellValue
-		cLst, err := fromCsvFile(csvDir, modelDef, modelDef.Param[j].Name, &cell, encodingName)
+		var cell db.CellParam
+		cLst, err := fromCsvFile(csvDir, modelDef, modelDef.Param[j].Name, meta.Param[j].SubCount, &cell, encodingName)
 		if err != nil {
 			return 0, 0, err
 		}
@@ -280,7 +280,7 @@ func fromRunTextToDb(
 		// insert parameter values in model run
 		layout.Name = modelDef.Param[j].Name
 
-		if err = db.WriteParameter(dbConn, modelDef, &layout, cLst, doubleFmt); err != nil {
+		if err = db.WriteParameter(dbConn, modelDef, &layout, meta.Param[j].SubCount, cLst, doubleFmt); err != nil {
 			return 0, 0, err
 		}
 	}
@@ -290,14 +290,14 @@ func fromRunTextToDb(
 
 		// read output table accumulator(s) values from csv file
 		var ca db.CellAcc
-		acLst, err := fromCsvFile(csvDir, modelDef, modelDef.Table[j].Name, &ca, encodingName)
+		acLst, err := fromCsvFile(csvDir, modelDef, modelDef.Table[j].Name, meta.Run.SubCount, &ca, encodingName)
 		if err != nil {
 			return 0, 0, err
 		}
 
 		// read output table expression(s) values from csv file
 		var ce db.CellExpr
-		ecLst, err := fromCsvFile(csvDir, modelDef, modelDef.Table[j].Name, &ce, encodingName)
+		ecLst, err := fromCsvFile(csvDir, modelDef, modelDef.Table[j].Name, meta.Run.SubCount, &ce, encodingName)
 		if err != nil {
 			return 0, 0, err
 		}

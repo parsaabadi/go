@@ -367,7 +367,7 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 	err = toCsvFile(
 		outDir,
 		"table_acc.csv",
-		[]string{"model_id", "model_table_id", "acc_id", "acc_name", "is_derived", "acc_expr"},
+		[]string{"model_id", "model_table_id", "acc_id", "acc_name", "is_derived", "acc_src"},
 		func() (bool, []string, error) {
 
 			if idx < 0 || idx >= len(modelDef.Table) { // end of output table rows
@@ -393,7 +393,7 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 			row[2] = strconv.Itoa(modelDef.Table[idx].Acc[j].AccId)
 			row[3] = modelDef.Table[idx].Acc[j].Name
 			row[4] = strconv.FormatBool(modelDef.Table[idx].Acc[j].IsDerived)
-			row[5] = modelDef.Table[idx].Acc[j].AccExpr
+			row[5] = modelDef.Table[idx].Acc[j].SrcAcc
 			j++
 			return false, row, nil
 		})

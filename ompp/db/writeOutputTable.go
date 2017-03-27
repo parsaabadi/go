@@ -258,7 +258,7 @@ func makePutExprValueInsert(meta *TableMeta, cellLst *list.List) func() (bool, [
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {
-			return false, nil, errors.New("invalid size of row buffer, expected: " + strconv.Itoa(n+3))
+			return false, nil, errors.New("invalid size of row buffer, expected: " + strconv.Itoa(n+2))
 		}
 
 		// set sql statement parameter values: expression id, dimensions enum
@@ -325,7 +325,7 @@ func makePutAccValueInsert(meta *TableMeta, cellLst *list.List) func() (bool, []
 			return false, nil, errors.New("invalid size of row buffer, expected: " + strconv.Itoa(n+3))
 		}
 
-		// set sql statement parameter values: accumulator id and subsample number, dimensions enum
+		// set sql statement parameter values: accumulator id and subvalue number, dimensions enum
 		row[0] = cell.AccId
 		row[1] = cell.SubId
 

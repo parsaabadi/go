@@ -95,6 +95,7 @@ func (pub *WorksetPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*Workset
 			return nil, errors.New("workset: " + pub.Name + " parameter " + pub.Param[k].Name + " not found")
 		}
 		ws.Param[k].ParamHid = modelDef.Param[idx].ParamHid
+		ws.Param[k].SubCount = pub.Param[k].SubCount
 
 		// workset parameter value notes, use set id default zero
 		if len(pub.Param[k].Txt) > 0 {
@@ -393,7 +394,8 @@ func doInsertWorksetBody(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, la
 
 		// insert workset parameter
 		err := TrxUpdate(trx,
-			"INSERT INTO workset_parameter (set_id, parameter_hid) VALUES ("+sId+", "+strconv.Itoa(meta.Param[k].ParamHid)+")")
+			"INSERT INTO workset_parameter (set_id, parameter_hid, sub_count) VALUES ("+
+			sId+", "+strconv.Itoa(meta.Param[k].ParamHid)+", "+strconv.Itoa(meta.Param[k].SubCount)+")")
 		if err != nil {
 			return err
 		}

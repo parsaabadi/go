@@ -10,7 +10,7 @@ import (
 	"strconv"
 )
 
-// ReadParameter read input parameter page (dimensions and value) from workset or model run results.
+// ReadParameter read input parameter page (sub id, dimensions, value) from workset or model run results.
 func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadLayout) (*list.List, error) {
 
 	// validate parameters
@@ -102,18 +102,18 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadLayout) (*li
 	}
 
 	// make sql to select parameter from model run:
-	//   SELECT dim0, dim1, param_value
+	//   SELECT sub_id, dim0, dim1, param_value
 	//   FROM ageSex_p2012_817
 	//   WHERE run_id = (SELECT base_run_id FROM run_parameter WHERE run_id = 1234 AND parameter_hid = 1)
 	//   AND dim1 IN (1, 2, 3, 4)
-	//   ORDER BY 1, 2
+	//   ORDER BY 1, 2, 3
 	// or workset:
-	//   SELECT dim0, dim1, param_value
+	//   SELECT sub_id, dim0, dim1, param_value
 	//   FROM ageSex_w2012_817
 	//   WHERE set_id = 9876
 	//   AND dim1 IN (1, 2, 3, 4)
-	//   ORDER BY 1, 2
-	q := "SELECT "
+	//   ORDER BY 1, 2, 3
+	q := "SELECT sub_id, "
 	for k := range param.Dim {
 		q += param.Dim[k].Name + ", "
 	}
@@ -155,38 +155,41 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadLayout) (*li
 	}
 
 	// append order by
-	q += makeOrderBy(param.Rank, layout.OrderBy, 0)
+	q += makeOrderBy(param.Rank, layout.OrderBy, 1)
 
-	// prepare db-row conversion buffer
+	// prepare db-row conversion buffer: sub_id, dimensions, value
+	var nSub int
 	d := make([]int, param.Rank)
 	var v interface{}
 	var vb bool
 	var vs string
-	var fc func(c *CellValue)
-
+	var fc func(c *CellParam)
 	var scanBuf []interface{}
+
+	scanBuf = append(scanBuf, &nSub)
 	for k := 0; k < param.Rank; k++ {
 		scanBuf = append(scanBuf, &d[k])
 	}
 	switch {
 	case param.typeOf.IsBool():
 		scanBuf = append(scanBuf, &vb)
-		fc = func(c *CellValue) { copy(c.DimIds, d); c.Value = vb }
+		fc = func(c *CellParam) { c.SubId = nSub; copy(c.DimIds, d); c.Value = vb }
 	case param.typeOf.IsString():
 		scanBuf = append(scanBuf, &vs)
-		fc = func(c *CellValue) { copy(c.DimIds, d); c.Value = vs }
+		fc = func(c *CellParam) { c.SubId = nSub; copy(c.DimIds, d); c.Value = vs }
 	default:
 		scanBuf = append(scanBuf, &v)
-		fc = func(c *CellValue) { copy(c.DimIds, d); c.Value = v }
+		fc = func(c *CellParam) { c.SubId = nSub; copy(c.DimIds, d); c.Value = v }
 	}
 
-	// select parameter cells: dimension(s) enum ids and parameter value
+	// select parameter cells: (sub id, dimension(s) enum ids, parameter value)
 	cLst, err := SelectToList(dbConn, q, layout.Offset, layout.Size,
 		func(rows *sql.Rows) (interface{}, error) {
 			if err := rows.Scan(scanBuf...); err != nil {
 				return nil, err
 			}
-			var c = CellValue{cellDims: cellDims{DimIds: make([]int, param.Rank)}} // make new cell from conversion buffer
+			// make new cell from conversion buffer
+			var c = CellParam{cellValue: cellValue{cellDims: cellDims{DimIds: make([]int, param.Rank)}}}
 			fc(&c)
 			return c, nil
 		})

@@ -10,7 +10,7 @@ import (
 
 // WriteLayout describes parameters or output tables values for insert or update.
 //
-// Name is a parameter or output table name to read, also for output table if ValueName is not empty
+// Name is a parameter or output table name to read
 type WriteLayout struct {
 	Name    string // parameter name or output table name
 	ToId    int    // run id or set id to write parameter or output table values

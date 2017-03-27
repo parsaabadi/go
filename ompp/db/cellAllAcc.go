@@ -9,10 +9,10 @@ import (
 	"strconv"
 )
 
-// CellAllAcc is value of maultiple output table accumulators.
+// CellAllAcc is value of multiple output table accumulators.
 type CellAllAcc struct {
 	cellDims           // dimensions
-	SubId    int       // output table subsample id
+	SubId    int       // output table subvalue id
 	IsNull   []bool    // if true then value is NULL
 	Value    []float64 // accumulator value(s)
 }
@@ -82,7 +82,7 @@ func (CellAllAcc) CsvHeader(modelDef *ModelMeta, name string, isIdHeader bool, v
 
 // CsvToIdRow return converter from output table cell (sub_id, dimensions, acc0, acc1, acc2) to csv row []string.
 //
-// Converter simply does Sprint() for each dimension item id,, subsample number and value(s).
+// Converter simply does Sprint() for each dimension item id, subvalue number and value(s).
 // Converter will retrun error if len(row) not equal to number of fields in csv record.
 // Double format string is used if parameter type is float, double, long double
 // If valueName is "" empty then all accumulators converted else one
@@ -240,7 +240,7 @@ func (CellAllAcc) CsvToRow(
 // It does retrun error if len(row) not equal to number of fields in cell db-record.
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
 func (CellAllAcc) CsvToCell(
-	modelDef *ModelMeta, name string, valueName string) (
+	modelDef *ModelMeta, name string, subCount int, valueName string) (
 	func(row []string) (interface{}, error), error) {
 
 	// validate parameters
@@ -290,12 +290,15 @@ func (CellAllAcc) CsvToCell(
 			return nil, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(1+nRank+nAcc))
 		}
 
-		// subsample number
-		i, err := strconv.Atoi(row[0])
+		// subvalue number
+		nSub, err := strconv.Atoi(row[0])
 		if err != nil {
 			return nil, err
 		}
-		cell.SubId = i
+		if nSub < 0 || nSub >= subCount {
+			return nil, errors.New("invalid sub-value id: " + strconv.Itoa(nSub) + " output table: " + name)
+		}
+		cell.SubId = nSub
 
 		// convert dimensions: enum code to enum id or integer value for simple type dimension
 		for k := range cell.DimIds {

@@ -453,6 +453,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 				p, s := makeDbTablePrefixSuffix(dbFacet, modelDef.Table[idx].Name, modelDef.Table[idx].Digest)
 				modelDef.Table[idx].DbExprTable = p + "_v" + s
 				modelDef.Table[idx].DbAccTable = p + "_a" + s
+				modelDef.Table[idx].DbAccAllView = p + "_d" + s
 			}
 
 			// INSERT INTO table_dic
@@ -507,13 +508,14 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 				modelDef.Table[idx].Acc[j].ModelId = modelDef.Model.ModelId // update model id with db value
 
 				err = TrxUpdate(trx,
-					"INSERT INTO table_acc (table_hid, acc_id, acc_name, is_derived, acc_expr)"+
+					"INSERT INTO table_acc (table_hid, acc_id, acc_name, is_derived, acc_src, acc_sql)"+
 						" VALUES ("+
 						strconv.Itoa(modelDef.Table[idx].TableHid)+", "+
 						strconv.Itoa(modelDef.Table[idx].Acc[j].AccId)+", "+
 						toQuoted(modelDef.Table[idx].Acc[j].Name)+", "+
 						toBoolStr(modelDef.Table[idx].Acc[j].IsDerived)+", "+
-						toQuoted(modelDef.Table[idx].Acc[j].AccExpr)+")")
+						toQuoted(modelDef.Table[idx].Acc[j].SrcAcc)+", "+
+						toQuoted(modelDef.Table[idx].Acc[j].AccSql)+")")
 				if err != nil {
 					return err
 				}
@@ -604,19 +606,21 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 // CREATE TABLE ageSex_p20120817
 // (
 //  run_id      INT   NOT NULL,
+//  sub_id      INT   NOT NULL,
 //  dim0        INT   NOT NULL,
 //  dim1        INT   NOT NULL,
 //  param_value FLOAT NOT NULL,
-//  PRIMARY KEY (run_id, dim0, dim1)
+//  PRIMARY KEY (run_id, sub_id, dim0, dim1)
 // )
 //
 // CREATE TABLE ageSex_w20120817
 // (
 //  set_id      INT   NOT NULL,
+//  sub_id      INT   NOT NULL,
 //  dim0        INT   NOT NULL,
 //  dim1        INT   NOT NULL,
 //  param_value FLOAT NOT NULL,
-//  PRIMARY KEY (set_id, dim0, dim1)
+//  PRIMARY KEY (set_id, sub_id, dim0, dim1)
 // )
 func paramCreateTable(dbFacet Facet, param *ParamMeta) (string, string, error) {
 
@@ -638,13 +642,15 @@ func paramCreateTable(dbFacet Facet, param *ParamMeta) (string, string, error) {
 
 	rSql := dbFacet.createTableIfNotExist(param.DbRunTable, "("+
 		"run_id INT NOT NULL, "+
+		"sub_id INT NOT NULL, "+
 		colPart+
-		"PRIMARY KEY (run_id"+keyPart+")"+
+		"PRIMARY KEY (run_id, sub_id"+keyPart+")"+
 		")")
 	wSql := dbFacet.createTableIfNotExist(param.DbSetTable, "("+
 		"set_id INT NOT NULL, "+
+		"sub_id INT NOT NULL, "+
 		colPart+
-		"PRIMARY KEY (set_id"+keyPart+")"+
+		"PRIMARY KEY (set_id, sub_id"+keyPart+")"+
 		")")
 	return rSql, wSql, nil
 }
@@ -707,77 +713,45 @@ func outTableCreateTable(dbFacet Facet, meta *TableMeta) (string, string, error)
 // AS
 // SELECT
 //   A.run_id, A.sub_id, A.dim0, A.dim1,
-//   acc0,
-//   acc1,
-//   (acc0 + acc1) AS acc2
+//   A.acc_value AS acc0,
+//   (
+//     SELECT A1.acc_value FROM salarySex_a_2012820 A1
+//     WHERE A1.run_id = A.run_id AND A1.sub_id = A.sub_id AND A1.dim0 = A.dim0 AND A1.dim1 = A.dim1
+//     AND A1.acc_id = 1
+//   ) AS acc1,
+//   (
+//     (
+//       A.acc_value
+//     )
+//     +
+//     (
+//       SELECT A1.acc_value FROM salarySex_a_2012820 A1
+//       WHERE A1.run_id = A.run_id AND A1.sub_id = A.sub_id AND A1.dim0 = A.dim0 AND A1.dim1 = A.dim1
+//       AND A1.acc_id = 1
+//     )
+//   ) AS acc2
 // FROM salarySex_a_2012820 A
-// INNER JOIN
-// (
-//   SELECT run_id, sub_id, dim0, dim1, acc_value AS acc0
-//   FROM salarySex_a_2012820
-//   WHERE acc_id = 0
-// ) B0
-// ON (B0.run_id = A.run_id AND B0.sub_id = A.sub_id AND B0.dim0 = A.dim0 AND B0.dim1 = A.dim1)
-// INNER JOIN
-// (
-//   SELECT run_id, sub_id, dim0, dim1, acc_value AS acc1
-//   FROM salarySex_a_2012820
-//   WHERE acc_id = 1
-// ) B1
-// ON (B1.run_id = A.run_id AND B1.sub_id = A.sub_id AND B1.dim0 = A.dim0 AND B1.dim1 = A.dim1)
-// WHERE A.acc_id = 0
+// WHERE A.acc_id = 0;
 //
 func outTableCreateAccAllView(dbFacet Facet, meta *TableMeta) (string, error) {
 
+	// start view body with run id, sub id and dimensions
 	sql := "SELECT A.run_id, A.sub_id"
 
 	for k := range meta.Dim {
 		sql += ", A." + meta.Dim[k].Name
 	}
 
+	// append accumulators as sql subqueries
 	for k := range meta.Acc {
-		if !meta.Acc[k].IsDerived {
-			sql += ", " + meta.Acc[k].Name
-		} else {
-			sql += ", (" + meta.Acc[k].AccExpr + ") AS " + meta.Acc[k].Name
-		}
+		sql += ", (" + meta.Acc[k].AccSql + ") AS " + meta.Acc[k].Name
 	}
 
-	sql += " FROM " + meta.DbAccTable + " A"
-
-	for k := range meta.Acc {
-		if meta.Acc[k].IsDerived {
-			continue
-		}
-
-		al := "B" + strconv.Itoa(meta.Acc[k].AccId) // join alias: B0
-
-		// INNER JOIN
-		// (
-		//   SELECT run_id, sub_id, dim0, dim1, acc_value AS acc0
-		//   FROM salarySex_a_2012820
-		//   WHERE acc_id = 0
-		// ) B0
-		sql += " INNER JOIN" +
-			" (SELECT run_id, sub_id, "
-		for j := range meta.Dim {
-			sql += meta.Dim[j].Name + ", "
-		}
-		sql += "acc_value AS " + meta.Acc[k].Name +
-			" FROM " + meta.DbAccTable +
-			" WHERE acc_id = " + strconv.Itoa(meta.Acc[k].AccId) +
-			" ) " + al
-
-		// ON (B0.run_id = A.run_id AND B0.sub_id = A.sub_id AND B0.dim0 = A.dim0 AND B0.dim1 = A.dim1)
-		sql += " ON (" +
-			al + ".run_id = A.run_id AND " + al + ".sub_id = A.sub_id"
-		for j := range meta.Dim {
-			sql += " AND " + al + "." + meta.Dim[j].Name + " = A." + meta.Dim[j].Name
-		}
-		sql += ")"
-	}
-
-	sql += " WHERE A.acc_id = 0"
+	// main accumulator table
+	// select first accumulator from main table
+	// all other accumulators joined to the first by run id, sub id and dimensions
+	sql += " FROM " + meta.DbAccTable + " A" +
+		" WHERE A.acc_id = " + strconv.Itoa(meta.Acc[0].AccId) + ";"
 
 	return dbFacet.createViewIfNotExist(meta.DbAccAllView, sql), nil
 }

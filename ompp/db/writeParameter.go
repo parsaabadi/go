@@ -23,7 +23,7 @@ import (
 // If workset already contain parameter values then values updated else inserted.
 //
 // Double format is used for float model types digest calculation, if non-empty format supplied
-func WriteParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *WriteLayout, cellLst *list.List, doubleFmt string) error {
+func WriteParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *WriteLayout, subCount int, cellLst *list.List, doubleFmt string) error {
 
 	// validate parameters
 	if modelDef == nil {
@@ -40,6 +40,9 @@ func WriteParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *WriteLayout, ce
 			return errors.New("invalid destination run id: " + strconv.Itoa(layout.ToId))
 		}
 		return errors.New("invalid destination set id: " + strconv.Itoa(layout.ToId))
+	}
+	if subCount <= 0 {
+		return errors.New("invalid number of parameter sub-vaules: " + strconv.Itoa(subCount))
 	}
 	if cellLst == nil {
 		return errors.New("invalid (empty) parameter values")
@@ -59,12 +62,12 @@ func WriteParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *WriteLayout, ce
 		return err
 	}
 	if layout.IsToRun {
-		if err = doWriteRunParameter(trx, modelDef, param, layout.ToId, cellLst, doubleFmt); err != nil {
+		if err = doWriteRunParameter(trx, modelDef, param, layout.ToId, subCount, cellLst, doubleFmt); err != nil {
 			trx.Rollback()
 			return err
 		}
 	} else {
-		if err = doWriteSetParameter(trx, param, layout.ToId, cellLst); err != nil {
+		if err = doWriteSetParameter(trx, param, layout.ToId, subCount, cellLst); err != nil {
 			trx.Rollback()
 			return err
 		}
@@ -79,7 +82,7 @@ func WriteParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *WriteLayout, ce
 // Model run must exist and be in completed state (i.e. success or error state).
 // Model run should not already contain parameter values: parameter can be inserted only once in model run and cannot be updated after.
 // Double format is used for float model types digest calculation, if non-empty format supplied
-func doWriteRunParameter(trx *sql.Tx, modelDef *ModelMeta, param *ParamMeta, runId int, cellLst *list.List, doubleFmt string) error {
+func doWriteRunParameter(trx *sql.Tx, modelDef *ModelMeta, param *ParamMeta, runId int, subCount int, cellLst *list.List, doubleFmt string) error {
 
 	// start run update
 	srId := strconv.Itoa(runId)
@@ -136,9 +139,9 @@ func doWriteRunParameter(trx *sql.Tx, modelDef *ModelMeta, param *ParamMeta, run
 
 	// insert into run_parameter with digest and current run id as base run id
 	err = TrxUpdate(trx,
-		"INSERT INTO run_parameter (run_id, parameter_hid, base_run_id, run_digest)"+
+		"INSERT INTO run_parameter (run_id, parameter_hid, base_run_id, sub_count, run_digest)"+
 			" VALUES ("+
-			srId+", "+sHid+", "+srId+", "+toQuoted(digest)+")")
+			srId+", "+sHid+", "+srId+", "+strconv.Itoa(subCount)+", "+toQuoted(digest)+")")
 	if err != nil {
 		return err
 	}
@@ -204,7 +207,7 @@ func digestParameter(modelDef *ModelMeta, param *ParamMeta, cellLst *list.List, 
 	}
 
 	// append digest of accumulator(s) cells
-	var pc CellValue
+	var pc CellParam
 	if err = digestCells(hMd5, modelDef, param.Name, pc, cellLst, doubleFmt); err != nil {
 		return "", err
 	}
@@ -215,7 +218,7 @@ func digestParameter(modelDef *ModelMeta, param *ParamMeta, cellLst *list.List, 
 // doWriteSetParameter insert or update parameter values in workset.
 // It does insert as part of transaction
 // If workset already contain parameter values then values updated else inserted.
-func doWriteSetParameter(trx *sql.Tx, param *ParamMeta, setId int, cellLst *list.List) error {
+func doWriteSetParameter(trx *sql.Tx, param *ParamMeta, setId int, subCount int, cellLst *list.List) error {
 
 	// start workset update
 	sId := strconv.Itoa(setId)
@@ -273,15 +276,15 @@ func doWriteSetParameter(trx *sql.Tx, param *ParamMeta, setId int, cellLst *list
 // make sql to insert parameter values into model run or workset
 func makeSqlInsertParamValue(dbTable string, runSetCol string, dims []ParamDimsRow, toId int) string {
 
-	// INSERT INTO ageSex_w2012817 (set_id, dim0, dim1, param_value) VALUES (2, ?, ?, ?)
+	// INSERT INTO ageSex_w2012817 (set_id, sub_id, dim0, dim1, param_value) VALUES (2, ?, ?, ?)
 	q := "INSERT INTO " + dbTable +
-		" (" + runSetCol + ", "
+		" (" + runSetCol + ", sub_id, "
 
 	for k := range dims {
 		q += dims[k].Name + ", "
 	}
 
-	q += "param_value) VALUES (" + strconv.Itoa(toId) + ", "
+	q += "param_value) VALUES (" + strconv.Itoa(toId) + ", ?, "
 
 	for k := 0; k < len(dims); k++ {
 		q += "?, "
@@ -308,7 +311,7 @@ func makePutInsertParamValue(param *ParamMeta, cellLst *list.List) func() (bool,
 	}
 
 	// for each cell put into row of sql statement parameters
-	row := make([]interface{}, param.Rank+1)
+	row := make([]interface{}, param.Rank+2)
 	c := cellLst.Front()
 
 	put := func() (bool, []interface{}, error) {
@@ -318,21 +321,23 @@ func makePutInsertParamValue(param *ParamMeta, cellLst *list.List) func() (bool,
 		}
 
 		// convert and check input row
-		cell, ok := c.Value.(CellValue)
+		cell, ok := c.Value.(CellParam)
 		if !ok {
 			return false, nil, errors.New("invalid type, expected: parameter cell (internal error)")
 		}
 
 		n := len(cell.DimIds)
-		if len(row) != n+1 {
-			return false, nil, errors.New("invalid size of row buffer, expected: " + strconv.Itoa(n+1))
+		if len(row) != n+2 {
+			return false, nil, errors.New("invalid size of row buffer, expected: " + strconv.Itoa(n+2))
 		}
 
-		// set sql statement parameter value(s)
+		// set sql statement parameter values: subvalue number, dimensions enum, parameter value
+		row[0] = cell.SubId
+
 		for k, e := range cell.DimIds {
-			row[k] = e
+			row[k+1] = e
 		}
-		row[n] = fv(cell.Value) // parameter value converted db value
+		row[n+1] = fv(cell.Value) // parameter value converted db value
 
 		// move to next input row and return current row to sql statement
 		c = c.Next()

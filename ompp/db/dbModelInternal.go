@@ -191,13 +191,13 @@ func (meta *ModelMeta) updateInternals() error {
 			}
 
 			// digest output table accumulators: id, name, expression
-			_, err = hMd5.Write([]byte("acc_id,acc_name,acc_expr\n"))
+			_, err = hMd5.Write([]byte("acc_id,acc_name,acc_src\n"))
 			if err != nil {
 				return err
 			}
 			for k := range meta.Table[idx].Acc {
 				_, err := hMd5.Write([]byte(
-					strconv.Itoa(meta.Table[idx].Acc[k].AccId) + "," + meta.Table[idx].Acc[k].Name + "," + meta.Table[idx].Acc[k].AccExpr + "\n"))
+					strconv.Itoa(meta.Table[idx].Acc[k].AccId) + "," + meta.Table[idx].Acc[k].Name + "," + meta.Table[idx].Acc[k].SrcAcc + "\n"))
 				if err != nil {
 					return err
 				}

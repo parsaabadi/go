@@ -289,19 +289,22 @@ func fromWorksetTextToDb(
 		return 0, 0, errors.New("workset name is empty and metadata json file not found or empty")
 	}
 
-	// if only csv directory specified: make list of parameters based on csv file names
+	// if only csv directory specified:
+	//   make list of parameters based on csv file names
+	//   assume only one parameter sub-value in csv file
 	if metaPath == "" && csvDir != "" {
 
 		fl, err := filepath.Glob(csvDir + "/*.csv")
 		if err != nil {
 			return 0, 0, err
 		}
-		pub.Param = make([]db.NameLangNote, len(fl))
+		pub.Param = make([]db.ParamRunSetPub, len(fl))
 
 		for j := range fl {
 			fn := filepath.Base(fl[j])
 			fn = fn[:len(fn)-4] // remove .csv extension
 			pub.Param[j].Name = fn
+			pub.Param[j].SubCount = 1 // only one sub-value
 		}
 	}
 
@@ -334,8 +337,8 @@ func fromWorksetTextToDb(
 	for j := range pub.Param {
 
 		// read parameter values from csv file
-		var cell db.CellValue
-		cLst, err := fromCsvFile(csvDir, modelDef, pub.Param[j].Name, &cell, encodingName)
+		var cell db.CellParam
+		cLst, err := fromCsvFile(csvDir, modelDef, pub.Param[j].Name, pub.Param[j].SubCount, &cell, encodingName)
 		if err != nil {
 			return 0, 0, err
 		}
@@ -346,7 +349,7 @@ func fromWorksetTextToDb(
 		// insert or update parameter values in workset
 		layout.Name = pub.Param[j].Name
 
-		err = db.WriteParameter(dbConn, modelDef, &layout, cLst, "")
+		err = db.WriteParameter(dbConn, modelDef, &layout, pub.Param[j].SubCount, cLst, "")
 		if err != nil {
 			return 0, 0, err
 		}

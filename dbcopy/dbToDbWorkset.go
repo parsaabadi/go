@@ -215,7 +215,7 @@ func copyWorksetDbToDb(
 		// destination: insert or update parameter values in workset
 		dstLt.Name = pub.Param[j].Name
 
-		err = db.WriteParameter(dstDb, dstModel, &dstLt, cLst, "")
+		err = db.WriteParameter(dstDb, dstModel, &dstLt, dstWs.Param[j].SubCount, cLst, "")
 		if err != nil {
 			return 0, err
 		}

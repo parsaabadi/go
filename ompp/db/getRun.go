@@ -211,7 +211,7 @@ func GetRunText(dbConn *sql.DB, runId int, langCode string) ([]RunTxtRow, error)
 // getRunText return model run description and notes: run_txt table rows.
 func getRunText(dbConn *sql.DB, query string) ([]RunTxtRow, error) {
 
-	// select db rows from workset_parameter_txt
+	// select db rows from run_txt
 	var txtLst []RunTxtRow
 
 	err := SelectRows(dbConn, query,
@@ -322,7 +322,7 @@ func (meta *RunMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunPub, err
 		Digest:         meta.Run.Digest,
 		Opts:           make(map[string]string, len(meta.Opts)),
 		Txt:            make([]descrNote, len(meta.Txt)),
-		ParamTxt:       make([]NameLangNote, len(meta.ParamTxt)),
+		Param:          make([]ParamRunSetPub, len(meta.Param)),
 	}
 
 	// copy run_option rows
@@ -339,22 +339,23 @@ func (meta *RunMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunPub, err
 	}
 
 	// run parameters value notes
-	for k := range meta.ParamTxt {
+	for k := range meta.Param {
 
 		// find model parameter index by name
-		idx, ok := modelDef.ParamByHid(meta.ParamTxt[k].ParamHid)
+		idx, ok := modelDef.ParamByHid(meta.Param[k].ParamHid)
 		if !ok {
-			return nil, errors.New("model run: " + strconv.Itoa(meta.Run.RunId) + " " + meta.Run.Name + ", parameter " + strconv.Itoa(meta.ParamTxt[k].ParamHid) + " not found")
+			return nil, errors.New("model run: " + strconv.Itoa(meta.Run.RunId) + " " + meta.Run.Name + ", parameter " + strconv.Itoa(meta.Param[k].ParamHid) + " not found")
 		}
 
-		pub.ParamTxt[k] = NameLangNote{
-			Name: modelDef.Param[idx].Name,
-			Txt:  make([]langNote, len(meta.ParamTxt[k].Txt)),
+		pub.Param[k] = ParamRunSetPub{
+			Name:     modelDef.Param[idx].Name,
+			SubCount: meta.Param[k].SubCount,
+			Txt:      make([]langNote, len(meta.Param[k].Txt)),
 		}
-		for j := range meta.ParamTxt[k].Txt {
-			pub.ParamTxt[k].Txt[j] = langNote{
-				LangCode: meta.ParamTxt[k].Txt[j].LangCode,
-				Note:     meta.ParamTxt[k].Txt[j].Note,
+		for j := range meta.Param[k].Txt {
+			pub.Param[k].Txt[j] = langNote{
+				LangCode: meta.Param[k].Txt[j].LangCode,
+				Note:     meta.Param[k].Txt[j].Note,
 			}
 		}
 	}
@@ -362,7 +363,8 @@ func (meta *RunMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunPub, err
 	return &pub, nil
 }
 
-// GetRunFull return full metadata for completed model run: run_lst, run_txt, run_option run_parameter_txt rows.
+// GetRunFull return full metadata for completed model run:
+// run_lst, run_txt, run_option, run_parameter, run_parameter_txt rows.
 //
 // It does not return non-completed runs (run in progress).
 // If langCode not empty then only specified language selected else all languages
@@ -414,6 +416,31 @@ func GetRunFull(dbConn *sql.DB, runRow *RunRow, langCode string) (*RunMeta, erro
 	}
 	meta.Opts = optRs[runRow.RunId]
 
+	// append run_parameter rows: Hid and sub-value count
+	q = "SELECT M.run_id, M.parameter_hid, M.sub_count" +
+		" FROM run_parameter M" +
+		" INNER JOIN run_lst H ON (H.run_id = M.run_id)" +
+		runWhere +
+		" ORDER BY 1, 2"
+
+	hi := make(map[int]int) // map (parameter Hid) => index in parameter array
+
+	err = SelectRows(dbConn, q,
+		func(rows *sql.Rows) error {
+			var r runParam
+			var nId int
+			if err := rows.Scan(&nId, &r.ParamHid, &r.SubCount); err != nil {
+				return err
+			}
+			i := len(meta.Param)
+			meta.Param = append(meta.Param, r)
+			hi[r.ParamHid] = i
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
 	// run_parameter_txt: select using Hid
 	q = "SELECT M.run_id, M.parameter_hid, M.lang_id, L.lang_code, M.note" +
 		" FROM run_parameter_txt M" +
@@ -429,22 +456,19 @@ func GetRunFull(dbConn *sql.DB, runRow *RunRow, langCode string) (*RunMeta, erro
 	}
 
 	// append parameter value notes to corresponding Hid of parameter
-	hi := make(map[int]int) // map (parameter Hid) => index in parameter array
-
 	for k := range paramTxtRs {
 		i, ok := hi[paramTxtRs[k].ParamHid]
 		if !ok {
-			i = len(meta.ParamTxt)
-			hi[paramTxtRs[k].ParamHid] = i
-			meta.ParamTxt = append(meta.ParamTxt, runParam{ParamHid: paramTxtRs[k].ParamHid})
+			return nil, errors.New("model run: " + strconv.Itoa(runRow.RunId) + " " + runRow.Name + ", parameter " + strconv.Itoa(paramTxtRs[k].ParamHid) + " not found")
 		}
-		meta.ParamTxt[i].Txt = append(meta.ParamTxt[i].Txt, paramTxtRs[k])
+		meta.Param[i].Txt = append(meta.Param[i].Txt, paramTxtRs[k])
 	}
 
 	return meta, nil
 }
 
-// GetRunFullList return list of full metadata for completed model runs: run_lst, run_txt, run_option run_parameter_txt rows.
+// GetRunFullList return list of full metadata for completed model runs:
+// run_lst, run_txt, run_option, run_parameter, run_parameter_txt rows.
 //
 // If isSuccess true then return only successfully completed runs else all completed runs.
 // It does not return non-completed runs (run in progress).
@@ -542,6 +566,43 @@ func GetRunFullList(dbConn *sql.DB, modelId int, isSuccess bool, langCode string
 		}
 	}
 
+	// append run_parameter rows: parameter Hid and sub-value count
+	q = "SELECT M.run_id, M.parameter_hid, M.sub_count" +
+		" FROM run_parameter M" +
+		" INNER JOIN run_lst H ON (H.run_id = M.run_id)" +
+		" WHERE H.model_id = " + smId +
+		statusFilter +
+		" ORDER BY 1, 2"
+
+	hi := make(map[int]map[int]int) // map[run id] => map[parameter Hid] => index in parameter array
+
+	err = SelectRows(dbConn, q,
+		func(rows *sql.Rows) error {
+			var r runParam
+			var nId int
+			if err := rows.Scan(&nId, &r.ParamHid, &r.SubCount); err != nil {
+				return err
+			}
+
+			idx, ok := m[nId] // find run id index
+			if !ok {
+				return nil // skip run if not in previous run list
+			}
+
+			i := len(rl[idx].Param)
+			rl[idx].Param = append(rl[idx].Param, r) // append run_parameter row
+
+			if _, ok = hi[nId]; !ok {
+				hi[nId] = make(map[int]int)
+			}
+			hi[nId][r.ParamHid] = i // update map[run id] => map[hId] => parameter index
+
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
 	// for each run_parameter_txt row
 	for k := range paramTxtRs {
 
@@ -549,24 +610,13 @@ func GetRunFullList(dbConn *sql.DB, modelId int, isSuccess bool, langCode string
 		if !ok {
 			continue // run id not found: run list updated between selects
 		}
-
-		// find parameter Hid in the list of that run parameters with value notes
-		// append parameter value notes to that parameter Hid
-		isFound := false
-
-		for j := range rl[i].ParamTxt {
-			isFound = rl[i].ParamTxt[j].ParamHid == paramTxtRs[k].ParamHid
-			if isFound {
-				rl[i].ParamTxt[j].Txt = append(rl[i].ParamTxt[j].Txt, paramTxtRs[k])
-				break
-			}
+		mh, ok := hi[paramTxtRs[k].RunId]
+		if !ok {
+			continue // run id not found: run list updated between selects
 		}
-		// there is no parameter Hid in the list of that run parameters with value notes
-		// append Hid and append parameter value notes to that parameter Hid
-		if !isFound {
-			idx := len(rl[i].ParamTxt)
-			rl[i].ParamTxt = append(rl[i].ParamTxt, runParam{ParamHid: paramTxtRs[k].ParamHid})
-			rl[i].ParamTxt[idx].Txt = append(rl[i].ParamTxt[idx].Txt, paramTxtRs[k])
+		// append parameter value notes to that parameter Hid
+		if j, ok := mh[paramTxtRs[k].ParamHid]; ok {
+			rl[i].Param[j].Txt = append(rl[i].Param[j].Txt, paramTxtRs[k])
 		}
 	}
 

@@ -218,7 +218,7 @@ func copyRunDbToDb(
 		// destination: insert parameter values in model run
 		dstLt.Name = dstModel.Param[j].Name
 
-		if err = db.WriteParameter(dstDb, dstModel, &dstLt, cLst, doubleFmt); err != nil {
+		if err = db.WriteParameter(dstDb, dstModel, &dstLt, dstRun.Param[j].SubCount, cLst, doubleFmt); err != nil {
 			return 0, err
 		}
 	}
