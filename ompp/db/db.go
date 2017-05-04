@@ -60,6 +60,8 @@ func Open(dbConnStr, dbDriver string, isFacetRequired bool) (*sql.DB, Facet, err
 		if dbConnStr, dbDriver, err = prepareSqlite(dbConnStr); err != nil {
 			return nil, DefaultFacet, err
 		}
+	}
+	if dbDriver == Sqlite3DbDriver { // at this SQLite pseudo name replaced by "sqlite3" db-driver name
 		facet = SqliteFacet
 	}
 
