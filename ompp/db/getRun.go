@@ -321,7 +321,7 @@ func (meta *RunMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunPub, err
 		UpdateDateTime: meta.Run.UpdateDateTime,
 		Digest:         meta.Run.Digest,
 		Opts:           make(map[string]string, len(meta.Opts)),
-		Txt:            make([]descrNote, len(meta.Txt)),
+		Txt:            make([]DescrNote, len(meta.Txt)),
 		Param:          make([]ParamRunSetPub, len(meta.Param)),
 	}
 
@@ -332,7 +332,7 @@ func (meta *RunMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunPub, err
 
 	// run description and notes by language
 	for k := range meta.Txt {
-		pub.Txt[k] = descrNote{
+		pub.Txt[k] = DescrNote{
 			LangCode: meta.Txt[k].LangCode,
 			Descr:    meta.Txt[k].Descr,
 			Note:     meta.Txt[k].Note}
@@ -350,10 +350,10 @@ func (meta *RunMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunPub, err
 		pub.Param[k] = ParamRunSetPub{
 			Name:     modelDef.Param[idx].Name,
 			SubCount: meta.Param[k].SubCount,
-			Txt:      make([]langNote, len(meta.Param[k].Txt)),
+			Txt:      make([]LangNote, len(meta.Param[k].Txt)),
 		}
 		for j := range meta.Param[k].Txt {
-			pub.Param[k].Txt[j] = langNote{
+			pub.Param[k].Txt[j] = LangNote{
 				LangCode: meta.Param[k].Txt[j].LangCode,
 				Note:     meta.Param[k].Txt[j].Note,
 			}

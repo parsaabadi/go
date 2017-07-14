@@ -40,7 +40,7 @@ type RunPub struct {
 	Status         string            // status        VARCHAR(1)   NOT NULL, -- run status: i=init p=progress s=success x=exit e=error(failed)
 	UpdateDateTime string            // update_dt     VARCHAR(32)  NOT NULL, -- last update date-time
 	Digest         string            // run_digest    VARCHAR(32)  NULL,     -- digest of the run
-	Txt            []descrNote       // run text: description and notes by language
+	Txt            []DescrNote       // run text: description and notes by language
 	Opts           map[string]string // options used to run the model: run_option
 	Param          []ParamRunSetPub  // run parameters: name, sub-value count and value notes by language
 }
@@ -49,7 +49,7 @@ type RunPub struct {
 type ParamRunSetPub struct {
 	Name     string     // parameter name
 	SubCount int        // number of parameter sub-values
-	Txt      []langNote // parameter value notes by language
+	Txt      []LangNote // parameter value notes by language
 }
 
 // RunRow is model run row: run_lst table row.
@@ -127,7 +127,7 @@ type WorksetPub struct {
 	BaseRunDigest  string           // if not empty then digest of the base run
 	IsReadonly     bool             // readonly flag
 	UpdateDateTime string           // last update date-time
-	Txt            []descrNote      // workset text: description and notes by language
+	Txt            []DescrNote      // workset text: description and notes by language
 	Param          []ParamRunSetPub // workset parameters: name and text (value notes by language)
 }
 
@@ -238,7 +238,7 @@ type TaskPub struct {
 	ModelName   string       // model name for that task list
 	ModelDigest string       // model digest for that task list
 	Name        string       // task_name    VARCHAR(255) NOT NULL
-	Txt         []descrNote  // task text: description and notes by language
+	Txt         []DescrNote  // task text: description and notes by language
 	Set         []string     // task body: list of workset names
 	TaskRun     []taskRunPub // task run history: task_run_lst
 }

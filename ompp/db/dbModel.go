@@ -72,7 +72,7 @@ type ModelTxtMeta struct {
 	TableExprTxt []TableExprTxtRow // output table expression text rows: table_expr_txt join to model_table_dic
 }
 
-// ModelWordMeta is language-specific portion of model metadata db rows.
+// ModelWordMeta is language-specific model_word db rows.
 type ModelWordMeta struct {
 	ModelName   string          // model name for text metadata
 	ModelDigest string          // model digest for text metadata
@@ -126,15 +126,15 @@ type modelLangWord struct {
 	Words    map[string]string // model_word db-table rows as (code, value) map
 }
 
-// descrNote is a holder for language code, descripriton and notes
-type descrNote struct {
+// DescrNote is a holder for language code, descripriton and notes
+type DescrNote struct {
 	LangCode string // lang_code VARCHAR(32)  NOT NULL
 	Descr    string // descr     VARCHAR(255) NOT NULL
 	Note     string // note      VARCHAR(32000)
 }
 
-// langDescrNote is a holder for language code and notes
-type langNote struct {
+// LangNote is a holder for language code and notes
+type LangNote struct {
 	LangCode string // lang_code VARCHAR(32)  NOT NULL
 	Note     string // note      VARCHAR(32000)
 }

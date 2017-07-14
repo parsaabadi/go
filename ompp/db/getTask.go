@@ -350,12 +350,12 @@ func (meta *TaskMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskPub, e
 		ModelName:   modelDef.Model.Name,
 		ModelDigest: modelDef.Model.Digest,
 		Name:        meta.Task.Name,
-		Txt:         make([]descrNote, len(meta.Txt)),
+		Txt:         make([]DescrNote, len(meta.Txt)),
 	}
 
 	// task description and notes by language
 	for k := range meta.Txt {
-		pub.Txt[k] = descrNote{
+		pub.Txt[k] = DescrNote{
 			LangCode: meta.Txt[k].LangCode,
 			Descr:    meta.Txt[k].Descr,
 			Note:     meta.Txt[k].Note}

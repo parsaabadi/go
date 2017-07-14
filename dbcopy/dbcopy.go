@@ -8,9 +8,12 @@ Arguments for dbcopy can be specified on command line or through .ini file:
   dbcopy -ini my.ini
 Command line arguments take precedence over ini-file options.
 
-Only model name argument does not have default value and must be specified explicitly:
+Only model argument does not have default value and must be specified explicitly:
   dbcopy -m modelOne
   dbcopy -dbcopy.ModelName modelOne
+  dbcopy -dbcopy.ModelDigest 649f17f26d67c37b78dde94f79772445
+
+Model digest is globally unique and you may want to it if there are multiple versions of the model.
 
 There are 4 possible copy directions: "text", "db", "db2db", "csv" and default is "text".
 It is also possible to delete entire model or some model data from database (see dbcopy.Delete below).
@@ -72,6 +75,10 @@ If you want to create csv files with numeric id's Sex=[0,1] instead then use IdC
   dbcopy -m redModel -dbcopy.IdCsv -s Default
   dbcopy -m modelOne -dbcopy.IdCsv -dbcopy.RunId 101
   dbcopy -m modelOne -dbcopy.IdCsv -dbcopy.TaskName taskOne
+
+Dbcopy do auto detect input files encoding to convert source text into utf-8.
+On Windows you may want to expliciltly specify encoding name:
+  dbcopy -m modelOne -dbcopy.To db -dbcopy.CodePage windows-1252
 
 To delete from database entire model, model run results, set of input parameters or modeling task:
   dbcopy -m modelOne -dbcopy.Delete
@@ -197,9 +204,9 @@ func mainBody(args []string) error {
 
 	// pairs of full and short argument names to map short name to full name
 	var optFs = []config.FullShort{
-		config.FullShort{modelNameArgKey, modelNameShortKey},
-		config.FullShort{setNameArgKey, setNameShortKey},
-		config.FullShort{paramDirArgKey, paramDirShortKey},
+		config.FullShort{Full: modelNameArgKey, Short: modelNameShortKey},
+		config.FullShort{Full: setNameArgKey, Short: setNameShortKey},
+		config.FullShort{Full: paramDirArgKey, Short: paramDirShortKey},
 	}
 
 	// parse command line arguments and ini-file
