@@ -6,7 +6,6 @@ package main
 import (
 	"net/http"
 
-	"github.com/husobee/vestigo"
 	"go.openmpp.org/ompp/db"
 )
 
@@ -38,8 +37,7 @@ func modelListHandler(w http.ResponseWriter, r *http.Request) {
 // If optional lang specified then result in that language else in browser language or model default.
 func modelTextListHandler(w http.ResponseWriter, r *http.Request) {
 
-	// get optional language argument and languages accepted by browser
-	rqLangTags := getRequestLang(r)
+	rqLangTags := getRequestLang(r) // get optional language argument and languages accepted by browser
 
 	// get model name, description, notes
 	ds := theCatalog.AllModelDigests()
@@ -62,13 +60,8 @@ func modelTextListHandler(w http.ResponseWriter, r *http.Request) {
 // Model digest-or-name must specified, if multiple models with same name exist only one is returned.
 func modelMetaHandler(w http.ResponseWriter, r *http.Request) {
 
-	// get ?dn parameter from url or get router parameter /:dn
-	dn := r.URL.Query().Get("dn")
-	if dn == "" {
-		dn = vestigo.Param(r, "dn")
-	}
+	dn := getRequestParam(r, "dn")
 
-	// find metadata in catalog and write json response
 	m, _ := theCatalog.ModelMetaByDigestOrName(dn)
 	jsonResponse(w, r, m)
 }
@@ -82,16 +75,9 @@ func modelMetaHandler(w http.ResponseWriter, r *http.Request) {
 // If optional lang specified then result in that language else in browser language or model default.
 func modelTextHandler(w http.ResponseWriter, r *http.Request) {
 
-	// get ?dn parameter from url or get router parameter /:dn
-	dn := r.URL.Query().Get("dn")
-	if dn == "" {
-		dn = vestigo.Param(r, "dn")
-	}
+	dn := getRequestParam(r, "dn")
+	rqLangTags := getRequestLang(r) // get optional language argument and languages accepted by browser
 
-	// get optional language argument and languages accepted by browser
-	rqLangTags := getRequestLang(r)
-
-	// find metadata in catalog and write json response
 	mt, _ := theCatalog.ModelMetaTextByDigestOrName(dn, rqLangTags)
 	jsonResponse(w, r, mt)
 }
@@ -103,13 +89,8 @@ func modelTextHandler(w http.ResponseWriter, r *http.Request) {
 // Model digest-or-name must specified, if multiple models with same name exist only one is returned.
 func langListHandler(w http.ResponseWriter, r *http.Request) {
 
-	// get ?dn parameter from url or get router parameter /:dn
-	dn := r.URL.Query().Get("dn")
-	if dn == "" {
-		dn = vestigo.Param(r, "dn")
-	}
+	dn := getRequestParam(r, "dn")
 
-	// find model languages in catalog and write json response
 	m, _ := theCatalog.LangListByDigestOrName(dn)
 	jsonResponse(w, r, m)
 }
@@ -121,13 +102,8 @@ func langListHandler(w http.ResponseWriter, r *http.Request) {
 // Model digest-or-name must specified, if multiple models with same name exist only one is returned.
 func modelGroupHandler(w http.ResponseWriter, r *http.Request) {
 
-	// get ?dn parameter from url or get router parameter /:dn
-	dn := r.URL.Query().Get("dn")
-	if dn == "" {
-		dn = vestigo.Param(r, "dn")
-	}
+	dn := getRequestParam(r, "dn")
 
-	// find group info in catalog and write json response
 	mt, _ := theCatalog.GroupsByDigestOrName(dn)
 	jsonResponse(w, r, mt)
 }
@@ -141,16 +117,22 @@ func modelGroupHandler(w http.ResponseWriter, r *http.Request) {
 // If optional lang specified then result in that language else in browser language or model default.
 func modelGroupTextHandler(w http.ResponseWriter, r *http.Request) {
 
-	// get ?dn parameter from url or get router parameter /:dn
-	dn := r.URL.Query().Get("dn")
-	if dn == "" {
-		dn = vestigo.Param(r, "dn")
-	}
+	dn := getRequestParam(r, "dn")
+	rqLangTags := getRequestLang(r) // get optional language argument and languages accepted by browser
 
-	// get optional language argument and languages accepted by browser
-	rqLangTags := getRequestLang(r)
-
-	// find group info in catalog and write json response
 	mt, _ := theCatalog.GroupsTextByDigestOrName(dn, rqLangTags)
+	jsonResponse(w, r, mt)
+}
+
+// modelProfileHandler return profile db rows by model digest and profile name in json:
+// GET /api/profile?digest=a1b2c3d?name=profileName
+// GET /api/profile/:digest/:name
+// Model digest and profile name must specified, if no such profile exist in database then empty result returned.
+func modelProfileHandler(w http.ResponseWriter, r *http.Request) {
+
+	digest := getRequestParam(r, "digest")
+	profile := getRequestParam(r, "name")
+
+	mt, _ := theCatalog.ModelProfileByName(digest, profile)
 	jsonResponse(w, r, mt)
 }

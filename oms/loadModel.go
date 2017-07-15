@@ -240,7 +240,7 @@ func (mc *ModelCatalog) loadModelMeta(dn string) int {
 	// read metadata from database
 	m, err := db.GetModelById(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId)
 	if err != nil {
-		omppLog.Log("Error at get model metadata: ", err.Error())
+		omppLog.Log("Error at get model metadata: ", dn, ": ", err.Error())
 		return -1
 	}
 
@@ -329,11 +329,44 @@ func (mc *ModelCatalog) loadModelGroups(dn string) int {
 	// read groups from database
 	g, err := db.GetModelGroup(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, "")
 	if err != nil {
-		omppLog.Log("Error at get parameter and output table groups: ", err.Error())
+		omppLog.Log("Error at get parameter and output table groups: ", dn, ": ", err.Error())
 		return -1
 	}
 
 	// store model groups
 	mc.modelLst[idx].groupLst = g
 	return idx
+}
+
+// ModelProfileByName return model profile db rows by digest and by profile name.
+func (mc *ModelCatalog) ModelProfileByName(digest, profile string) (*db.ProfileMeta, bool) {
+
+	// if model digest is empty or profile name is empty then return empty results
+	if digest == "" {
+		omppLog.Log("Warning: invalid (empty) model digest")
+		return &db.ProfileMeta{}, false
+	}
+	if profile == "" {
+		omppLog.Log("Warning: invalid (empty) profile name")
+		return &db.ProfileMeta{}, false
+	}
+
+	// find model index by digest
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	idx := mc.indexByDigest(digest)
+	if idx < 0 {
+		omppLog.Log("Warning: model digest: ", digest)
+		return &db.ProfileMeta{}, false // return empty result: model not found or error
+	}
+
+	// read groups from database
+	p, err := db.GetProfile(mc.modelLst[idx].dbConn, profile)
+	if err != nil {
+		omppLog.Log("Error at get profile: ", digest, ": ", profile, ": ", err.Error())
+		return &db.ProfileMeta{}, false // return empty result: model not found or error
+	}
+
+	return p, true
 }

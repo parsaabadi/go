@@ -174,6 +174,11 @@ func mainBody(args []string) error {
 	router.Get("/api/model-group-text/:dn", modelGroupTextHandler, logRequest)
 	router.Get("/api/model-group-text/:dn/:lang", modelGroupTextHandler, logRequest)
 
+	// GET /api/profile?digest=a1b2c3d?name=profileName
+	// GET /api/profile/:digest/:name
+	router.Get("/api/profile", modelProfileHandler, logRequest)
+	router.Get("/api/profile/:digest/:name", modelProfileHandler, logRequest)
+
 	if !isApiOnly {
 		router.Get("/*", homeHandler, logRequest) // serve UI web pages
 	} else {

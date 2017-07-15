@@ -82,7 +82,7 @@ func (mc *ModelCatalog) loadModelText(digest string) int {
 	// read model_dic_txt rows from database
 	txt, err := db.GetModelTextById(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, "")
 	if err != nil {
-		omppLog.Log("Error at get model_dic_txt: ", err.Error())
+		omppLog.Log("Error at get model_dic_txt: ", digest, ": ", err.Error())
 		return -1
 	}
 
@@ -981,7 +981,7 @@ func (mc *ModelCatalog) loadModelMetaText(dn string) int {
 	// read metadata from database
 	m, err := db.GetModelText(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, "")
 	if err != nil {
-		omppLog.Log("Error at get model text metadata: ", err.Error())
+		omppLog.Log("Error at get model text metadata: ", dn, ": ", err.Error())
 		return -1
 	}
 

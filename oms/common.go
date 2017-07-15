@@ -74,6 +74,16 @@ func logRequest(next http.HandlerFunc) http.HandlerFunc {
 	return next
 }
 
+// get url parameter ?name or router parameter /:name
+func getRequestParam(r *http.Request, name string) string {
+
+	v := r.URL.Query().Get(name)
+	if v == "" {
+		v = vestigo.Param(r, name)
+	}
+	return v
+}
+
 // get languages accepted by browser and
 // append optional language argument on top of the list
 func getRequestLang(r *http.Request) []language.Tag {
