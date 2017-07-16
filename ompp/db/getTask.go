@@ -231,7 +231,8 @@ func GetTaskLastCompletedRun(dbConn *sql.DB, taskId int) (*TaskRunRow, error) {
 			" WHERE R.task_run_id ="+
 			" ("+
 			" SELECT MAX(M.task_run_id) FROM task_run_lst M"+
-			" WHERE M.task_id = "+strconv.Itoa(taskId)+" AND M.status IN ('s', 'x', 'e')"+
+			" WHERE M.task_id = "+strconv.Itoa(taskId)+
+			" AND M.status IN (" + toQuoted(DoneRunStatus) + ", " + toQuoted(ErrorRunStatus) + ", " + toQuoted(ExitRunStatus) + ")"+
 			" )")
 }
 

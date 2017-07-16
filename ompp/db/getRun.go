@@ -57,7 +57,8 @@ func GetLastCompletedRun(dbConn *sql.DB, modelId int) (*RunRow, error) {
 			" WHERE H.run_id ="+
 			" ("+
 			" SELECT MAX(M.run_id) FROM run_lst M"+
-			" WHERE M.model_id = "+strconv.Itoa(modelId)+" AND M.status IN ('s', 'x', 'e')"+
+			" WHERE M.model_id = "+strconv.Itoa(modelId)+
+			" AND M.status IN (" + toQuoted(DoneRunStatus) + ", " + toQuoted(ErrorRunStatus) + ", " + toQuoted(ExitRunStatus) + ")"+
 			" )")
 }
 

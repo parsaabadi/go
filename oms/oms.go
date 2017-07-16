@@ -174,11 +174,38 @@ func mainBody(args []string) error {
 	router.Get("/api/model-group-text/:dn", modelGroupTextHandler, logRequest)
 	router.Get("/api/model-group-text/:dn/:lang", modelGroupTextHandler, logRequest)
 
-	// GET /api/profile?digest=a1b2c3d?name=profileName
-	// GET /api/profile/:digest/:name
-	router.Get("/api/profile", modelProfileHandler, logRequest)
-	router.Get("/api/profile/:digest/:name", modelProfileHandler, logRequest)
+	// GET /api/model-profile?digest=a1b2c3d?name=profileName
+	// GET /api/model-profile/:digest/:name
+	router.Get("/api/model-profile", modelProfileHandler, logRequest)
+	router.Get("/api/model-profile/:digest/:name", modelProfileHandler, logRequest)
 
+	// GET /api/run-status?dn=a1b2c3d&rdn=1f2e3d4
+	// GET /api/run-status?dn=modelName&rdn=runName
+	// GET /api/run/:dn/:rdn
+	router.Get("/api/run-status", runStatusHandler, logRequest)
+	router.Get("/api/run-status/:dn/:rdn", runStatusHandler, logRequest)
+
+	// GET /api/first-run-status?dn=a1b2c3d
+	// GET /api/first-run-status?dn=modelName
+	// GET /api/first-run/:dn
+	router.Get("/api/first-run-status", firstRunStatusHandler, logRequest)
+	router.Get("/api/first-run-status/:dn", firstRunStatusHandler, logRequest)
+
+	// GET /api/last-run-status?dn=a1b2c3d
+	// GET /api/last-run-status?dn=modelName
+	// GET /api/last-run/:dn
+	router.Get("/api/last-run-status", lastRunStatusHandler, logRequest)
+	router.Get("/api/last-run-status/:dn", lastRunStatusHandler, logRequest)
+
+	// GET /api/last-completed-run?dn=a1b2c3d
+	// GET /api/last-completed-run?dn=modelName?lang=en
+	// GET /api/last-completed-run/:dn
+	// GET /api/last-completed-run/:dn/:lang
+	router.Get("/api/last-completed-run", lastCompletedRunHandler, logRequest)
+	router.Get("/api/last-completed-run/:dn", lastCompletedRunHandler, logRequest)
+	router.Get("/api/last-completed-run/:dn/:lang", lastCompletedRunHandler, logRequest)
+
+	// set web root handler: UI web pages or "not found" if this is web-service mode
 	if !isApiOnly {
 		router.Get("/*", homeHandler, logRequest) // serve UI web pages
 	} else {

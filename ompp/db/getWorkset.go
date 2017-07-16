@@ -204,9 +204,9 @@ func GetWorksetRunIds(dbConn *sql.DB, setId int) ([]int, error) {
 		"SELECT RL.run_id"+
 			" FROM run_lst RL"+
 			" INNER JOIN run_option RO ON (RO.run_id = RL.run_id)"+
-			" WHERE RL.status = 's'"+
+			" WHERE RL.status = "+toQuoted(DoneRunStatus)+
 			" AND RO.option_key = 'OpenM.SetId'"+
-			" AND RO.option_value = '"+strconv.Itoa(setId)+"'"+
+			" AND RO.option_value = "+toQuoted(strconv.Itoa(setId))+
 			" ORDER BY 1",
 		func(rows *sql.Rows) error {
 			var rId int
