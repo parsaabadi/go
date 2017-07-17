@@ -20,11 +20,11 @@ import (
 
 // byte order mark bytes
 var (
-	utf8bom    = []byte{0xEF, 0xBB, 0xBF}
-	utf16LEbom = []byte{0xFF, 0xFE}
-	utf16BEbom = []byte{0xFE, 0xFF}
-	utf32LEbom = []byte{0xFF, 0xFE, 0x00, 0x00}
-	utf32BEbom = []byte{0x00, 0x00, 0xFE, 0xFF}
+	Utf8bom    = []byte{0xEF, 0xBB, 0xBF}
+	Utf16LEbom = []byte{0xFF, 0xFE}
+	Utf16BEbom = []byte{0xFE, 0xFF}
+	Utf32LEbom = []byte{0xFF, 0xFE, 0x00, 0x00}
+	Utf32BEbom = []byte{0x00, 0x00, 0xFE, 0xFF}
 )
 
 const utf8ProbeLen = 4 * 32 * 1024 // probe length: if this length utf8 then the rest of the file is utf8
@@ -82,8 +82,8 @@ func Utf8Reader(f *os.File, encodingName string) (io.Reader, error) {
 	}
 
 	// if utf-8 BOM then skip it and return source file
-	if nBom >= len(utf8bom) && bom[0] == utf8bom[0] && bom[1] == utf8bom[1] && bom[2] == utf8bom[2] {
-		if _, err := f.Seek(int64(len(utf8bom)), 0); err != nil {
+	if nBom >= len(Utf8bom) && bom[0] == Utf8bom[0] && bom[1] == Utf8bom[1] && bom[2] == Utf8bom[2] {
+		if _, err := f.Seek(int64(len(Utf8bom)), 0); err != nil {
 			return nil, errors.New("file seek error: " + err.Error())
 		}
 		return f, nil
@@ -95,16 +95,16 @@ func Utf8Reader(f *os.File, encodingName string) (io.Reader, error) {
 	}
 
 	// ambiguos utf-16LE and utf32-LE detection: assume utf-32LE because 00 00 is very unlikely in text file
-	if nBom >= len(utf32LEbom) && bom[0] == utf32LEbom[0] && bom[1] == utf32LEbom[1] && bom[2] == utf32LEbom[2] && bom[3] == utf32LEbom[3] {
+	if nBom >= len(Utf32LEbom) && bom[0] == Utf32LEbom[0] && bom[1] == Utf32LEbom[1] && bom[2] == Utf32LEbom[2] && bom[3] == Utf32LEbom[3] {
 		return transform.NewReader(f, utf32.UTF32(utf32.LittleEndian, utf32.UseBOM).NewDecoder()), nil
 	}
-	if nBom >= len(utf32BEbom) && bom[0] == utf32BEbom[0] && bom[1] == utf32BEbom[1] && bom[2] == utf32BEbom[2] && bom[3] == utf32BEbom[3] {
+	if nBom >= len(Utf32BEbom) && bom[0] == Utf32BEbom[0] && bom[1] == Utf32BEbom[1] && bom[2] == Utf32BEbom[2] && bom[3] == Utf32BEbom[3] {
 		return transform.NewReader(f, utf32.UTF32(utf32.BigEndian, utf32.UseBOM).NewDecoder()), nil
 	}
-	if nBom >= len(utf16LEbom) && bom[0] == utf16LEbom[0] && bom[1] == utf16LEbom[1] {
+	if nBom >= len(Utf16LEbom) && bom[0] == Utf16LEbom[0] && bom[1] == Utf16LEbom[1] {
 		return transform.NewReader(f, unicode.BOMOverride(encoding.Nop.NewDecoder())), nil
 	}
-	if nBom >= len(utf16BEbom) && bom[0] == utf16BEbom[0] && bom[1] == utf16BEbom[1] {
+	if nBom >= len(Utf16BEbom) && bom[0] == Utf16BEbom[0] && bom[1] == Utf16BEbom[1] {
 		return transform.NewReader(f, unicode.BOMOverride(encoding.Nop.NewDecoder())), nil
 	}
 	// no BOM detected

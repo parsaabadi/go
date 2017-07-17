@@ -108,7 +108,9 @@ func dbToTextWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 	// write workset metadata into json and parameter values into csv files
 	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
-	if err = toWorksetText(srcDb, modelDef, wm, outDir, dblFmt, isIdCsv); err != nil {
+	isWriteUtf8bom := runOpts.Bool(useUtf8CsvArgKey)
+	
+	if err = toWorksetText(srcDb, modelDef, wm, outDir, dblFmt, isIdCsv, isWriteUtf8bom); err != nil {
 		return err
 	}
 
@@ -126,7 +128,7 @@ func dbToTextWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 
 // toWorksetListText write all readonly worksets into csv files, each set in separate subdirectory
 func toWorksetListText(
-	dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleFmt string, isIdCsv bool) error {
+	dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleFmt string, isIdCsv bool, isWriteUtf8bom bool) error {
 
 	// get all readonly worksets
 	wl, err := db.GetWorksetFullList(dbConn, modelDef.Model.ModelId, true, "")
@@ -136,7 +138,7 @@ func toWorksetListText(
 
 	// read all workset parameters and dump it into csv files
 	for k := range wl {
-		err = toWorksetText(dbConn, modelDef, &wl[k], outDir, doubleFmt, isIdCsv)
+		err = toWorksetText(dbConn, modelDef, &wl[k], outDir, doubleFmt, isIdCsv, isWriteUtf8bom)
 		if err != nil {
 			return err
 		}
@@ -146,7 +148,13 @@ func toWorksetListText(
 
 // toWorksetText write workset into csv file, in separate subdirectory
 func toWorksetText(
-	dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.WorksetMeta, outDir string, doubleFmt string, isIdCsv bool) error {
+	dbConn *sql.DB,
+	modelDef *db.ModelMeta,
+	meta *db.WorksetMeta,
+	outDir string,
+	doubleFmt string,
+	isIdCsv bool,
+	isWriteUtf8bom bool) error {
 
 	// convert db rows into "public" format
 	setId := meta.Set.SetId
@@ -182,7 +190,7 @@ func toWorksetText(
 		}
 
 		var pc db.CellParam
-		err = toCsvCellFile(csvDir, modelDef, layout.Name, pc, cLst, doubleFmt, isIdCsv, "")
+		err = toCsvCellFile(csvDir, modelDef, layout.Name, pc, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom)
 		if err != nil {
 			return err
 		}

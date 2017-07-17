@@ -55,12 +55,14 @@ func dbToText(modelName string, modelDigest string, runOpts *config.RunOptions) 
 	// write all model run data into csv files: parameters, output expressions and accumulators
 	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
-	if err = toRunListText(srcDb, modelDef, outDir, dblFmt, isIdCsv); err != nil {
+	isWriteUtf8bom := runOpts.Bool(useUtf8CsvArgKey)
+
+	if err = toRunListText(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom); err != nil {
 		return err
 	}
 
 	// write all readonly workset data into csv files: input parameters
-	if err = toWorksetListText(srcDb, modelDef, outDir, dblFmt, isIdCsv); err != nil {
+	if err = toWorksetListText(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom); err != nil {
 		return err
 	}
 
@@ -147,7 +149,8 @@ func toCsvCellFile(
 	cellLst *list.List,
 	doubleFmt string,
 	isIdCsv bool,
-	valueName string) error {
+	valueName string,
+	isWriteUtf8bom bool) error {
 
 	// converter from db cell to csv row []string
 	var cvt func(interface{}, []string) error
@@ -173,6 +176,12 @@ func toCsvCellFile(
 		return err
 	}
 	defer f.Close()
+
+	if isWriteUtf8bom { // if required then write utf-8 bom
+		if _, err = f.Write(helper.Utf8bom); err != nil {
+			return err
+		}
+	}
 
 	wr := csv.NewWriter(f)
 

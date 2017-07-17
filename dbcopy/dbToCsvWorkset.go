@@ -16,7 +16,13 @@ import (
 )
 
 // write all readonly workset data into csv files: input parameters
-func toWorksetListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleFmt string, isIdCsv bool) error {
+func toWorksetListCsv(
+	dbConn *sql.DB,
+	modelDef *db.ModelMeta,
+	outDir string,
+	doubleFmt string,
+	isIdCsv bool,
+	isWriteUtf8bom bool) error {
 
 	// get all readonly worksets
 	wl, err := db.GetWorksetFullList(dbConn, modelDef.Model.ModelId, true, "")
@@ -26,7 +32,7 @@ func toWorksetListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, dou
 
 	// read all workset parameters and dump it into csv files
 	for k := range wl {
-		err = toWorksetCsv(dbConn, modelDef, &wl[k], outDir, doubleFmt, isIdCsv)
+		err = toWorksetCsv(dbConn, modelDef, &wl[k], outDir, doubleFmt, isIdCsv, isWriteUtf8bom)
 		if err != nil {
 			return err
 		}
@@ -39,6 +45,7 @@ func toWorksetListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, dou
 	err = toCsvFile(
 		outDir,
 		"workset_lst.csv",
+		isWriteUtf8bom,
 		[]string{"set_id", "base_run_id", "model_id", "set_name", "is_readonly", "update_dt"},
 		func() (bool, []string, error) {
 			if 0 <= idx && idx < len(wl) {
@@ -69,6 +76,7 @@ func toWorksetListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, dou
 	err = toCsvFile(
 		outDir,
 		"workset_txt.csv",
+		isWriteUtf8bom,
 		[]string{"set_id", "lang_code", "descr", "note"},
 		func() (bool, []string, error) {
 
@@ -115,6 +123,7 @@ func toWorksetListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, dou
 	err = toCsvFile(
 		outDir,
 		"workset_parameter.csv",
+		isWriteUtf8bom,
 		[]string{"set_id", "parameter_hid", "sub_count"},
 		func() (bool, []string, error) {
 
@@ -156,6 +165,7 @@ func toWorksetListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, dou
 	err = toCsvFile(
 		outDir,
 		"workset_parameter_txt.csv",
+		isWriteUtf8bom,
 		[]string{"set_id", "parameter_hid", "lang_code", "note"},
 		func() (bool, []string, error) {
 
@@ -209,7 +219,13 @@ func toWorksetListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, dou
 
 // toWorksetCsv write workset paarameters into csv files, in separate subdirectory
 func toWorksetCsv(
-	dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.WorksetMeta, outDir string, doubleFmt string, isIdCsv bool) error {
+	dbConn *sql.DB,
+	modelDef *db.ModelMeta,
+	meta *db.WorksetMeta,
+	outDir string,
+	doubleFmt string,
+	isIdCsv bool,
+	isWriteUtf8bom bool) error {
 
 	// create workset subdir under output dir
 	setId := meta.Set.SetId
@@ -242,7 +258,7 @@ func toWorksetCsv(
 		}
 
 		var pc db.CellParam
-		err = toCsvCellFile(csvDir, modelDef, layout.Name, pc, cLst, doubleFmt, isIdCsv, "")
+		err = toCsvCellFile(csvDir, modelDef, layout.Name, pc, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom)
 		if err != nil {
 			return err
 		}

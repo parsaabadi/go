@@ -51,49 +51,52 @@ func dbToCsv(modelName string, modelDigest string, runOpts *config.RunOptions) e
 	}
 
 	// write model definition into csv files
-	if err = toModelCsv(srcDb, modelDef, outDir); err != nil {
+	isWriteUtf8bom := runOpts.Bool(useUtf8CsvArgKey)
+
+	if err = toModelCsv(srcDb, modelDef, outDir, isWriteUtf8bom); err != nil {
 		return err
 	}
 
 	// write list of languages into csv file
-	if err = toLanguageCsv(srcDb, outDir); err != nil {
+	if err = toLanguageCsv(srcDb, outDir, isWriteUtf8bom); err != nil {
 		return err
 	}
 
 	// write model language-specific strings into csv file
-	if err = toModelWordCsv(srcDb, modelDef.Model.ModelId, outDir); err != nil {
+	if err = toModelWordCsv(srcDb, modelDef.Model.ModelId, outDir, isWriteUtf8bom); err != nil {
 		return err
 	}
 
 	// write model text (description and notes) into csv file
-	if err = toModelTextCsv(srcDb, modelDef.Model.ModelId, outDir); err != nil {
+	if err = toModelTextCsv(srcDb, modelDef.Model.ModelId, outDir, isWriteUtf8bom); err != nil {
 		return err
 	}
 
 	// write model parameter and output table groups and groups text into csv file
-	if err = toModelGroupCsv(srcDb, modelDef.Model.ModelId, outDir); err != nil {
+	if err = toModelGroupCsv(srcDb, modelDef.Model.ModelId, outDir, isWriteUtf8bom); err != nil {
 		return err
 	}
 
 	// write model profile into csv file
-	if err = toModelProfileCsv(srcDb, modelName, outDir); err != nil {
+	if err = toModelProfileCsv(srcDb, modelName, outDir, isWriteUtf8bom); err != nil {
 		return err
 	}
 
 	// write all model run data into csv files: parameters, output expressions and accumulators
 	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
-	if err = toRunListCsv(srcDb, modelDef, outDir, dblFmt, isIdCsv); err != nil {
+
+	if err = toRunListCsv(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom); err != nil {
 		return err
 	}
 
 	// write all readonly workset data into csv files: input parameters
-	if err = toWorksetListCsv(srcDb, modelDef, outDir, dblFmt, isIdCsv); err != nil {
+	if err = toWorksetListCsv(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom); err != nil {
 		return err
 	}
 
 	// write all modeling tasks and task run history into csv files
-	if err = toTaskListCsv(srcDb, modelDef.Model.ModelId, outDir); err != nil {
+	if err = toTaskListCsv(srcDb, modelDef.Model.ModelId, outDir, isWriteUtf8bom); err != nil {
 		return err
 	}
 
@@ -110,7 +113,7 @@ func dbToCsv(modelName string, modelDigest string, runOpts *config.RunOptions) e
 }
 
 // toModelCsv writes model metadata into csv files.
-func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
+func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, isWriteUtf8bom bool) error {
 
 	// write model master row into csv
 	row := make([]string, 7)
@@ -126,6 +129,7 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 	err := toCsvFile(
 		outDir,
 		"model_dic.csv",
+		isWriteUtf8bom,
 		[]string{"model_id", "model_name", "model_digest", "model_type", "model_ver", "create_dt", "default_lang_code"},
 		func() (bool, []string, error) {
 			if idx == 0 { // only one model_dic row exist
@@ -146,6 +150,7 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 	err = toCsvFile(
 		outDir,
 		"type_dic.csv",
+		isWriteUtf8bom,
 		[]string{"model_id", "model_type_id", "type_hid", "type_name", "type_digest", "dic_id", "total_enum_id"},
 		func() (bool, []string, error) {
 			if 0 <= idx && idx < len(modelDef.Type) {
@@ -173,6 +178,7 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 	err = toCsvFile(
 		outDir,
 		"type_enum_lst.csv",
+		isWriteUtf8bom,
 		[]string{"model_id", "model_type_id", "enum_id", "enum_name"},
 		func() (bool, []string, error) {
 
@@ -213,6 +219,7 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 	err = toCsvFile(
 		outDir,
 		"parameter_dic.csv",
+		isWriteUtf8bom,
 		[]string{
 			"model_id", "model_parameter_id", "parameter_hid", "parameter_name",
 			"parameter_digest", "db_run_table", "db_set_table", "parameter_rank",
@@ -247,6 +254,7 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 	err = toCsvFile(
 		outDir,
 		"parameter_dims.csv",
+		isWriteUtf8bom,
 		[]string{"model_id", "model_parameter_id", "dim_id", "dim_name", "model_type_id"},
 		func() (bool, []string, error) {
 
@@ -288,6 +296,7 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 	err = toCsvFile(
 		outDir,
 		"table_dic.csv",
+		isWriteUtf8bom,
 		[]string{
 			"model_id", "model_table_id", "table_hid", "table_name",
 			"table_digest", "is_user", "table_rank", "is_sparse",
@@ -323,6 +332,7 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 	err = toCsvFile(
 		outDir,
 		"table_dims.csv",
+		isWriteUtf8bom,
 		[]string{"model_id", "model_table_id", "dim_id", "dim_name", "model_type_id", "is_total", "dim_size"},
 		func() (bool, []string, error) {
 
@@ -367,6 +377,7 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 	err = toCsvFile(
 		outDir,
 		"table_acc.csv",
+		isWriteUtf8bom,
 		[]string{"model_id", "model_table_id", "acc_id", "acc_name", "is_derived", "acc_src"},
 		func() (bool, []string, error) {
 
@@ -410,6 +421,7 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 	err = toCsvFile(
 		outDir,
 		"table_expr.csv",
+		isWriteUtf8bom,
 		[]string{"model_id", "model_table_id", "expr_id", "expr_name", "expr_decimals", "expr_src"},
 		func() (bool, []string, error) {
 
@@ -448,7 +460,8 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 }
 
 // toCsvFile write into csvDir/fileName.csv file.
-func toCsvFile(csvDir string, fileName string, columnNames []string, lineCvt lineCsvConverter) error {
+func toCsvFile(
+	csvDir string, fileName string, isWriteUtf8bom bool, columnNames []string, lineCvt lineCsvConverter) error {
 
 	// create csv file
 	f, err := os.OpenFile(filepath.Join(csvDir, fileName), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
@@ -456,6 +469,12 @@ func toCsvFile(csvDir string, fileName string, columnNames []string, lineCvt lin
 		return err
 	}
 	defer f.Close()
+
+	if isWriteUtf8bom { // if required then write utf-8 bom
+		if _, err = f.Write(helper.Utf8bom); err != nil {
+			return err
+		}
+	}
 
 	wr := csv.NewWriter(f)
 

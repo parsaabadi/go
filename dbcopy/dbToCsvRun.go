@@ -16,7 +16,13 @@ import (
 )
 
 // write all model run data into csv files: parameters, output expressions and accumulators
-func toRunListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleFmt string, isIdCsv bool) error {
+func toRunListCsv(
+	dbConn *sql.DB,
+	modelDef *db.ModelMeta,
+	outDir string,
+	doubleFmt string,
+	isIdCsv bool,
+	isWriteUtf8bom bool) error {
 
 	// get all successfully completed model runs
 	rl, err := db.GetRunFullList(dbConn, modelDef.Model.ModelId, true, "")
@@ -26,7 +32,7 @@ func toRunListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleF
 
 	// read all run parameters, output accumulators and expressions and dump it into csv files
 	for k := range rl {
-		err = toRunCsv(dbConn, modelDef, &rl[k], outDir, doubleFmt, isIdCsv)
+		err = toRunCsv(dbConn, modelDef, &rl[k], outDir, doubleFmt, isIdCsv, isWriteUtf8bom)
 		if err != nil {
 			return err
 		}
@@ -39,6 +45,7 @@ func toRunListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleF
 	err = toCsvFile(
 		outDir,
 		"run_lst.csv",
+		isWriteUtf8bom,
 		[]string{
 			"run_id", "model_id", "run_name", "sub_count",
 			"sub_started", "sub_completed", "create_dt", "status",
@@ -72,6 +79,7 @@ func toRunListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleF
 	err = toCsvFile(
 		outDir,
 		"run_txt.csv",
+		isWriteUtf8bom,
 		[]string{"run_id", "lang_code", "descr", "note"},
 		func() (bool, []string, error) {
 
@@ -130,6 +138,7 @@ func toRunListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleF
 	err = toCsvFile(
 		outDir,
 		"run_option.csv",
+		isWriteUtf8bom,
 		[]string{"run_id", "option_key", "option_value"},
 		func() (bool, []string, error) {
 			if 0 <= idx && idx < len(kvArr) {
@@ -151,6 +160,7 @@ func toRunListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleF
 	err = toCsvFile(
 		outDir,
 		"run_parameter.csv",
+		isWriteUtf8bom,
 		[]string{"run_id", "parameter_hid", "sub_count"},
 		func() (bool, []string, error) {
 
@@ -192,6 +202,7 @@ func toRunListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleF
 	err = toCsvFile(
 		outDir,
 		"run_parameter_txt.csv",
+		isWriteUtf8bom,
 		[]string{"run_id", "parameter_hid", "lang_code", "note"},
 		func() (bool, []string, error) {
 
@@ -245,7 +256,13 @@ func toRunListCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleF
 
 // toRunCsv write model run metadata, parameters and output tables into csv files, in separate subdirectory
 func toRunCsv(
-	dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.RunMeta, outDir string, doubleFmt string, isIdCsv bool) error {
+	dbConn *sql.DB,
+	modelDef *db.ModelMeta,
+	meta *db.RunMeta,
+	outDir string,
+	doubleFmt string,
+	isIdCsv bool,
+	isWriteUtf8bom bool) error {
 
 	// create run subdir under model dir
 	runId := meta.Run.RunId
@@ -274,7 +291,7 @@ func toRunCsv(
 		}
 
 		var pc db.CellParam
-		err = toCsvCellFile(csvDir, modelDef, layout.Name, pc, cLst, doubleFmt, isIdCsv, "")
+		err = toCsvCellFile(csvDir, modelDef, layout.Name, pc, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom)
 		if err != nil {
 			return err
 		}
@@ -294,7 +311,7 @@ func toRunCsv(
 		}
 
 		var ec db.CellExpr
-		err = toCsvCellFile(csvDir, modelDef, layout.Name, ec, cLst, doubleFmt, isIdCsv, "")
+		err = toCsvCellFile(csvDir, modelDef, layout.Name, ec, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom)
 		if err != nil {
 			return err
 		}
@@ -309,7 +326,7 @@ func toRunCsv(
 		}
 
 		var ac db.CellAcc
-		err = toCsvCellFile(csvDir, modelDef, layout.Name, ac, cLst, doubleFmt, isIdCsv, "")
+		err = toCsvCellFile(csvDir, modelDef, layout.Name, ac, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom)
 		if err != nil {
 			return err
 		}
@@ -324,7 +341,7 @@ func toRunCsv(
 		}
 
 		var al db.CellAllAcc
-		err = toCsvCellFile(csvDir, modelDef, layout.Name, al, cLst, doubleFmt, isIdCsv, "")
+		err = toCsvCellFile(csvDir, modelDef, layout.Name, al, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom)
 		if err != nil {
 			return err
 		}

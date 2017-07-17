@@ -80,6 +80,10 @@ Dbcopy do auto detect input files encoding to convert source text into utf-8.
 On Windows you may want to expliciltly specify encoding name:
   dbcopy -m modelOne -dbcopy.To db -dbcopy.CodePage windows-1252
 
+If you want to write utf-8 BOM into output csv file then:
+  dbcopy -m modelOne -dbcopy.Utf8BomIntoCsv
+  dbcopy -m modelOne -dbcopy.Utf8BomIntoCsv -dbcopy.To csv
+
 To delete from database entire model, model run results, set of input parameters or modeling task:
   dbcopy -m modelOne -dbcopy.Delete
   dbcopy -m modelOne -dbcopy.Delete -dbcopy.RunId 101
@@ -161,6 +165,7 @@ const (
 	doubleFormatArgKey = "dbcopy.DoubleFormat"     // convert to string format for float and double
 	useIdCsvArgKey     = "dbcopy.IdCsv"            // if true then create csv files with enum id's default: enum code
 	encodingArgKey     = "dbcopy.CodePage"         // code page for converting source files, e.g. windows-1252
+	useUtf8CsvArgKey   = "dbcopy.Utf8BomIntoCsv"   // if true then write utf-8 BOM into csv file
 )
 
 func main() {
@@ -201,6 +206,7 @@ func mainBody(args []string) error {
 	_ = flag.String(doubleFormatArgKey, "%.15g", "convert to string format for float and double")
 	_ = flag.Bool(useIdCsvArgKey, false, "if true then create csv files with enum id's default: enum code")
 	_ = flag.String(encodingArgKey, "", "code page to convert source file into utf-8, e.g.: windows-1252")
+	_ = flag.Bool(useUtf8CsvArgKey, false, "if true then write utf-8 BOM into csv file")
 
 	// pairs of full and short argument names to map short name to full name
 	var optFs = []config.FullShort{
