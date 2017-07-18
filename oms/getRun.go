@@ -123,8 +123,7 @@ func (mc *ModelCatalog) LastCompletedRunText(dn string, preferedLang []language.
 		return &db.RunPub{}, false // return empty result: run_lst row not found
 	}
 
-	// get run_txt db row for that run
-	// match prefered languages and model languages
+	// get run_txt db row for that run using matched prefered languag
 	_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
 	lc := mc.modelLst[idx].langLst[np].LangCode
 
@@ -165,8 +164,7 @@ func (mc *ModelCatalog) RunListText(dn string, preferedLang []language.Tag) ([]d
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	// get run_lst and run_txt db rows
-	// match prefered languages and model languages
+	// get run_txt db row for each run_lst using matched prefered languag
 	_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
 	lc := mc.modelLst[idx].langLst[np].LangCode
 
@@ -183,14 +181,14 @@ func (mc *ModelCatalog) RunListText(dn string, preferedLang []language.Tag) ([]d
 	// for each run_lst find run_txt row if exist and convert to "public" run format
 	rpl := make([]db.RunPub, len(rl))
 
-	ti := 0
-	for ri := range rl {
+	nt := 0
+	for ni := range rl {
 
-		// find text row for current master ro by run id
+		// find text row for current master row by run id
 		isFound := false
-		for ; ti < len(rt); ti++ {
-			isFound = rt[ti].RunId == rl[ri].RunId
-			if rt[ti].RunId >= rl[ri].RunId {
+		for ; nt < len(rt); nt++ {
+			isFound = rt[nt].RunId == rl[ni].RunId
+			if rt[nt].RunId >= rl[ni].RunId {
 				break // text found or text missing: text run id ahead of master run id
 			}
 		}
@@ -199,17 +197,17 @@ func (mc *ModelCatalog) RunListText(dn string, preferedLang []language.Tag) ([]d
 		var p *db.RunPub
 		var err error
 
-		if isFound && ti < len(rt) {
-			p, err = (&db.RunMeta{Run: rl[ri], Txt: []db.RunTxtRow{rt[ti]}}).ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
+		if isFound && nt < len(rt) {
+			p, err = (&db.RunMeta{Run: rl[ni], Txt: []db.RunTxtRow{rt[nt]}}).ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
 		} else {
-			p, err = (&db.RunMeta{Run: rl[ri]}).ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
+			p, err = (&db.RunMeta{Run: rl[ni]}).ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
 		}
 		if err != nil {
 			omppLog.Log("Error at run conversion: ", dn, ": ", err.Error())
 			return []db.RunPub{}, false // return empty result: conversion error
 		}
 		if p != nil {
-			rpl[ri] = *p
+			rpl[ni] = *p
 		}
 	}
 
@@ -257,8 +255,7 @@ func (mc *ModelCatalog) RunTextFull(dn, rdn string, preferedLang []language.Tag)
 		return &db.RunPub{}, false // return empty result: run not completed
 	}
 
-	// get full metadata db rows
-	// match prefered languages and model languages
+	// get full metadata db rows using matched prefered languag
 	_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
 	lc := mc.modelLst[idx].langLst[np].LangCode
 
@@ -277,228 +274,3 @@ func (mc *ModelCatalog) RunTextFull(dn, rdn string, preferedLang []language.Tag)
 
 	return rp, true
 }
-
-/*
-*
-* Alterantive version: different text matching
-*
-// LastCompletedRunText return last compeleted run_lst and run_txt db rows by model digest-or-name.
-// Run completed if run status one of: s=success, x=exit, e=error
-// It can be in prefered language, default model language or empty if no completed runs exist.
-func (mc *ModelCatalog) LastCompletedRunText(dn string, preferedLang []language.Tag) (*db.RunPub, bool) {
-
-	// if model digest-or-name is empty then return empty results
-	if dn == "" {
-		omppLog.Log("Warning: invalid (empty) model digest and name")
-		return &db.RunPub{}, false
-	}
-
-	// lock catalog and find model index by digest or name
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx := mc.indexByDigestOrName(dn)
-	if idx < 0 {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return &db.RunPub{}, false // return empty result: model not found or error
-	}
-
-	// get last completed run_lst db row
-	r, err := db.GetLastCompletedRun(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId)
-	if err != nil {
-		omppLog.Log("Error at get last completed run: ", dn, ": ", err.Error())
-		return &db.RunPub{}, false // return empty result: run select error
-	}
-	if r == nil {
-		omppLog.Log("Warning: there is no completed run not found for the model: ", dn)
-		return &db.RunPub{}, false // return empty result: run_lst row not found
-	}
-
-	// get run_txt db row for that run
-	rt, err := db.GetRunText(mc.modelLst[idx].dbConn, r.RunId, "")
-	if err != nil {
-		omppLog.Log("Error at get run text of last completed run: ", dn, ": ", r.RunId, ": ", err.Error())
-		return &db.RunPub{}, false // return empty result: run select error
-	}
-
-	// match prefered languages and model languages
-	_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
-	lc := mc.modelLst[idx].langLst[np].LangCode
-	lcd := mc.modelLst[idx].meta.Model.DefaultLangCode
-
-	rm := db.RunMeta{Run: *r}
-
-	// set run_txt row by language
-	if len(rt) > 0 {
-
-		var nf, i int
-		for ; i < len(rt); i++ {
-			if rt[i].LangCode == lc {
-				break // language match
-			}
-			if rt[i].LangCode == lcd {
-				nf = i // index of default language
-			}
-		}
-		if i >= len(rt) {
-			i = nf // use default language or zero index row
-		}
-		rm.Txt = append(rm.Txt, rt[i])
-	}
-
-	// convert to "public" model run format
-	rp, err := rm.ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
-	if err != nil {
-		omppLog.Log("Error at last completed run conversion: ", dn, ": ", r.Name, ": ", err.Error())
-		return &db.RunPub{}, false // return empty result: conversion error
-	}
-
-	return rp, true
-}
-
-// RunTextList return list of run_lst and run_txt db rows by model digest-or-name.
-// It can be in prefered language, default model language or empty if no completed runs exist.
-func (mc *ModelCatalog) RunTextList(dn string, preferedLang []language.Tag) ([]db.RunPub, bool) {
-
-	// if model digest-or-name is empty then return empty results
-	if dn == "" {
-		omppLog.Log("Warning: invalid (empty) model digest and name")
-		return []db.RunPub{}, false
-	}
-
-	// lock catalog and find model index by digest or name
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx := mc.indexByDigestOrName(dn)
-	if idx < 0 {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return []db.RunPub{}, false // return empty result: model not found or error
-	}
-
-	// get run_lst and run_txt db rows
-	rl, rt, err := db.GetRunList(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, "")
-	if err != nil {
-		omppLog.Log("Error at get run list: ", dn, ": ", err.Error())
-		return []db.RunPub{}, false // return empty result: run select error
-	}
-	if len(rl) <= 0 {
-		omppLog.Log("Warning: there is no runs found for the model: ", dn)
-		return []db.RunPub{}, false // return empty result: run_lst rows not found for that model
-	}
-
-	// match prefered languages and model languages
-	_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
-	lc := mc.modelLst[idx].langLst[np].LangCode
-	lcd := mc.modelLst[idx].meta.Model.DefaultLangCode
-
-	// find run_txt row by language and convert to "public" run format
-	rpl := make([]db.RunPub, len(rl))
-
-	var isKey, isFound, isMatch bool
-	var nf, ni, ri, ti int
-
-	for ; ti < len(rt); ti++ {
-
-		if ri >= len(rl) {
-			break // done with master rows
-		}
-
-		// check if keys are equal
-		isKey = rt[ti].RunId == rl[ri].RunId
-
-		// start of next key: set "paublic" value
-		if !isKey && isFound {
-
-			if !isMatch { // if no match then use default
-				ni = nf
-			}
-
-			p, err := (&db.RunMeta{Run: rl[ri], Txt: []db.RunTxtRow{rt[ni]}}).ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
-			if err != nil {
-				omppLog.Log("Error at run conversion: ", dn, ": ", err.Error())
-				return []db.RunPub{}, false // return empty result: conversion error
-			}
-			rpl[ri] = *p
-
-			// reset to start next search
-			isFound = false
-			isMatch = false
-			ri++ // move to next master row
-			ti-- // repeat current text row
-			continue
-		}
-
-		// inside of key
-		if isKey {
-
-			if !isFound {
-				isFound = true // first key found
-				nf = ti
-			}
-			// match the language
-			isMatch = rt[ti].LangCode == lc
-			if isMatch {
-				ni = ti // perefred language match
-			}
-			if rt[ti].LangCode == lcd {
-				nf = ti // index of default language
-			}
-		}
-
-		// if keys not equal and master key behind text key
-		// then append "public" with empty text
-		// and move to next master row and repeat current text row
-		if !isKey && rt[ri].RunId > rl[ri].RunId {
-
-			p, err := (&db.RunMeta{Run: rl[ri]}).ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
-			if err != nil {
-				omppLog.Log("Error at run conversion: ", dn, ": ", err.Error())
-				return []db.RunPub{}, false // return empty result: conversion error
-			}
-			rpl[ri] = *p
-
-			ri++ // move to master type
-			ti-- // repeat current text row
-			continue
-		}
-	} // for
-
-	// last row found
-	if isFound && ri < len(rl) {
-
-		if !isMatch { // if no match then use default
-			ni = nf
-		}
-
-		var p *db.RunPub
-		var err error
-
-		if ni < len(rt) {
-			p, err = (&db.RunMeta{Run: rl[ri], Txt: []db.RunTxtRow{rt[ni]}}).ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
-		} else {
-			p, err = (&db.RunMeta{Run: rl[ri]}).ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
-		}
-		if err != nil {
-			omppLog.Log("Error at run conversion: ", dn, ": ", err.Error())
-			return []db.RunPub{}, false // return empty result: conversion error
-		}
-		if p != nil {
-			rpl[ri] = *p
-		}
-		ri++ // next master row
-	}
-
-	// convert the rest of master rows to "public" with empty text
-	for ; ri < len(rl); ri++ {
-		p, err := (&db.RunMeta{Run: rl[ri]}).ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
-		if err != nil {
-			omppLog.Log("Error at run conversion: ", dn, ": ", err.Error())
-			return []db.RunPub{}, false // return empty result: conversion error
-		}
-		rpl[ri] = *p
-	}
-
-	return rpl, true
-}
-*/

@@ -131,10 +131,10 @@ func (mc *ModelCatalog) ModelMetaTextByDigestOrName(dn string, preferedLang []la
 
 	// initialaze text metadata with copy of language-neutral metadata
 	mt := ModelMetaDescrNote{
-		ModelTxt: ModelDicDescrNote{Model: mc.modelLst[idx].meta.Model},
-		TypeTxt:  make([]TypeDescrNote, len(mc.modelLst[idx].meta.Type)),
-		ParamTxt: make([]ParamDescrNote, len(mc.modelLst[idx].meta.Param)),
-		TableTxt: make([]TableDescrNote, len(mc.modelLst[idx].meta.Table))}
+		ModelDicDescrNote: ModelDicDescrNote{Model: mc.modelLst[idx].meta.Model},
+		TypeTxt:           make([]TypeDescrNote, len(mc.modelLst[idx].meta.Type)),
+		ParamTxt:          make([]ParamDescrNote, len(mc.modelLst[idx].meta.Param)),
+		TableTxt:          make([]TableDescrNote, len(mc.modelLst[idx].meta.Table))}
 
 	// model types
 	for k := range mt.TypeTxt {
@@ -191,7 +191,7 @@ func (mc *ModelCatalog) ModelMetaTextByDigestOrName(dn string, preferedLang []la
 		if i >= len(mc.modelLst[idx].txtMeta.ModelTxt) {
 			i = nf // use default language or zero index row
 		}
-		mt.ModelTxt.DescrNote = db.DescrNote{
+		mt.DescrNote = db.DescrNote{
 			LangCode: mc.modelLst[idx].txtMeta.ModelTxt[i].LangCode,
 			Descr:    mc.modelLst[idx].txtMeta.ModelTxt[i].Descr,
 			Note:     mc.modelLst[idx].txtMeta.ModelTxt[i].Note}

@@ -30,29 +30,34 @@ func (mc *ModelCatalog) ModelDicByDigest(digest string) (db.ModelDicRow, bool) {
 }
 
 // ModelMetaByDigestOrName return model_dic db row by model digest or name.
-// TODO: ? return deep copy rather pointer to catalog ?
-func (mc *ModelCatalog) ModelMetaByDigestOrName(dn string) (db.ModelMeta, bool) {
+func (mc *ModelCatalog) ModelMetaByDigestOrName(dn string) (*db.ModelMeta, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
 		omppLog.Log("Warning: invalid (empty) model digest and name")
-		return db.ModelMeta{}, false
+		return &db.ModelMeta{}, false
 	}
 
 	// if model metadata not loaded then read it from database
 	idx := mc.loadModelMeta(dn)
 	if idx < 0 {
-		return db.ModelMeta{}, false // return empty result: model not found or error
+		return &db.ModelMeta{}, false // return empty result: model not found or error
 	}
 
 	// lock model catalog and return copy of model metadata
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	return *mc.modelLst[idx].meta, true
+	m, err := mc.modelLst[idx].meta.Clone()
+	if err != nil {
+		omppLog.Log("Error at model metadata clone: ", dn, ": ", err.Error())
+		return &db.ModelMeta{}, false
+	}
+
+	return m, true
 }
 
-// loadModelMeta read language-independent model metadata from db.
+// loadModelMeta read language-neutral model metadata from db.
 // If metadata already loaded then do skip db reading and return index in model list.
 // It search model by digest or name if digest not found.
 // Return index in model list or < 0 on error or if model not found.

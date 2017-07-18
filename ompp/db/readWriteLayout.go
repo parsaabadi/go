@@ -36,18 +36,22 @@ type ReadLayout struct {
 	OrderBy    []OrderByColumn // order by columnns, if empty then dimension id ascending order is used
 }
 
-// Select filter operations for dimension enum ids.
+// FilterOp is enum type for filter operators in select where conditions
+type FilterOp int8
+
+// Select filter operators for dimension enum ids.
 const (
-	InAutoOpFilter  = iota // auto convert IN list filter into equal or BETWEEN if possible
-	InOpFilter             // dimension enum ids in: dim2 IN (11, 22, 33)
-	EqOpFilter             // dimension equal: dim1 = 12
-	BetweenOpFilter        // dimension enum ids between: dim3 BETWEEN 44 AND 88
+	InAutoOpFilter  FilterOp = iota // auto convert IN list filter into equal or BETWEEN if possible
+	InOpFilter                      // dimension enum ids in: dim2 IN (11, 22, 33)
+	EqOpFilter                      // dimension equal: dim1 = 12
+	BetweenOpFilter                 // dimension enum ids between: dim3 BETWEEN 44 AND 88
 )
 
+// FilterColumn define dimension column and condition to filter enum ids to build select where
 type FilterColumn struct {
-	DimName string // dimension name
-	Op      int    // filter operation: equal, IN, BETWEEN
-	EnumIds []int  // enum ids: one, two or many ids depending on filter condition
+	DimName string   // dimension name
+	Op      FilterOp // filter operator: equal, IN, BETWEEN
+	EnumIds []int    // enum ids: one, two or many ids depending on filter condition
 }
 
 // OrderBy define column to order by rows selected from parameter or output table.

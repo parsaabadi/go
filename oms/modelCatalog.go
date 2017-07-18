@@ -28,7 +28,7 @@ var theCatalog ModelCatalog
 type modelDef struct {
 	dbConn        *sql.DB          // database connection
 	isMetaFull    bool             // if true then ModelMeta fully loaded else only ModelDicRow
-	meta          *db.ModelMeta    // model metadata, language independent part, should not be nil
+	meta          *db.ModelMeta    // model metadata, language-neutral part, should not be nil
 	isTxtMetaFull bool             // if true then ModelTxtMeta fully loaded else only []ModelTxtRow
 	txtMeta       *db.ModelTxtMeta // if not nil then language-specific model metadata
 	langLst       []db.LangLstRow  // model languages, first is default language
@@ -41,10 +41,10 @@ type modelDef struct {
 // It is sliced by one single language, but it can be different single language for each row.
 // It is either user prefered language, model default language, first of the row or empty "" language.
 type ModelMetaDescrNote struct {
-	ModelTxt ModelDicDescrNote // model text rows: model_dic_txt
-	TypeTxt  []TypeDescrNote   // model type text rows: type_dic_txt join to model_type_dic
-	ParamTxt []ParamDescrNote  // model parameter text rows: parameter_dic_txt join to model_parameter_dic
-	TableTxt []TableDescrNote  // model output table text rows: table_dic_txt join to model_table_dic
+	ModelDicDescrNote                  // model text rows: model_dic_txt
+	TypeTxt           []TypeDescrNote  // model type text rows: type_dic_txt join to model_type_dic
+	ParamTxt          []ParamDescrNote // model parameter text rows: parameter_dic_txt join to model_parameter_dic
+	TableTxt          []TableDescrNote // model output table text rows: table_dic_txt join to model_table_dic
 }
 
 // ModelDicDescrNote is join of model_dic db row and model_dic_txt row

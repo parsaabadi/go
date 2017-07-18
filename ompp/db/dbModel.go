@@ -9,7 +9,7 @@ const maxBuiltInTypeId = 100
 // totalEnumCode is predefined enum code for "total" enum
 const totalEnumCode = "all"
 
-// ModelMeta is model metadata db rows, language-independent portion of it.
+// ModelMeta is model metadata db rows, language-neutral portion of it.
 //
 // Types, parameters and output tables can be shared between different models and even between different databases.
 // Use digest hash to find same type (parameter, table or model) in other database.

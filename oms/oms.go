@@ -198,7 +198,7 @@ func mainBody(args []string) error {
 	router.Get("/api/run/last-status/:dn", lastRunStatusHandler, logRequest)
 
 	// GET /api/run/last-completed?dn=a1b2c3d
-	// GET /api/run/last-completed?dn=modelName?lang=en
+	// GET /api/run/last-completed?dn=modelName&lang=en
 	// GET /api/run/last-completed/:dn
 	// GET /api/run/last-completed/:dn/:lang
 	router.Get("/api/run/last-completed", lastCompletedRunHandler, logRequest)
@@ -206,7 +206,7 @@ func mainBody(args []string) error {
 	router.Get("/api/run/last-completed/:dn/:lang", lastCompletedRunHandler, logRequest)
 
 	// GET /api/run-list?dn=a1b2c3d
-	// GET /api/run-list?dn=modelName?lang=en
+	// GET /api/run-list?dn=modelName&lang=en
 	// GET /api/run-list/:dn
 	// GET /api/run-list/:dn/:lang
 	router.Get("/api/run-list", runListHandler, logRequest)
@@ -220,6 +220,40 @@ func mainBody(args []string) error {
 	router.Get("/api/run/text", runTextHandler, logRequest)
 	router.Get("/api/run/text/:dn/:rdn", runTextHandler, logRequest)
 	router.Get("/api/run/text/:dn/:rdn/:lang", runTextHandler, logRequest)
+
+	// GET /api/workset/status?dn=a1b2c3d&name=mySet
+	// GET /api/workset/status?dn=modelName&name=mySet
+	// GET /api/workset/status/:dn/:name
+	router.Get("/api/workset/status", worksetStatusHandler, logRequest)
+	router.Get("/api/workset/status/:dn/:name", worksetStatusHandler, logRequest)
+
+	// GET /api/workset/default-status?dn=a1b2c3d
+	// GET /api/workset/default-status?dn=modelName
+	// GET /api/workset/default-status/:dn
+	router.Get("/api/workset/default-status", worksetDefaultStatusHandler, logRequest)
+	router.Get("/api/workset/default-status/:dn", worksetDefaultStatusHandler, logRequest)
+
+	// GET /api/workset?dn=a1b2c3d&name=mySet
+	// GET /api/workset?dn=modelName&name=mySet&lang=en
+	// GET /api/workset/:dn/:name
+	// GET /api/workset-list/:dn/:name/:lang
+	router.Get("/api/workset", worksetHandler, logRequest)
+	router.Get("/api/workset/:dn/:name", worksetHandler, logRequest)
+	router.Get("/api/workset/:dn/:name/:lang", worksetHandler, logRequest)
+
+	// GET /api/workset-list?dn=a1b2c3d
+	// GET /api/workset-list?dn=modelName&lang=en
+	// GET /api/workset-list/:dn
+	// GET /api/workset-list/:dn/:lang
+	router.Get("/api/workset-list", worksetListHandler, logRequest)
+	router.Get("/api/workset-list/:dn", worksetListHandler, logRequest)
+	router.Get("/api/workset-list/:dn/:lang", worksetListHandler, logRequest)
+
+	// GET /api/workset/text?dn=a1b2c3d&name=mySet
+	// GET /api/workset/text?dn=modelName&name=mySet
+	// GET /api/workset/text/:dn/:name
+	router.Get("/api/workset/text", worksetTextHandler, logRequest)
+	router.Get("/api/workset/text/:dn/:name", worksetTextHandler, logRequest)
 
 	// set web root handler: UI web pages or "not found" if this is web-service mode
 	if !isApiOnly {
