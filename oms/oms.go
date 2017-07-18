@@ -179,31 +179,47 @@ func mainBody(args []string) error {
 	router.Get("/api/model-profile", modelProfileHandler, logRequest)
 	router.Get("/api/model-profile/:digest/:name", modelProfileHandler, logRequest)
 
-	// GET /api/run-status?dn=a1b2c3d&rdn=1f2e3d4
-	// GET /api/run-status?dn=modelName&rdn=runName
-	// GET /api/run/:dn/:rdn
-	router.Get("/api/run-status", runStatusHandler, logRequest)
-	router.Get("/api/run-status/:dn/:rdn", runStatusHandler, logRequest)
+	// GET /api/run/status?dn=a1b2c3d&rdn=1f2e3d4
+	// GET /api/run/status?dn=modelName&rdn=runName
+	// GET /api/run/status/:dn/:rdn
+	router.Get("/api/run/status", runStatusHandler, logRequest)
+	router.Get("/api/run/status/:dn/:rdn", runStatusHandler, logRequest)
 
-	// GET /api/first-run-status?dn=a1b2c3d
-	// GET /api/first-run-status?dn=modelName
-	// GET /api/first-run/:dn
-	router.Get("/api/first-run-status", firstRunStatusHandler, logRequest)
-	router.Get("/api/first-run-status/:dn", firstRunStatusHandler, logRequest)
+	// GET /api/run/first-status?dn=a1b2c3d
+	// GET /api/run/first-status?dn=modelName
+	// GET /api/run/first-status/:dn
+	router.Get("/api/run/first-status", firstRunStatusHandler, logRequest)
+	router.Get("/api/run/first-status/:dn", firstRunStatusHandler, logRequest)
 
-	// GET /api/last-run-status?dn=a1b2c3d
-	// GET /api/last-run-status?dn=modelName
-	// GET /api/last-run/:dn
-	router.Get("/api/last-run-status", lastRunStatusHandler, logRequest)
-	router.Get("/api/last-run-status/:dn", lastRunStatusHandler, logRequest)
+	// GET /api/run/last-status?dn=a1b2c3d
+	// GET /api/run/last-status?dn=modelName
+	// GET /api/run/last-status/:dn
+	router.Get("/api/run/last-status", lastRunStatusHandler, logRequest)
+	router.Get("/api/run/last-status/:dn", lastRunStatusHandler, logRequest)
 
-	// GET /api/last-completed-run?dn=a1b2c3d
-	// GET /api/last-completed-run?dn=modelName?lang=en
-	// GET /api/last-completed-run/:dn
-	// GET /api/last-completed-run/:dn/:lang
-	router.Get("/api/last-completed-run", lastCompletedRunHandler, logRequest)
-	router.Get("/api/last-completed-run/:dn", lastCompletedRunHandler, logRequest)
-	router.Get("/api/last-completed-run/:dn/:lang", lastCompletedRunHandler, logRequest)
+	// GET /api/run/last-completed?dn=a1b2c3d
+	// GET /api/run/last-completed?dn=modelName?lang=en
+	// GET /api/run/last-completed/:dn
+	// GET /api/run/last-completed/:dn/:lang
+	router.Get("/api/run/last-completed", lastCompletedRunHandler, logRequest)
+	router.Get("/api/run/last-completed/:dn", lastCompletedRunHandler, logRequest)
+	router.Get("/api/run/last-completed/:dn/:lang", lastCompletedRunHandler, logRequest)
+
+	// GET /api/run-list?dn=a1b2c3d
+	// GET /api/run-list?dn=modelName?lang=en
+	// GET /api/run-list/:dn
+	// GET /api/run-list/:dn/:lang
+	router.Get("/api/run-list", runListHandler, logRequest)
+	router.Get("/api/run-list/:dn", runListHandler, logRequest)
+	router.Get("/api/run-list/:dn/:lang", runListHandler, logRequest)
+
+	// GET /api/run/text?dn=a1b2c3d&rdn=1f2e3d4
+	// GET /api/run/text?dn=modelName&rdn=runName&lang=en
+	// GET /api/run/text/:dn/:rdn
+	// GET /api/run/text/:dn/:rdn/:lang
+	router.Get("/api/run/text", runTextHandler, logRequest)
+	router.Get("/api/run/text/:dn/:rdn", runTextHandler, logRequest)
+	router.Get("/api/run/text/:dn/:rdn/:lang", runTextHandler, logRequest)
 
 	// set web root handler: UI web pages or "not found" if this is web-service mode
 	if !isApiOnly {

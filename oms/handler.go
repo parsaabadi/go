@@ -37,7 +37,7 @@ func modelListHandler(w http.ResponseWriter, r *http.Request) {
 // If optional lang specified then result in that language else in browser language or model default.
 func modelTextListHandler(w http.ResponseWriter, r *http.Request) {
 
-	rqLangTags := getRequestLang(r) // get optional language argument and languages accepted by browser
+	rqLangTags := getRequestLang(r, "lang") // get optional language argument and languages accepted by browser
 
 	// get model name, description, notes
 	ds := theCatalog.AllModelDigests()
@@ -76,7 +76,7 @@ func modelMetaHandler(w http.ResponseWriter, r *http.Request) {
 func modelTextHandler(w http.ResponseWriter, r *http.Request) {
 
 	dn := getRequestParam(r, "dn")
-	rqLangTags := getRequestLang(r) // get optional language argument and languages accepted by browser
+	rqLangTags := getRequestLang(r, "lang") // get optional language argument and languages accepted by browser
 
 	mt, _ := theCatalog.ModelMetaTextByDigestOrName(dn, rqLangTags)
 	jsonResponse(w, r, mt)
@@ -118,7 +118,7 @@ func modelGroupHandler(w http.ResponseWriter, r *http.Request) {
 func modelGroupTextHandler(w http.ResponseWriter, r *http.Request) {
 
 	dn := getRequestParam(r, "dn")
-	rqLangTags := getRequestLang(r) // get optional language argument and languages accepted by browser
+	rqLangTags := getRequestLang(r, "lang") // get optional language argument and languages accepted by browser
 
 	mt, _ := theCatalog.GroupsTextByDigestOrName(dn, rqLangTags)
 	jsonResponse(w, r, mt)
@@ -138,9 +138,9 @@ func modelProfileHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // runStatusHandler return run_lst db row by model digest-or-name and run digest-or-name in json:
-// GET /api/run-status?dn=a1b2c3d&rdn=1f2e3d4
-// GET /api/run-status?dn=modelName&rdn=runName
-// GET /api/run/:dn/:rdn
+// GET /api/run/status?dn=a1b2c3d&rdn=1f2e3d4
+// GET /api/run/status?dn=modelName&rdn=runName
+// GET /api/run/status/:dn/:rdn
 // If multiple models or runs with same name exist only one is returned.
 // If no such run exist in database then empty result returned.
 func runStatusHandler(w http.ResponseWriter, r *http.Request) {
@@ -148,14 +148,14 @@ func runStatusHandler(w http.ResponseWriter, r *http.Request) {
 	dn := getRequestParam(r, "dn")
 	rdn := getRequestParam(r, "rdn")
 
-	rst, _ := theCatalog.RunStatusByDigestOrName(dn, rdn)
+	rst, _ := theCatalog.RunStatus(dn, rdn)
 	jsonResponse(w, r, rst)
 }
 
 // firstRunStatusHandler return first run_lst db row by model digest-or-name in json:
-// GET /api/first-run-status?dn=a1b2c3d
-// GET /api/first-run-status?dn=modelName
-// GET /api/first-run/:dn
+// GET /api/run/first-status?dn=a1b2c3d
+// GET /api/run/first-status?dn=modelName
+// GET /api/run/first-status/:dn
 // If multiple models or runs with same name exist only one is returned.
 // If no run exist in database then empty result returned.
 func firstRunStatusHandler(w http.ResponseWriter, r *http.Request) {
@@ -167,9 +167,9 @@ func firstRunStatusHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // lastRunStatusHandler return last run_lst db row by model digest-or-name in json:
-// GET /api/last-run-status?dn=a1b2c3d
-// GET /api/last-run-status?dn=modelName
-// GET /api/last-run/:dn
+// GET /api/run/last-status?dn=a1b2c3d
+// GET /api/run/last-status?dn=modelName
+// GET /api/run/last-status/:dn
 // If multiple models or runs with same name exist only one is returned.
 // If no run exist in database then empty result returned.
 func lastRunStatusHandler(w http.ResponseWriter, r *http.Request) {
@@ -181,19 +181,55 @@ func lastRunStatusHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // lastCompletedRunHandler return last compeleted run_lst and run_txt db rows by model digest-or-name in json:
-// GET /api/last-completed-run?dn=a1b2c3d
-// GET /api/last-completed-run?dn=modelName?lang=en
-// GET /api/last-completed-run/:dn
-// GET /api/last-completed-run/:dn/:lang
+// GET /api/run/last-completed?dn=a1b2c3d
+// GET /api/run/last-completed?dn=modelName?lang=en
+// GET /api/run/last-completed/:dn
+// GET /api/run/last-completed/:dn/:lang
 // Run completed if run status one of: s=success, x=exit, e=error
 // If multiple models or runs with same name exist only one is returned.
 // If no run exist in database then empty result returned.
-// If optional lang specified then result in that language else in browser language or model default.
+// If optional lang specified then result in that language else in browser language.
 func lastCompletedRunHandler(w http.ResponseWriter, r *http.Request) {
 
 	dn := getRequestParam(r, "dn")
-	rqLangTags := getRequestLang(r) // get optional language argument and languages accepted by browser
+	rqLangTags := getRequestLang(r, "lang") // get optional language argument and languages accepted by browser
 
-	rt, _ := theCatalog.LastCompletedRunText(dn, rqLangTags)
+	rp, _ := theCatalog.LastCompletedRunText(dn, rqLangTags)
+	jsonResponse(w, r, rp)
+}
+
+// runListHandler return list of run_lst and run_txt db rows by model digest-or-name in json:
+// GET /api/run-list?dn=a1b2c3d
+// GET /api/run-list?dn=modelName?lang=en
+// GET /api/run-list/:dn
+// GET /api/run-list/:dn/:lang
+// If multiple models with same name exist only one is returned.
+// If optional lang specified then result in that language else in browser language.
+func runListHandler(w http.ResponseWriter, r *http.Request) {
+
+	dn := getRequestParam(r, "dn")
+	rqLangTags := getRequestLang(r, "lang") // get optional language argument and languages accepted by browser
+
+	rpl, _ := theCatalog.RunListText(dn, rqLangTags)
+	jsonResponse(w, r, rpl)
+}
+
+// runTextHandler return full run metadata: run_lst, run_txt, parameter sub-value counts and text db rows
+// by model digest-or-name and digest-or-name in json:
+// GET /api/run/text?dn=a1b2c3d&rdn=1f2e3d4
+// GET /api/run/text?dn=modelName&rdn=runName&lang=en
+// GET /api/run/text/:dn/:rdn
+// GET /api/run/text/:dn/:rdn/:lang
+// If multiple models with same name exist only one is returned.
+// It does not return non-completed runs (run in progress).
+// Run completed if run status one of: s=success, x=exit, e=error.
+// If optional lang specified then result in that language else in browser language.
+func runTextHandler(w http.ResponseWriter, r *http.Request) {
+
+	dn := getRequestParam(r, "dn")
+	rdn := getRequestParam(r, "rdn")
+	rqLangTags := getRequestLang(r, "lang") // get optional language argument and languages accepted by browser
+
+	rt, _ := theCatalog.RunTextFull(dn, rdn, rqLangTags)
 	jsonResponse(w, r, rt)
 }

@@ -86,15 +86,15 @@ func getRequestParam(r *http.Request, name string) string {
 
 // get languages accepted by browser and
 // append optional language argument on top of the list
-func getRequestLang(r *http.Request) []language.Tag {
+func getRequestLang(r *http.Request, name string) []language.Tag {
 
 	// browser languages
 	rqLangTags, _, _ := language.ParseAcceptLanguage(r.Header.Get("Accept-Language"))
 
 	// if optional url parameter ?lang or router parameter /:lang specified
-	ln := r.URL.Query().Get("lang")
+	ln := r.URL.Query().Get(name)
 	if ln == "" {
-		ln = vestigo.Param(r, "lang")
+		ln = vestigo.Param(r, name)
 	}
 
 	// add lang parameter as top language
