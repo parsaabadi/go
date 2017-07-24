@@ -46,10 +46,36 @@ func GetWorksetByName(dbConn *sql.DB, modelId int, name string) (*WorksetRow, er
 			" )")
 }
 
-// GetWorksetList return list of model worksets, description and notes: workset_lst and workset_txt rows.
+// GetWorksetList return list of model worksets: workset_lst rows.
+func GetWorksetList(dbConn *sql.DB, modelId int) ([]WorksetRow, error) {
+
+	// model not found: model id must be positive
+	if modelId <= 0 {
+		return nil, nil
+	}
+
+	// select worksets by model id
+	q := "SELECT" +
+		" W.set_id, W.base_run_id, W.model_id, W.set_name, W.is_readonly, W.update_dt" +
+		" FROM workset_lst W" +
+		" WHERE W.model_id = " + strconv.Itoa(modelId) +
+		" ORDER BY 1"
+
+	setRs, err := getWsLst(dbConn, q)
+	if err != nil {
+		return nil, err
+	}
+	if len(setRs) <= 0 { // no worksets found
+		return nil, err
+	}
+
+	return setRs, nil
+}
+
+// GetWorksetListText return list of model worksets, description and notes: workset_lst and workset_txt rows.
 //
 // If langCode not empty then only specified language selected else all languages
-func GetWorksetList(dbConn *sql.DB, modelId int, langCode string) ([]WorksetRow, []WorksetTxtRow, error) {
+func GetWorksetListText(dbConn *sql.DB, modelId int, langCode string) ([]WorksetRow, []WorksetTxtRow, error) {
 
 	// model not found: model id must be positive
 	if modelId <= 0 {
@@ -65,7 +91,7 @@ func GetWorksetList(dbConn *sql.DB, modelId int, langCode string) ([]WorksetRow,
 
 	setRs, err := getWsLst(dbConn, q)
 	if err != nil {
-
+		return nil, nil, err
 	}
 	if len(setRs) <= 0 { // no worksets found
 		return nil, nil, err

@@ -58,7 +58,7 @@ func GetLastCompletedRun(dbConn *sql.DB, modelId int) (*RunRow, error) {
 			" ("+
 			" SELECT MAX(M.run_id) FROM run_lst M"+
 			" WHERE M.model_id = "+strconv.Itoa(modelId)+
-			" AND M.status IN (" + toQuoted(DoneRunStatus) + ", " + toQuoted(ErrorRunStatus) + ", " + toQuoted(ExitRunStatus) + ")"+
+			" AND M.status IN ("+toQuoted(DoneRunStatus)+", "+toQuoted(ErrorRunStatus)+", "+toQuoted(ExitRunStatus)+")"+
 			" )")
 }
 
@@ -147,10 +147,38 @@ func getRunLst(dbConn *sql.DB, query string) ([]RunRow, error) {
 	return runRs, nil
 }
 
-// GetRunList return list of model runs with description and notes: run_lst and run_txt rows.
+// GetRunList return list of model runs: run_lst rows.
+func GetRunList(dbConn *sql.DB, modelId int) ([]RunRow, error) {
+
+	// model not found: model id must be positive
+	if modelId <= 0 {
+		return nil, nil
+	}
+
+	// get list of runs for that model id
+	q := "SELECT" +
+		" H.run_id, H.model_id, H.run_name, H.sub_count," +
+		" H.sub_started, H.sub_completed, H.create_dt, H.status," +
+		" H.update_dt, H.run_digest" +
+		" FROM run_lst H" +
+		" WHERE H.model_id = " + strconv.Itoa(modelId) +
+		" ORDER BY 1"
+
+	runRs, err := getRunLst(dbConn, q)
+	if err != nil {
+		return nil, err
+	}
+	if len(runRs) <= 0 { // no model runs
+		return nil, nil
+	}
+
+	return runRs, nil
+}
+
+// GetRunListText return list of model runs with description and notes: run_lst and run_txt rows.
 //
 // If langCode not empty then only specified language selected else all languages
-func GetRunList(dbConn *sql.DB, modelId int, langCode string) ([]RunRow, []RunTxtRow, error) {
+func GetRunListText(dbConn *sql.DB, modelId int, langCode string) ([]RunRow, []RunTxtRow, error) {
 
 	// model not found: model id must be positive
 	if modelId <= 0 {

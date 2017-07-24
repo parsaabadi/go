@@ -79,60 +79,53 @@ func (mc *ModelCatalog) WorksetDefaultStatus(dn string) (*db.WorksetRow, bool) {
 	return w, true
 }
 
-// WorksetText return workset_lst and workset_txt db rows by model digest-or-name and workset name.
-// Text (description and notes) are in prefered language or empty if text in such language exists.
-func (mc *ModelCatalog) WorksetText(dn, name string, preferedLang []language.Tag) (*db.WorksetPub, bool) {
+// WorksetList return list of workset_lst db rows by model digest-or-name.
+// No text info returned (no description and notes).
+func (mc *ModelCatalog) WorksetList(dn string) ([]db.WorksetPub, bool) {
 
-	// if model digest-or-name or workset name is empty then return empty results
+	// if model digest-or-name is empty then return empty results
 	if dn == "" {
 		omppLog.Log("Warning: invalid (empty) model digest and name")
-		return &db.WorksetPub{}, false
-	}
-	if name == "" {
-		omppLog.Log("Warning: invalid (empty) workset name")
-		return &db.WorksetPub{}, false
+		return []db.WorksetPub{}, false
 	}
 
 	// load model metadata in order to convert to "public"
 	idx := mc.loadModelMeta(dn)
 	if idx < 0 {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return &db.WorksetPub{}, false // return empty result: model not found or error
+		return []db.WorksetPub{}, false // return empty result: model not found or error
 	}
 
 	// lock catalog and find model index by digest or name
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	// get workset_lst db row by name
-	w, err := db.GetWorksetByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, name)
+	wl, err := db.GetWorksetList(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId)
 	if err != nil {
-		omppLog.Log("Error at get workset status: ", dn, ": ", name, ": ", err.Error())
-		return &db.WorksetPub{}, false // return empty result: workset select error
+		omppLog.Log("Error at get workset list: ", dn, ": ", err.Error())
+		return []db.WorksetPub{}, false // return empty result: workset select error
 	}
-	if w == nil {
-		omppLog.Log("Warning workset status not found: ", dn, ": ", name)
-		return &db.WorksetPub{}, false // return empty result: workset_lst row not found
-	}
-
-	// get workset_txt db row for that workset using matched prefered languag
-	_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
-	lc := mc.modelLst[idx].langLst[np].LangCode
-
-	wt, err := db.GetWorksetText(mc.modelLst[idx].dbConn, w.SetId, lc)
-	if err != nil {
-		omppLog.Log("Error at get workset text: ", dn, ": ", w.SetId, ": ", err.Error())
-		return &db.WorksetPub{}, false // return empty result: workset select error
+	if len(wl) <= 0 {
+		// omppLog.Log("Warning: there is no any worksets found for the model: ", dn)
+		return []db.WorksetPub{}, false // return empty result: workset_lst rows not found for that model
 	}
 
-	// convert to "public" model workset format
-	wp, err := (&db.WorksetMeta{Set: *w, Txt: wt}).ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
-	if err != nil {
-		omppLog.Log("Error at workset conversion: ", dn, ": ", w.Name, ": ", err.Error())
-		return &db.WorksetPub{}, false // return empty result: conversion error
+	// for each workset_lst convert it to "public" workset format
+	wpl := make([]db.WorksetPub, len(wl))
+
+	for ni := range wl {
+
+		p, err := (&db.WorksetMeta{Set: wl[ni]}).ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
+		if err != nil {
+			omppLog.Log("Error at workset conversion: ", dn, ": ", err.Error())
+			return []db.WorksetPub{}, false // return empty result: conversion error
+		}
+		if p != nil {
+			wpl[ni] = *p
+		}
 	}
 
-	return wp, true
+	return wpl, true
 }
 
 // WorksetListText return list of workset_lst and workset_txt db rows by model digest-or-name.
@@ -160,7 +153,7 @@ func (mc *ModelCatalog) WorksetListText(dn string, preferedLang []language.Tag) 
 	_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
 	lc := mc.modelLst[idx].langLst[np].LangCode
 
-	wl, wt, err := db.GetWorksetList(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, lc)
+	wl, wt, err := db.GetWorksetListText(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, lc)
 	if err != nil {
 		omppLog.Log("Error at get workset list: ", dn, ": ", err.Error())
 		return []db.WorksetPub{}, false // return empty result: workset select error
