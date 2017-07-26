@@ -155,10 +155,10 @@ func mainBody(args []string) error {
 	router.Get("/api/model-text/:dn/:lang", modelTextHandler, logRequest)
 
 	// GET /api/model-text-all?dn=a1b2c3d
-	// GET /api/model-text-all?dn=modelName&
+	// GET /api/model-text-all?dn=modelName
 	// GET /api/model-text-all/:dn
-	router.Get("/api/model-text-all", modelTextAllHandler, logRequest)
-	router.Get("/api/model-text-all/:dn", modelTextAllHandler, logRequest)
+	router.Get("/api/model-text-all", modelAllTextHandler, logRequest)
+	router.Get("/api/model-text-all/:dn", modelAllTextHandler, logRequest)
 
 	// GET /api/lang-list?dn=a1b2c3d
 	// GET /api/lang-list?dn=modelName
@@ -179,6 +179,12 @@ func mainBody(args []string) error {
 	router.Get("/api/model-group-text", modelGroupTextHandler, logRequest)
 	router.Get("/api/model-group-text/:dn", modelGroupTextHandler, logRequest)
 	router.Get("/api/model-group-text/:dn/:lang", modelGroupTextHandler, logRequest)
+
+	// GET /api/model-group-text-all?dn=a1b2c3d
+	// GET /api/model-group-text-all?dn=modelName
+	// GET /api/model-group-text-all/:dn
+	router.Get("/api/model-group-text-all", modelGroupAllTextHandler, logRequest)
+	router.Get("/api/model-group-text-all/:dn", modelGroupAllTextHandler, logRequest)
 
 	// GET /api/model-profile?digest=a1b2c3d?name=profileName
 	// GET /api/model-profile/:digest/:name
@@ -213,9 +219,15 @@ func mainBody(args []string) error {
 	// GET /api/run/last-completed-text?dn=modelName&lang=en
 	// GET /api/run/last-completed-text/:dn
 	// GET /api/run/last-completed-text/:dn/:lang
-	router.Get("/api/run/last-completed", lastCompletedRunTextHandler, logRequest)
-	router.Get("/api/run/last-completed/:dn", lastCompletedRunTextHandler, logRequest)
-	router.Get("/api/run/last-completed/:dn/:lang", lastCompletedRunTextHandler, logRequest)
+	router.Get("/api/run/last-completed-text", lastCompletedRunTextHandler, logRequest)
+	router.Get("/api/run/last-completed-text/:dn", lastCompletedRunTextHandler, logRequest)
+	router.Get("/api/run/last-completed-text/:dn/:lang", lastCompletedRunTextHandler, logRequest)
+
+	// GET /api/run/last-completed-text-all?dn=a1b2c3d
+	// GET /api/run/last-completed-text-all?dn=modelName
+	// GET /api/run/last-completed-text-all/:dn
+	router.Get("/api/run/last-completed-text-all", lastCompletedRunAllTextHandler, logRequest)
+	router.Get("/api/run/last-completed-text-all/:dn", lastCompletedRunAllTextHandler, logRequest)
 
 	// GET /api/run-list?dn=a1b2c3d
 	// GET /api/run-list?dn=modelName
@@ -238,6 +250,12 @@ func mainBody(args []string) error {
 	router.Get("/api/run-text", runTextHandler, logRequest)
 	router.Get("/api/run-text/:dn/:rdn", runTextHandler, logRequest)
 	router.Get("/api/run-text/:dn/:rdn/:lang", runTextHandler, logRequest)
+
+	// GET /api/run-text-all?dn=a1b2c3d&rdn=1f2e3d4
+	// GET /api/run-text-all?dn=modelName&rdn=runName
+	// GET /api/run-text-all/:dn/:rdn
+	router.Get("/api/run-text-all", runAllTextHandler, logRequest)
+	router.Get("/api/run-text-all/:dn/:rdn", runAllTextHandler, logRequest)
 
 	// GET /api/workset/status?dn=a1b2c3d&name=mySet
 	// GET /api/workset/status?dn=modelName&name=mySet
@@ -269,9 +287,15 @@ func mainBody(args []string) error {
 	// GET /api/workset-text?dn=modelName&name=mySet&lang=en
 	// GET /api/workset-text/:dn/:name
 	// GET /api/workset-text/:dn/:name/:lang
-	router.Get("/api/workset-text", worksetTextFullHandler, logRequest)
-	router.Get("/api/workset-text/:dn/:name", worksetTextFullHandler, logRequest)
-	router.Get("/api/workset-text/:dn/:name/:lang", worksetTextFullHandler, logRequest)
+	router.Get("/api/workset-text", worksetTextHandler, logRequest)
+	router.Get("/api/workset-text/:dn/:name", worksetTextHandler, logRequest)
+	router.Get("/api/workset-text/:dn/:name/:lang", worksetTextHandler, logRequest)
+
+	// GET /api/workset-text-all?dn=a1b2c3d&name=mySet
+	// GET /api/workset-text-all?dn=modelName&name=mySet
+	// GET /api/workset-text-all/:dn/:name
+	router.Get("/api/workset-text-all", worksetAllTextHandler, logRequest)
+	router.Get("/api/workset-text-all/:dn/:name", worksetAllTextHandler, logRequest)
 
 	// set web root handler: UI web pages or "not found" if this is web-service mode
 	if !isApiOnly {

@@ -34,7 +34,7 @@ type modelDef struct {
 	langLst       []db.LangLstRow  // model languages, first is default language
 	langTags      []language.Tag   // model languages as tags
 	matcher       language.Matcher // matcher to search text by language
-	groupLst      *db.GroupMeta    // if not nil then parameters and table groups
+	groupLst      *db.GroupLstPub  // if not nil then parameters and table groups
 }
 
 // ModelMetaFull is full model metadata: language-neutral db rows
@@ -117,12 +117,14 @@ type TableExprDescrNote struct {
 	DescrNote db.DescrNote    // from table_expr_txt
 }
 
+/*
 // GroupMeta is db rows to describe parent-child groups of model parameters and output tables.
 // It is language-neutral groups metadata.
 type GroupMeta struct {
 	Group   []db.GroupLstRow // parameters or output tables group rows: group_lst
 	GroupPc []db.GroupPcRow  // group parent-child relationship rows: group_pc
 }
+*/
 
 // GroupMetaDescrNote is language-specific db rows to describe parent-child groups of model parameters and output tables.
 // It is sliced by one single language, but it can be different single language for each row.

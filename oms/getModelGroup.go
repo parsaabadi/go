@@ -5,35 +5,49 @@ package main
 
 import (
 	"go.openmpp.org/ompp/db"
+	"go.openmpp.org/ompp/helper"
 	"go.openmpp.org/ompp/omppLog"
 	"golang.org/x/text/language"
 )
 
 // GroupsByDigestOrName return parameter and output table groups,
 // language-neutral part of metadata by model digest or name.
-func (mc *ModelCatalog) GroupsByDigestOrName(dn string) (*GroupMeta, bool) {
+func (mc *ModelCatalog) GroupsByDigestOrName(dn string) (*db.GroupLstPub, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
 		omppLog.Log("Warning: invalid (empty) model digest and name")
-		return &GroupMeta{}, false
+		return &db.GroupLstPub{}, false
 	}
 
 	// if groups not loaded then read it from database
 	idx := mc.loadModelGroups(dn)
 	if idx < 0 {
-		return &GroupMeta{}, false // return empty result: model not found or error
+		return &db.GroupLstPub{}, false // return empty result: model not found or error
 	}
 
 	// lock model catalog and copy of language-neutral metadata
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	gm := GroupMeta{
-		Group:   append([]db.GroupLstRow{}, mc.modelLst[idx].groupLst.GroupLst...),
-		GroupPc: append([]db.GroupPcRow{}, mc.modelLst[idx].groupLst.GroupPc...)}
+	gp := db.GroupLstPub{
+		ModelName:   mc.modelLst[idx].groupLst.ModelName,
+		ModelDigest: mc.modelLst[idx].groupLst.ModelDigest,
+		Group:       make([]db.GroupPub, len(mc.modelLst[idx].groupLst.Group)),
+		Pc:          append([]db.GroupPcPub{}, mc.modelLst[idx].groupLst.Pc...)}
 
-	return &gm, true
+	// copy language-neutral part of group rows: group_lst only
+	for k := range mc.modelLst[idx].groupLst.Group {
+		gp.Group[k] = db.GroupPub{
+			GroupId:  mc.modelLst[idx].groupLst.Group[k].GroupId,
+			IsParam:  mc.modelLst[idx].groupLst.Group[k].IsParam,
+			Name:     mc.modelLst[idx].groupLst.Group[k].Name,
+			IsHidden: mc.modelLst[idx].groupLst.Group[k].IsHidden,
+			Txt:      []db.DescrNote{},
+		}
+	}
+
+	return &gp, true
 }
 
 // loadModelGroups reads parameter and output table groups from db by digest or name.
@@ -60,33 +74,67 @@ func (mc *ModelCatalog) loadModelGroups(dn string) int {
 		return idx
 	}
 
-	// read groups from database
+	// read groups from database and convert to "public" model groups format
 	g, err := db.GetModelGroup(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, "")
 	if err != nil {
 		omppLog.Log("Error at get parameter and output table groups: ", dn, ": ", err.Error())
 		return -1
 	}
+	gp, err := g.ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
+	if err != nil {
+		omppLog.Log("Error at parameter and output table groups conversion: ", dn, ": ", err.Error())
+		return -1
+	}
 
 	// store model groups
-	mc.modelLst[idx].groupLst = g
+	mc.modelLst[idx].groupLst = gp
 	return idx
 }
 
-// GroupsTextByDigestOrName return parameter and output table groups with text (description and notes)
-// by model digest or name and prefered language tags.
-// Language-specifc description and notes can be in default model language or empty if no rows db rows exist.
-func (mc *ModelCatalog) GroupsTextByDigestOrName(dn string, preferedLang []language.Tag) (*GroupMetaDescrNote, bool) {
+// GroupsAllTextByDigestOrName return parameter and output table groups with text (description and notes)
+// by model digest or name in all languages.
+func (mc *ModelCatalog) GroupsAllTextByDigestOrName(dn string) (*db.GroupLstPub, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
 		omppLog.Log("Warning: invalid (empty) model digest and name")
-		return &GroupMetaDescrNote{}, false
+		return &db.GroupLstPub{}, false
 	}
 
 	// if groups not loaded then read it from database
 	idx := mc.loadModelGroups(dn)
 	if idx < 0 {
-		return &GroupMetaDescrNote{}, false // return empty result: model not found or error
+		return &db.GroupLstPub{}, false // return empty result: model not found or error
+	}
+
+	// lock model catalog and return copy of model metadata
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	g := &db.GroupLstPub{}
+	if err := helper.DeepCopy(mc.modelLst[idx].groupLst, g); err != nil {
+		omppLog.Log("Error at model groups metadata clone: ", dn, ": ", err.Error())
+		return &db.GroupLstPub{}, false
+	}
+
+	return g, true
+}
+
+// GroupsTextByDigestOrName return parameter and output table groups with text (description and notes)
+// by model digest or name and prefered language tags.
+// Language-specifc description and notes can be in default model language or empty if no rows db rows exist.
+func (mc *ModelCatalog) GroupsTextByDigestOrName(dn string, preferedLang []language.Tag) (*db.GroupLstPub, bool) {
+
+	// if model digest-or-name is empty then return empty results
+	if dn == "" {
+		omppLog.Log("Warning: invalid (empty) model digest and name")
+		return &db.GroupLstPub{}, false
+	}
+
+	// if groups not loaded then read it from database
+	idx := mc.loadModelGroups(dn)
+	if idx < 0 {
+		return &db.GroupLstPub{}, false // return empty result: model not found or error
 	}
 
 	// lock model catalog
@@ -99,99 +147,42 @@ func (mc *ModelCatalog) GroupsTextByDigestOrName(dn string, preferedLang []langu
 	lcd := mc.modelLst[idx].meta.Model.DefaultLangCode
 
 	// initialaze with copy of language-neutral metadata
-	gm := GroupMetaDescrNote{
-		GroupLst: make([]GroupDescrNote, len(mc.modelLst[idx].groupLst.GroupLst)),
-		GroupPc:  append([]db.GroupPcRow{}, mc.modelLst[idx].groupLst.GroupPc...)}
+	gp := db.GroupLstPub{
+		ModelName:   mc.modelLst[idx].groupLst.ModelName,
+		ModelDigest: mc.modelLst[idx].groupLst.ModelDigest,
+		Group:       make([]db.GroupPub, len(mc.modelLst[idx].groupLst.Group)),
+		Pc:          append([]db.GroupPcPub{}, mc.modelLst[idx].groupLst.Pc...)}
 
-	for k := range mc.modelLst[idx].groupLst.GroupLst {
-		gm.GroupLst[k].Group = mc.modelLst[idx].groupLst.GroupLst[k]
-	}
+	// copy group rows, text only in prefered language or model default language
+	for k := range mc.modelLst[idx].groupLst.Group {
 
-	// set language-specific rows by matched language or by default language or by zero index language
+		gp.Group[k] = db.GroupPub{
+			GroupId:  mc.modelLst[idx].groupLst.Group[k].GroupId,
+			IsParam:  mc.modelLst[idx].groupLst.Group[k].IsParam,
+			Name:     mc.modelLst[idx].groupLst.Group[k].Name,
+			IsHidden: mc.modelLst[idx].groupLst.Group[k].IsHidden,
+			Txt:      []db.DescrNote{},
+		}
 
-	// set group description and notes
-	if len(gm.GroupLst) > 0 && len(mc.modelLst[idx].groupLst.GroupTxt) > 0 {
+		// find group text in prefered language, model default or zero index language
+		nd := 0
+		isMatch := false
 
-		var isKey, isFound, isMatch bool
-		var nf, ni, si, di int
+		for j := range mc.modelLst[idx].groupLst.Group[k].Txt {
 
-		for ; si < len(mc.modelLst[idx].groupLst.GroupTxt); si++ {
-
-			// destination rows must be defined by [di] index
-			if di >= len(gm.GroupLst) {
-				break // done with all destination text
+			if isMatch = mc.modelLst[idx].groupLst.Group[k].Txt[j].LangCode == lc; isMatch {
+				gp.Group[k].Txt = append(gp.Group[k].Txt, mc.modelLst[idx].groupLst.Group[k].Txt[j])
+				break // prefered language found
 			}
-
-			// check if source and destination keys equal
-			mId := gm.GroupLst[di].Group.ModelId
-			gId := gm.GroupLst[di].Group.GroupId
-
-			isKey = mc.modelLst[idx].groupLst.GroupTxt[si].ModelId == mId &&
-				mc.modelLst[idx].groupLst.GroupTxt[si].GroupId == gId
-
-			// start of next key: set value
-			if !isKey && isFound {
-
-				if !isMatch { // if no match then use default
-					ni = nf
-				}
-				gm.GroupLst[di].DescrNote = db.DescrNote{
-					LangCode: mc.modelLst[idx].groupLst.GroupTxt[ni].LangCode,
-					Descr:    mc.modelLst[idx].groupLst.GroupTxt[ni].Descr,
-					Note:     mc.modelLst[idx].groupLst.GroupTxt[ni].Note}
-
-				// reset to start next search
-				isFound = false
-				isMatch = false
-				di++ // move to next type
-				si-- // repeat current source row
-				continue
+			if mc.modelLst[idx].groupLst.Group[k].Txt[j].LangCode == lcd {
+				nd = j // model default language found
 			}
-
-			// inside of key
-			if isKey {
-
-				if !isFound {
-					isFound = true // first key found
-					nf = si
-				}
-				// match the language
-				isMatch = mc.modelLst[idx].groupLst.GroupTxt[si].LangCode == lc
-				if isMatch {
-					ni = si // perefred language match
-				}
-				if mc.modelLst[idx].groupLst.GroupTxt[si].LangCode == lcd {
-					nf = si // index of default language
-				}
-			}
-
-			// if keys not equal and destination key behind source
-			// then move to next destination row and repeat current source row
-			if !isKey &&
-				(mc.modelLst[idx].groupLst.GroupTxt[si].ModelId > mId ||
-					mc.modelLst[idx].groupLst.GroupTxt[si].ModelId == mId &&
-						mc.modelLst[idx].groupLst.GroupTxt[si].GroupId > gId) {
-
-				di++ // move to next type
-				si-- // repeat current source row
-				continue
-			}
-		} // for
-
-		// last row
-		if isFound && di < len(gm.GroupLst) {
-
-			if !isMatch { // if no match then use default
-				ni = nf
-			}
-			if ni < len(mc.modelLst[idx].groupLst.GroupTxt) {
-				gm.GroupLst[di].DescrNote = db.DescrNote{
-					LangCode: mc.modelLst[idx].groupLst.GroupTxt[ni].LangCode,
-					Descr:    mc.modelLst[idx].groupLst.GroupTxt[ni].Descr,
-					Note:     mc.modelLst[idx].groupLst.GroupTxt[ni].Note}
-			}
+		}
+		// if prefereed language not found then use model default or zero index language
+		if !isMatch && nd < len(mc.modelLst[idx].groupLst.Group[k].Txt) {
+			gp.Group[k].Txt = append(gp.Group[k].Txt, mc.modelLst[idx].groupLst.Group[k].Txt[nd])
 		}
 	}
 
-	return &gm, true
+	return &gp, true
 }

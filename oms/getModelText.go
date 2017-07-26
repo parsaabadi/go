@@ -7,6 +7,7 @@ import (
 	"golang.org/x/text/language"
 
 	"go.openmpp.org/ompp/db"
+	"go.openmpp.org/ompp/helper"
 	"go.openmpp.org/ompp/omppLog"
 )
 
@@ -23,8 +24,8 @@ func (mc *ModelCatalog) ModelAllTextByDigest(digest string) (*db.ModelTxtMeta, b
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	t, err := mc.modelLst[idx].txtMeta.Clone()
-	if err != nil {
+	t := &db.ModelTxtMeta{}
+	if err := helper.DeepCopy(mc.modelLst[idx].txtMeta, t); err != nil {
 		omppLog.Log("Error at model language-specific metadata clone: ", digest, ": ", err.Error())
 		return &db.ModelTxtMeta{}, false
 	}
@@ -144,8 +145,8 @@ func (mc *ModelCatalog) ModelMetaAllTextByDigest(dn string) (*db.ModelTxtMeta, b
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	t, err := mc.modelLst[idx].txtMeta.Clone()
-	if err != nil {
+	t := &db.ModelTxtMeta{}
+	if err := helper.DeepCopy(mc.modelLst[idx].txtMeta, t); err != nil {
 		omppLog.Log("Error at model language-specific metadata clone: ", dn, ": ", err.Error())
 		return &db.ModelTxtMeta{}, false
 	}

@@ -329,69 +329,6 @@ func getRunParamText(dbConn *sql.DB, query string) ([]RunParamTxtRow, error) {
 	return txtLst, nil
 }
 
-// ToPublic convert model run db rows into "public" model run format for json import-export.
-func (meta *RunMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunPub, error) {
-
-	// validate run model id: run must belong to the model
-	if meta.Run.ModelId != modelDef.Model.ModelId {
-		return nil, errors.New("model run: " + strconv.Itoa(meta.Run.RunId) + " " + meta.Run.Name + ", invalid model id " + strconv.Itoa(meta.Run.ModelId) + " expected: " + strconv.Itoa(modelDef.Model.ModelId))
-	}
-
-	// run header
-	pub := RunPub{
-		ModelName:      modelDef.Model.Name,
-		ModelDigest:    modelDef.Model.Digest,
-		Name:           meta.Run.Name,
-		SubCount:       meta.Run.SubCount,
-		SubStarted:     meta.Run.SubStarted,
-		SubCompleted:   meta.Run.SubCompleted,
-		CreateDateTime: meta.Run.CreateDateTime,
-		Status:         meta.Run.Status,
-		UpdateDateTime: meta.Run.UpdateDateTime,
-		Digest:         meta.Run.Digest,
-		Opts:           make(map[string]string, len(meta.Opts)),
-		Txt:            make([]DescrNote, len(meta.Txt)),
-		Param:          make([]ParamRunSetPub, len(meta.Param)),
-	}
-
-	// copy run_option rows
-	for k, v := range meta.Opts {
-		pub.Opts[k] = v
-	}
-
-	// run description and notes by language
-	for k := range meta.Txt {
-		pub.Txt[k] = DescrNote{
-			LangCode: meta.Txt[k].LangCode,
-			Descr:    meta.Txt[k].Descr,
-			Note:     meta.Txt[k].Note}
-	}
-
-	// run parameters value notes
-	for k := range meta.Param {
-
-		// find model parameter index by name
-		idx, ok := modelDef.ParamByHid(meta.Param[k].ParamHid)
-		if !ok {
-			return nil, errors.New("model run: " + strconv.Itoa(meta.Run.RunId) + " " + meta.Run.Name + ", parameter " + strconv.Itoa(meta.Param[k].ParamHid) + " not found")
-		}
-
-		pub.Param[k] = ParamRunSetPub{
-			Name:     modelDef.Param[idx].Name,
-			SubCount: meta.Param[k].SubCount,
-			Txt:      make([]LangNote, len(meta.Param[k].Txt)),
-		}
-		for j := range meta.Param[k].Txt {
-			pub.Param[k].Txt[j] = LangNote{
-				LangCode: meta.Param[k].Txt[j].LangCode,
-				Note:     meta.Param[k].Txt[j].Note,
-			}
-		}
-	}
-
-	return &pub, nil
-}
-
 // GetRunFull return full metadata for completed model run:
 // run_lst, run_txt, run_option, run_parameter, run_parameter_txt rows.
 //

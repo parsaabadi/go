@@ -33,85 +33,6 @@ func UpdateWorksetReadonly(dbConn *sql.DB, setId int, isReadonly bool) error {
 	return nil
 }
 
-// FromPublic convert workset metadata from "public" format (coming from json import-export) into db rows.
-func (pub *WorksetPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*WorksetMeta, error) {
-
-	// validate parameters
-	if modelDef == nil {
-		return nil, errors.New("invalid (empty) model metadata")
-	}
-	if pub.Name == "" {
-		return nil, errors.New("invalid (empty) workset name")
-	}
-	if pub.ModelName == "" && pub.ModelDigest == "" {
-		return nil, errors.New("invalid (empty) model name and digest, workset: " + pub.Name)
-	}
-
-	// validate workset model name and/or digest: workset must belong to the model
-	if (pub.ModelName != "" && pub.ModelName != modelDef.Model.Name) ||
-		(pub.ModelDigest != "" && pub.ModelDigest != modelDef.Model.Digest) {
-		return nil, errors.New("invalid workset model name " + pub.ModelName + " or digest " + pub.ModelDigest + " expected: " + modelDef.Model.Name + " " + modelDef.Model.Digest)
-	}
-
-	// workset header: workset_lst row with zero default set id
-	ws := WorksetMeta{
-		Set: WorksetRow{
-			SetId:          0, // set id is undefined
-			Name:           pub.Name,
-			ModelId:        modelDef.Model.ModelId,
-			IsReadonly:     pub.IsReadonly,
-			UpdateDateTime: pub.UpdateDateTime,
-		},
-		Txt:   make([]WorksetTxtRow, len(pub.Txt)),
-		Param: make([]worksetParam, len(pub.Param)),
-	}
-
-	// if base run digest not "" empty then find base run for that workset
-	if pub.BaseRunDigest != "" {
-		runRow, err := GetRunByDigest(dbConn, pub.BaseRunDigest)
-		if err != nil {
-			return nil, err
-		}
-		if runRow != nil {
-			ws.Set.BaseRunId = runRow.RunId //	base run found
-		}
-	}
-
-	// workset description and notes: workset_txt rows
-	// use set id default zero
-	for k := range pub.Txt {
-		ws.Txt[k].LangCode = pub.Txt[k].LangCode
-		ws.Txt[k].Descr = pub.Txt[k].Descr
-		ws.Txt[k].Note = pub.Txt[k].Note
-	}
-
-	// workset parameters and parameter value notes: workset_parameter, workset_parameter_txt rows
-	// use set id default zero
-	for k := range pub.Param {
-
-		// find model parameter index by name
-		idx, ok := modelDef.ParamByName(pub.Param[k].Name)
-		if !ok {
-			return nil, errors.New("workset: " + pub.Name + " parameter " + pub.Param[k].Name + " not found")
-		}
-		ws.Param[k].ParamHid = modelDef.Param[idx].ParamHid
-		ws.Param[k].SubCount = pub.Param[k].SubCount
-
-		// workset parameter value notes, use set id default zero
-		if len(pub.Param[k].Txt) > 0 {
-			ws.Param[k].Txt = make([]WorksetParamTxtRow, len(pub.Param[k].Txt))
-
-			for j := range pub.Param[k].Txt {
-				ws.Param[k].Txt[j].ParamHid = ws.Param[k].ParamHid
-				ws.Param[k].Txt[j].LangCode = pub.Param[k].Txt[j].LangCode
-				ws.Param[k].Txt[j].Note = pub.Param[k].Txt[j].Note
-			}
-		}
-	}
-
-	return &ws, nil
-}
-
 // UpdateWorkset insert new or update existing workset metadata in database.
 //
 // Set name is used to find workset and set id updated with actual database value
@@ -395,7 +316,7 @@ func doInsertWorksetBody(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, la
 		// insert workset parameter
 		err := TrxUpdate(trx,
 			"INSERT INTO workset_parameter (set_id, parameter_hid, sub_count) VALUES ("+
-			sId+", "+strconv.Itoa(meta.Param[k].ParamHid)+", "+strconv.Itoa(meta.Param[k].SubCount)+")")
+				sId+", "+strconv.Itoa(meta.Param[k].ParamHid)+", "+strconv.Itoa(meta.Param[k].SubCount)+")")
 		if err != nil {
 			return err
 		}

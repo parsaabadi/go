@@ -331,69 +331,6 @@ func getWsParamText(dbConn *sql.DB, query string) ([]WorksetParamTxtRow, error) 
 	return txtLst, nil
 }
 
-// ToPublic convert workset db rows into "public" workset format for json import-export
-func (meta *WorksetMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*WorksetPub, error) {
-
-	// validate workset model id: workset must belong to the model
-	if meta.Set.ModelId != modelDef.Model.ModelId {
-		return nil, errors.New("workset: " + strconv.Itoa(meta.Set.SetId) + " " + meta.Set.Name + ", invalid model id " + strconv.Itoa(meta.Set.ModelId) + " expected: " + strconv.Itoa(modelDef.Model.ModelId))
-	}
-
-	// workset header
-	pub := WorksetPub{
-		ModelName:      modelDef.Model.Name,
-		ModelDigest:    modelDef.Model.Digest,
-		Name:           meta.Set.Name,
-		IsReadonly:     meta.Set.IsReadonly,
-		UpdateDateTime: meta.Set.UpdateDateTime,
-		Txt:            make([]DescrNote, len(meta.Txt)),
-		Param:          make([]ParamRunSetPub, len(meta.Param)),
-	}
-
-	// find base run digest by id, if workset based on run then base run id must be positive
-	if meta.Set.BaseRunId > 0 {
-		runRow, err := GetRun(dbConn, meta.Set.BaseRunId)
-		if err != nil {
-			return nil, err
-		}
-		if runRow != nil {
-			pub.BaseRunDigest = runRow.Digest // base run found
-		}
-	}
-
-	// workset description and notes by language
-	for k := range meta.Txt {
-		pub.Txt[k] = DescrNote{
-			LangCode: meta.Txt[k].LangCode,
-			Descr:    meta.Txt[k].Descr,
-			Note:     meta.Txt[k].Note}
-	}
-
-	// workset parameters and parameter value notes
-	for k := range meta.Param {
-
-		// find model parameter index by name
-		idx, ok := modelDef.ParamByHid(meta.Param[k].ParamHid)
-		if !ok {
-			return nil, errors.New("workset: " + strconv.Itoa(meta.Set.SetId) + " " + meta.Set.Name + ", parameter " + strconv.Itoa(meta.Param[k].ParamHid) + " not found")
-		}
-
-		pub.Param[k] = ParamRunSetPub{
-			Name:     modelDef.Param[idx].Name,
-			SubCount: meta.Param[k].SubCount,
-			Txt:      make([]LangNote, len(meta.Param[k].Txt)),
-		}
-		for j := range meta.Param[k].Txt {
-			pub.Param[k].Txt[j] = LangNote{
-				LangCode: meta.Param[k].Txt[j].LangCode,
-				Note:     meta.Param[k].Txt[j].Note,
-			}
-		}
-	}
-
-	return &pub, nil
-}
-
 // GetWorksetFull return full workset metadata:
 // workset_lst, workset_txt, workset_parameter, workset_parameter_txt table rows.
 //

@@ -79,15 +79,6 @@ type ModelWordMeta struct {
 	ModelWord   []modelLangWord // language and db rows of model_word in that language
 }
 
-// GroupMeta is db rows to describe parent-child groups of model parameters and output tables.
-type GroupMeta struct {
-	ModelName   string        // model name for group metadata
-	ModelDigest string        // model digest for group metadata
-	GroupLst    []GroupLstRow // parameters or output tables group rows: group_lst
-	GroupPc     []GroupPcRow  // group parent-child relationship rows: group_pc
-	GroupTxt    []GroupTxtRow // group text rows: group_txt
-}
-
 // ProfileMeta is rows from profile_option table.
 //
 // Profile is a named group of (key, value) options, similar to ini-file.
@@ -343,6 +334,32 @@ type TableExprTxtRow struct {
 	Note     string // note           VARCHAR(32000)
 }
 
+// GroupMeta is db rows to describe parent-child groups of model parameters and output tables.
+type GroupMeta struct {
+	ModelName   string        // model name for group metadata
+	ModelDigest string        // model digest for group metadata
+	GroupLst    []GroupLstRow // parameters or output tables group rows: group_lst
+	GroupPc     []GroupPcRow  // group parent-child relationship rows: group_pc
+	GroupTxt    []GroupTxtRow // group text rows: group_txt
+}
+
+// GroupLstPub is "public" model groups metadata for json import-export
+type GroupLstPub struct {
+	ModelName   string       // model name for that run
+	ModelDigest string       // model digest for that run
+	Group       []GroupPub   // group and group text: group_lst row and and group_txt rows
+	Pc          []GroupPcPub // groups parent-child hierarchy
+}
+
+// GroupPub is "public" model groups metadata for json import-export
+type GroupPub struct {
+	GroupId  int         // group_id     INT          NOT NULL
+	IsParam  bool        // is_parameter SMALLINT     NOT NULL, -- if <> 0 then parameter group else output table group
+	Name     string      // group_name   VARCHAR(255) NOT NULL
+	IsHidden bool        // is_hidden    SMALLINT     NOT NULL
+	Txt      []DescrNote // group text: description and notes by language
+}
+
 // GroupLstRow is db row of group_lst table
 type GroupLstRow struct {
 	ModelId  int    // model_id     INT          NOT NULL
@@ -354,7 +371,12 @@ type GroupLstRow struct {
 
 // GroupPcRow is db row of group_pc table
 type GroupPcRow struct {
-	ModelId      int // model_id       INT NOT NULL
+	ModelId    int // model_id       INT NOT NULL
+	GroupPcPub     // "public" part of group_pc db row
+}
+
+// GroupPcPub is "public" part of group_pc db row
+type GroupPcPub struct {
 	GroupId      int // group_id       INT NOT NULL
 	ChildPos     int // child_pos      INT NOT NULL
 	ChildGroupId int // child_group_id INT NULL, -- if not NULL then id of child group
@@ -363,9 +385,7 @@ type GroupPcRow struct {
 
 // GroupTxtRow is db row of group_txt table
 type GroupTxtRow struct {
-	ModelId  int    // model_id  INT          NOT NULL
-	GroupId  int    // group_id  INT          NOT NULL
-	LangCode string // lang_code VARCHAR(32)  NOT NULL
-	Descr    string // descr     VARCHAR(255) NOT NULL
-	Note     string // note      VARCHAR(32000)
+	ModelId   int // model_id  INT          NOT NULL
+	GroupId   int // group_id  INT          NOT NULL
+	DescrNote     // language, description, notes
 }

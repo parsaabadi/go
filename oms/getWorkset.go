@@ -199,9 +199,10 @@ func (mc *ModelCatalog) WorksetListText(dn string, preferedLang []language.Tag) 
 	return wpl, true
 }
 
-// WorksetTextFull return full workset metadata by model digest-or-name and workset name.
-// Text (description and notes) are in prefered language or empty if text in such language exists.
-func (mc *ModelCatalog) WorksetTextFull(dn, name string, preferedLang []language.Tag) (*db.WorksetPub, bool) {
+// WorksetText return full workset metadata by model digest-or-name and workset name.
+// Text (description and notes) can be in prefered language or all languages.
+// If prefered language requested and it is not found in db then return empty text results.
+func (mc *ModelCatalog) WorksetText(dn, name string, isAllLang bool, preferedLang []language.Tag) (*db.WorksetPub, bool) {
 
 	// if model digest-or-name or workset name is empty then return empty results
 	if dn == "" {
@@ -235,9 +236,12 @@ func (mc *ModelCatalog) WorksetTextFull(dn, name string, preferedLang []language
 		return &db.WorksetPub{}, false // return empty result: workset_lst row not found
 	}
 
-	// get full workset metadata using matched prefered languag
-	_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
-	lc := mc.modelLst[idx].langLst[np].LangCode
+	// get full workset metadata using matched prefered language or in all languages
+	lc := ""
+	if !isAllLang {
+		_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
+		lc = mc.modelLst[idx].langLst[np].LangCode
+	}
 
 	wm, err := db.GetWorksetFull(mc.modelLst[idx].dbConn, w, lc)
 	if err != nil {
