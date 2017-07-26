@@ -39,6 +39,17 @@ func (src *LangMeta) Clone() (*LangMeta, error) {
 	return dst, nil
 }
 
+// Clone return deep copy of source model language-specific metadata
+func (src *ModelTxtMeta) Clone() (*ModelTxtMeta, error) {
+
+	dst := &ModelTxtMeta{}
+
+	if err := helper.DeepCopy(src, dst); err != nil {
+		return nil, err
+	}
+	return dst, nil
+}
+
 // FromJson restore model metadata list from json string bytes
 func (dst *ModelMeta) FromJson(srcJson []byte) (bool, error) {
 

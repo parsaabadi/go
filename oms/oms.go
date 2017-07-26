@@ -154,6 +154,12 @@ func mainBody(args []string) error {
 	router.Get("/api/model-text/:dn", modelTextHandler, logRequest)
 	router.Get("/api/model-text/:dn/:lang", modelTextHandler, logRequest)
 
+	// GET /api/model-text-all?dn=a1b2c3d
+	// GET /api/model-text-all?dn=modelName&
+	// GET /api/model-text-all/:dn
+	router.Get("/api/model-text-all", modelTextAllHandler, logRequest)
+	router.Get("/api/model-text-all/:dn", modelTextAllHandler, logRequest)
+
 	// GET /api/lang-list?dn=a1b2c3d
 	// GET /api/lang-list?dn=modelName
 	// GET /api/lang-list/:dn

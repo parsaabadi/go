@@ -10,6 +10,70 @@ import (
 	"go.openmpp.org/ompp/omppLog"
 )
 
+// ModelAllTextByDigest return language-specific model metadata by model digest in all languages.
+func (mc *ModelCatalog) ModelAllTextByDigest(digest string) (*db.ModelTxtMeta, bool) {
+
+	// if model_dic_txt rows not loaded then read it from database
+	idx := mc.loadModelText(digest)
+	if idx < 0 {
+		return &db.ModelTxtMeta{}, false // return empty result: model not found or error
+	}
+
+	// lock model catalog and return copy of model metadata
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	t, err := mc.modelLst[idx].txtMeta.Clone()
+	if err != nil {
+		omppLog.Log("Error at model language-specific metadata clone: ", digest, ": ", err.Error())
+		return &db.ModelTxtMeta{}, false
+	}
+
+	return t, true
+}
+
+// loadModelText partially init model text metadata by reading model_dic_txt db rows.
+// If metadata already loaded then skip db reading and return index in model list.
+// Return index in model list or < 0 on error or if model digest not found.
+func (mc *ModelCatalog) loadModelText(digest string) int {
+
+	// if model digest is empty then return empty results
+	if digest == "" {
+		omppLog.Log("Warning: invalid (empty) model digest")
+		return -1
+	}
+
+	// find model index by digest
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	idx := mc.indexByDigest(digest)
+	if idx < 0 {
+		omppLog.Log("Warning: model digest not found: ", digest)
+		return idx // model not found, index is negative
+	}
+	if mc.modelLst[idx].txtMeta != nil { // exit if model text already loaded
+		return idx
+	}
+
+	// read model_dic_txt rows from database
+	txt, err := db.GetModelTextById(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, "")
+	if err != nil {
+		omppLog.Log("Error at get model_dic_txt: ", digest, ": ", err.Error())
+		return -1
+	}
+
+	// partial initialization of model text metadata: only model_dic_txt rows
+	mc.modelLst[idx].isTxtMetaFull = false
+	mc.modelLst[idx].txtMeta =
+		&db.ModelTxtMeta{
+			ModelName:   mc.modelLst[idx].meta.Model.Name,
+			ModelDigest: mc.modelLst[idx].meta.Model.Digest,
+			ModelTxt:    txt}
+
+	return idx
+}
+
 // ModelTextByDigest return model_dic_txt db row by model digest and prefered language tags.
 // It can be in prefered language, default model language or empty if no model model_dic_txt rows exist.
 func (mc *ModelCatalog) ModelTextByDigest(digest string, preferedLang []language.Tag) (*ModelDicDescrNote, bool) {
@@ -55,44 +119,74 @@ func (mc *ModelCatalog) ModelTextByDigest(digest string, preferedLang []language
 	return &mt, true
 }
 
-// loadModelText partially init model text metadata by reading model_dic_txt db rows.
-// If metadata already loaded then skip db reading and return index in model list.
-// Return index in model list or < 0 on error or if model digest not found.
-func (mc *ModelCatalog) loadModelText(digest string) int {
+// ModelMetaAllTextByDigest return language-specific model metadata by model digest or name in all languages.
+func (mc *ModelCatalog) ModelMetaAllTextByDigest(dn string) (*db.ModelTxtMeta, bool) {
 
-	// if model digest is empty then return empty results
-	if digest == "" {
-		omppLog.Log("Warning: invalid (empty) model digest")
-		return -1
+	// if model digest-or-name is empty then return empty results
+	if dn == "" {
+		omppLog.Log("Warning: invalid (empty) model digest and name")
+		return &db.ModelTxtMeta{}, false
 	}
 
-	// find model index by digest
+	// before text metadata we must load language-neutral model metadata
+	idx := mc.loadModelMeta(dn)
+	if idx < 0 {
+		return &db.ModelTxtMeta{}, false // return empty result: model not found or error
+	}
+
+	// if language-specific model metadata not loaded then read it from database
+	idx = mc.loadModelMetaText(dn)
+	if idx < 0 {
+		return &db.ModelTxtMeta{}, false // return empty result: model not found or error
+	}
+
+	// lock model catalog and return copy of model metadata
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	idx := mc.indexByDigest(digest)
-	if idx < 0 {
-		omppLog.Log("Warning: model digest not found: ", digest)
-		return idx // model not found, index is negative
-	}
-	if mc.modelLst[idx].txtMeta != nil { // exit if model text already loaded
-		return idx
+	t, err := mc.modelLst[idx].txtMeta.Clone()
+	if err != nil {
+		omppLog.Log("Error at model language-specific metadata clone: ", dn, ": ", err.Error())
+		return &db.ModelTxtMeta{}, false
 	}
 
-	// read model_dic_txt rows from database
-	txt, err := db.GetModelTextById(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, "")
-	if err != nil {
-		omppLog.Log("Error at get model_dic_txt: ", digest, ": ", err.Error())
+	return t, true
+}
+
+// loadModelMetaText reads language-specific model metadata from db by digest or name.
+// If metadata already loaded then skip db reading and return index in model list.
+// Return index in model list or < 0 on error or if model digest not found.
+func (mc *ModelCatalog) loadModelMetaText(dn string) int {
+
+	// if model digest-or-name is empty then return empty results
+	if dn == "" {
+		omppLog.Log("Warning: invalid (empty) model digest and name")
 		return -1
 	}
 
-	// partial initialization of model text metadata: only model_dic_txt rows
-	mc.modelLst[idx].isTxtMetaFull = false
-	mc.modelLst[idx].txtMeta =
-		&db.ModelTxtMeta{
-			ModelName:   mc.modelLst[idx].meta.Model.Name,
-			ModelDigest: mc.modelLst[idx].meta.Model.Digest,
-			ModelTxt:    txt}
+	// find model index by digest-or-name
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	idx := mc.indexByDigestOrName(dn)
+	if idx < 0 {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return idx // model not found, index is negative
+	}
+	if mc.modelLst[idx].txtMeta != nil && mc.modelLst[idx].isTxtMetaFull { // exit if model metadata already loaded
+		return idx
+	}
+
+	// read metadata from database
+	m, err := db.GetModelText(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, "")
+	if err != nil {
+		omppLog.Log("Error at get model text metadata: ", dn, ": ", err.Error())
+		return -1
+	}
+
+	// store model text metadata
+	mc.modelLst[idx].isTxtMetaFull = true
+	mc.modelLst[idx].txtMeta = m
 
 	return idx
 }
@@ -952,42 +1046,4 @@ func (mc *ModelCatalog) ModelMetaTextByDigestOrName(dn string, preferedLang []la
 	}
 
 	return &mt, false
-}
-
-// loadModelMetaText reads language-specific model metadata from db by digest or name.
-// If metadata already loaded then skip db reading and return index in model list.
-// Return index in model list or < 0 on error or if model digest not found.
-func (mc *ModelCatalog) loadModelMetaText(dn string) int {
-
-	// if model digest-or-name is empty then return empty results
-	if dn == "" {
-		omppLog.Log("Warning: invalid (empty) model digest and name")
-		return -1
-	}
-
-	// find model index by digest-or-name
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx := mc.indexByDigestOrName(dn)
-	if idx < 0 {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return idx // model not found, index is negative
-	}
-	if mc.modelLst[idx].txtMeta != nil && mc.modelLst[idx].isTxtMetaFull { // exit if model metadata already loaded
-		return idx
-	}
-
-	// read metadata from database
-	m, err := db.GetModelText(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, "")
-	if err != nil {
-		omppLog.Log("Error at get model text metadata: ", dn, ": ", err.Error())
-		return -1
-	}
-
-	// store model text metadata
-	mc.modelLst[idx].isTxtMetaFull = true
-	mc.modelLst[idx].txtMeta = m
-
-	return idx
 }

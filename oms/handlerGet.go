@@ -16,7 +16,8 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // modelListHandler return list of model_dic rows in json:
-// GET /api/model-list-text
+// GET /api/model-list
+// GET /api/model-list/
 func modelListHandler(w http.ResponseWriter, r *http.Request) {
 
 	// list of models digest and for each model in catalog and get model_dic row
@@ -80,6 +81,35 @@ func modelTextHandler(w http.ResponseWriter, r *http.Request) {
 
 	mt, _ := theCatalog.ModelMetaTextByDigestOrName(dn, rqLangTags)
 	jsonResponse(w, r, mt)
+}
+
+// modelTextAllHandler return language-specific model metadata in json:
+// GET /api/model-text-all?dn=a1b2c3d
+// GET /api/model-text-all?dn=modelName&
+// GET /api/model-text-all/:dn
+// Model digest-or-name must specified, if multiple models with same name exist only one is returned.
+// Text rows returned in all languages.
+func modelTextAllHandler(w http.ResponseWriter, r *http.Request) {
+
+	dn := getRequestParam(r, "dn")
+
+	// find model language-neutral metadata by digest or name
+	mf := &ModelMetaFull{}
+
+	m, ok := theCatalog.ModelMetaByDigestOrName(dn)
+	if !ok {
+		jsonResponse(w, r, mf)
+		return // empty result: digest not found
+	}
+	mf.ModelMeta = *m
+
+	// find model language-specific metadata by digest
+	if t, ok := theCatalog.ModelMetaAllTextByDigest(mf.ModelMeta.Model.Digest); ok {
+		mf.ModelTxtMeta = *t
+	}
+
+	// write json response
+	jsonResponse(w, r, mf)
 }
 
 // langListHandler return list of model langauages in json:

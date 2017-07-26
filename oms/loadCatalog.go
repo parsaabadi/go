@@ -144,16 +144,16 @@ func (mc *ModelCatalog) indexByDigest(digest string) int {
 // If digest exist in model list then return index by digest else first index of name.
 // Return -1 if no digest or name found.
 func (mc *ModelCatalog) indexByDigestOrName(dn string) int {
-	ni := -1
+	n := -1
 	for k := range mc.modelLst {
 		if mc.modelLst[k].meta.Model.Digest == dn {
 			return k
 		}
-		if ni < 0 && mc.modelLst[k].meta.Model.Name == dn {
-			ni = k
+		if n < 0 && mc.modelLst[k].meta.Model.Name == dn {
+			n = k
 		}
 	}
-	return ni
+	return n
 }
 
 // AllModelDigests return copy of all model digests.

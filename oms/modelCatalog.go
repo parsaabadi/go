@@ -37,7 +37,14 @@ type modelDef struct {
 	groupLst      *db.GroupMeta    // if not nil then parameters and table groups
 }
 
-// ModelMetaDescrNote is language-specific portion of model metadata db rows
+// ModelMetaFull is full model metadata: language-neutral db rows
+// and language-specific rows in all languages.
+type ModelMetaFull struct {
+	db.ModelMeta    // model text rows: model_dic_txt
+	db.ModelTxtMeta // model type text rows: type_dic_txt join to model_type_dic
+}
+
+// ModelMetaDescrNote is language-specific model metadata db rows.
 // It is sliced by one single language, but it can be different single language for each row.
 // It is either user prefered language, model default language, first of the row or empty "" language.
 type ModelMetaDescrNote struct {
@@ -111,13 +118,13 @@ type TableExprDescrNote struct {
 }
 
 // GroupMeta is db rows to describe parent-child groups of model parameters and output tables.
-// It is language-neutral portion of groups metadata
+// It is language-neutral groups metadata.
 type GroupMeta struct {
 	Group   []db.GroupLstRow // parameters or output tables group rows: group_lst
 	GroupPc []db.GroupPcRow  // group parent-child relationship rows: group_pc
 }
 
-// GroupMetaDescrNote is db rows to describe parent-child groups of model parameters and output tables.
+// GroupMetaDescrNote is language-specific db rows to describe parent-child groups of model parameters and output tables.
 // It is sliced by one single language, but it can be different single language for each row.
 // It is either user prefered language, model default language, first of the row or empty "" language.
 type GroupMetaDescrNote struct {
