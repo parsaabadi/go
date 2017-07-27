@@ -135,10 +135,12 @@ func mainBody(args []string) error {
 
 	// GET /api/model-list-text?lang=en
 	// GET /api/model-list-text/
-	// GET /api/model-list-text/:lang
+	// GET /api/model-list/text
+	// GET /api/model-list/text/lang/:lang
 	router.Get("/api/model-list-text", modelTextListHandler, logRequest)
 	router.Get("/api/model-list-text/", modelTextListHandler, logRequest)
-	router.Get("/api/model-list-text/:lang", modelTextListHandler, logRequest)
+	router.Get("/api/model-list/text", modelTextListHandler, logRequest)
+	router.Get("/api/model-list/text/lang/:lang", modelTextListHandler, logRequest)
 
 	// GET /api/model?dn=a1b2c3d
 	// GET /api/model?dn=modelName
@@ -148,154 +150,162 @@ func mainBody(args []string) error {
 
 	// GET /api/model-text?dn=a1b2c3d
 	// GET /api/model-text?dn=modelName&lang=en
-	// GET /api/model-text/:dn
-	// GET /api/model-text/:dn/:lang
+	// GET /api/model/:dn/text
+	// GET /api/model/:dn/text/lang/:lang
 	router.Get("/api/model-text", modelTextHandler, logRequest)
-	router.Get("/api/model-text/:dn", modelTextHandler, logRequest)
-	router.Get("/api/model-text/:dn/:lang", modelTextHandler, logRequest)
+	router.Get("/api/model/:dn/text", modelTextHandler, logRequest)
+	router.Get("/api/model/:dn/text/lang/:lang", modelTextHandler, logRequest)
 
 	// GET /api/model-text-all?dn=a1b2c3d
 	// GET /api/model-text-all?dn=modelName
-	// GET /api/model-text-all/:dn
+	// GET /api/model/:dn/text/all
 	router.Get("/api/model-text-all", modelAllTextHandler, logRequest)
-	router.Get("/api/model-text-all/:dn", modelAllTextHandler, logRequest)
+	router.Get("/api/model/:dn/text/all", modelAllTextHandler, logRequest)
 
 	// GET /api/lang-list?dn=a1b2c3d
 	// GET /api/lang-list?dn=modelName
-	// GET /api/lang-list/:dn
+	// GET /api/model/:dn/lang-list
 	router.Get("/api/lang-list", langListHandler, logRequest)
-	router.Get("/api/lang-list/:dn", langListHandler, logRequest)
+	router.Get("/api/model/:dn/lang-list", langListHandler, logRequest)
 
 	// GET /api/model-group?dn=a1b2c3d
 	// GET /api/model-group?dn=modelName
-	// GET /api/model-group/:dn
+	// GET /api/model/:dn/group
 	router.Get("/api/model-group", modelGroupHandler, logRequest)
-	router.Get("/api/model-group/:dn", modelGroupHandler, logRequest)
+	router.Get("/api/model/:dn/group", modelGroupHandler, logRequest)
 
 	// GET /api/model-group-text?dn=a1b2c3d
 	// GET /api/model-group-text?dn=modelName&lang=en
-	// GET /api/model-group-text/:dn
-	// GET /api/model-group-text/:dn/:lang
+	// GET /api/model/:dn/group/text
+	// GET /api/model/:dn/group/text/lang/:lang
 	router.Get("/api/model-group-text", modelGroupTextHandler, logRequest)
-	router.Get("/api/model-group-text/:dn", modelGroupTextHandler, logRequest)
-	router.Get("/api/model-group-text/:dn/:lang", modelGroupTextHandler, logRequest)
+	router.Get("/api/model/:dn/group/text", modelGroupTextHandler, logRequest)
+	router.Get("/api/model/:dn/group/text/lang/:lang", modelGroupTextHandler, logRequest)
 
 	// GET /api/model-group-text-all?dn=a1b2c3d
 	// GET /api/model-group-text-all?dn=modelName
-	// GET /api/model-group-text-all/:dn
+	// GET /api/model/:dn/group/text/all
 	router.Get("/api/model-group-text-all", modelGroupAllTextHandler, logRequest)
-	router.Get("/api/model-group-text-all/:dn", modelGroupAllTextHandler, logRequest)
+	router.Get("/api/model/:dn/group/text/all", modelGroupAllTextHandler, logRequest)
 
-	// GET /api/model-profile?digest=a1b2c3d?name=profileName
-	// GET /api/model-profile/:digest/:name
+	// GET /api/model-profile?digest=a1b2c3d&name=profileName
+	// GET /api/model/:digest/profile/:name
 	router.Get("/api/model-profile", modelProfileHandler, logRequest)
-	router.Get("/api/model-profile/:digest/:name", modelProfileHandler, logRequest)
-
-	// GET /api/run/status?dn=a1b2c3d&rdn=1f2e3d4
-	// GET /api/run/status?dn=modelName&rdn=runName
-	// GET /api/run/status/:dn/:rdn
-	router.Get("/api/run/status", runStatusHandler, logRequest)
-	router.Get("/api/run/status/:dn/:rdn", runStatusHandler, logRequest)
-
-	// GET /api/run/first-status?dn=a1b2c3d
-	// GET /api/run/first-status?dn=modelName
-	// GET /api/run/first-status/:dn
-	router.Get("/api/run/first-status", firstRunStatusHandler, logRequest)
-	router.Get("/api/run/first-status/:dn", firstRunStatusHandler, logRequest)
-
-	// GET /api/run/last-status?dn=a1b2c3d
-	// GET /api/run/last-status?dn=modelName
-	// GET /api/run/last-status/:dn
-	router.Get("/api/run/last-status", lastRunStatusHandler, logRequest)
-	router.Get("/api/run/last-status/:dn", lastRunStatusHandler, logRequest)
-
-	// GET /api/run/last-completed-status?dn=a1b2c3d
-	// GET /api/run/last-completed-status?dn=modelName
-	// GET /api/run/last-completed-status/:dn
-	router.Get("/api/run/last-completed-status", lastCompletedRunStatusHandler, logRequest)
-	router.Get("/api/run/last-completed-status/:dn", lastCompletedRunStatusHandler, logRequest)
-
-	// GET /api/run/last-completed-text?dn=a1b2c3d
-	// GET /api/run/last-completed-text?dn=modelName&lang=en
-	// GET /api/run/last-completed-text/:dn
-	// GET /api/run/last-completed-text/:dn/:lang
-	router.Get("/api/run/last-completed-text", lastCompletedRunTextHandler, logRequest)
-	router.Get("/api/run/last-completed-text/:dn", lastCompletedRunTextHandler, logRequest)
-	router.Get("/api/run/last-completed-text/:dn/:lang", lastCompletedRunTextHandler, logRequest)
-
-	// GET /api/run/last-completed-text-all?dn=a1b2c3d
-	// GET /api/run/last-completed-text-all?dn=modelName
-	// GET /api/run/last-completed-text-all/:dn
-	router.Get("/api/run/last-completed-text-all", lastCompletedRunAllTextHandler, logRequest)
-	router.Get("/api/run/last-completed-text-all/:dn", lastCompletedRunAllTextHandler, logRequest)
+	router.Get("/api/model/:digest/profile/:name", modelProfileHandler, logRequest)
 
 	// GET /api/run-list?dn=a1b2c3d
 	// GET /api/run-list?dn=modelName
-	// GET /api/run-list/:dn
+	// GET /api/model/:dn/run-list
 	router.Get("/api/run-list", runListHandler, logRequest)
-	router.Get("/api/run-list/:dn", runListHandler, logRequest)
+	router.Get("/api/model/:dn/run-list", runListHandler, logRequest)
 
 	// GET /api/run-list-text?dn=a1b2c3d
 	// GET /api/run-list-text?dn=modelName&lang=en
-	// GET /api/run-list-text/:dn
-	// GET /api/run-list-text/:dn/:lang
+	// GET /api/model/:dn/run-list/text
+	// GET /api/model/:dn/run-list/text/lang/:lang
 	router.Get("/api/run-list-text", runListTextHandler, logRequest)
-	router.Get("/api/run-list-text/:dn", runListTextHandler, logRequest)
-	router.Get("/api/run-list-text/:dn/:lang", runListTextHandler, logRequest)
+	router.Get("/api/model/:dn/run-list/text", runListTextHandler, logRequest)
+	router.Get("/api/model/:dn/run-list/text/lang/:lang", runListTextHandler, logRequest)
+
+	// GET /api/run-status?dn=a1b2c3d&rdn=1f2e3d4
+	// GET /api/run-status?dn=modelName&rdn=runName
+	// GET /api/model/:dn/run/:rdn/status
+	router.Get("/api/run/status", runStatusHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/status", runStatusHandler, logRequest)
+
+	// GET /api/run-first-status?dn=a1b2c3d
+	// GET /api/run-first-status?dn=modelName
+	// GET /api/model/:dn/run/status/first
+	router.Get("/api/run/first-status", firstRunStatusHandler, logRequest)
+	router.Get("/api/model/:dn/run/status/first", firstRunStatusHandler, logRequest)
+
+	// GET /api/run-last-status?dn=a1b2c3d
+	// GET /api/run-last-status?dn=modelName
+	// GET /api/model/:dn/run/status/last
+	router.Get("/api/run/last-status", lastRunStatusHandler, logRequest)
+	router.Get("/api/model/:dn/run/status/last", lastRunStatusHandler, logRequest)
+
+	// GET /api/run/last-completed-status?dn=a1b2c3d
+	// GET /api/run/last-completed-status?dn=modelName
+	// GET /api/model/:dn/run/status/last/completed
+	router.Get("/api/run/last-completed-status", lastCompletedRunStatusHandler, logRequest)
+	router.Get("/api/model/:dn/run/status/last/completed", lastCompletedRunStatusHandler, logRequest)
 
 	// GET /api/run-text?dn=a1b2c3d&rdn=1f2e3d4
 	// GET /api/run-text?dn=modelName&rdn=runName&lang=en
-	// GET /api/run-text/:dn/:rdn
-	// GET /api/run-text/:dn/:rdn/:lang
+	// GET /api/model/:dn/run/:rdn/text
+	// GET /api/model/:dn/run/:rdn/text/
+	// GET /api/model/:dn/run/:rdn/text/lang/
+	// GET /api/model/:dn/run/:rdn/text/lang/:lang
 	router.Get("/api/run-text", runTextHandler, logRequest)
-	router.Get("/api/run-text/:dn/:rdn", runTextHandler, logRequest)
-	router.Get("/api/run-text/:dn/:rdn/:lang", runTextHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/text", runTextHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/text/", runTextHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/text/lang/", runTextHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/text/lang/:lang", runTextHandler, logRequest)
 
 	// GET /api/run-text-all?dn=a1b2c3d&rdn=1f2e3d4
 	// GET /api/run-text-all?dn=modelName&rdn=runName
-	// GET /api/run-text-all/:dn/:rdn
+	// GET /api/model/:dn/run/:rdn/text/all
 	router.Get("/api/run-text-all", runAllTextHandler, logRequest)
-	router.Get("/api/run-text-all/:dn/:rdn", runAllTextHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/text/all", runAllTextHandler, logRequest)
 
-	// GET /api/workset/status?dn=a1b2c3d&name=mySet
-	// GET /api/workset/status?dn=modelName&name=mySet
-	// GET /api/workset/status/:dn/:name
-	router.Get("/api/workset/status", worksetStatusHandler, logRequest)
-	router.Get("/api/workset/status/:dn/:name", worksetStatusHandler, logRequest)
+	// GET /api/run-last-completed-text?dn=a1b2c3d
+	// GET /api/run-last-completed-text?dn=modelName&lang=en
+	// GET /api/model/:dn/run/last/completed/text
+	// GET /api/model/:dn/run/last/completed/text/lang/:lang
+	router.Get("/api/run/last-completed-text", lastCompletedRunTextHandler, logRequest)
+	router.Get("/api/model/:dn/run/last/completed/text", lastCompletedRunTextHandler, logRequest)
+	router.Get("/api/model/:dn/run/last/completed/text/lang/:lang", lastCompletedRunTextHandler, logRequest)
 
-	// GET /api/workset/default-status?dn=a1b2c3d
-	// GET /api/workset/default-status?dn=modelName
-	// GET /api/workset/default-status/:dn
-	router.Get("/api/workset/default-status", worksetDefaultStatusHandler, logRequest)
-	router.Get("/api/workset/default-status/:dn", worksetDefaultStatusHandler, logRequest)
+	// GET /api/run-last-completed-text-all?dn=a1b2c3d
+	// GET /api/run-last-completed-text-all?dn=modelName
+	// GET /api/model/:dn/run/last/completed/text/all
+	router.Get("/api/run/last-completed-text-all", lastCompletedRunAllTextHandler, logRequest)
+	router.Get("/api/model/:dn/run/last/completed/text/all", lastCompletedRunAllTextHandler, logRequest)
 
 	// GET /api/workset-list?dn=a1b2c3d
 	// GET /api/workset-list?dn=modelName
-	// GET /api/workset-list/:dn
+	// GET /api/model/:dn/workset-list
 	router.Get("/api/workset-list", worksetListHandler, logRequest)
-	router.Get("/api/workset-list/:dn", worksetListHandler, logRequest)
+	router.Get("/api/model/:dn/workset-list", worksetListHandler, logRequest)
 
 	// GET /api/workset-list-text?dn=a1b2c3d
 	// GET /api/workset-list-text?dn=modelName&lang=en
-	// GET /api/workset-list-text/:dn
-	// GET /api/workset-list-text/:dn/:lang
+	// GET /api/model/:dn/workset-list/text
+	// GET /api/model/:dn/workset-list/text/lang/:lang
 	router.Get("/api/workset-list-text", worksetListTextHandler, logRequest)
-	router.Get("/api/workset-list-text/:dn", worksetListTextHandler, logRequest)
-	router.Get("/api/workset-list-text/:dn/:lang", worksetListTextHandler, logRequest)
+	router.Get("/api/model/:dn/workset-list/text", worksetListTextHandler, logRequest)
+	router.Get("/api/model/:dn/workset-list/text/lang/:lang", worksetListTextHandler, logRequest)
+
+	// GET /api/workset/status?dn=a1b2c3d&name=mySet
+	// GET /api/workset/status?dn=modelName&name=mySet
+	// GET /api/model/:dn/workset/:name/status
+	router.Get("/api/workset/status", worksetStatusHandler, logRequest)
+	router.Get("/api/model/:dn/workset/:name/status", worksetStatusHandler, logRequest)
+
+	// GET /api/workset/default-status?dn=a1b2c3d
+	// GET /api/workset/default-status?dn=modelName
+	// GET /api/model/:dn/workset/status/default
+	router.Get("/api/workset/default-status", worksetDefaultStatusHandler, logRequest)
+	router.Get("/api/model/:dn/workset/status/default", worksetDefaultStatusHandler, logRequest)
 
 	// GET /api/workset-text?dn=a1b2c3d&name=mySet
 	// GET /api/workset-text?dn=modelName&name=mySet&lang=en
-	// GET /api/workset-text/:dn/:name
-	// GET /api/workset-text/:dn/:name/:lang
+	// GET /api/model/:dn/workset/:name/text
+	// GET /api/model/:dn/workset/:name/text/
+	// GET /api/model/:dn/workset/:name/text/lang/
+	// GET /api/model/:dn/workset/:name/text/lang/:lang
 	router.Get("/api/workset-text", worksetTextHandler, logRequest)
-	router.Get("/api/workset-text/:dn/:name", worksetTextHandler, logRequest)
-	router.Get("/api/workset-text/:dn/:name/:lang", worksetTextHandler, logRequest)
+	router.Get("/api/model/:dn/workset/:name/text", worksetTextHandler, logRequest)
+	router.Get("/api/model/:dn/workset/:name/text/", worksetTextHandler, logRequest)
+	router.Get("/api/model/:dn/workset/:name/text/lang/", worksetTextHandler, logRequest)
+	router.Get("/api/model/:dn/workset/:name/text/lang/:lang", worksetTextHandler, logRequest)
 
 	// GET /api/workset-text-all?dn=a1b2c3d&name=mySet
 	// GET /api/workset-text-all?dn=modelName&name=mySet
-	// GET /api/workset-text-all/:dn/:name
+	// GET /api/model/:dn/workset/:name/text/all
 	router.Get("/api/workset-text-all", worksetAllTextHandler, logRequest)
-	router.Get("/api/workset-text-all/:dn/:name", worksetAllTextHandler, logRequest)
+	router.Get("/api/model/:dn/workset/:name/text/all", worksetAllTextHandler, logRequest)
 
 	// set web root handler: UI web pages or "not found" if this is web-service mode
 	if !isApiOnly {
