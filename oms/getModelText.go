@@ -91,7 +91,7 @@ func (mc *ModelCatalog) ModelTextByDigest(digest string, preferedLang []language
 
 	// match prefered languages and model languages
 	_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
-	lc := mc.modelLst[idx].langLst[np].LangCode
+	lc := mc.modelLst[idx].langCodes[np]
 	lcd := mc.modelLst[idx].meta.Model.DefaultLangCode
 
 	mt := ModelDicDescrNote{Model: mc.modelLst[idx].meta.Model}
@@ -221,7 +221,7 @@ func (mc *ModelCatalog) ModelMetaTextByDigestOrName(dn string, preferedLang []la
 
 	// match prefered languages and model languages
 	_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
-	lc := mc.modelLst[idx].langLst[np].LangCode
+	lc := mc.modelLst[idx].langCodes[np]
 	lcd := mc.modelLst[idx].meta.Model.DefaultLangCode
 
 	// initialaze text metadata with copy of language-neutral metadata

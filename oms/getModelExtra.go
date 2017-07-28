@@ -29,7 +29,12 @@ func (mc *ModelCatalog) LangListByDigestOrName(dn string) ([]db.LangLstRow, bool
 		return []db.LangLstRow{}, false
 	}
 
-	return append([]db.LangLstRow{}, mc.modelLst[idx].langLst...), true
+	ls := make([]db.LangLstRow, len(mc.modelLst[idx].langMeta.Lang))
+	for k := range mc.modelLst[idx].langMeta.Lang {
+		ls[k] = mc.modelLst[idx].langMeta.Lang[k].LangLstRow
+	}
+
+	return ls, true
 }
 
 // ModelProfileByName return model profile db rows by digest and by profile name.

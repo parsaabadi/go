@@ -256,8 +256,8 @@ func lastRunStatusHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // lastCompletedRunHandler return last compeleted run_lst db row by model digest-or-name:
-// GET /api/run/last-completed-status?dn=a1b2c3d
-// GET /api/run/last-completed-status?dn=modelName
+// GET /api/run-last-completed-status?dn=a1b2c3d
+// GET /api/run-last-completed-status?dn=modelName
 // GET /api/model/:dn/run/status/last/completed
 // Run completed if run status one of: s=success, x=exit, e=error
 // If multiple models or runs with same name exist only one is returned.
@@ -374,8 +374,8 @@ func worksetListTextHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // worksetStatusHandler return workset_lst db row by model digest-or-name and workset name:
-// GET /api/workset/status?dn=a1b2c3d&name=mySet
-// GET /api/workset/status?dn=modelName&name=mySet
+// GET /api/workset-status?dn=a1b2c3d&name=mySet
+// GET /api/workset-status?dn=modelName&name=mySet
 // GET /api/model/:dn/workset/:name/status
 // If multiple models with same name exist only one is returned.
 // If no such workset exist in database then empty result returned.
@@ -389,8 +389,8 @@ func worksetStatusHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // worksetDefaultStatusHandler return workset_lst db row of default workset by model digest-or-name:
-// GET /api/workset/default-status?dn=a1b2c3d
-// GET /api/workset/default-status?dn=modelName
+// GET /api/workset-default-status?dn=a1b2c3d
+// GET /api/workset-default-status?dn=modelName
 // GET /api/model/:dn/workset/status/default
 // If multiple models with same name exist only one is returned.
 // If no default workset exist in database then empty result returned.

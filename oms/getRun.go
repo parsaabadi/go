@@ -162,7 +162,7 @@ func (mc *ModelCatalog) LastCompletedRunText(dn string, isAllLang bool, prefered
 	lc := ""
 	if !isAllLang {
 		_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
-		lc = mc.modelLst[idx].langLst[np].LangCode
+		lc = mc.modelLst[idx].langCodes[np]
 	}
 
 	rt, err := db.GetRunText(mc.modelLst[idx].dbConn, r.RunId, lc)
@@ -253,7 +253,7 @@ func (mc *ModelCatalog) RunListText(dn string, preferedLang []language.Tag) ([]d
 
 	// get run_txt db row for each run_lst using matched prefered languag
 	_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
-	lc := mc.modelLst[idx].langLst[np].LangCode
+	lc := mc.modelLst[idx].langCodes[np]
 
 	rl, rt, err := db.GetRunListText(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, lc)
 	if err != nil {
@@ -347,7 +347,7 @@ func (mc *ModelCatalog) RunTextFull(dn, rdn string, isAllLang bool, preferedLang
 	lc := ""
 	if !isAllLang {
 		_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
-		lc = mc.modelLst[idx].langLst[np].LangCode
+		lc = mc.modelLst[idx].langCodes[np]
 	}
 
 	rm, err := db.GetRunFull(mc.modelLst[idx].dbConn, r, lc)

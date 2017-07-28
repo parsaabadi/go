@@ -151,7 +151,7 @@ func (mc *ModelCatalog) WorksetListText(dn string, preferedLang []language.Tag) 
 
 	// get workset_txt db row for each workset_lst using matched prefered language
 	_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
-	lc := mc.modelLst[idx].langLst[np].LangCode
+	lc := mc.modelLst[idx].langCodes[np]
 
 	wl, wt, err := db.GetWorksetListText(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, lc)
 	if err != nil {
@@ -240,7 +240,7 @@ func (mc *ModelCatalog) WorksetText(dn, name string, isAllLang bool, preferedLan
 	lc := ""
 	if !isAllLang {
 		_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
-		lc = mc.modelLst[idx].langLst[np].LangCode
+		lc = mc.modelLst[idx].langCodes[np]
 	}
 
 	wm, err := db.GetWorksetFull(mc.modelLst[idx].dbConn, w, lc)

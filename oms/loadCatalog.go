@@ -80,17 +80,34 @@ func (mc *ModelCatalog) RefreshSqlite(mDir string) error {
 			}
 
 			// make model languages list, starting from default language
-			ml := []db.LangLstRow{}
+			ml := []string{}
 			lt := []language.Tag{}
 
 			for k := range ls.Lang {
 				if ls.Lang[k].LangCode == dicLst[idx].DefaultLangCode {
-					ml = append([]db.LangLstRow{ls.Lang[k].LangLstRow}, ml...)
+					ml = append([]string{ls.Lang[k].LangCode}, ml...)
 					lt = append([]language.Tag{language.Make(ls.Lang[k].LangCode)}, lt...)
 				} else {
-					ml = append(ml, ls.Lang[k].LangLstRow)
+					ml = append(ml, ls.Lang[k].LangCode)
 					lt = append(lt, language.Make(ls.Lang[k].LangCode))
 				}
+			}
+
+			// sort and clone model languages
+			m := &db.LangMeta{}
+			for k := range ml {
+				for j := range ls.Lang {
+					if ls.Lang[j].LangCode == ml[k] {
+						m.Lang = append(m.Lang, ls.Lang[j])
+						break
+					}
+				}
+			}
+			cl, err := m.Clone()
+			if err != nil || ls == nil {
+				omppLog.Log("Warning: language clone failed for database: ", fp)
+				dbc.Close()
+				continue // skip this database
 			}
 
 			// append to model list
@@ -98,8 +115,8 @@ func (mc *ModelCatalog) RefreshSqlite(mDir string) error {
 				dbConn:     dbc,
 				isMetaFull: false,
 				meta:       &db.ModelMeta{Model: dicLst[idx]},
-				langLst:    ml,
-				langTags:   lt,
+				langCodes:  ml,
+				langMeta:   cl,
 				matcher:    language.NewMatcher(lt)})
 		}
 	}

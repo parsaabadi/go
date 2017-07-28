@@ -143,7 +143,7 @@ func (mc *ModelCatalog) GroupsTextByDigestOrName(dn string, preferedLang []langu
 
 	// match prefered languages and model languages
 	_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
-	lc := mc.modelLst[idx].langLst[np].LangCode
+	lc := mc.modelLst[idx].langCodes[np]
 	lcd := mc.modelLst[idx].meta.Model.DefaultLangCode
 
 	// initialaze with copy of language-neutral metadata
