@@ -284,13 +284,13 @@ func apiGetRoutes(router *vestigo.Router) {
 	// GET /api/run-first-status?dn=a1b2c3d
 	// GET /api/run-first-status?dn=modelName
 	// GET /api/model/:dn/run/status/first
-	router.Get("/api/run/first-status", firstRunStatusHandler, logRequest)
+	router.Get("/api/run-first-status", firstRunStatusHandler, logRequest)
 	router.Get("/api/model/:dn/run/status/first", firstRunStatusHandler, logRequest)
 
 	// GET /api/run-last-status?dn=a1b2c3d
 	// GET /api/run-last-status?dn=modelName
 	// GET /api/model/:dn/run/status/last
-	router.Get("/api/run/last-status", lastRunStatusHandler, logRequest)
+	router.Get("/api/run-last-status", lastRunStatusHandler, logRequest)
 	router.Get("/api/model/:dn/run/status/last", lastRunStatusHandler, logRequest)
 
 	// GET /api/run-last-completed-status?dn=a1b2c3d
