@@ -270,6 +270,40 @@ func lastCompletedRunStatusHandler(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, r, rp)
 }
 
+// lastCompletedRunHandler return last compeleted run_lst and run_txt db rows by model digest-or-name:
+// GET /api/run-last-completed-text?dn=a1b2c3d
+// GET /api/run-last-completed-text?dn=modelName&lang=en
+// GET /api/model/:dn/run/last/completed/text
+// GET /api/model/:dn/run/last/completed/text/lang/:lang
+// Run completed if run status one of: s=success, x=exit, e=error
+// If multiple models or runs with same name exist only one is returned.
+// If no run exist in database then empty result returned.
+// If optional lang specified then result in that language else in browser language.
+func lastCompletedRunTextHandler(w http.ResponseWriter, r *http.Request) {
+
+	dn := getRequestParam(r, "dn")
+	rqLangTags := getRequestLang(r, "lang") // get optional language argument and languages accepted by browser
+
+	rp, _ := theCatalog.LastCompletedRunText(dn, false, rqLangTags)
+	jsonResponse(w, r, rp)
+}
+
+// lastCompletedRulastCompletedRunAllTextHandlernHandler return last compeleted run_lst and run_txt db rows by model digest-or-name:
+// GET /api/run-last-completed-text-all?dn=a1b2c3d
+// GET /api/run-last-completed-text-all?dn=modelName
+// GET /api/model/:dn/run/last/completed/text/all
+// Run completed if run status one of: s=success, x=exit, e=error
+// If multiple models or runs with same name exist only one is returned.
+// If no run exist in database then empty result returned.
+// Text rows returned in all languages.
+func lastCompletedRunAllTextHandler(w http.ResponseWriter, r *http.Request) {
+
+	dn := getRequestParam(r, "dn")
+
+	rp, _ := theCatalog.LastCompletedRunText(dn, true, nil)
+	jsonResponse(w, r, rp)
+}
+
 // runTextHandler return full run metadata: run_lst, run_txt, parameter sub-value counts and text db rows
 // by model digest-or-name and digest-or-name:
 // GET /api/run-text?dn=a1b2c3d&rdn=1f2e3d4
@@ -307,40 +341,6 @@ func runAllTextHandler(w http.ResponseWriter, r *http.Request) {
 	rdn := getRequestParam(r, "rdn")
 
 	rp, _ := theCatalog.RunTextFull(dn, rdn, true, nil)
-	jsonResponse(w, r, rp)
-}
-
-// lastCompletedRunHandler return last compeleted run_lst and run_txt db rows by model digest-or-name:
-// GET /api/run-last-completed-text?dn=a1b2c3d
-// GET /api/run-last-completed-text?dn=modelName&lang=en
-// GET /api/model/:dn/run/last/completed/text
-// GET /api/model/:dn/run/last/completed/text/lang/:lang
-// Run completed if run status one of: s=success, x=exit, e=error
-// If multiple models or runs with same name exist only one is returned.
-// If no run exist in database then empty result returned.
-// If optional lang specified then result in that language else in browser language.
-func lastCompletedRunTextHandler(w http.ResponseWriter, r *http.Request) {
-
-	dn := getRequestParam(r, "dn")
-	rqLangTags := getRequestLang(r, "lang") // get optional language argument and languages accepted by browser
-
-	rp, _ := theCatalog.LastCompletedRunText(dn, false, rqLangTags)
-	jsonResponse(w, r, rp)
-}
-
-// lastCompletedRulastCompletedRunAllTextHandlernHandler return last compeleted run_lst and run_txt db rows by model digest-or-name:
-// GET /api/run-last-completed-text-all?dn=a1b2c3d
-// GET /api/run-last-completed-text-all?dn=modelName
-// GET /api/model/:dn/run/last/completed/text/all
-// Run completed if run status one of: s=success, x=exit, e=error
-// If multiple models or runs with same name exist only one is returned.
-// If no run exist in database then empty result returned.
-// Text rows returned in all languages.
-func lastCompletedRunAllTextHandler(w http.ResponseWriter, r *http.Request) {
-
-	dn := getRequestParam(r, "dn")
-
-	rp, _ := theCatalog.LastCompletedRunText(dn, true, nil)
 	jsonResponse(w, r, rp)
 }
 

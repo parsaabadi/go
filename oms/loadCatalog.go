@@ -93,30 +93,13 @@ func (mc *ModelCatalog) RefreshSqlite(mDir string) error {
 				}
 			}
 
-			// sort and clone model languages
-			m := &db.LangMeta{}
-			for k := range ml {
-				for j := range ls.Lang {
-					if ls.Lang[j].LangCode == ml[k] {
-						m.Lang = append(m.Lang, ls.Lang[j])
-						break
-					}
-				}
-			}
-			cl, err := m.Clone()
-			if err != nil || ls == nil {
-				omppLog.Log("Warning: language clone failed for database: ", fp)
-				dbc.Close()
-				continue // skip this database
-			}
-
 			// append to model list
 			mLst = append(mLst, modelDef{
 				dbConn:     dbc,
 				isMetaFull: false,
 				meta:       &db.ModelMeta{Model: dicLst[idx]},
 				langCodes:  ml,
-				langMeta:   cl,
+				langMeta:   ls,
 				matcher:    language.NewMatcher(lt)})
 		}
 	}

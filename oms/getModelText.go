@@ -11,28 +11,6 @@ import (
 	"go.openmpp.org/ompp/omppLog"
 )
 
-// ModelAllTextByDigest return language-specific model metadata by model digest in all languages.
-func (mc *ModelCatalog) ModelAllTextByDigest(digest string) (*db.ModelTxtMeta, bool) {
-
-	// if model_dic_txt rows not loaded then read it from database
-	idx := mc.loadModelText(digest)
-	if idx < 0 {
-		return &db.ModelTxtMeta{}, false // return empty result: model not found or error
-	}
-
-	// lock model catalog and return copy of model metadata
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	t := &db.ModelTxtMeta{}
-	if err := helper.DeepCopy(mc.modelLst[idx].txtMeta, t); err != nil {
-		omppLog.Log("Error at model language-specific metadata clone: ", digest, ": ", err.Error())
-		return &db.ModelTxtMeta{}, false
-	}
-
-	return t, true
-}
-
 // loadModelText partially init model text metadata by reading model_dic_txt db rows.
 // If metadata already loaded then skip db reading and return index in model list.
 // Return index in model list or < 0 on error or if model digest not found.

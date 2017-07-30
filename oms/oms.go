@@ -299,6 +299,20 @@ func apiGetRoutes(router *vestigo.Router) {
 	router.Get("/api/run-last-completed-status", lastCompletedRunStatusHandler, logRequest)
 	router.Get("/api/model/:dn/run/status/last/completed", lastCompletedRunStatusHandler, logRequest)
 
+	// GET /api/run-last-completed-text?dn=a1b2c3d
+	// GET /api/run-last-completed-text?dn=modelName&lang=en
+	// GET /api/model/:dn/run/last/completed/text
+	// GET /api/model/:dn/run/last/completed/text/lang/:lang
+	router.Get("/api/run-last-completed-text", lastCompletedRunTextHandler, logRequest)
+	router.Get("/api/model/:dn/run/last/completed/text", lastCompletedRunTextHandler, logRequest)
+	router.Get("/api/model/:dn/run/last/completed/text/lang/:lang", lastCompletedRunTextHandler, logRequest)
+
+	// GET /api/run-last-completed-text-all?dn=a1b2c3d
+	// GET /api/run-last-completed-text-all?dn=modelName
+	// GET /api/model/:dn/run/last/completed/text/all
+	router.Get("/api/run-last-completed-text-all", lastCompletedRunAllTextHandler, logRequest)
+	router.Get("/api/model/:dn/run/last/completed/text/all", lastCompletedRunAllTextHandler, logRequest)
+
 	// GET /api/run-text?dn=a1b2c3d&rdn=1f2e3d4
 	// GET /api/run-text?dn=modelName&rdn=runName&lang=en
 	// GET /api/model/:dn/run/:rdn/text
@@ -316,20 +330,6 @@ func apiGetRoutes(router *vestigo.Router) {
 	// GET /api/model/:dn/run/:rdn/text/all
 	router.Get("/api/run-text-all", runAllTextHandler, logRequest)
 	router.Get("/api/model/:dn/run/:rdn/text/all", runAllTextHandler, logRequest)
-
-	// GET /api/run-last-completed-text?dn=a1b2c3d
-	// GET /api/run-last-completed-text?dn=modelName&lang=en
-	// GET /api/model/:dn/run/last/completed/text
-	// GET /api/model/:dn/run/last/completed/text/lang/:lang
-	router.Get("/api/run/last-completed-text", lastCompletedRunTextHandler, logRequest)
-	router.Get("/api/model/:dn/run/last/completed/text", lastCompletedRunTextHandler, logRequest)
-	router.Get("/api/model/:dn/run/last/completed/text/lang/:lang", lastCompletedRunTextHandler, logRequest)
-
-	// GET /api/run-last-completed-text-all?dn=a1b2c3d
-	// GET /api/run-last-completed-text-all?dn=modelName
-	// GET /api/model/:dn/run/last/completed/text/all
-	router.Get("/api/run/last-completed-text-all", lastCompletedRunAllTextHandler, logRequest)
-	router.Get("/api/model/:dn/run/last/completed/text/all", lastCompletedRunAllTextHandler, logRequest)
 
 	//
 	// GET model set of input parameters (workset)

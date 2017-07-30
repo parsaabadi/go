@@ -32,9 +32,9 @@ type modelDef struct {
 	isTxtMetaFull bool             // if true then ModelTxtMeta fully loaded else only []ModelTxtRow
 	txtMeta       *db.ModelTxtMeta // if not nil then language-specific model metadata
 	langCodes     []string         // language codes, first is default language
-	langMeta      *db.LangMeta     // model languages, first is default language
 	matcher       language.Matcher // matcher to search text by language
 	groupLst      *db.GroupLstPub  // if not nil then parameters and table groups
+	langMeta      *db.LangMeta     // list of languages: one list per db connection, order of lanuages NOT the same as language codes
 }
 
 // ModelMetaFull is full model metadata: language-neutral db rows
