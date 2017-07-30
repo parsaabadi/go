@@ -262,15 +262,15 @@ hidLoop:
 	}
 
 	// delete existing workset_parameter_txt, workset_parameter, workset_txt
-	err = TrxUpdate(trx, "DELETE FROM workset_parameter_txt WHERE set_id ="+sId)
+	err = TrxUpdate(trx, "DELETE FROM workset_parameter_txt WHERE set_id = "+sId)
 	if err != nil {
 		return err
 	}
-	err = TrxUpdate(trx, "DELETE FROM workset_parameter WHERE set_id ="+sId)
+	err = TrxUpdate(trx, "DELETE FROM workset_parameter WHERE set_id = "+sId)
 	if err != nil {
 		return err
 	}
-	err = TrxUpdate(trx, "DELETE FROM workset_txt WHERE set_id ="+sId)
+	err = TrxUpdate(trx, "DELETE FROM workset_txt WHERE set_id = "+sId)
 	if err != nil {
 		return err
 	}

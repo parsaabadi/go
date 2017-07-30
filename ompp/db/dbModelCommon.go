@@ -34,7 +34,12 @@ func (src *LangMeta) Clone() (*LangMeta, error) {
 	if err := helper.DeepCopy(src, dst); err != nil {
 		return nil, err
 	}
-	dst.updateInternals()
+
+	// copy language id: it is non-public and update internals
+	for k := range src.Lang {
+		dst.Lang[k].langId = src.Lang[k].langId
+	}
+	dst.updateInternals() // update internals
 
 	return dst, nil
 }
