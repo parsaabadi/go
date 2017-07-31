@@ -10,14 +10,14 @@ import (
 )
 
 // WorksetStatus return workset_lst db row by model digest-or-name and workset name.
-func (mc *ModelCatalog) WorksetStatus(dn, name string) (*db.WorksetRow, bool) {
+func (mc *ModelCatalog) WorksetStatus(dn, wsn string) (*db.WorksetRow, bool) {
 
 	// if model digest-or-name or workset name is empty then return empty results
 	if dn == "" {
 		omppLog.Log("Warning: invalid (empty) model digest and name")
 		return &db.WorksetRow{}, false
 	}
-	if name == "" {
+	if wsn == "" {
 		omppLog.Log("Warning: invalid (empty) workset name")
 		return &db.WorksetRow{}, false
 	}
@@ -33,13 +33,13 @@ func (mc *ModelCatalog) WorksetStatus(dn, name string) (*db.WorksetRow, bool) {
 	}
 
 	// get workset_lst db row by name
-	w, err := db.GetWorksetByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, name)
+	w, err := db.GetWorksetByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, wsn)
 	if err != nil {
-		omppLog.Log("Error at get workset status: ", dn, ": ", name, ": ", err.Error())
+		omppLog.Log("Error at get workset status: ", dn, ": ", wsn, ": ", err.Error())
 		return &db.WorksetRow{}, false // return empty result: workset select error
 	}
 	if w == nil {
-		omppLog.Log("Warning workset status not found: ", dn, ": ", name)
+		omppLog.Log("Warning workset status not found: ", dn, ": ", wsn)
 		return &db.WorksetRow{}, false // return empty result: workset_lst row not found
 	}
 
@@ -202,14 +202,14 @@ func (mc *ModelCatalog) WorksetListText(dn string, preferedLang []language.Tag) 
 // WorksetText return full workset metadata by model digest-or-name and workset name.
 // Text (description and notes) can be in prefered language or all languages.
 // If prefered language requested and it is not found in db then return empty text results.
-func (mc *ModelCatalog) WorksetText(dn, name string, isAllLang bool, preferedLang []language.Tag) (*db.WorksetPub, bool) {
+func (mc *ModelCatalog) WorksetText(dn, wsn string, isAllLang bool, preferedLang []language.Tag) (*db.WorksetPub, bool) {
 
 	// if model digest-or-name or workset name is empty then return empty results
 	if dn == "" {
 		omppLog.Log("Warning: invalid (empty) model digest and name")
 		return &db.WorksetPub{}, false
 	}
-	if name == "" {
+	if wsn == "" {
 		omppLog.Log("Warning: invalid (empty) workset name")
 		return &db.WorksetPub{}, false
 	}
@@ -226,13 +226,13 @@ func (mc *ModelCatalog) WorksetText(dn, name string, isAllLang bool, preferedLan
 	defer mc.theLock.Unlock()
 
 	// get workset_lst db row by name
-	w, err := db.GetWorksetByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, name)
+	w, err := db.GetWorksetByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, wsn)
 	if err != nil {
-		omppLog.Log("Error at get workset status: ", dn, ": ", name, ": ", err.Error())
+		omppLog.Log("Error at get workset status: ", dn, ": ", wsn, ": ", err.Error())
 		return &db.WorksetPub{}, false // return empty result: workset select error
 	}
 	if w == nil {
-		omppLog.Log("Warning workset status not found: ", dn, ": ", name)
+		omppLog.Log("Warning workset status not found: ", dn, ": ", wsn)
 		return &db.WorksetPub{}, false // return empty result: workset_lst row not found
 	}
 

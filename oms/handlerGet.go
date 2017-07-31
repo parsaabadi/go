@@ -374,17 +374,17 @@ func worksetListTextHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // worksetStatusHandler return workset_lst db row by model digest-or-name and workset name:
-// GET /api/workset-status?dn=a1b2c3d&name=mySet
-// GET /api/workset-status?dn=modelName&name=mySet
-// GET /api/model/:dn/workset/:name/status
+// GET /api/workset-status?dn=a1b2c3d&wsn=mySet
+// GET /api/workset-status?dn=modelName&wsn=mySet
+// GET /api/model/:dn/workset/:wsn/status
 // If multiple models with same name exist only one is returned.
 // If no such workset exist in database then empty result returned.
 func worksetStatusHandler(w http.ResponseWriter, r *http.Request) {
 
 	dn := getRequestParam(r, "dn")
-	name := getRequestParam(r, "name")
+	wsn := getRequestParam(r, "wsn")
 
-	wst, _ := theCatalog.WorksetStatus(dn, name)
+	wst, _ := theCatalog.WorksetStatus(dn, wsn)
 	jsonResponse(w, r, wst)
 }
 
@@ -403,37 +403,37 @@ func worksetDefaultStatusHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // worksetTextHandler return full workset metadata by model digest-or-name and workset name:
-// GET /api/workset-text?dn=a1b2c3d&name=mySet
-// GET /api/workset-text?dn=modelName&name=mySet&lang=en
-// GET /api/model/:dn/workset/:name/text
-// GET /api/model/:dn/workset/:name/text/
-// GET /api/model/:dn/workset/:name/text/lang/
-// GET /api/model/:dn/workset/:name/text/lang/:lang
+// GET /api/workset-text?dn=a1b2c3d&wsn=mySet
+// GET /api/workset-text?dn=modelName&wsn=mySet&lang=en
+// GET /api/model/:dn/workset/:wsn/text
+// GET /api/model/:dn/workset/:wsn/text/
+// GET /api/model/:dn/workset/:wsn/text/lang/
+// GET /api/model/:dn/workset/:wsn/text/lang/:lang
 // If multiple models with same name exist only one is returned.
 // If no such workset exist in database then empty result returned.
 // If optional lang specified then result in that language else in browser language.
 func worksetTextHandler(w http.ResponseWriter, r *http.Request) {
 
 	dn := getRequestParam(r, "dn")
-	name := getRequestParam(r, "name")
+	wsn := getRequestParam(r, "wsn")
 	rqLangTags := getRequestLang(r, "lang") // get optional language argument and languages accepted by browser
 
-	wp, _ := theCatalog.WorksetText(dn, name, false, rqLangTags)
+	wp, _ := theCatalog.WorksetText(dn, wsn, false, rqLangTags)
 	jsonResponse(w, r, wp)
 }
 
 // worksetAllTextHandler return full workset metadata by model digest-or-name and workset name:
-// GET /api/workset-text-all?dn=a1b2c3d&name=mySet
-// GET /api/workset-text-all?dn=modelName&name=mySet
-// GET /api/model/:dn/workset/:name/text/all
+// GET /api/workset-text-all?dn=a1b2c3d&wsn=mySet
+// GET /api/workset-text-all?dn=modelName&wsn=mySet
+// GET /api/model/:dn/workset/:wsn/text/all
 // If multiple models with same name exist only one is returned.
 // If no such workset exist in database then empty result returned.
 // Text rows returned in all languages.
 func worksetAllTextHandler(w http.ResponseWriter, r *http.Request) {
 
 	dn := getRequestParam(r, "dn")
-	name := getRequestParam(r, "name")
+	wsn := getRequestParam(r, "wsn")
 
-	wp, _ := theCatalog.WorksetText(dn, name, true, nil)
+	wp, _ := theCatalog.WorksetText(dn, wsn, true, nil)
 	jsonResponse(w, r, wp)
 }

@@ -50,24 +50,24 @@ func worksetReadonlyHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // worksetReadonlyUrlHandler update workset read-only status by model digest-or-name and workset name:
-// POST /api/model/:dn/workset/:name/readonly/:val
+// POST /api/model/:dn/workset/:wsn/readonly/:val
 // If multiple models with same name exist then result is undefined.
 // If no such workset exist in database then empty result returned.
 func worksetReadonlyUrlHandler(w http.ResponseWriter, r *http.Request) {
 
 	dn := getRequestParam(r, "dn")
-	name := getRequestParam(r, "name")
+	wsn := getRequestParam(r, "wsn")
 	val := getRequestParam(r, "val")
 
 	// convert readonly flag
 	isReadonly, err := strconv.ParseBool(val)
 	if err != nil {
-		http.Error(w, "Invalid value of workset read-only flag"+name, http.StatusBadRequest)
+		http.Error(w, "Invalid value of workset read-only flag"+wsn, http.StatusBadRequest)
 		return
 	}
 
 	// update workset read-only status
-	digest, ws, ok := theCatalog.UpdateWorksetReadonly(dn, name, isReadonly)
+	digest, ws, ok := theCatalog.UpdateWorksetReadonly(dn, wsn, isReadonly)
 	if ok {
 		w.Header().Set("Location", "/api/model/"+digest+"/workset/"+ws.Name)
 	}

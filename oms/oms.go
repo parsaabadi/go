@@ -349,11 +349,11 @@ func apiGetRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:dn/workset-list/text", worksetListTextHandler, logRequest)
 	router.Get("/api/model/:dn/workset-list/text/lang/:lang", worksetListTextHandler, logRequest)
 
-	// GET /api/workset-status?dn=a1b2c3d&name=mySet
-	// GET /api/workset-status?dn=modelName&name=mySet
-	// GET /api/model/:dn/workset/:name/status
+	// GET /api/workset-status?dn=a1b2c3d&wsn=mySet
+	// GET /api/workset-status?dn=modelName&wsn=mySet
+	// GET /api/model/:dn/workset/:wsn/status
 	router.Get("/api/workset-status", worksetStatusHandler, logRequest)
-	router.Get("/api/model/:dn/workset/:name/status", worksetStatusHandler, logRequest)
+	router.Get("/api/model/:dn/workset/:wsn/status", worksetStatusHandler, logRequest)
 
 	// GET /api/workset-default-status?dn=a1b2c3d
 	// GET /api/workset-default-status?dn=modelName
@@ -361,32 +361,32 @@ func apiGetRoutes(router *vestigo.Router) {
 	router.Get("/api/workset-default-status", worksetDefaultStatusHandler, logRequest)
 	router.Get("/api/model/:dn/workset/status/default", worksetDefaultStatusHandler, logRequest)
 
-	// GET /api/workset-text?dn=a1b2c3d&name=mySet
-	// GET /api/workset-text?dn=modelName&name=mySet&lang=en
-	// GET /api/model/:dn/workset/:name/text
-	// GET /api/model/:dn/workset/:name/text/
-	// GET /api/model/:dn/workset/:name/text/lang/
-	// GET /api/model/:dn/workset/:name/text/lang/:lang
+	// GET /api/workset-text?dn=a1b2c3d&wsn=mySet
+	// GET /api/workset-text?dn=modelName&wsn=mySet&lang=en
+	// GET /api/model/:dn/workset/:wsn/text
+	// GET /api/model/:dn/workset/:wsn/text/
+	// GET /api/model/:dn/workset/:wsn/text/lang/
+	// GET /api/model/:dn/workset/:wsn/text/lang/:lang
 	router.Get("/api/workset-text", worksetTextHandler, logRequest)
-	router.Get("/api/model/:dn/workset/:name/text", worksetTextHandler, logRequest)
-	router.Get("/api/model/:dn/workset/:name/text/", worksetTextHandler, logRequest)
-	router.Get("/api/model/:dn/workset/:name/text/lang/", worksetTextHandler, logRequest)
-	router.Get("/api/model/:dn/workset/:name/text/lang/:lang", worksetTextHandler, logRequest)
+	router.Get("/api/model/:dn/workset/:wsn/text", worksetTextHandler, logRequest)
+	router.Get("/api/model/:dn/workset/:wsn/text/", worksetTextHandler, logRequest)
+	router.Get("/api/model/:dn/workset/:wsn/text/lang/", worksetTextHandler, logRequest)
+	router.Get("/api/model/:dn/workset/:wsn/text/lang/:lang", worksetTextHandler, logRequest)
 
-	// GET /api/workset-text-all?dn=a1b2c3d&name=mySet
-	// GET /api/workset-text-all?dn=modelName&name=mySet
-	// GET /api/model/:dn/workset/:name/text/all
+	// GET /api/workset-text-all?dn=a1b2c3d&wsn=mySet
+	// GET /api/workset-text-all?dn=modelName&wsn=mySet
+	// GET /api/model/:dn/workset/:wsn/text/all
 	router.Get("/api/workset-text-all", worksetAllTextHandler, logRequest)
-	router.Get("/api/model/:dn/workset/:name/text/all", worksetAllTextHandler, logRequest)
+	router.Get("/api/model/:dn/workset/:wsn/text/all", worksetAllTextHandler, logRequest)
 }
 
 // add http POST routes to web-service /api
 func apiPostRoutes(router *vestigo.Router) {
 
 	// POST /api/workset-readonly
-	// POST /api/model/:dn/workset/:name/readonly/:val
+	// POST /api/model/:dn/workset/:wsn/readonly/:val
 	router.Post("/api/workset-readonly", worksetReadonlyHandler, logRequest)
-	router.Post("/api/model/:dn/workset/:name/readonly/:val", worksetReadonlyUrlHandler, logRequest)
+	router.Post("/api/model/:dn/workset/:wsn/readonly/:val", worksetReadonlyUrlHandler, logRequest)
 
 	// POST /api/workset
 	router.Post("/api/workset", worksetUpdateHandler, logRequest)
