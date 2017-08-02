@@ -14,7 +14,7 @@ import (
 //
 // If layout.IsAccum true then select accumulator(s) else output expression value(s)
 // If layout.ValueName not empty then select only that expression (accumulator) else all expressions (accumulators)
-func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadLayout) (*list.List, error) {
+func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadOutTableLayout) (*list.List, error) {
 
 	// validate parameters
 	if modelDef == nil {

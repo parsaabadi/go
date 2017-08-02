@@ -11,7 +11,7 @@ import (
 )
 
 // ReadParameter read input parameter page (sub id, dimensions, value) from workset or model run results.
-func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadLayout) (*list.List, error) {
+func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayout) (*list.List, error) {
 
 	// validate parameters
 	if modelDef == nil {

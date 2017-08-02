@@ -18,22 +18,34 @@ type WriteLayout struct {
 }
 
 // ReadLayout describes source and size of data page to read input parameters or output tables.
-//
-// Name is a parameter or output table name to read.
-// For output table if ValueName is not empty then only accumulator or output expression
-// with that name selected (i.e: "acc1" or "expr4") else all output table accumulators (expressions) selected.
 type ReadLayout struct {
-	Name       string          // parameter name or output table name
-	ValueName  string          // only for output table: if not empty then expression or accumulator name to select
-	FromId     int             // run id or set id to select input parameter or output table values
-	IsFromSet  bool            // only for parameter: if true then select from workset else from model run
-	IsEditSet  bool            // only for parameter: if true then workset must be editable (readonly = false)
-	IsAccum    bool            // only for output table: if true then select output table accumulator else expression
-	IsAllAccum bool            // only for accumulators: if true then select from all accumulators view else from accumulators table
-	Offset     int64           // first row to return from select, zero-based ofsset
-	Size       int64           // max row count to select, if <= 0 then all rows
-	Filter     []FilterColumn  // dimension filters; final WHERE join filters by AND
-	OrderBy    []OrderByColumn // order by columnns, if empty then dimension id ascending order is used
+	Name    string          // parameter name or output table name
+	FromId  int             // run id or set id to select input parameter or output table values
+	Offset  int64           // first row to return from select, zero-based ofsset
+	Size    int64           // max row count to select, if <= 0 then all rows
+	Filter  []FilterColumn  // dimension filters; final WHERE join filters by AND
+	OrderBy []OrderByColumn // order by columnns, if empty then dimension id ascending order is used
+}
+
+// ReadParamLayout describes source and size of data page to read input parameters.
+//
+// If ValueName is not empty then only accumulator or output expression
+// with that name selected (i.e: "acc1" or "expr4") else all output table accumulators (expressions) selected.
+type ReadParamLayout struct {
+	ReadLayout      // parameter name, page size, where filters and order by
+	IsFromSet  bool // if true then select from workset else from model run
+	IsEditSet  bool // if true then workset must be editable (readonly = false)
+}
+
+// ReadOutTableLayout describes source and size of data page to read output tables.
+//
+// If ValueName is not empty then only accumulator or output expression
+// with that name selected (i.e: "acc1" or "expr4") else all output table accumulators (expressions) selected.
+type ReadOutTableLayout struct {
+	ReadLayout        // output table name, page size, where filters and order by
+	ValueName  string // if not empty then expression or accumulator name to select
+	IsAccum    bool   // if true then select output table accumulator else expression
+	IsAllAccum bool   // if true then select from all accumulators view else from accumulators table
 }
 
 // FilterOp is enum type for filter operators in select where conditions

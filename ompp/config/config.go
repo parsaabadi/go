@@ -219,6 +219,20 @@ func (opts *RunOptions) Int(key string, defaultValue int) int {
 	return defaultValue
 }
 
+// Int64 return 64 bit integer value by key.
+// If value not defined by command line argument or ini-file option
+// or cannot be converted to int64 then default is returned
+func (opts *RunOptions) Int64(key string, defaultValue int64) int64 {
+	sVal, isExist, _ := opts.StringExist(key)
+	if !isExist || sVal == "" {
+		return defaultValue
+	}
+	if val, err := strconv.ParseInt(sVal, 0, 64); err == nil {
+		return val
+	}
+	return defaultValue
+}
+
 // Uint64 return unsigned 64 bit integer value by key.
 // If value not defined by command line argument or ini-file option
 // or cannot be converted to uint64 then default is returned
