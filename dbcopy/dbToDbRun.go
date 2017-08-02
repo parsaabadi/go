@@ -198,21 +198,21 @@ func copyRunDbToDb(
 	// copy all run parameters, output accumulators and expressions from source to destination
 	omppLog.Log("Model run from ", srcId, " ", pub.Name, " to ", dstId)
 
-	srcLt := db.ReadLayout{FromId: srcId}
+	paramLt := db.ReadParamLayout{ReadLayout: db.ReadLayout{FromId: srcId}}
 	dstLt := db.WriteLayout{ToId: dstId, IsToRun: true}
 
 	// copy all parameters values for that modrel run
 	for j := range srcModel.Param {
 
 		// source: read parameter values
-		srcLt.Name = srcModel.Param[j].Name
+		paramLt.Name = srcModel.Param[j].Name
 
-		cLst, err := db.ReadParameter(srcDb, srcModel, &srcLt)
+		cLst, err := db.ReadParameter(srcDb, srcModel, &paramLt)
 		if err != nil {
 			return 0, err
 		}
 		if cLst.Len() <= 0 { // parameter data must exist for all parameters
-			return 0, errors.New("missing run parameter values " + srcLt.Name + " run id: " + strconv.Itoa(srcLt.FromId))
+			return 0, errors.New("missing run parameter values " + paramLt.Name + " run id: " + strconv.Itoa(paramLt.FromId))
 		}
 
 		// destination: insert parameter values in model run
@@ -224,21 +224,23 @@ func copyRunDbToDb(
 	}
 
 	// copy all output tables values for that modrel run
+	tblLt := db.ReadOutTableLayout{ReadLayout: db.ReadLayout{FromId: srcId}}
+
 	for j := range srcModel.Table {
 
 		// source: read output table accumulator
-		srcLt.Name = srcModel.Table[j].Name
-		srcLt.IsAccum = true
+		tblLt.Name = srcModel.Table[j].Name
+		tblLt.IsAccum = true
 
-		acLst, err := db.ReadOutputTable(srcDb, srcModel, &srcLt)
+		acLst, err := db.ReadOutputTable(srcDb, srcModel, &tblLt)
 		if err != nil {
 			return 0, err
 		}
 
 		// source: read output table expression values
-		srcLt.IsAccum = false
+		tblLt.IsAccum = false
 
-		ecLst, err := db.ReadOutputTable(srcDb, srcModel, &srcLt)
+		ecLst, err := db.ReadOutputTable(srcDb, srcModel, &tblLt)
 		if err != nil {
 			return 0, err
 		}

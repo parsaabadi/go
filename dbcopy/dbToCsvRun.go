@@ -275,73 +275,75 @@ func toRunCsv(
 		return err
 	}
 
-	layout := &db.ReadLayout{FromId: runId}
+	paramLt := &db.ReadParamLayout{ReadLayout: db.ReadLayout{FromId: runId}}
 
 	// write all parameters into csv file
 	for j := range modelDef.Param {
 
-		layout.Name = modelDef.Param[j].Name
+		paramLt.Name = modelDef.Param[j].Name
 
-		cLst, err := db.ReadParameter(dbConn, modelDef, layout)
+		cLst, err := db.ReadParameter(dbConn, modelDef, paramLt)
 		if err != nil {
 			return err
 		}
 		if cLst.Len() <= 0 { // parameter data must exist for all parameters
-			return errors.New("missing run parameter values " + layout.Name + " run id: " + strconv.Itoa(layout.FromId))
+			return errors.New("missing run parameter values " + paramLt.Name + " run id: " + strconv.Itoa(paramLt.FromId))
 		}
 
 		var pc db.CellParam
-		err = toCsvCellFile(csvDir, modelDef, layout.Name, pc, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom)
+		err = toCsvCellFile(csvDir, modelDef, paramLt.Name, pc, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom)
 		if err != nil {
 			return err
 		}
 	}
 
 	// write all output tables into csv file
+	tblLt := &db.ReadOutTableLayout{ReadLayout: db.ReadLayout{FromId: runId}}
+
 	for j := range modelDef.Table {
 
 		// write output table expression values into csv file
-		layout.Name = modelDef.Table[j].Name
-		layout.IsAccum = false
-		layout.IsAllAccum = false
+		tblLt.Name = modelDef.Table[j].Name
+		tblLt.IsAccum = false
+		tblLt.IsAllAccum = false
 
-		cLst, err := db.ReadOutputTable(dbConn, modelDef, layout)
+		cLst, err := db.ReadOutputTable(dbConn, modelDef, tblLt)
 		if err != nil {
 			return err
 		}
 
 		var ec db.CellExpr
-		err = toCsvCellFile(csvDir, modelDef, layout.Name, ec, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom)
+		err = toCsvCellFile(csvDir, modelDef, tblLt.Name, ec, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom)
 		if err != nil {
 			return err
 		}
 
 		// write output table accumulators into csv file
-		layout.IsAccum = true
-		layout.IsAllAccum = false
+		tblLt.IsAccum = true
+		tblLt.IsAllAccum = false
 
-		cLst, err = db.ReadOutputTable(dbConn, modelDef, layout)
+		cLst, err = db.ReadOutputTable(dbConn, modelDef, tblLt)
 		if err != nil {
 			return err
 		}
 
 		var ac db.CellAcc
-		err = toCsvCellFile(csvDir, modelDef, layout.Name, ac, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom)
+		err = toCsvCellFile(csvDir, modelDef, tblLt.Name, ac, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom)
 		if err != nil {
 			return err
 		}
 
 		// write all accumulators view into csv file
-		layout.IsAccum = true
-		layout.IsAllAccum = true
+		tblLt.IsAccum = true
+		tblLt.IsAllAccum = true
 
-		cLst, err = db.ReadOutputTable(dbConn, modelDef, layout)
+		cLst, err = db.ReadOutputTable(dbConn, modelDef, tblLt)
 		if err != nil {
 			return err
 		}
 
 		var al db.CellAllAcc
-		err = toCsvCellFile(csvDir, modelDef, layout.Name, al, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom)
+		err = toCsvCellFile(csvDir, modelDef, tblLt.Name, al, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom)
 		if err != nil {
 			return err
 		}

@@ -238,27 +238,27 @@ func toWorksetCsv(
 		return err
 	}
 
-	layout := &db.ReadLayout{FromId: setId, IsFromSet: true}
+	paramLt := &db.ReadParamLayout{ReadLayout: db.ReadLayout{FromId: setId}, IsFromSet: true}
 
 	// write parameter into csv file
 	for j := range meta.Param {
 
 		idx, ok := modelDef.ParamByHid(meta.Param[j].ParamHid)
 		if !ok {
-			return errors.New("missing workset parameter Hid: " + strconv.Itoa(meta.Param[j].ParamHid) + " workset: " + strconv.Itoa(layout.FromId) + " " + meta.Set.Name)
+			return errors.New("missing workset parameter Hid: " + strconv.Itoa(meta.Param[j].ParamHid) + " workset: " + strconv.Itoa(paramLt.FromId) + " " + meta.Set.Name)
 		}
-		layout.Name = modelDef.Param[idx].Name
+		paramLt.Name = modelDef.Param[idx].Name
 
-		cLst, err := db.ReadParameter(dbConn, modelDef, layout)
+		cLst, err := db.ReadParameter(dbConn, modelDef, paramLt)
 		if err != nil {
 			return err
 		}
 		if cLst.Len() <= 0 { // parameter data must exist for all parameters
-			return errors.New("missing workset parameter values " + layout.Name + " set id: " + strconv.Itoa(layout.FromId))
+			return errors.New("missing workset parameter values " + paramLt.Name + " set id: " + strconv.Itoa(paramLt.FromId))
 		}
 
 		var pc db.CellParam
-		err = toCsvCellFile(csvDir, modelDef, layout.Name, pc, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom)
+		err = toCsvCellFile(csvDir, modelDef, paramLt.Name, pc, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom)
 		if err != nil {
 			return err
 		}

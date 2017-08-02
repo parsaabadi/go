@@ -195,21 +195,21 @@ func copyWorksetDbToDb(
 	// read all workset parameters and copy into destination database
 	omppLog.Log("Workset ", dstWs.Set.Name, " from id ", srcId, " to ", dstId)
 
-	srcLt := &db.ReadLayout{FromId: srcId, IsFromSet: true}
+	paramLt := &db.ReadParamLayout{ReadLayout: db.ReadLayout{FromId: srcId}, IsFromSet: true}
 	dstLt := db.WriteLayout{ToId: dstId}
 
 	// write parameter into destination database
 	for j := range pub.Param {
 
 		// source: read workset parameter values
-		srcLt.Name = pub.Param[j].Name
+		paramLt.Name = pub.Param[j].Name
 
-		cLst, err := db.ReadParameter(srcDb, srcModel, srcLt)
+		cLst, err := db.ReadParameter(srcDb, srcModel, paramLt)
 		if err != nil {
 			return 0, err
 		}
 		if cLst.Len() <= 0 { // parameter data must exist for all parameters
-			return 0, errors.New("missing workset parameter values " + srcLt.Name + " set id: " + strconv.Itoa(srcLt.FromId))
+			return 0, errors.New("missing workset parameter values " + paramLt.Name + " set id: " + strconv.Itoa(paramLt.FromId))
 		}
 
 		// destination: insert or update parameter values in workset
