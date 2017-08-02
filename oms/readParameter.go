@@ -15,8 +15,8 @@ import (
 // Page of values is a rows from parameter value table started at zero based offset row
 // and up to max page size rows, if page size <= 0 then all values returned.
 // Parameter values can be read-only (select from run or read-only workset) or read-write (read-write workset).
-// Rows can be filtered and ordered (see db.ReadLayout for details).
-func (mc *ModelCatalog) ReadParameter(dn, src string, layout *db.ReadLayout) (*list.List, bool) {
+// Rows can be filtered and ordered (see db.ReadParamLayout for details).
+func (mc *ModelCatalog) ReadParameter(dn, src string, layout *db.ReadParamLayout) (*list.List, bool) {
 
 	// if model digest-or-name or workset name is empty then return empty results
 	if dn == "" {
@@ -35,12 +35,10 @@ func (mc *ModelCatalog) ReadParameter(dn, src string, layout *db.ReadLayout) (*l
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	pIdx, ok := mc.paramIndexByDigestOrName(idx, layout.Name)
-	if !ok {
-		omppLog.Log("Warning: parameter digest or name not found: ", layout.Name)
+	if _, ok = mc.modelLst[idx].meta.ParamByName(layout.Name); !ok {
+		omppLog.Log("Warning: parameter not found: ", layout.Name)
 		return nil, false // return empty result: parameter not found or error
 	}
-	layout.Name = mc.modelLst[idx].meta.Param[pIdx].Name // parameter name
 
 	// find model run or workset id
 	if layout.IsFromSet {
@@ -84,7 +82,7 @@ func (mc *ModelCatalog) loadWorksetByName(modelIdx int, wsn string) (*db.Workset
 		return nil, false // return empty result: workset select error
 	}
 	if wst == nil {
-		omppLog.Log("Warning workset status not found: ", mc.modelLst[modelIdx].meta.Model.Name, ": ", wsn)
+		omppLog.Log("Warning: workset not found: ", mc.modelLst[modelIdx].meta.Model.Name, ": ", wsn)
 		return nil, false // return empty result: workset_lst row not found
 	}
 
@@ -111,13 +109,13 @@ func (mc *ModelCatalog) loadCompletedRunByDigestOrName(modelIdx int, rdn string)
 		return nil, false // return empty result: run select error
 	}
 	if rst == nil {
-		omppLog.Log("Warning run status not found: ", mc.modelLst[modelIdx].meta.Model.Name, ": ", rdn)
+		omppLog.Log("Warning: run not found: ", mc.modelLst[modelIdx].meta.Model.Name, ": ", rdn)
 		return nil, false // return empty result: run_lst row not found
 	}
 
 	// run must be completed
 	if !db.IsRunCompleted(rst.Status) {
-		omppLog.Log("Warning run is not completed: ", mc.modelLst[modelIdx].meta.Model.Name, ": ", rdn, ": ", rst.Status)
+		omppLog.Log("Warning: run is not completed: ", mc.modelLst[modelIdx].meta.Model.Name, ": ", rdn, ": ", rst.Status)
 		return nil, false // return empty result: run_lst row not found
 	}
 

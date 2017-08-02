@@ -7,6 +7,7 @@ import (
 	"container/list"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,86 +20,6 @@ import (
 	"go.openmpp.org/ompp/omppLog"
 )
 
-// jsonSetHeaders set response headers: Content-Type: application/json and Access-Control-Allow-Origin
-func jsonSetHeaders(w http.ResponseWriter, r *http.Request) {
-
-	// if Content-Type not set then use json
-	if _, isSet := w.Header()["Content-Type"]; !isSet {
-		w.Header().Set("Content-Type", "application/json")
-	}
-
-	// if request from localhost then allow response to any protocol or port
-	if strings.HasPrefix(r.Host, "localhost") {
-		if _, isSet := w.Header()["Access-Control-Allow-Origin"]; !isSet {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-		}
-	}
-}
-
-// jsonResponse set response headers and writes src as json into w response writer.
-// On error it writes 500 internal server error response.
-func jsonResponse(w http.ResponseWriter, r *http.Request, src interface{}) {
-
-	jsonSetHeaders(w, r)
-
-	err := json.NewEncoder(w).Encode(src)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
-
-// jsonListResponse set response headers and writes srcLst as json into w response writer.
-// On error it writes 500 internal server error response.
-func jsonListResponse(w http.ResponseWriter, r *http.Request, srcLst *list.List) {
-
-	jsonSetHeaders(w, r) // set response headers, i.e. content type
-
-	w.Write([]byte{'['}) // output is json array
-
-	enc := json.NewEncoder(w)
-	isNext := false
-
-	for src := srcLst.Front(); src != nil; src = src.Next() {
-
-		if isNext {
-			w.Write([]byte{','}) // until the last separate array items with , comma
-		}
-
-		// write actual value
-		if err := enc.Encode(src.Value); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-		isNext = true
-	}
-
-	w.Write([]byte{']'}) // end of array
-}
-
-// set Content-Type header by extension and invoke next handler.
-// This function exist to supress Windows registry content type overrides
-func setContentType(next http.Handler) http.Handler {
-
-	var ctDef = map[string]string{
-		".css": "text/css; charset=utf-8",
-		".js":  "application/javascript",
-	}
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
-		// if Content-Type not set and it is one of "forced" extensions
-		// then set content type
-		if _, isSet := w.Header()["Content-Type"]; !isSet {
-			if ext := filepath.Ext(r.URL.Path); ext != "" {
-				if ct := ctDef[strings.ToLower(ext)]; ct != "" {
-					w.Header().Set("Content-Type", ct)
-				}
-			}
-		}
-
-		next.ServeHTTP(w, r) // invoke next handler
-	})
-}
-
 // logRequest is a middelware to log http request
 func logRequest(next http.HandlerFunc) http.HandlerFunc {
 	if isLogRequest {
@@ -108,6 +29,13 @@ func logRequest(next http.HandlerFunc) http.HandlerFunc {
 		}
 	} // else
 	return next
+}
+
+// match request language with UI supported languages and return canonic language name
+func matchRequestToUiLang(r *http.Request) string {
+	rqLangTags, _, _ := language.ParseAcceptLanguage(r.Header.Get("Accept-Language"))
+	tag, _, _ := uiLangMatcher.Match(rqLangTags...)
+	return tag.String()
 }
 
 // get value of url parameter ?name or router parameter /:name
@@ -190,11 +118,108 @@ func getRequestLang(r *http.Request, name string) []language.Tag {
 	return rqLangTags
 }
 
-// match request language with UI supported languages and return canonic language name
-func matchRequestToUiLang(r *http.Request) string {
-	rqLangTags, _, _ := language.ParseAcceptLanguage(r.Header.Get("Accept-Language"))
-	tag, _, _ := uiLangMatcher.Match(rqLangTags...)
-	return tag.String()
+// set Content-Type header by extension and invoke next handler.
+// This function exist to supress Windows registry content type overrides
+func setContentType(next http.Handler) http.Handler {
+
+	var ctDef = map[string]string{
+		".css": "text/css; charset=utf-8",
+		".js":  "application/javascript",
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		// if Content-Type not set and it is one of "forced" extensions
+		// then set content type
+		if _, isSet := w.Header()["Content-Type"]; !isSet {
+			if ext := filepath.Ext(r.URL.Path); ext != "" {
+				if ct := ctDef[strings.ToLower(ext)]; ct != "" {
+					w.Header().Set("Content-Type", ct)
+				}
+			}
+		}
+
+		next.ServeHTTP(w, r) // invoke next handler
+	})
+}
+
+// jsonSetHeaders set response headers: Content-Type: application/json and Access-Control-Allow-Origin
+func jsonSetHeaders(w http.ResponseWriter, r *http.Request) {
+
+	// if Content-Type not set then use json
+	if _, isSet := w.Header()["Content-Type"]; !isSet {
+		w.Header().Set("Content-Type", "application/json")
+	}
+
+	// if request from localhost then allow response to any protocol or port
+	if strings.HasPrefix(r.Host, "localhost") {
+		if _, isSet := w.Header()["Access-Control-Allow-Origin"]; !isSet {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+		}
+	}
+}
+
+// jsonResponse set response headers and writes src as json into w response writer.
+// On error it writes 500 internal server error response.
+func jsonResponse(w http.ResponseWriter, r *http.Request, src interface{}) {
+
+	jsonSetHeaders(w, r)
+
+	err := json.NewEncoder(w).Encode(src)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// jsonListResponse set response headers and writes srcLst as json into w response writer.
+// On error it writes 500 internal server error response.
+func jsonListResponse(w http.ResponseWriter, r *http.Request, srcLst *list.List) {
+
+	jsonSetHeaders(w, r) // set response headers, i.e. content type
+
+	w.Write([]byte{'['}) // output is json array
+
+	enc := json.NewEncoder(w)
+	isNext := false
+
+	for src := srcLst.Front(); src != nil; src = src.Next() {
+
+		if isNext {
+			w.Write([]byte{','}) // until the last separate array items with , comma
+		}
+
+		// write actual value
+		if err := enc.Encode(src.Value); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		isNext = true
+	}
+
+	w.Write([]byte{']'}) // end of array
+}
+
+// jsonRequestDecode validate Content-Type: application/json and decode json body.
+// Destination for json decode: dst must be a pointer.
+// On error it writes error response 400 or 415 and return false.
+func jsonRequestDecode(w http.ResponseWriter, r *http.Request, dst interface{}) bool {
+
+	// json body expected
+	if r.Header.Get("Content-Type") != "application/json" {
+		http.Error(w, "Expected Content-Type: application/json", http.StatusUnsupportedMediaType)
+		return false
+	}
+
+	// decode json
+	err := json.NewDecoder(r.Body).Decode(dst)
+	if err != nil {
+		if err == io.EOF {
+			http.Error(w, "Invalid (empty) json at "+r.URL.String(), http.StatusBadRequest)
+			return false
+		}
+		http.Error(w, "Json decode error at "+r.URL.String(), http.StatusBadRequest)
+		return false
+	}
+	return true // completed OK
 }
 
 // isDirExist return error if directory does not exist or not accessible

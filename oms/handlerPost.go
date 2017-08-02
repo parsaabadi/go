@@ -4,8 +4,6 @@
 package main
 
 import (
-	"encoding/json"
-	"io"
 	"net/http"
 
 	"go.openmpp.org/ompp/db"
@@ -20,21 +18,10 @@ import (
 // If no such workset exist in database then result is undefined.
 func worksetReadonlyHandler(w http.ResponseWriter, r *http.Request) {
 
-	if r.Header.Get("Content-Type") != "application/json" {
-		http.Error(w, "Expected Content-Type: application/json", http.StatusUnsupportedMediaType)
-		return
-	}
-
-	// decode json
+	// decode json request body
 	var wp db.WorksetPub
-	err := json.NewDecoder(r.Body).Decode(&wp)
-	if err != nil {
-		if err == io.EOF {
-			http.Error(w, "Invalid (empty) json at "+r.URL.String(), http.StatusBadRequest)
-			return
-		}
-		http.Error(w, "Json decode error at "+r.URL.String(), http.StatusBadRequest)
-		return
+	if !jsonRequestDecode(w, r, &wp) {
+		return // error at json decode, response done with http error
 	}
 
 	// update workset read-only status
@@ -81,21 +68,10 @@ func worksetReadonlyUrlHandler(w http.ResponseWriter, r *http.Request) {
 // then parameters removed form database, including parameter values
 func worksetUpdateHandler(w http.ResponseWriter, r *http.Request) {
 
-	if r.Header.Get("Content-Type") != "application/json" {
-		http.Error(w, "Expected Content-Type: application/json", http.StatusUnsupportedMediaType)
-		return
-	}
-
-	// decode json
+	// decode json request body
 	var wp db.WorksetPub
-	err := json.NewDecoder(r.Body).Decode(&wp)
-	if err != nil {
-		if err == io.EOF {
-			http.Error(w, "Invalid (empty) json at "+r.URL.String(), http.StatusBadRequest)
-			return
-		}
-		http.Error(w, "Json decode error at "+r.URL.String(), http.StatusBadRequest)
-		return
+	if !jsonRequestDecode(w, r, &wp) {
+		return // error at json decode, response done with http error
 	}
 
 	// update workset metadata
