@@ -108,6 +108,17 @@ func (meta *ModelMeta) ParamByKey(paramId int) (int, bool) {
 	return k, (k >= 0 && k < n && meta.Param[k].ParamId == paramId)
 }
 
+// ParamByDigest return index of parameter by parameter digest
+func (meta *ModelMeta) ParamByDigest(digest string) (int, bool) {
+
+	for k := range meta.Param {
+		if meta.Param[k].Digest == digest {
+			return k, true
+		}
+	}
+	return len(meta.Param), false
+}
+
 // ParamByName return index of parameter by name
 func (meta *ModelMeta) ParamByName(name string) (int, bool) {
 
@@ -173,6 +184,17 @@ func (meta *ModelMeta) OutTableByName(name string) (int, bool) {
 
 	for k := range meta.Table {
 		if meta.Table[k].Name == name {
+			return k, true
+		}
+	}
+	return len(meta.Table), false
+}
+
+// OutTableByDigest return index of output table by digest
+func (meta *ModelMeta) OutTableByDigest(digest string) (int, bool) {
+
+	for k := range meta.Table {
+		if meta.Table[k].Digest == digest {
 			return k, true
 		}
 	}
@@ -303,4 +325,9 @@ func (typeRow *TypeDicRow) sqlColumnType(dbFacet Facet) (string, error) {
 	}
 
 	return "", errors.New("invalid type id: " + strconv.Itoa(typeRow.TypeId))
+}
+
+// IsRunCompleted retrun true if run status one of: s=success, x=exit, e=error
+func IsRunCompleted(status string) bool {
+	return status == DoneRunStatus || status == ExitRunStatus || status == ErrorRunStatus
 }

@@ -35,7 +35,7 @@ func (meta *RunMeta) UpdateRun(dbConn *sql.DB, modelDef *ModelMeta, langDef *Lan
 	if meta.Run.ModelId != modelDef.Model.ModelId {
 		return false, errors.New("model run: " + strconv.Itoa(meta.Run.RunId) + " " + meta.Run.Name + " invalid model id " + strconv.Itoa(meta.Run.ModelId) + " expected: " + strconv.Itoa(modelDef.Model.ModelId))
 	}
-	if meta.Run.Status != DoneRunStatus && meta.Run.Status != ExitRunStatus && meta.Run.Status != ErrorRunStatus {
+	if !IsRunCompleted(meta.Run.Status) {
 		return false, errors.New("model run not completed: " + strconv.Itoa(meta.Run.RunId) + " " + meta.Run.Name)
 	}
 
@@ -264,7 +264,7 @@ func doUpdateRunDigest(trx *sql.Tx, runId int) (string, error) {
 func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, meta *RunMeta, langDef *LangMeta) error {
 
 	// validate: run must be completed
-	if meta.Run.Status != DoneRunStatus && meta.Run.Status != ExitRunStatus && meta.Run.Status != ErrorRunStatus {
+	if !IsRunCompleted(meta.Run.Status) {
 		return errors.New("model run not completed: " + strconv.Itoa(meta.Run.RunId) + " " + meta.Run.Name)
 	}
 

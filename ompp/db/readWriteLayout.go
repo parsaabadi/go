@@ -27,7 +27,7 @@ type ReadLayout struct {
 	ValueName  string          // only for output table: if not empty then expression or accumulator name to select
 	FromId     int             // run id or set id to select input parameter or output table values
 	IsFromSet  bool            // only for parameter: if true then select from workset else from model run
-	IsEditSet  bool            // only for parameter: if true then workset must be editable (readonly = false) else must be readonly
+	IsEditSet  bool            // only for parameter: if true then workset must be editable (readonly = false)
 	IsAccum    bool            // only for output table: if true then select output table accumulator else expression
 	IsAllAccum bool            // only for accumulators: if true then select from all accumulators view else from accumulators table
 	Offset     int64           // first row to return from select, zero-based ofsset
@@ -37,14 +37,14 @@ type ReadLayout struct {
 }
 
 // FilterOp is enum type for filter operators in select where conditions
-type FilterOp int8
+type FilterOp string
 
 // Select filter operators for dimension enum ids.
 const (
-	InAutoOpFilter  FilterOp = iota // auto convert IN list filter into equal or BETWEEN if possible
-	InOpFilter                      // dimension enum ids in: dim2 IN (11, 22, 33)
-	EqOpFilter                      // dimension equal: dim1 = 12
-	BetweenOpFilter                 // dimension enum ids between: dim3 BETWEEN 44 AND 88
+	InAutoOpFilter  FilterOp = "IN_AUTO" // auto convert IN list filter into equal or BETWEEN if possible
+	InOpFilter               = "IN"      // dimension enum ids in: dim2 IN (11, 22, 33)
+	EqOpFilter               = "="       // dimension equal: dim1 = 12
+	BetweenOpFilter          = "BETWEEN" // dimension enum ids between: dim3 BETWEEN 44 AND 88
 )
 
 // FilterColumn define dimension column and condition to filter enum ids to build select where
@@ -78,7 +78,8 @@ func makeOrderBy(rank int, orderBy []OrderByColumn, extraIdColumns int) string {
 			}
 		}
 		return q
-	} // else
+	}
+	// else
 	if rank > 0 || extraIdColumns > 0 { // default: order by  acc_id, sub_id, dimensions
 
 		q := " ORDER BY "

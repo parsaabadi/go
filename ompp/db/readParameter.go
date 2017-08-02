@@ -34,7 +34,7 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadLayout) (*li
 
 	// if this is workset parameter then:
 	//   if source workset exist
-	//   check readonly status: it must be !=layout.IsEditSet
+	//   check readonly status: if layout.IsEditSet then read-only must be false
 	//   if parameter not in workset then select base run id, it must be >0
 	var srcRunId int
 	var isWsParam bool
@@ -53,8 +53,8 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadLayout) (*li
 		}
 
 		// workset readonly status must be compatible with (oposite to) "edit workset" status
-		if setRow.IsReadonly == layout.IsEditSet {
-			return nil, errors.New("cannot read or edit parameter " + param.Name + " from workset, id: " + strconv.Itoa(layout.FromId))
+		if layout.IsEditSet && setRow.IsReadonly {
+			return nil, errors.New("cannot edit parameter " + param.Name + " from read-only workset, id: " + strconv.Itoa(layout.FromId))
 		}
 
 		// check is this workset contain the parameter
@@ -96,7 +96,7 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadLayout) (*li
 		if runRow == nil {
 			return nil, errors.New("model run not found, id: " + strconv.Itoa(srcRunId))
 		}
-		if runRow.Status != DoneRunStatus && runRow.Status != ExitRunStatus && runRow.Status != ErrorRunStatus {
+		if !IsRunCompleted(runRow.Status) {
 			return nil, errors.New("model run not completed, id: " + strconv.Itoa(srcRunId))
 		}
 	}
