@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"strconv"
 
 	"go.openmpp.org/ompp/db"
 )
@@ -57,12 +56,11 @@ func worksetReadonlyUrlHandler(w http.ResponseWriter, r *http.Request) {
 
 	dn := getRequestParam(r, "dn")
 	wsn := getRequestParam(r, "wsn")
-	val := getRequestParam(r, "val")
 
 	// convert readonly flag
-	isReadonly, err := strconv.ParseBool(val)
-	if err != nil {
-		http.Error(w, "Invalid value of workset read-only flag"+wsn, http.StatusBadRequest)
+	isReadonly, ok := getBoolRequestParam(r, "val")
+	if !ok {
+		http.Error(w, "Invalid value of workset read-only flag "+wsn, http.StatusBadRequest)
 		return
 	}
 
@@ -74,7 +72,7 @@ func worksetReadonlyUrlHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // worksetUpdateHandler update workset metadata from json post:
-// POST /api/workset
+// POST /api/workset-meta
 // Json keys: model digest or name and workset name.
 // Json content: workset "public" metadata.
 // If multiple models with same name exist then result is undefined.

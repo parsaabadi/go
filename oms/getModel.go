@@ -21,8 +21,8 @@ func (mc *ModelCatalog) ModelDicByDigest(digest string) (db.ModelDicRow, bool) {
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	idx := mc.indexByDigest(digest)
-	if idx < 0 {
+	idx, ok := mc.indexByDigest(digest)
+	if !ok {
 		return db.ModelDicRow{}, false // model not found, empty result
 	}
 
@@ -39,8 +39,8 @@ func (mc *ModelCatalog) ModelMetaByDigestOrName(dn string) (*db.ModelMeta, bool)
 	}
 
 	// if model metadata not loaded then read it from database
-	idx := mc.loadModelMeta(dn)
-	if idx < 0 {
+	idx, ok := mc.loadModelMeta(dn)
+	if !ok {
 		return &db.ModelMeta{}, false // return empty result: model not found or error
 	}
 
@@ -61,37 +61,37 @@ func (mc *ModelCatalog) ModelMetaByDigestOrName(dn string) (*db.ModelMeta, bool)
 // If metadata already loaded then do skip db reading and return index in model list.
 // It search model by digest or name if digest not found.
 // Return index in model list or < 0 on error or if model not found.
-func (mc *ModelCatalog) loadModelMeta(dn string) int {
+func (mc *ModelCatalog) loadModelMeta(dn string) (int, bool) {
 
 	// if model digest-name is empty then return empty results
 	if dn == "" {
 		omppLog.Log("Warning: invalid (empty) model digest and name")
-		return -1
+		return 0, false
 	}
 
 	// find model index by digest or name
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	idx := mc.indexByDigestOrName(dn)
-	if idx < 0 {
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return idx // model not found, index is negative
+		return 0, false // model not found, index is negative
 	}
 	if mc.modelLst[idx].meta != nil && mc.modelLst[idx].isMetaFull { // exit if model metadata already loaded
-		return idx
+		return idx, true
 	}
 
 	// read metadata from database
 	m, err := db.GetModelById(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId)
 	if err != nil {
 		omppLog.Log("Error at get model metadata: ", dn, ": ", err.Error())
-		return -1
+		return 0, false
 	}
 
 	// store model metadata
 	mc.modelLst[idx].isMetaFull = true
 	mc.modelLst[idx].meta = m
 
-	return idx
+	return idx, true
 }

@@ -4,9 +4,13 @@
 package main
 
 import (
+	"container/list"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/husobee/vestigo"
@@ -15,9 +19,8 @@ import (
 	"go.openmpp.org/ompp/omppLog"
 )
 
-// jsonResponse set response headers and writes src as json into w response writer.
-// On return error it writes 500 internal server error response.
-func jsonResponse(w http.ResponseWriter, r *http.Request, src interface{}) {
+// jsonSetHeaders set response headers: Content-Type: application/json and Access-Control-Allow-Origin
+func jsonSetHeaders(w http.ResponseWriter, r *http.Request) {
 
 	// if Content-Type not set then use json
 	if _, isSet := w.Header()["Content-Type"]; !isSet {
@@ -30,12 +33,45 @@ func jsonResponse(w http.ResponseWriter, r *http.Request, src interface{}) {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
 		}
 	}
+}
 
-	// write json
+// jsonResponse set response headers and writes src as json into w response writer.
+// On error it writes 500 internal server error response.
+func jsonResponse(w http.ResponseWriter, r *http.Request, src interface{}) {
+
+	jsonSetHeaders(w, r)
+
 	err := json.NewEncoder(w).Encode(src)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+// jsonListResponse set response headers and writes srcLst as json into w response writer.
+// On error it writes 500 internal server error response.
+func jsonListResponse(w http.ResponseWriter, r *http.Request, srcLst *list.List) {
+
+	jsonSetHeaders(w, r) // set response headers, i.e. content type
+
+	w.Write([]byte{'['}) // output is json array
+
+	enc := json.NewEncoder(w)
+	isNext := false
+
+	for src := srcLst.Front(); src != nil; src = src.Next() {
+
+		if isNext {
+			w.Write([]byte{','}) // until the last separate array items with , comma
+		}
+
+		// write actual value
+		if err := enc.Encode(src.Value); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		isNext = true
+	}
+
+	w.Write([]byte{']'}) // end of array
 }
 
 // set Content-Type header by extension and invoke next handler.
@@ -74,7 +110,7 @@ func logRequest(next http.HandlerFunc) http.HandlerFunc {
 	return next
 }
 
-// get url parameter ?name or router parameter /:name
+// get value of url parameter ?name or router parameter /:name
 func getRequestParam(r *http.Request, name string) string {
 
 	v := r.URL.Query().Get(name)
@@ -82,6 +118,54 @@ func getRequestParam(r *http.Request, name string) string {
 		v = vestigo.Param(r, name)
 	}
 	return v
+}
+
+// get boolean value of url parameter ?name or router parameter /:name
+func getBoolRequestParam(r *http.Request, name string) (bool, bool) {
+
+	v := r.URL.Query().Get(name)
+	if v == "" {
+		v = vestigo.Param(r, name)
+	}
+	if v == "" {
+		return false, true // no such parameter: return = false by default
+	}
+	if isVal, err := strconv.ParseBool(v); err == nil {
+		return isVal, true // return result: value is boolean
+	}
+	return false, false // value is not boolean
+}
+
+// get integer value of url parameter ?name or router parameter /:name
+func getIntRequestParam(r *http.Request, name string, defaultVal int) (int, bool) {
+
+	v := r.URL.Query().Get(name)
+	if v == "" {
+		v = vestigo.Param(r, name)
+	}
+	if v == "" {
+		return defaultVal, true // no such parameter: return defult value
+	}
+	if nVal, err := strconv.Atoi(v); err == nil {
+		return nVal, true // return result: value is integer
+	}
+	return defaultVal, false // value is not integer
+}
+
+// get int64 value of url parameter ?name or router parameter /:name
+func getInt64RequestParam(r *http.Request, name string, defaultVal int64) (int64, bool) {
+
+	v := r.URL.Query().Get(name)
+	if v == "" {
+		v = vestigo.Param(r, name)
+	}
+	if v == "" {
+		return defaultVal, true // no such parameter: return defult value
+	}
+	if nVal, err := strconv.ParseInt(v, 0, 64); err == nil {
+		return nVal, true // return result: value is integer
+	}
+	return defaultVal, false // value is not integer
 }
 
 // get languages accepted by browser and
@@ -111,4 +195,19 @@ func matchRequestToUiLang(r *http.Request) string {
 	rqLangTags, _, _ := language.ParseAcceptLanguage(r.Header.Get("Accept-Language"))
 	tag, _, _ := uiLangMatcher.Match(rqLangTags...)
 	return tag.String()
+}
+
+// isDirExist return error if directory does not exist or not accessible
+func isDirExist(dirPath string) error {
+	stat, err := os.Stat(dirPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errors.New("Error: directory not exist: " + dirPath)
+		}
+		return errors.New("Error: unable to access directory: " + dirPath + " : " + err.Error())
+	}
+	if !stat.IsDir() {
+		return errors.New("Error: directory expected: " + dirPath)
+	}
+	return nil
 }

@@ -437,3 +437,4 @@ func worksetAllTextHandler(w http.ResponseWriter, r *http.Request) {
 	wp, _ := theCatalog.WorksetText(dn, wsn, true, nil)
 	jsonResponse(w, r, wp)
 }
+

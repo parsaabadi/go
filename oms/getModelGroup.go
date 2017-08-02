@@ -65,8 +65,8 @@ func (mc *ModelCatalog) loadModelGroups(dn string) int {
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	idx := mc.indexByDigestOrName(dn)
-	if idx < 0 {
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return idx // model not found, index is negative
 	}

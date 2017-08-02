@@ -21,15 +21,15 @@ func (mc *ModelCatalog) UpdateWorksetReadonly(dn, wsn string, isReadonly bool) (
 		return "", &db.WorksetRow{}, false
 	}
 
-	idx := mc.loadModelMeta(dn)
-	if idx < 0 {
+	// lock catalog and find model index by digest or name
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return "", &db.WorksetRow{}, false // return empty result: model not found or error
 	}
-
-	// lock catalog and if model metadata not loaded then read it from database
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
 
 	// find workset in database
 	w, err := db.GetWorksetByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, wsn)
@@ -81,8 +81,8 @@ func (mc *ModelCatalog) UpdateWorkset(wp *db.WorksetPub) (bool, error) {
 	}
 
 	// if model metadata not loaded then read it from database
-	idx := mc.loadModelMeta(dn)
-	if idx < 0 {
+	idx, ok := mc.loadModelMeta(dn)
+	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return false, nil // return empty result: model not found or error
 	}

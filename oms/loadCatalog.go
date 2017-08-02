@@ -16,19 +16,19 @@ import (
 // RefreshSqlite open db-connection to model.sqlite files in model directory and read model_dic row for each model.
 // If multiple version of the same model (equal by digest) exist in different files then only one is used.
 // All previously opened db connections are closed.
-func (mc *ModelCatalog) RefreshSqlite(mDir string) error {
+func (mc *ModelCatalog) RefreshSqlite(modelDir string) error {
 
 	// model directory must exist
-	isDir := mDir != "" && mDir != "."
+	isDir := modelDir != "" && modelDir != "."
 	if isDir {
-		isDir = isDirExist(mDir) == nil
+		isDir = isDirExist(modelDir) == nil
 	}
 	if !isDir {
-		return errors.New("Error: model directory not exist or not accesible: " + mDir)
+		return errors.New("Error: model directory not exist or not accesible: " + modelDir)
 	}
 
 	// get list of model/dir/*.sqlite files
-	pathLst, err := filepath.Glob(filepath.Join(mDir, "*.sqlite"))
+	pathLst, err := filepath.Glob(filepath.Join(modelDir, "*.sqlite"))
 	if err != nil {
 		omppLog.Log("Error: fail to list model directory: ", err.Error())
 		return errors.New("Error: fail to list model directory")
@@ -109,7 +109,7 @@ func (mc *ModelCatalog) RefreshSqlite(mDir string) error {
 	defer mc.theLock.Unlock()
 
 	// update model directory
-	theCatalog.modelDir = mDir
+	theCatalog.modelDir = modelDir
 	theCatalog.isDirEnabled = isDir
 
 	// close existing connections and store updated list of models and db connections
@@ -130,30 +130,66 @@ func (mc *ModelCatalog) getModelDir() (string, bool) {
 	return mc.modelDir, mc.isDirEnabled
 }
 
-// indexByDigest return index of model by digest or -1 if not found. It can be used only inside of lock.
-func (mc *ModelCatalog) indexByDigest(digest string) int {
+// indexByDigest return index of model by digest.
+// It can be used only inside of lock.
+func (mc *ModelCatalog) indexByDigest(digest string) (int, bool) {
 	for k := range mc.modelLst {
 		if mc.modelLst[k].meta.Model.Digest == digest {
-			return k
+			return k, true
 		}
 	}
-	return -1
+	return 0, false
 }
 
-// indexByDigestOrName return index of model by digest or by name. It can be used only inside of lock.
+// indexByDigestOrName return index of model by digest or by name.
+// It can be used only inside of lock.
 // If digest exist in model list then return index by digest else first index of name.
-// Return -1 if no digest or name found.
-func (mc *ModelCatalog) indexByDigestOrName(dn string) int {
+func (mc *ModelCatalog) indexByDigestOrName(dn string) (int, bool) {
 	n := -1
 	for k := range mc.modelLst {
 		if mc.modelLst[k].meta.Model.Digest == dn {
-			return k
+			return k, true // return: digest found
 		}
 		if n < 0 && mc.modelLst[k].meta.Model.Name == dn {
 			n = k
 		}
 	}
-	return n
+	if n >= 0 {
+		return n, true // return: name found
+	}
+	return 0, false // not found
+}
+
+// paramIndexByDigestOrName return index of parameter by digest or by name.
+// It can be used only inside of lock.
+// If digest exist in model parameter list then return index by digest else index of name.
+// Return -1 if no digest or name found.
+func (mc *ModelCatalog) paramIndexByDigestOrName(modelIdx int, pdn string) (int, bool) {
+
+	if modelIdx < 0 || modelIdx >= len(mc.modelLst) {
+		return -1, false
+	}
+
+	if n, ok := mc.modelLst[modelIdx].meta.ParamByDigest(pdn); ok {
+		return n, ok
+	}
+	return mc.modelLst[modelIdx].meta.ParamByName(pdn)
+}
+
+// outTblIndexByDigestOrName return index of output table by digest or by name.
+// It can be used only inside of lock.
+// If digest exist in model output table list then return index by digest else index of name.
+// Return -1 if no digest or name found.
+func (mc *ModelCatalog) outTblIndexByDigestOrName(modelIdx int, pdn string) (int, bool) {
+
+	if modelIdx < 0 || modelIdx >= len(mc.modelLst) {
+		return -1, false
+	}
+
+	if n, ok := mc.modelLst[modelIdx].meta.OutTableByDigest(pdn); ok {
+		return n, ok
+	}
+	return mc.modelLst[modelIdx].meta.OutTableByName(pdn)
 }
 
 // AllModelDigests return copy of all model digests.

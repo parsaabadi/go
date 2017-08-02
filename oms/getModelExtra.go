@@ -23,8 +23,8 @@ func (mc *ModelCatalog) LangListByDigestOrName(dn string) ([]db.LangLstRow, bool
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	idx := mc.indexByDigestOrName(dn)
-	if idx < 0 {
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return []db.LangLstRow{}, false
 	}
@@ -54,8 +54,8 @@ func (mc *ModelCatalog) ModelProfileByName(digest, profile string) (*db.ProfileM
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	idx := mc.indexByDigest(digest)
-	if idx < 0 {
+	idx, ok := mc.indexByDigest(digest)
+	if !ok {
 		omppLog.Log("Warning: model digest not found: ", digest)
 		return &db.ProfileMeta{}, false // return empty result: model not found or error
 	}

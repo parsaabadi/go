@@ -20,14 +20,15 @@ import (
 
 // config keys to get values from ini-file or command line arguments.
 const (
-	rootDirArgKey    = "oms.RootDir"    // root directory, expected subdir: html
-	modelDirArgKey   = "oms.ModelDir"   // models directory, if relative then must be relative to root directory
-	listenArgKey     = "oms.Listen"     // address to listen, default: localhost:4040
-	listenShortKey   = "l"              // address to listen (short form)
-	logRequestArgKey = "oms.LogRequest" // if true then log http request
-	apiOnlyArgKey    = "oms.ApiOnly"    // if true then API only web-service, no UI
-	uiLangsArgKey    = "oms.Languages"  // list of supported languages
-	encodingArgKey   = "oms.CodePage"   // code page for converting source files, e.g. windows-1252
+	rootDirArgKey    = "oms.RootDir"     // root directory, expected subdir: html
+	modelDirArgKey   = "oms.ModelDir"    // models directory, if relative then must be relative to root directory
+	listenArgKey     = "oms.Listen"      // address to listen, default: localhost:4040
+	listenShortKey   = "l"               // address to listen (short form)
+	logRequestArgKey = "oms.LogRequest"  // if true then log http request
+	apiOnlyArgKey    = "oms.ApiOnly"     // if true then API only web-service, no UI
+	uiLangsArgKey    = "oms.Languages"   // list of supported languages
+	encodingArgKey   = "oms.CodePage"    // code page for converting source files, e.g. windows-1252
+	pageSizeAgrKey   = "oms.MaxRowCount" // max number of rows to return from read parameters or output tables
 )
 
 // front-end UI subdirectory with html and javascript
@@ -38,6 +39,9 @@ var uiLangMatcher language.Matcher
 
 // if true then log http requests
 var isLogRequest bool
+
+// default "page" size: row count to read parameters or output tables
+var pageMaxSize int = 100
 
 // main entry point: wrapper to handle errors
 func main() {
@@ -63,6 +67,7 @@ func mainBody(args []string) error {
 	_ = flag.Bool(apiOnlyArgKey, false, "if true then API only web-service, no UI")
 	_ = flag.String(uiLangsArgKey, "en", "comma-separated list of supported languages")
 	_ = flag.String(encodingArgKey, "", "code page to convert source file into utf-8, e.g.: windows-1252")
+	_ = flag.Int(pageSizeAgrKey, pageMaxSize, "max number of rows to return from read parameters or output tables")
 
 	// pairs of full and short argument names to map short name to full name
 	var optFs = []config.FullShort{
@@ -79,6 +84,7 @@ func mainBody(args []string) error {
 	}
 	isLogRequest = runOpts.Bool(logRequestArgKey)
 	isApiOnly := runOpts.Bool(apiOnlyArgKey)
+	pageMaxSize = runOpts.Int(pageSizeAgrKey, pageMaxSize)
 	rootDir := runOpts.String(rootDirArgKey) // server root directory
 
 	// if UI required then server root directory must have html subdir
@@ -128,8 +134,9 @@ func mainBody(args []string) error {
 	// setup router and start server
 	router := vestigo.NewRouter()
 
-	apiGetRoutes(router)  // get /api web-service routes
-	apiPostRoutes(router) // post /api web-service routes
+	apiGetRoutes(router)    // web-service /api routes to get metadata
+	apiReadRoutes(router)   // web-service /api routes to read values
+	apiUpdateRoutes(router) // web-service /api routes to update metadata
 
 	// set web root handler: UI web pages or "not found" if this is web-service mode
 	if !isApiOnly {
@@ -166,22 +173,7 @@ func exitOnPanic() {
 	os.Exit(2) // final exit
 }
 
-// isDirExist return error if directory does not exist or not accessible
-func isDirExist(dirPath string) error {
-	stat, err := os.Stat(dirPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return errors.New("Error: directory not exist: " + dirPath)
-		}
-		return errors.New("Error: unable to access directory: " + dirPath + " : " + err.Error())
-	}
-	if !stat.IsDir() {
-		return errors.New("Error: directory expected: " + dirPath)
-	}
-	return nil
-}
-
-// add http GET routes to web-service /api
+// add http GET web-service /api routes to get metadata
 func apiGetRoutes(router *vestigo.Router) {
 
 	//
@@ -380,14 +372,36 @@ func apiGetRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:dn/workset/:wsn/text/all", worksetAllTextHandler, logRequest)
 }
 
-// add http POST routes to web-service /api
-func apiPostRoutes(router *vestigo.Router) {
+// add http GET or POST web-service /api routes to read parameters or output tables
+func apiReadRoutes(router *vestigo.Router) {
+
+	// GET /api/workset-parameter-value-id?dn=a1b2c3d&wsn=mySet&pdn=ff00ee11
+	// GET /api/workset-parameter-value-id?dn=modelOne&wsn=mySet&pdn=ageSex
+	// GET /api/workset-parameter-value-id?dn=modelOne&wsn=mySet&pdn=ageSex&start=0
+	// GET /api/workset-parameter-value-id?dn=modelOne&wsn=mySet&pdn=ageSex&start=0&count=100
+	// GET /api/model/:dn/workset/:wsn/parameter/:pdn/value-id
+	// GET /api/model/:dn/workset/:wsn/parameter/:pdn/value-id/start/:start
+	// GET /api/model/:dn/workset/:wsn/parameter/:pdn/value-id/start/:start/count/:count
+	router.Get("/api/workset-parameter-value-id", worksetParameterIdReadGetHandler, logRequest)
+	router.Get("/api/model/:dn/workset/:wsn/parameter/:pdn/value-id", worksetParameterIdReadGetHandler, logRequest)
+	router.Get("/api/model/:dn/workset/:wsn/parameter/:pdn/value-id/start/:start", worksetParameterIdReadGetHandler, logRequest)
+	router.Get("/api/model/:dn/workset/:wsn/parameter/:pdn/value-id/start/:start/count/:count", worksetParameterIdReadGetHandler, logRequest)
+
+	// POST /api/model/:dn/workset/:wsn/parameter/value-id
+	router.Post("/api/model/:dn/workset/:wsn/parameter/value-id", worksetParameterIdReadHandler, logRequest)
+
+	// POST /api/model/:dn/workset/:wsn/parameter/value
+	router.Post("/api/model/:dn/workset/:wsn/parameter/value", worksetParameterCodeReadHandler, logRequest)
+}
+
+// add http POST web-service /api routes to update metadata
+func apiUpdateRoutes(router *vestigo.Router) {
 
 	// POST /api/workset-readonly
 	// POST /api/model/:dn/workset/:wsn/readonly/:val
 	router.Post("/api/workset-readonly", worksetReadonlyHandler, logRequest)
 	router.Post("/api/model/:dn/workset/:wsn/readonly/:val", worksetReadonlyUrlHandler, logRequest)
 
-	// POST /api/workset
-	router.Post("/api/workset", worksetUpdateHandler, logRequest)
+	// POST /api/workset-meta
+	router.Post("/api/workset-meta", worksetUpdateHandler, logRequest)
 }

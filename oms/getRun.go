@@ -26,8 +26,8 @@ func (mc *ModelCatalog) RunStatus(dn, rdn string) (*db.RunRow, bool) {
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	idx := mc.indexByDigestOrName(dn)
-	if idx < 0 {
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return &db.RunRow{}, false // return empty result: model not found or error
 	}
@@ -62,8 +62,8 @@ func (mc *ModelCatalog) FirstOrLastRunStatus(dn string, isFisrt bool) (*db.RunRo
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	idx := mc.indexByDigestOrName(dn)
-	if idx < 0 {
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return &db.RunRow{}, false // return empty result: model not found or error
 	}
@@ -104,8 +104,8 @@ func (mc *ModelCatalog) LastCompletedRunStatus(dn string) (*db.RunRow, bool) {
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	idx := mc.indexByDigestOrName(dn)
-	if idx < 0 {
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return &db.RunRow{}, false // return empty result: model not found or error
 	}
@@ -137,8 +137,8 @@ func (mc *ModelCatalog) LastCompletedRunText(dn string, isAllLang bool, prefered
 	}
 
 	// load model metadata in order to convert to "public"
-	idx := mc.loadModelMeta(dn)
-	if idx < 0 {
+	idx, ok := mc.loadModelMeta(dn)
+	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return &db.RunPub{}, false // return empty result: model not found or error
 	}
@@ -192,8 +192,8 @@ func (mc *ModelCatalog) RunList(dn string) ([]db.RunPub, bool) {
 	}
 
 	// load model metadata in order to convert to "public"
-	idx := mc.loadModelMeta(dn)
-	if idx < 0 {
+	idx, ok := mc.loadModelMeta(dn)
+	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return []db.RunPub{}, false // return empty result: model not found or error
 	}
@@ -241,8 +241,8 @@ func (mc *ModelCatalog) RunListText(dn string, preferedLang []language.Tag) ([]d
 	}
 
 	// load model metadata in order to convert to "public"
-	idx := mc.loadModelMeta(dn)
-	if idx < 0 {
+	idx, ok := mc.loadModelMeta(dn)
+	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return []db.RunPub{}, false // return empty result: model not found or error
 	}
@@ -315,8 +315,8 @@ func (mc *ModelCatalog) RunTextFull(dn, rdn string, isAllLang bool, preferedLang
 	}
 
 	// load model metadata in order to convert to "public"
-	idx := mc.loadModelMeta(dn)
-	if idx < 0 {
+	idx, ok := mc.loadModelMeta(dn)
+	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return &db.RunPub{}, false // return empty result: model not found or error
 	}
@@ -338,7 +338,7 @@ func (mc *ModelCatalog) RunTextFull(dn, rdn string, isAllLang bool, preferedLang
 		omppLog.Log("Warning run status not found: ", dn, ": ", rdn)
 		return &db.RunPub{}, false // return empty result: run_lst row not found
 	}
-	if r.Status != db.DoneRunStatus && r.Status != db.ErrorRunStatus && r.Status != db.ExitRunStatus {
+	if !db.IsRunCompleted(r.Status) {
 		omppLog.Log("Warning run is not completed: ", dn, ": ", rdn, ": ", r.Status)
 		return &db.RunPub{}, false // return empty result: run not completed
 	}
