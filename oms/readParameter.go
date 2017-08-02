@@ -80,8 +80,12 @@ func (mc *ModelCatalog) loadWorksetByName(modelIdx int, wsn string) (*db.Workset
 
 	wst, err := db.GetWorksetByName(mc.modelLst[modelIdx].dbConn, mc.modelLst[modelIdx].meta.Model.ModelId, wsn)
 	if err != nil {
-		omppLog.Log("Error at get workset status: ", mc.modelLst[modelIdx].meta.Model.Name, ": ", wsn, ": ", err.Error())
+		omppLog.Log("Workset not found or error at get workset status: ", mc.modelLst[modelIdx].meta.Model.Name, ": ", wsn, ": ", err.Error())
 		return nil, false // return empty result: workset select error
+	}
+	if wst == nil {
+		omppLog.Log("Warning workset status not found: ", mc.modelLst[modelIdx].meta.Model.Name, ": ", wsn)
+		return nil, false // return empty result: workset_lst row not found
 	}
 
 	return wst, true
