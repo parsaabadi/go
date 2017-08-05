@@ -16,7 +16,7 @@ import (
 // and up to max page size rows, if page size <= 0 then all values returned.
 // Parameter values can be read-only (select from run or read-only workset) or read-write (read-write workset).
 // Rows can be filtered and ordered (see db.ReadParamLayout for details).
-func (mc *ModelCatalog) ReadParameter(dn, src string, layout *db.ReadParamLayout) (*list.List, bool) {
+func (mc *ModelCatalog) ReadParameter(dn, src string, isCode bool, layout *db.ReadParamLayout) (*list.List, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
@@ -64,6 +64,14 @@ func (mc *ModelCatalog) ReadParameter(dn, src string, layout *db.ReadParamLayout
 		return nil, false // return empty result: values select error
 	}
 
+	// convert from id list into code list
+	if isCode {
+		if ok := mc.convertToCellCodeList(mc.modelLst[idx].meta, layout.Name, cLst); !ok {
+			omppLog.Log("Failed to parameter value cells: ", dn, ": ", layout.Name, ": ", err.Error())
+			return nil, false // fail to convert from id cell list into code cell list
+		}
+	}
+
 	return cLst, true
 }
 
@@ -73,8 +81,7 @@ func (mc *ModelCatalog) ReadParameter(dn, src string, layout *db.ReadParamLayout
 // Page started at zero based offset row and up to max page size rows, if page size <= 0 then all values returned.
 // Values can be from expression table, accumulator table or "all accumulators" view.
 // Rows can be filtered and ordered (see db.ReadOutTableLayout for details).
-func (mc *ModelCatalog) ReadOutTable(
-	dn, src string, layout *db.ReadOutTableLayout) (*list.List, bool) {
+func (mc *ModelCatalog) ReadOutTable(dn, src string, isCode bool, layout *db.ReadOutTableLayout) (*list.List, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
@@ -112,7 +119,61 @@ func (mc *ModelCatalog) ReadOutTable(
 		return nil, false // return empty result: values select error
 	}
 
+	// convert from id list into code list
+	if isCode {
+		if ok := mc.convertToCellCodeList(mc.modelLst[idx].meta, layout.Name, cLst); !ok {
+			omppLog.Log("Failed to convert table value cells: ", dn, ": ", layout.Name, ": ", err.Error())
+			return nil, false // fail to convert from id cell list into code cell list
+		}
+	}
+
 	return cLst, true
+}
+
+// convertToCellCodeList for eact cell list element convert it from id's cell into code cell.
+// Parameter and output table values selected into list of id cells where dimension items are enum id's.
+// Code cell contain enum codes for enum-based dimensions and string values of simple type dimensions.
+// If this is enum type parameter then parameter value converted from id to enum code.
+// It can be used only inside of lock.
+func (mc *ModelCatalog) convertToCellCodeList(meta *db.ModelMeta, name string, cellLst *list.List) bool {
+
+	if meta == nil {
+		omppLog.Log("Invalid (empty) model metadata, fail to create cell value converter: ", name)
+		return false // error: no model metadata or no cell list
+	}
+	if cellLst == nil || cellLst.Len() <= 0 {
+		return true // exit on emprty list: nothing to do
+	}
+
+	// create converter
+	var cvt func(interface{}) (interface{}, error)
+	var err error
+
+	if cellLst.Front() != nil {
+		if cv, ok := cellLst.Front().Value.(db.CellToCodeConverter); ok {
+			cvt, err = cv.IdToCodeCell(meta, name)
+		}
+	}
+	if err != nil {
+		omppLog.Log("Failed to create cell value converter: ", name, ": ", err.Error())
+		return false // error: fail to get converter, may be front element of the list is not a cell
+	}
+	if cvt == nil {
+		omppLog.Log("Invalid cell value list or front element: ", name)
+		return false // error: front element of the list is not a cell
+	}
+
+	// convert all list elements from id's to code
+	for el := cellLst.Front(); el != nil; el = el.Next() {
+
+		c, err := cvt(el.Value) // convert from id's to codes
+		if err != nil {
+			omppLog.Log("Error at convert cell value of: ", name, ": ", err.Error())
+			return false // error at conversion
+		}
+		el.Value = c
+	}
+	return true
 }
 
 // loadWorksetByName select workset_lst db row by name and model index in model catalog.

@@ -375,73 +375,79 @@ func apiGetRoutes(router *vestigo.Router) {
 // add http GET or POST web-service /api routes to read parameters or output tables
 func apiReadRoutes(router *vestigo.Router) {
 
-	// GET /api/workset-parameter-value-id?dn=modelOne&wsn=mySet&name=ageSex
-	// GET /api/workset-parameter-value-id?dn=modelOne&wsn=mySet&name=ageSex&start=0
-	// GET /api/workset-parameter-value-id?dn=modelOne&wsn=mySet&name=ageSex&start=0&count=100
-	// GET /api/model/:dn/workset/:wsn/parameter/:name/value-id
-	// GET /api/model/:dn/workset/:wsn/parameter/:name/value-id/start/:start
-	// GET /api/model/:dn/workset/:wsn/parameter/:name/value-id/start/:start/count/:count
-	router.Get("/api/workset-parameter-value-id", worksetParameterIdReadGetHandler, logRequest)
-	router.Get("/api/model/:dn/workset/:wsn/parameter/:name/value-id", worksetParameterIdReadGetHandler, logRequest)
-	router.Get("/api/model/:dn/workset/:wsn/parameter/:name/value-id/start/:start", worksetParameterIdReadGetHandler, logRequest)
-	router.Get("/api/model/:dn/workset/:wsn/parameter/:name/value-id/start/:start/count/:count", worksetParameterIdReadGetHandler, logRequest)
+	// POST /api/model/:dn/workset/:wsn/parameter/value
+	router.Post("/api/model/:dn/workset/:wsn/parameter/value", worksetParameterCodeReadHandler, logRequest)
 
 	// POST /api/model/:dn/workset/:wsn/parameter/value-id
 	router.Post("/api/model/:dn/workset/:wsn/parameter/value-id", worksetParameterIdReadHandler, logRequest)
 
-	// POST /api/model/:dn/workset/:wsn/parameter/value
-	router.Post("/api/model/:dn/workset/:wsn/parameter/value", worksetParameterCodeReadHandler, logRequest)
-
-	// GET /api/run-parameter-value-id?dn=a1b2c3d&rdn=1f2e3d4&name=ageSex
-	// GET /api/run-parameter-value-id?dn=modelOne&rdn=myRun&name=ageSex
-	// GET /api/run-parameter-value-id?dn=modelOne&rdn=1f2e3d4&name=ageSex&start=0
-	// GET /api/run-parameter-value-id?dn=modelOne&rdn=myRun&name=ageSex&start=0&count=100
-	// GET /api/model/:dn/run/:rdn/parameter/:name/value-id
-	// GET /api/model/:dn/run/:rdn/parameter/:name/value-id/start/:start
-	// GET /api/model/:dn/run/:rdn/parameter/:name/value-id/start/:start/count/:count
-	router.Get("/api/run-parameter-value-id", runParameterIdReadGetHandler, logRequest)
-	router.Get("/api/model/:dn/run/:rdn/parameter/:name/value-id", runParameterIdReadGetHandler, logRequest)
-	router.Get("/api/model/:dn/run/:rdn/parameter/:name/value-id/start/:start", runParameterIdReadGetHandler, logRequest)
-	router.Get("/api/model/:dn/run/:rdn/parameter/:name/value-id/start/:start/count/:count", runParameterIdReadGetHandler, logRequest)
+	// POST /api/model/:dn/run/:rdn/parameter/value
+	router.Post("/api/model/:dn/run/:rdn/parameter/value", runParameterCodeReadHandler, logRequest)
 
 	// POST /api/model/:dn/run/:rdn/parameter/value-id
 	router.Post("/api/model/:dn/run/:rdn/parameter/value-id", runParameterIdReadHandler, logRequest)
 
-	// GET /api/run-table-expr-id?dn=modelOne&rdn=myRun&name=salarySex
-	// GET /api/run-table-expr-id?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0
-	// GET /api/run-table-expr-id?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0&count=100
-	// GET /api/model/:dn/run/:rdn/table/:name/expr-id
-	// GET /api/model/:dn/run/:rdn/table/:name/expr-id/start/:start
-	// GET /api/model/:dn/run/:rdn/table/:name/expr-id/start/:start/count/:count
-	router.Get("/api/run-table-expr-id", runTableIdExprReadGetHandler, logRequest)
-	router.Get("/api/model/:dn/run/:rdn/table/:name/expr-id", runTableIdExprReadGetHandler, logRequest)
-	router.Get("/api/model/:dn/run/:rdn/table/:name/expr-id/start/:start", runTableIdExprReadGetHandler, logRequest)
-	router.Get("/api/model/:dn/run/:rdn/table/:name/expr-id/start/:start/count/:count", runTableIdExprReadGetHandler, logRequest)
-
-	// GET /api/run-table-acc-id?dn=modelOne&rdn=myRun&name=salarySex
-	// GET /api/run-table-acc-id?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0
-	// GET /api/run-table-acc-id?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0&count=100
-	// GET /api/model/:dn/run/:rdn/table/:name/acc-id
-	// GET /api/model/:dn/run/:rdn/table/:name/acc-id/start/:start
-	// GET /api/model/:dn/run/:rdn/table/:name/acc-id/start/:start/count/:count
-	router.Get("/api/run-table-acc-id", runTableIdAccReadGetHandler, logRequest)
-	router.Get("/api/model/:dn/run/:rdn/table/:name/acc-id", runTableIdAccReadGetHandler, logRequest)
-	router.Get("/api/model/:dn/run/:rdn/table/:name/acc-id/start/:start", runTableIdAccReadGetHandler, logRequest)
-	router.Get("/api/model/:dn/run/:rdn/table/:name/acc-id/start/:start/count/:count", runTableIdAccReadGetHandler, logRequest)
-
-	// GET /api/run-table-all-acc-id?dn=modelOne&rdn=myRun&name=salarySex
-	// GET /api/run-table-all-acc-id?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0
-	// GET /api/run-table-all-acc-id?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0&count=100
-	// GET /api/model/:dn/run/:rdn/table/:name/all-acc-id
-	// GET /api/model/:dn/run/:rdn/table/:name/all-acc-id/start/:start
-	// GET /api/model/:dn/run/:rdn/table/:name/all-acc-id/start/:start/count/:count
-	router.Get("/api/run-table-all-acc-id", runTableIdAllAccReadGetHandler, logRequest)
-	router.Get("/api/model/:dn/run/:rdn/table/:name/all-acc-id", runTableIdAllAccReadGetHandler, logRequest)
-	router.Get("/api/model/:dn/run/:rdn/table/:name/all-acc-id/start/:start", runTableIdAllAccReadGetHandler, logRequest)
-	router.Get("/api/model/:dn/run/:rdn/table/:name/all-acc-id/start/:start/count/:count", runTableIdAllAccReadGetHandler, logRequest)
+	// POST /api/model/:dn/run/:rdn/table/value
+	router.Post("/api/model/:dn/run/:rdn/table/value", runTableCodeReadHandler, logRequest)
 
 	// POST /api/model/:dn/run/:rdn/table/value-id
 	router.Post("/api/model/:dn/run/:rdn/table/value-id", runTableIdReadHandler, logRequest)
+
+	// GET /api/workset-parameter-value?dn=modelOne&wsn=mySet&name=ageSex
+	// GET /api/workset-parameter-value?dn=modelOne&wsn=mySet&name=ageSex&start=0
+	// GET /api/workset-parameter-value?dn=modelOne&wsn=mySet&name=ageSex&start=0&count=100
+	// GET /api/model/:dn/workset/:wsn/parameter/:name/value
+	// GET /api/model/:dn/workset/:wsn/parameter/:name/value/start/:start
+	// GET /api/model/:dn/workset/:wsn/parameter/:name/value/start/:start/count/:count
+	router.Get("/api/workset-parameter-value", worksetParameterPageGetHandler, logRequest)
+	router.Get("/api/model/:dn/workset/:wsn/parameter/:name/value", worksetParameterPageGetHandler, logRequest)
+	router.Get("/api/model/:dn/workset/:wsn/parameter/:name/value/start/:start", worksetParameterPageGetHandler, logRequest)
+	router.Get("/api/model/:dn/workset/:wsn/parameter/:name/value/start/:start/count/:count", worksetParameterPageGetHandler, logRequest)
+
+	// GET /api/run-parameter-value?dn=a1b2c3d&rdn=1f2e3d4&name=ageSex
+	// GET /api/run-parameter-value?dn=modelOne&rdn=myRun&name=ageSex
+	// GET /api/run-parameter-value?dn=modelOne&rdn=1f2e3d4&name=ageSex&start=0
+	// GET /api/run-parameter-value?dn=modelOne&rdn=myRun&name=ageSex&start=0&count=100
+	// GET /api/model/:dn/run/:rdn/parameter/:name/value
+	// GET /api/model/:dn/run/:rdn/parameter/:name/value/start/:start
+	// GET /api/model/:dn/run/:rdn/parameter/:name/value/start/:start/count/:count
+	router.Get("/api/run-parameter-value", runParameterPageGetHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/parameter/:name/value", runParameterPageGetHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/parameter/:name/value/start/:start", runParameterPageGetHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/parameter/:name/value/start/:start/count/:count", runParameterPageGetHandler, logRequest)
+
+	// GET /api/run-table-expr?dn=modelOne&rdn=myRun&name=salarySex
+	// GET /api/run-table-expr?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0
+	// GET /api/run-table-expr?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0&count=100
+	// GET /api/model/:dn/run/:rdn/table/:name/expr
+	// GET /api/model/:dn/run/:rdn/table/:name/expr/start/:start
+	// GET /api/model/:dn/run/:rdn/table/:name/expr/start/:start/count/:count
+	router.Get("/api/run-table-expr", runTableExprPageGetHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/table/:name/expr", runTableExprPageGetHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/table/:name/expr/start/:start", runTableExprPageGetHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/table/:name/expr/start/:start/count/:count", runTableExprPageGetHandler, logRequest)
+
+	// GET /api/run-table-acc?dn=modelOne&rdn=myRun&name=salarySex
+	// GET /api/run-table-acc?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0
+	// GET /api/run-table-acc?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0&count=100
+	// GET /api/model/:dn/run/:rdn/table/:name/acc
+	// GET /api/model/:dn/run/:rdn/table/:name/acc/start/:start
+	// GET /api/model/:dn/run/:rdn/table/:name/acc/start/:start/count/:count
+	router.Get("/api/run-table-acc", runTableAccPageGetHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/table/:name/acc", runTableAccPageGetHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/table/:name/acc/start/:start", runTableAccPageGetHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/table/:name/acc/start/:start/count/:count", runTableAccPageGetHandler, logRequest)
+
+	// GET /api/run-table-all-acc?dn=modelOne&rdn=myRun&name=salarySex
+	// GET /api/run-table-all-acc?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0
+	// GET /api/run-table-all-acc?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0&count=100
+	// GET /api/model/:dn/run/:rdn/table/:name/all-acc
+	// GET /api/model/:dn/run/:rdn/table/:name/all-acc/start/:start
+	// GET /api/model/:dn/run/:rdn/table/:name/all-acc/start/:start/count/:count
+	router.Get("/api/run-table-all-acc", runTableAllAccPageGetHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/table/:name/all-acc", runTableAllAccPageGetHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/table/:name/all-acc/start/:start", runTableAllAccPageGetHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/table/:name/all-acc/start/:start/count/:count", runTableAllAccPageGetHandler, logRequest)
 }
 
 // add http POST web-service /api routes to update metadata
