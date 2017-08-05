@@ -231,7 +231,7 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadOutTableLa
 			if layout.IsAccum {
 
 				if !layout.IsAllAccum {
-					var ca = CellAcc{cellValue: cellValue{cellDims: cellDims{DimIds: make([]int, table.Rank)}}}
+					var ca = CellAcc{cellValue: cellValue{DimIds: make([]int, table.Rank)}}
 					ca.AccId = n1
 					ca.SubId = n2
 					copy(ca.DimIds, d)
@@ -245,9 +245,9 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadOutTableLa
 				// else all accumulators
 
 				var cl = CellAllAcc{
-					cellDims: cellDims{DimIds: make([]int, table.Rank)},
-					IsNull:   make([]bool, accCount),
-					Value:    make([]float64, accCount)}
+					DimIds: make([]int, table.Rank),
+					IsNull: make([]bool, accCount),
+					Value:  make([]float64, accCount)}
 
 				cl.SubId = n1
 				copy(cl.DimIds, d)
@@ -263,7 +263,7 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadOutTableLa
 			}
 			// else output table expression
 
-			var ce = CellExpr{cellValue: cellValue{cellDims: cellDims{DimIds: make([]int, table.Rank)}}}
+			var ce = CellExpr{cellValue: cellValue{DimIds: make([]int, table.Rank)}}
 			ce.ExprId = n1
 			copy(ce.DimIds, d)
 			ce.IsNull = !vf.Valid

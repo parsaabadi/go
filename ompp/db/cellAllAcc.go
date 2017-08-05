@@ -11,10 +11,19 @@ import (
 
 // CellAllAcc is value of multiple output table accumulators.
 type CellAllAcc struct {
-	cellDims           // dimensions
-	SubId    int       // output table subvalue id
-	IsNull   []bool    // if true then value is NULL
-	Value    []float64 // accumulator value(s)
+	DimIds []int     // dimensions item as enum ids or int values if dimension type simple
+	SubId  int       // output table subvalue id
+	IsNull []bool    // if true then value is NULL
+	Value  []float64 // accumulator value(s)
+}
+
+// CellCodeAllAcc is value of multiple output table accumulators.
+// Dimension(s) items are enum codes, not enum ids.
+type CellCodeAllAcc struct {
+	Dims   []string  // dimensions as enum codes or string of item if dimension type simple then
+	SubId  int       // output table subvalue id
+	IsNull []bool    // if true then value is NULL
+	Value  []float64 // accumulator value(s)
 }
 
 // CsvFileName return file name of csv file to store all accumulators rows
@@ -149,7 +158,7 @@ func (CellAllAcc) CsvToIdRow(
 	return cvt, nil
 }
 
-// CsvToRow return converter from output table cell (acc_id, sub_id, dimensions, value)
+// CsvToRow return converter from output table cell (sub_id, dimensions, acc0, acc1, acc2
 // to csv row []string (acc_name, sub_id, dimensions, value).
 //
 // Converter will retrun error if len(row) not equal to number of fields in csv record.
@@ -282,9 +291,9 @@ func (CellAllAcc) CsvToCell(
 
 		// make conversion buffer and check input csv row size
 		cell := CellAllAcc{
-			cellDims: cellDims{DimIds: make([]int, nRank)},
-			IsNull:   make([]bool, nAcc),
-			Value:    make([]float64, nAcc)}
+			DimIds: make([]int, nRank),
+			IsNull: make([]bool, nAcc),
+			Value:  make([]float64, nAcc)}
 
 		if len(row) != 1+nRank+nAcc {
 			return nil, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(1+nRank+nAcc))
@@ -325,6 +334,74 @@ func (CellAllAcc) CsvToCell(
 			}
 		}
 		return cell, nil
+	}
+
+	return cvt, nil
+}
+
+// IdToCodeCell return converter from output table cell of ids:  (sub_id, dimensions, acc0, acc1, acc2)
+// to cell of codes: (sub_id, dimensions as enum code, acc0, acc1, acc2)
+//
+// If dimension type is enum based then dimensions enum ids can be converted to enum code.
+// If dimension type is simple (bool or int) then dimension value converted to string.
+func (CellAllAcc) IdToCodeCell(modelDef *ModelMeta, name string) (
+	func(interface{}) (interface{}, error), error) {
+
+	// validate parameters
+	if modelDef == nil {
+		return nil, errors.New("invalid (empty) model metadata, look like model not found")
+	}
+	if name == "" {
+		return nil, errors.New("invalid (empty) output table name")
+	}
+
+	// find output table by name
+	k, ok := modelDef.OutTableByName(name)
+	if !ok {
+		return nil, errors.New("output table not found: " + name)
+	}
+	table := &modelDef.Table[k]
+
+	// for each dimension create converter from item id to code
+	fd := make([]func(itemId int) (string, error), table.Rank)
+
+	for k := 0; k < table.Rank; k++ {
+		f, err := cvtItemIdToCode(
+			name+"."+table.Dim[k].Name, table.Dim[k].typeOf, table.Dim[k].typeOf.Enum, table.Dim[k].IsTotal, table.Dim[k].typeOf.TotalEnumId)
+		if err != nil {
+			return nil, err
+		}
+		fd[k] = f
+	}
+
+	// create cell converter
+	cvt := func(src interface{}) (interface{}, error) {
+
+		srcCell, ok := src.(CellAllAcc)
+		if !ok {
+			return nil, errors.New("invalid type, expected: output table accumulator cell (internal error)")
+		}
+		if len(srcCell.DimIds) != table.Rank {
+			return nil, errors.New("invalid cell rank: " + strconv.Itoa(len(srcCell.DimIds)) + ", expected: " + strconv.Itoa(table.Rank))
+		}
+
+		dstCell := CellCodeAllAcc{
+			Dims:   make([]string, table.Rank),
+			SubId:  srcCell.SubId,
+			IsNull: append([]bool{}, srcCell.IsNull...),
+			Value:  append([]float64{}, srcCell.Value...),
+		}
+
+		// convert dimension item id to code
+		for k := range srcCell.DimIds {
+			v, err := fd[k](srcCell.DimIds[k])
+			if err != nil {
+				return nil, err
+			}
+			dstCell.Dims[k] = v
+		}
+
+		return dstCell, nil // converted OK
 	}
 
 	return cvt, nil

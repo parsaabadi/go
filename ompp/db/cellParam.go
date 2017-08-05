@@ -15,6 +15,13 @@ type CellParam struct {
 	SubId     int // parameter subvalue id
 }
 
+// CellCodeParam is value of input parameter.
+// Dimension(s) items are enum codes, not enum ids.
+type CellCodeParam struct {
+	cellCodeValue     // dimensions as enum codes and value
+	SubId         int // parameter subvalue id
+}
+
 // CsvFileName return file name of csv file to store parameter rows
 func (CellParam) CsvFileName(modelDef *ModelMeta, name string) (string, error) {
 
@@ -310,7 +317,7 @@ func (CellParam) CsvToCell(
 	cvt := func(row []string) (interface{}, error) {
 
 		// make conversion buffer and check input csv row size
-		cell := CellParam{cellValue: cellValue{cellDims: cellDims{DimIds: make([]int, param.Rank)}}}
+		cell := CellParam{cellValue: cellValue{DimIds: make([]int, param.Rank)}}
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {
@@ -349,6 +356,128 @@ func (CellParam) CsvToCell(
 		cell.Value = v
 
 		return cell, nil
+	}
+
+	return cvt, nil
+}
+
+// IdToCodeCell return converter from parameter cell of ids: (sub id, dimensions, value)
+// to cell of codes: (sub id, dimensions as enum code, value)
+//
+// If dimension type is enum based then dimensions enum ids can be converted to enum code.
+// If dimension type is simple (bool or int) then dimension value converted to string.
+// If parameter type is enum based then cell value enum id converted to enum code.
+func (CellParam) IdToCodeCell(modelDef *ModelMeta, name string) (
+	func(interface{}) (interface{}, error), error) {
+
+	// validate parameters
+	if modelDef == nil {
+		return nil, errors.New("invalid (empty) model metadata, look like model not found")
+	}
+	if name == "" {
+		return nil, errors.New("invalid (empty) parameter name")
+	}
+
+	// find parameter by name
+	k, ok := modelDef.ParamByName(name)
+	if !ok {
+		return nil, errors.New("parameter not found: " + name)
+	}
+	param := &modelDef.Param[k]
+
+	// for each dimension create converter from item id to code
+	fd := make([]func(itemId int) (string, error), param.Rank)
+
+	for k := 0; k < param.Rank; k++ {
+		f, err := cvtItemIdToCode(name+"."+param.Dim[k].Name, param.Dim[k].typeOf, param.Dim[k].typeOf.Enum, false, 0)
+		if err != nil {
+			return nil, err
+		}
+		fd[k] = f
+	}
+
+	// if parameter value type is enum-based then convert from enum id to code
+	isUseEnum := !param.typeOf.IsBuiltIn()
+	var fv func(itemId int) (string, error)
+
+	if isUseEnum {
+		f, err := cvtItemIdToCode(name, param.typeOf, param.typeOf.Enum, false, 0)
+		if err != nil {
+			return nil, err
+		}
+		fv = f
+	}
+
+	// create cell converter
+	cvt := func(src interface{}) (interface{}, error) {
+
+		srcCell, ok := src.(CellParam)
+		if !ok {
+			return nil, errors.New("invalid type, expected: parameter cell (internal error)")
+		}
+		if len(srcCell.DimIds) != param.Rank {
+			return nil, errors.New("invalid cell rank: " + strconv.Itoa(len(srcCell.DimIds)) + ", expected: " + strconv.Itoa(param.Rank))
+		}
+
+		dstCell := CellCodeParam{
+			cellCodeValue: cellCodeValue{Dims: make([]string, param.Rank)},
+			SubId:         srcCell.SubId,
+		}
+
+		// convert dimension item id to code
+		for k := range srcCell.DimIds {
+			v, err := fd[k](srcCell.DimIds[k])
+			if err != nil {
+				return nil, err
+			}
+			dstCell.Dims[k] = v
+		}
+
+		// convert cell value:
+		// if not enum then copy value else find code by id
+		if !isUseEnum {
+			dstCell.Value = srcCell.Value
+		} else {
+
+			// depending on sql + driver it can be different type
+			var iv int
+			switch e := srcCell.Value.(type) {
+			case int64:
+				iv = int(e)
+			case uint64:
+				iv = int(e)
+			case int32:
+				iv = int(e)
+			case uint32:
+				iv = int(e)
+			case int16:
+				iv = int(e)
+			case uint16:
+				iv = int(e)
+			case int8:
+				iv = int(e)
+			case uint8:
+				iv = int(e)
+			case uint:
+				iv = int(e)
+			case float32: // oracle (very unlikely)
+				iv = int(e)
+			case float64: // oracle (often)
+				iv = int(e)
+			case int:
+				iv = e
+			default:
+				return nil, errors.New("invalid parameter value type, expected: integer enum")
+			}
+
+			v, err := fv(int(iv)) // find value code by id
+			if err != nil {
+				return nil, err
+			}
+			dstCell.Value = v
+		}
+
+		return dstCell, nil // converted OK
 	}
 
 	return cvt, nil

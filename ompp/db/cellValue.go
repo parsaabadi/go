@@ -8,15 +8,17 @@ import (
 	"strconv"
 )
 
-// cellDims is dimensions of input parameter value, output table accumulator or expression.
-type cellDims struct {
-	DimIds []int // dimensions enum ids or int values if dimension type simple
+// cellValue is dimensions item as id and value of input parameter or output table.
+type cellValue struct {
+	DimIds []int       // dimensions enum ids or int values if dimension type simple
+	Value  interface{} // value: int64, bool, float64 or string
 }
 
-// CellValue is dimensions and value of input parameter or output table.
-type cellValue struct {
-	cellDims             // dimensions
-	Value    interface{} // value: int64, bool, float64 or string
+// cellCodeValue is dimensions item as code and value of input parameter or output table.
+// Value is enum code if parameter is enum-based.
+type cellCodeValue struct {
+	Dims  []string    // dimensions as enum code or string converted built-in type
+	Value interface{} // value: int64, bool, float64 or string
 }
 
 // CsvConverter provide methods to convert parameters or output table data from or to row []string for csv file.
@@ -45,6 +47,32 @@ type CsvConverter interface {
 	// return converter from csv row []string to parameter cell (dimensions and value)
 	CsvToCell(modelDef *ModelMeta, name string, subCount int, valueName string) (
 		func(row []string) (interface{}, error), error)
+}
+
+// CellToCodeConverter provide methods to convert parameters or output table row from enum id to enum code.
+// If dimension type is enum based then dimensions enum ids can be converted to enum code.
+// If dimension type is simple (bool or int) then dimension value converted to string.
+// If parameter type is enum based then cell value enum id converted to enum code.
+type CellToCodeConverter interface {
+
+	// IdToCodeCell return converter from id cell to code cell.
+	// Cell is dimensions and value of parameter or output table.
+	// It does convert from enum id to code for all dimensions and enum-based parameter value.
+	IdToCodeCell(modelDef *ModelMeta, name string) (
+		func(interface{}) (interface{}, error), error)
+}
+
+// CellToIdConverter provide methods to convert parameters or output table row from enum code to enum id.
+// If dimension type is enum based then dimensions enum codes converted to enum ids.
+// If dimension type is simple (bool or int) then dimension code converted from string to dimension type.
+// If parameter type is enum based then cell value enum code converted to enum id.
+type CellToIdConverter interface {
+
+	// CodeToIdCell return converter from code cell to id cell.
+	// Cell is dimensions and value of parameter or output table.
+	// It does convert from enum code to id for all dimensions and enum-based parameter value.
+	CodeToIdCell(modelDef *ModelMeta, name string) (
+		func(interface{}) (interface{}, error), error)
 }
 
 // cvtItemCodeToId return converter from dimension item code to id.

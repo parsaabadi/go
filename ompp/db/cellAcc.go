@@ -17,6 +17,15 @@ type CellAcc struct {
 	SubId     int  // output table subvalue id
 }
 
+// CellCodeAcc is value of output table accumulator.
+// Dimension(s) items are enum codes, not enum ids.
+type CellCodeAcc struct {
+	cellCodeValue      // dimensions as enum codes and value
+	IsNull        bool // if true then value is NULL
+	AccId         int  // output table accumulator id
+	SubId         int  // output table subvalue id
+}
+
 // CsvFileName return file name of csv file to store output table accumulator rows
 func (CellAcc) CsvFileName(modelDef *ModelMeta, name string) (string, error) {
 
@@ -235,7 +244,7 @@ func (CellAcc) CsvToCell(
 	cvt := func(row []string) (interface{}, error) {
 
 		// make conversion buffer and check input csv row size
-		cell := CellAcc{cellValue: cellValue{cellDims: cellDims{DimIds: make([]int, table.Rank)}}}
+		cell := CellAcc{cellValue: cellValue{DimIds: make([]int, table.Rank)}}
 
 		n := len(cell.DimIds)
 		if len(row) != n+3 {
@@ -286,6 +295,77 @@ func (CellAcc) CsvToCell(
 			cell.Value = v
 		}
 		return cell, nil
+	}
+
+	return cvt, nil
+}
+
+// IdToCodeCell return converter from output table cell of ids: (acc_id, sub_id, dimensions, value)
+// to cell of codes: (acc_id, sub_id, dimensions as enum code, value)
+//
+// If dimension type is enum based then dimensions enum ids can be converted to enum code.
+// If dimension type is simple (bool or int) then dimension value converted to string.
+func (CellAcc) IdToCodeCell(modelDef *ModelMeta, name string) (
+	func(interface{}) (interface{}, error), error) {
+
+	// validate parameters
+	if modelDef == nil {
+		return nil, errors.New("invalid (empty) model metadata, look like model not found")
+	}
+	if name == "" {
+		return nil, errors.New("invalid (empty) output table name")
+	}
+
+	// find output table by name
+	k, ok := modelDef.OutTableByName(name)
+	if !ok {
+		return nil, errors.New("output table not found: " + name)
+	}
+	table := &modelDef.Table[k]
+
+	// for each dimension create converter from item id to code
+	fd := make([]func(itemId int) (string, error), table.Rank)
+
+	for k := 0; k < table.Rank; k++ {
+		f, err := cvtItemIdToCode(
+			name+"."+table.Dim[k].Name, table.Dim[k].typeOf, table.Dim[k].typeOf.Enum, table.Dim[k].IsTotal, table.Dim[k].typeOf.TotalEnumId)
+		if err != nil {
+			return nil, err
+		}
+		fd[k] = f
+	}
+
+	// create cell converter
+	cvt := func(src interface{}) (interface{}, error) {
+
+		srcCell, ok := src.(CellAcc)
+		if !ok {
+			return nil, errors.New("invalid type, expected: output table accumulator id cell (internal error)")
+		}
+		if len(srcCell.DimIds) != table.Rank {
+			return nil, errors.New("invalid cell rank: " + strconv.Itoa(len(srcCell.DimIds)) + ", expected: " + strconv.Itoa(table.Rank))
+		}
+
+		dstCell := CellCodeAcc{
+			cellCodeValue: cellCodeValue{
+				Dims:  make([]string, table.Rank),
+				Value: srcCell.Value,
+			},
+			IsNull: srcCell.IsNull,
+			AccId:  srcCell.AccId,
+			SubId:  srcCell.SubId,
+		}
+
+		// convert dimension item id to code
+		for k := range srcCell.DimIds {
+			v, err := fd[k](srcCell.DimIds[k])
+			if err != nil {
+				return nil, err
+			}
+			dstCell.Dims[k] = v
+		}
+
+		return dstCell, nil // converted OK
 	}
 
 	return cvt, nil

@@ -189,7 +189,7 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayout)
 				return nil, err
 			}
 			// make new cell from conversion buffer
-			var c = CellParam{cellValue: cellValue{cellDims: cellDims{DimIds: make([]int, param.Rank)}}}
+			var c = CellParam{cellValue: cellValue{DimIds: make([]int, param.Rank)}}
 			fc(&c)
 			return c, nil
 		})
