@@ -24,13 +24,14 @@ func worksetParameterIdReadHandler(w http.ResponseWriter, r *http.Request) {
 		return // error in parameters, response done with http error
 	}
 
-	// read parameter page
-	if cLst, ok := theCatalog.ReadParameter(dn, wsn, layout); ok {
-		jsonListResponse(w, r, cLst)
-	} else {
+	// read parameter page and respond with json
+	cLst, ok := theCatalog.ReadParameter(dn, wsn, layout)
+	if !ok {
 		http.Error(w, "Error at workset parameter read "+wsn+": "+layout.Name, http.StatusBadRequest)
 		return
 	}
+
+	jsonListResponse(w, r, cLst)
 }
 
 // worksetParameterIdReadGetHandler read a "page" of parameter values from workset.
@@ -45,20 +46,21 @@ func worksetParameterIdReadHandler(w http.ResponseWriter, r *http.Request) {
 // Dimension(s) and enum-based parameters returned as enum id, not enum codes.
 func worksetParameterIdReadGetHandler(w http.ResponseWriter, r *http.Request) {
 
-	// from url or query parameters to read laout
+	// from url or query parameters to read layout
 	dn, wsn, layout, ok := requestGetToReadParamLayout(w, r, "wsn", true)
 	if !ok {
 		return // error in parameters, response done with http error
 	}
 	layout.IsEditSet = false // select for read, not for edit
 
-	// read parameter page
-	if cLst, ok := theCatalog.ReadParameter(dn, wsn, layout); ok {
-		jsonListResponse(w, r, cLst)
-	} else {
+	// read parameter page and respond with json
+	cLst, ok := theCatalog.ReadParameter(dn, wsn, layout)
+	if !ok {
 		http.Error(w, "Error at workset parameter read "+wsn+": "+layout.Name, http.StatusBadRequest)
 		return
 	}
+
+	jsonListResponse(w, r, cLst)
 }
 
 // worksetParameterCodeReadHandler read a "page" of parameter values from workset.
@@ -87,13 +89,14 @@ func runParameterIdReadHandler(w http.ResponseWriter, r *http.Request) {
 		return // error in parameters, response done with http error
 	}
 
-	// read parameter page
-	if cLst, ok := theCatalog.ReadParameter(dn, rdn, layout); ok {
-		jsonListResponse(w, r, cLst)
-	} else {
+	// read parameter page and respond with json
+	cLst, ok := theCatalog.ReadParameter(dn, rdn, layout)
+	if !ok {
 		http.Error(w, "Error at run parameter read "+rdn+": "+layout.Name, http.StatusBadRequest)
 		return
 	}
+
+	jsonListResponse(w, r, cLst)
 }
 
 // runParameterIdReadGetHandler read a "page" of parameter values from model run results.
@@ -109,64 +112,159 @@ func runParameterIdReadHandler(w http.ResponseWriter, r *http.Request) {
 // Dimension(s) and enum-based parameters returned as enum id, not enum codes.
 func runParameterIdReadGetHandler(w http.ResponseWriter, r *http.Request) {
 
-	// from url or query parameters to read laout
+	// from url or query parameters to read layout
 	dn, rdn, layout, ok := requestGetToReadParamLayout(w, r, "rdn", false)
 	if !ok {
 		return // error in parameters, response done with http error
 	}
 
-	// read parameter page
-	if cLst, ok := theCatalog.ReadParameter(dn, rdn, layout); ok {
-		jsonListResponse(w, r, cLst)
-	} else {
+	// read parameter page and respond with json
+	cLst, ok := theCatalog.ReadParameter(dn, rdn, layout)
+	if !ok {
 		http.Error(w, "Error at run parameter read "+rdn+": "+layout.Name, http.StatusBadRequest)
 		return
 	}
+
+	jsonListResponse(w, r, cLst)
 }
 
-// GET /api/run-table-value-id-expr?dn=modelOne&rdn=myRun&name=salarySex
-// GET /api/run-table-value-id-expr?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0
-// GET /api/run-table-value-id-expr?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0&count=100
-// GET /api/model/:dn/run/:rdn/table/:name/value-id/expr
-// GET /api/model/:dn/run/:rdn/table/:name/value-id/expr/start/:start
-// GET /api/model/:dn/run/:rdn/table/:name/value-id/expr/start/:start/count/:count
-func runTableIdExprReadGetHandler(w http.ResponseWriter, r *http.Request) {
-	// TODO
-}
-
-// GET /api/run-table-value-id-acc?dn=modelOne&rdn=myRun&name=salarySex
-// GET /api/run-table-value-id-acc?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0
-// GET /api/run-table-value-id-acc?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0&count=100
-// GET /api/model/:dn/run/:rdn/table/:name/value-id/acc
-// GET /api/model/:dn/run/:rdn/table/:name/value-id/acc/start/:start
-// GET /api/model/:dn/run/:rdn/table/:name/value-id/acc/start/:start/count/:count
-func runTableIdAccReadGetHandler(w http.ResponseWriter, r *http.Request) {
-	// TODO
-}
-
-// GET /api/run-table-value-id-all-acc?dn=modelOne&rdn=myRun&name=salarySex
-// GET /api/run-table-value-id-all-acc?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0
-// GET /api/run-table-value-id-all-acc?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0&count=100
-// GET /api/model/:dn/run/:rdn/table/:name/value-id/all-acc
-// GET /api/model/:dn/run/:rdn/table/:name/value-id/all-acc/start/:start
-// GET /api/model/:dn/run/:rdn/table/:name/value-id/all-acc/start/:start/count/:count
-func runTableIdAllAccReadGetHandler(w http.ResponseWriter, r *http.Request) {
-	// TODO
-}
-
+// runTableIdReadHandler read a "page" of output table values
+// from expression table, accumulator table or "all-accumulators" view of model run.
 // POST /api/model/:dn/run/:rdn/table/value-id
+// Json is posted to specify parameter name, "page" size and other read arguments,
+// see db.ReadOutTableLayout for more details.
+// Page is part of output table values defined by zero-based "start" row number and row count.
+// If row count <= 0 then all rows returned.
+// Dimension(s) returned as enum id, not enum codes.
 func runTableIdReadHandler(w http.ResponseWriter, r *http.Request) {
-	// TODO
+
+	// get url parameters and decode json request body
+	dn, rdn, layout, ok := requestJsonToReadOutTableLayout(w, r, "rdn")
+	if !ok {
+		return // error in parameters, response done with http error
+	}
+
+	// read output table page and respond with json
+	cLst, ok := theCatalog.ReadOutTable(dn, rdn, layout)
+	if !ok {
+		http.Error(w, "Error at run output table read "+rdn+": "+layout.Name, http.StatusBadRequest)
+		return
+	}
+
+	jsonListResponse(w, r, cLst)
 }
 
-// requestJsonToReadParamLayout return model, workset or run digest-or name and ReadLayout
+// runParameterIdReadGetHandler read a "page" of output table expression(s) values from model run results.
+// GET /api/run-table-expr-id?dn=modelOne&rdn=myRun&name=salarySex
+// GET /api/run-table-expr-id?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0
+// GET /api/run-table-expr-id?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0&count=100
+// GET /api/model/:dn/run/:rdn/table/:name/expr-id
+// GET /api/model/:dn/run/:rdn/table/:name/expr-id/start/:start
+// GET /api/model/:dn/run/:rdn/table/:name/expr-id/start/:start/count/:count
+// Page is part of output table values defined by zero-based "start" row number and row count.
+// If row count <= 0 then all rows returned.
+// Dimension(s) returned as enum id, not enum codes.
+func runTableIdExprReadGetHandler(w http.ResponseWriter, r *http.Request) {
+
+	// from url or query parameters to read layout
+	dn, rdn, layout, ok := requestGetToReadOutTableLayout(w, r, "rdn", false, false)
+	if !ok {
+		return // error in parameters, response done with http error
+	}
+
+	// read output table page and respond with json
+	cLst, ok := theCatalog.ReadOutTable(dn, rdn, layout)
+	if !ok {
+		http.Error(w, "Error at run output table read "+rdn+": "+layout.Name, http.StatusBadRequest)
+		return
+	}
+
+	jsonListResponse(w, r, cLst)
+}
+
+// runTableIdAccReadGetHandler read a "page" of output table accumulator(s) values from model run results.
+// GET /api/run-table-acc-id?dn=modelOne&rdn=myRun&name=salarySex
+// GET /api/run-table-acc-id?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0
+// GET /api/run-table-acc-id?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0&count=100
+// GET /api/model/:dn/run/:rdn/table/:name/acc-id
+// GET /api/model/:dn/run/:rdn/table/:name/acc-id/start/:start
+// GET /api/model/:dn/run/:rdn/table/:name/acc-id/start/:start/count/:count
+// Page is part of output table values defined by zero-based "start" row number and row count.
+// If row count <= 0 then all rows returned.
+// Dimension(s) returned as enum id, not enum codes.
+func runTableIdAccReadGetHandler(w http.ResponseWriter, r *http.Request) {
+
+	// from url or query parameters to read layout
+	dn, rdn, layout, ok := requestGetToReadOutTableLayout(w, r, "rdn", true, false)
+	if !ok {
+		return // error in parameters, response done with http error
+	}
+
+	// read output table page and respond with json
+	cLst, ok := theCatalog.ReadOutTable(dn, rdn, layout)
+	if !ok {
+		http.Error(w, "Error at run output table read "+rdn+": "+layout.Name, http.StatusBadRequest)
+		return
+	}
+
+	jsonListResponse(w, r, cLst)
+}
+
+// runTableIdAllAccReadGetHandler read a "page" of output table accumulator(s) values
+// from "all-accumulators" view of model run results.
+// GET /api/run-table-all-acc-id?dn=modelOne&rdn=myRun&name=salarySex
+// GET /api/run-table-all-acc-id?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0
+// GET /api/run-table-all-acc-id?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0&count=100
+// GET /api/model/:dn/run/:rdn/table/:name/all-acc-id
+// GET /api/model/:dn/run/:rdn/table/:name/all-acc-id/start/:start
+// GET /api/model/:dn/run/:rdn/table/:name/all-acc-id/start/:start/count/:count
+// Page is part of output table values defined by zero-based "start" row number and row count.
+// If row count <= 0 then all rows returned.
+// Dimension(s) returned as enum id, not enum codes.
+func runTableIdAllAccReadGetHandler(w http.ResponseWriter, r *http.Request) {
+
+	// from url or query parameters to read layout
+	dn, rdn, layout, ok := requestGetToReadOutTableLayout(w, r, "rdn", true, true)
+	if !ok {
+		return // error in parameters, response done with http error
+	}
+
+	// read output table page and respond with json
+	cLst, ok := theCatalog.ReadOutTable(dn, rdn, layout)
+	if !ok {
+		http.Error(w, "Error at run output table read "+rdn+": "+layout.Name, http.StatusBadRequest)
+		return
+	}
+
+	jsonListResponse(w, r, cLst)
+}
+
+// requestJsonToReadOutTableLayout return model, run digest-or-name and read layout
 // from url parameters and JSON body
-func requestJsonToReadParamLayout(
-	w http.ResponseWriter, r *http.Request, srcParam string, isSet bool) (string, string, *db.ReadParamLayout, bool) {
+func requestJsonToReadOutTableLayout(
+	w http.ResponseWriter, r *http.Request, rdnParam string) (string, string, *db.ReadOutTableLayout, bool) {
 
 	// url parameters
 	dn := getRequestParam(r, "dn")      // model digest-or-name
-	src := getRequestParam(r, srcParam) // workset name or run digest-or-name
+	src := getRequestParam(r, rdnParam) // run digest-or-name
+
+	// decode json request body
+	var layout db.ReadOutTableLayout
+	if !jsonRequestDecode(w, r, &layout) {
+		return "", "", &db.ReadOutTableLayout{}, false // error at json decode, response done with http error
+	}
+
+	return dn, src, &layout, true
+}
+
+// requestJsonToReadParamLayout return model, workset name or run digest-or-name and read layout
+// from url parameters and JSON body
+func requestJsonToReadParamLayout(
+	w http.ResponseWriter, r *http.Request, srcRqParam string, isSet bool) (string, string, *db.ReadParamLayout, bool) {
+
+	// url parameters
+	dn := getRequestParam(r, "dn")        // model digest-or-name
+	src := getRequestParam(r, srcRqParam) // workset name or run digest-or-name
 
 	// decode json request body
 	var layout db.ReadParamLayout
@@ -190,12 +288,12 @@ func requestJsonToReadParamLayout(
 // requestGetToReadLayout return model, workset or run digest-or name and ReadLayout
 // from GET parameters or url parameters
 func requestGetToReadParamLayout(
-	w http.ResponseWriter, r *http.Request, srcParam string, isSet bool) (string, string, *db.ReadParamLayout, bool) {
+	w http.ResponseWriter, r *http.Request, srcRqParam string, isSet bool) (string, string, *db.ReadParamLayout, bool) {
 
 	// url or query parameters
-	dn := getRequestParam(r, "dn")      // model digest-or-name
-	src := getRequestParam(r, srcParam) // workset name or run digest-or-name
-	name := getRequestParam(r, "name")  // parameter name
+	dn := getRequestParam(r, "dn")        // model digest-or-name
+	src := getRequestParam(r, srcRqParam) // workset name or run digest-or-name
+	name := getRequestParam(r, "name")    // parameter name
 
 	// url or query parameters: page offset and page size
 	start, ok := getInt64RequestParam(r, "start", 0)
@@ -214,5 +312,37 @@ func requestGetToReadParamLayout(
 		ReadLayout: db.ReadLayout{Name: name, Offset: start, Size: count},
 		IsFromSet:  isSet,
 	}
+	return dn, src, &layout, true
+}
+
+// requestGetToReadOutTableLayout return model, workset or run digest-or name and ReadLayout
+// from GET output table or url parameters
+func requestGetToReadOutTableLayout(
+	w http.ResponseWriter, r *http.Request, srcRqParam string, isAcc, isAllAcc bool) (string, string, *db.ReadOutTableLayout, bool) {
+
+	// url or query parameters
+	dn := getRequestParam(r, "dn")        // model digest-or-name
+	src := getRequestParam(r, srcRqParam) // run digest-or-name
+	name := getRequestParam(r, "name")    // output table name
+
+	// url or query parameters: page offset and page size
+	start, ok := getInt64RequestParam(r, "start", 0)
+	if !ok {
+		http.Error(w, "Invalid value of start row number to read "+name, http.StatusBadRequest)
+		return "", "", &db.ReadOutTableLayout{}, false
+	}
+	count, ok := getInt64RequestParam(r, "count", pageMaxSize)
+	if !ok {
+		http.Error(w, "Invalid value of max row count to read "+name, http.StatusBadRequest)
+		return "", "", &db.ReadOutTableLayout{}, false
+	}
+
+	// setup read layout
+	layout := db.ReadOutTableLayout{
+		ReadLayout: db.ReadLayout{Name: name, Offset: start, Size: count},
+		IsAccum:    isAcc,
+		IsAllAccum: isAllAcc,
+	}
+
 	return dn, src, &layout, true
 }

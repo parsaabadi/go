@@ -146,7 +146,7 @@ func mainBody(args []string) error {
 	}
 
 	addr := runOpts.String(listenArgKey)
-	omppLog.Log("Starting at " + addr)
+	omppLog.Log("Listen at " + addr)
 	if !isApiOnly {
 		omppLog.Log("To start open in your browser: " + addr)
 	}
@@ -407,38 +407,38 @@ func apiReadRoutes(router *vestigo.Router) {
 	// POST /api/model/:dn/run/:rdn/parameter/value-id
 	router.Post("/api/model/:dn/run/:rdn/parameter/value-id", runParameterIdReadHandler, logRequest)
 
-	// GET /api/run-table-value-id-expr?dn=modelOne&rdn=myRun&name=salarySex
-	// GET /api/run-table-value-id-expr?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0
-	// GET /api/run-table-value-id-expr?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0&count=100
-	// GET /api/model/:dn/run/:rdn/table/:name/value-id/expr
-	// GET /api/model/:dn/run/:rdn/table/:name/value-id/expr/start/:start
-	// GET /api/model/:dn/run/:rdn/table/:name/value-id/expr/start/:start/count/:count
-	router.Get("/api/run-table-value-id-expr", runTableIdExprReadGetHandler, logRequest)
-	router.Get("/api/model/:dn/run/:rdn/table/:name/value-id/expr", runTableIdExprReadGetHandler, logRequest)
-	router.Get("/api/model/:dn/run/:rdn/table/:name/value-id/expr/start/:start", runTableIdExprReadGetHandler, logRequest)
-	router.Get("/api/model/:dn/run/:rdn/table/:name/value-id/expr/start/:start/count/:count", runTableIdExprReadGetHandler, logRequest)
+	// GET /api/run-table-expr-id?dn=modelOne&rdn=myRun&name=salarySex
+	// GET /api/run-table-expr-id?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0
+	// GET /api/run-table-expr-id?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0&count=100
+	// GET /api/model/:dn/run/:rdn/table/:name/expr-id
+	// GET /api/model/:dn/run/:rdn/table/:name/expr-id/start/:start
+	// GET /api/model/:dn/run/:rdn/table/:name/expr-id/start/:start/count/:count
+	router.Get("/api/run-table-expr-id", runTableIdExprReadGetHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/table/:name/expr-id", runTableIdExprReadGetHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/table/:name/expr-id/start/:start", runTableIdExprReadGetHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/table/:name/expr-id/start/:start/count/:count", runTableIdExprReadGetHandler, logRequest)
 
-	// GET /api/run-table-value-id-acc?dn=modelOne&rdn=myRun&name=salarySex
-	// GET /api/run-table-value-id-acc?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0
-	// GET /api/run-table-value-id-acc?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0&count=100
-	// GET /api/model/:dn/run/:rdn/table/:name/value-id/acc
-	// GET /api/model/:dn/run/:rdn/table/:name/value-id/acc/start/:start
-	// GET /api/model/:dn/run/:rdn/table/:name/value-id/acc/start/:start/count/:count
-	router.Get("/api/run-table-value-id-acc", runTableIdAccReadGetHandler, logRequest)
-	router.Get("/api/model/:dn/run/:rdn/table/:name/value-id/acc", runTableIdAccReadGetHandler, logRequest)
-	router.Get("/api/model/:dn/run/:rdn/table/:name/value-id/acc/start/:start", runTableIdAccReadGetHandler, logRequest)
-	router.Get("/api/model/:dn/run/:rdn/table/:name/value-id/acc/start/:start/count/:count", runTableIdAccReadGetHandler, logRequest)
+	// GET /api/run-table-acc-id?dn=modelOne&rdn=myRun&name=salarySex
+	// GET /api/run-table-acc-id?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0
+	// GET /api/run-table-acc-id?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0&count=100
+	// GET /api/model/:dn/run/:rdn/table/:name/acc-id
+	// GET /api/model/:dn/run/:rdn/table/:name/acc-id/start/:start
+	// GET /api/model/:dn/run/:rdn/table/:name/acc-id/start/:start/count/:count
+	router.Get("/api/run-table-acc-id", runTableIdAccReadGetHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/table/:name/acc-id", runTableIdAccReadGetHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/table/:name/acc-id/start/:start", runTableIdAccReadGetHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/table/:name/acc-id/start/:start/count/:count", runTableIdAccReadGetHandler, logRequest)
 
-	// GET /api/run-table-value-id-all-acc?dn=modelOne&rdn=myRun&name=salarySex
-	// GET /api/run-table-value-id-all-acc?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0
-	// GET /api/run-table-value-id-all-acc?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0&count=100
-	// GET /api/model/:dn/run/:rdn/table/:name/value-id/all-acc
-	// GET /api/model/:dn/run/:rdn/table/:name/value-id/all-acc/start/:start
-	// GET /api/model/:dn/run/:rdn/table/:name/value-id/all-acc/start/:start/count/:count
-	router.Get("/api/run-table-value-id-all-acc", runTableIdAllAccReadGetHandler, logRequest)
-	router.Get("/api/model/:dn/run/:rdn/table/:name/value-id/all-acc", runTableIdAllAccReadGetHandler, logRequest)
-	router.Get("/api/model/:dn/run/:rdn/table/:name/value-id/all-acc/start/:start", runTableIdAllAccReadGetHandler, logRequest)
-	router.Get("/api/model/:dn/run/:rdn/table/:name/value-id/all-acc/start/:start/count/:count", runTableIdAllAccReadGetHandler, logRequest)
+	// GET /api/run-table-all-acc-id?dn=modelOne&rdn=myRun&name=salarySex
+	// GET /api/run-table-all-acc-id?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0
+	// GET /api/run-table-all-acc-id?dn=a1b2c3d&rdn=1f2e3d4&name=salarySex&start=0&count=100
+	// GET /api/model/:dn/run/:rdn/table/:name/all-acc-id
+	// GET /api/model/:dn/run/:rdn/table/:name/all-acc-id/start/:start
+	// GET /api/model/:dn/run/:rdn/table/:name/all-acc-id/start/:start/count/:count
+	router.Get("/api/run-table-all-acc-id", runTableIdAllAccReadGetHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/table/:name/all-acc-id", runTableIdAllAccReadGetHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/table/:name/all-acc-id/start/:start", runTableIdAllAccReadGetHandler, logRequest)
+	router.Get("/api/model/:dn/run/:rdn/table/:name/all-acc-id/start/:start/count/:count", runTableIdAllAccReadGetHandler, logRequest)
 
 	// POST /api/model/:dn/run/:rdn/table/value-id
 	router.Post("/api/model/:dn/run/:rdn/table/value-id", runTableIdReadHandler, logRequest)
