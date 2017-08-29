@@ -163,7 +163,7 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadOutTableLa
 		}
 	}
 
-	// append dimension filters, if specified
+	// append dimension enum code filters, if specified
 	for k := range layout.Filter {
 
 		// find dimension index by name
@@ -179,7 +179,31 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadOutTableLa
 		}
 
 		f, err := makeDimFilter(
-			modelDef, &layout.Filter[k], table.Dim[dix].Name, table.Dim[dix].typeOf, "output table "+table.Name)
+			modelDef, &layout.Filter[k], table.Dim[dix].Name, table.Dim[dix].typeOf, table.Dim[dix].IsTotal, "output table "+table.Name)
+		if err != nil {
+			return nil, err
+		}
+
+		q += " AND " + f
+	}
+
+	// append dimension enum id filters, if specified
+	for k := range layout.FilterById {
+
+		// find dimension index by name
+		dix := -1
+		for j := range table.Dim {
+			if table.Dim[j].Name == layout.FilterById[k].DimName {
+				dix = j
+				break
+			}
+		}
+		if dix < 0 {
+			return nil, errors.New("output table " + table.Name + " does not have dimension " + layout.FilterById[k].DimName)
+		}
+
+		f, err := makeDimIdFilter(
+			modelDef, &layout.FilterById[k], table.Dim[dix].Name, table.Dim[dix].typeOf, "output table "+table.Name)
 		if err != nil {
 			return nil, err
 		}

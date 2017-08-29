@@ -17,27 +17,28 @@ type WriteLayout struct {
 	IsToRun bool   // only for parameter: if true then write into into model run else into workset
 }
 
-// ReadLayout describes source and size of data page to read input parameters or output tables.
+// ReadLayout describes source and size of data page to read input parameter or output table values.
 type ReadLayout struct {
-	Name    string          // parameter name or output table name
-	FromId  int             // run id or set id to select input parameter or output table values
-	Offset  int64           // first row to return from select, zero-based ofsset
-	Size    int64           // max row count to select, if <= 0 then all rows
-	Filter  []FilterColumn  // dimension filters; final WHERE join filters by AND
-	OrderBy []OrderByColumn // order by columnns, if empty then dimension id ascending order is used
+	Name       string           // parameter name or output table name
+	FromId     int              // run id or set id to select input parameter or output table values
+	Offset     int64            // first row to return from select, zero-based ofsset
+	Size       int64            // max row count to select, if <= 0 then all rows
+	Filter     []FilterColumn   // dimension filters, final WHERE does join all filters by AND
+	FilterById []FilterIdColumn // dimension filters by enum ids, final WHERE does join filters by AND
+	OrderBy    []OrderByColumn  // order by columnns, if empty then dimension id ascending order is used
 }
 
-// ReadParamLayout describes source and size of data page to read input parameters.
+// ReadParamLayout describes source and size of data page to read input parameter values.
 //
-// If ValueName is not empty then only accumulator or output expression
-// with that name selected (i.e: "acc1" or "expr4") else all output table accumulators (expressions) selected.
+// It can read parameter values from model run results or from input working set (workset).
+// If this is read from workset then it can be read-only or read-write (editable) workset.
 type ReadParamLayout struct {
 	ReadLayout      // parameter name, page size, where filters and order by
 	IsFromSet  bool // if true then select from workset else from model run
 	IsEditSet  bool // if true then workset must be editable (readonly = false)
 }
 
-// ReadOutTableLayout describes source and size of data page to read output tables.
+// ReadOutTableLayout describes source and size of data page to read output table values.
 //
 // If ValueName is not empty then only accumulator or output expression
 // with that name selected (i.e: "acc1" or "expr4") else all output table accumulators (expressions) selected.
@@ -59,11 +60,18 @@ const (
 	BetweenOpFilter          = "BETWEEN" // dimension enum ids between: dim3 BETWEEN 44 AND 88
 )
 
-// FilterColumn define dimension column and condition to filter enum ids to build select where
+// FilterColumn define dimension column and condition to filter enum codes to build select where
 type FilterColumn struct {
 	DimName string   // dimension name
 	Op      FilterOp // filter operator: equal, IN, BETWEEN
-	EnumIds []int    // enum ids: one, two or many ids depending on filter condition
+	Enums   []string // enum code(s): one, two or many ids depending on filter condition
+}
+
+// FilterIdColumn define dimension column and condition to filter enum ids to build select where
+type FilterIdColumn struct {
+	DimName string   // dimension name
+	Op      FilterOp // filter operator: equal, IN, BETWEEN
+	EnumIds []int    // enum id(s): one, two or many ids depending on filter condition
 }
 
 // OrderBy define column to order by rows selected from parameter or output table.
@@ -113,10 +121,37 @@ func makeOrderBy(rank int, orderBy []OrderByColumn, extraIdColumns int) string {
 	return ""
 }
 
-// makeDimFilter return dimension filter, eg: dim1 IN (1, 2, 3, 4)
-// It is also can be equal or BETWEEN fitler
+// makeDimFilter convert dimension enum codes to enum ids and return filter condition, eg: dim1 IN (1, 2, 3, 4)
 func makeDimFilter(
-	modelDef *ModelMeta, flt *FilterColumn, dimName string, typeOf *TypeMeta, msgName string) (string, error) {
+	modelDef *ModelMeta, flt *FilterColumn, dimName string, typeOf *TypeMeta, isTotalEnabled bool, msgName string,
+) (string, error) {
+
+	// convert enum codes to ids
+	cvt, err := cvtItemCodeToId(dimName, typeOf, isTotalEnabled)
+	if err != nil {
+		return "", err
+	}
+	fltId := FilterIdColumn{
+		DimName: flt.DimName,
+		Op:      flt.Op,
+		EnumIds: make([]int, len(flt.Enums)),
+	}
+	for k := range flt.Enums {
+		id, err := cvt(flt.Enums[k])
+		if err != nil {
+			return "", err
+		}
+		fltId.EnumIds[k] = id
+	}
+
+	// return filter condition
+	return makeDimIdFilter(modelDef, &fltId, dimName, typeOf, msgName)
+}
+
+// makeDimIdFilter return dimension filter condition for enum ids, eg: dim1 IN (1, 2, 3, 4)
+// It is also can be equal or BETWEEN fitler.
+func makeDimIdFilter(
+	modelDef *ModelMeta, flt *FilterIdColumn, dimName string, typeOf *TypeMeta, msgName string) (string, error) {
 
 	// validate number of enum ids in enum list
 	if len(flt.EnumIds) <= 0 || flt.Op == EqOpFilter && len(flt.EnumIds) != 1 || flt.Op == BetweenOpFilter && len(flt.EnumIds) != 2 {

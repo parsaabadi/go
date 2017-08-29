@@ -80,7 +80,7 @@ type CellToIdConverter interface {
 // If dimension is enum-based then from enum code to enum id or to the total enum id;
 // If dimension is simple integer type then parse integer;
 // If dimension is boolean then false=>0, true=>1
-func cvtItemCodeToId(msgName string, typeOf *TypeMeta, enumArr []TypeEnumRow, isTotalEnabled bool, totalEnumId int,
+func cvtItemCodeToId(msgName string, typeOf *TypeMeta, isTotalEnabled bool,
 ) (
 	func(src string) (int, error), error,
 ) {
@@ -90,13 +90,13 @@ func cvtItemCodeToId(msgName string, typeOf *TypeMeta, enumArr []TypeEnumRow, is
 	case !typeOf.IsBuiltIn(): // enum dimension: find enum id by code
 
 		cvt = func(src string) (int, error) {
-			for j := range enumArr {
-				if src == enumArr[j].Name {
-					return enumArr[j].EnumId, nil
+			for j := range typeOf.Enum {
+				if src == typeOf.Enum[j].Name {
+					return typeOf.Enum[j].EnumId, nil
 				}
 			}
-			if isTotalEnabled && src == totalEnumCode { // check is it total item
-				return totalEnumId, nil
+			if isTotalEnabled && src == TotalEnumCode { // check is it total item
+				return typeOf.TotalEnumId, nil
 			}
 			return 0, errors.New("invalid value: " + src + " of: " + msgName)
 		}
@@ -136,7 +136,7 @@ func cvtItemCodeToId(msgName string, typeOf *TypeMeta, enumArr []TypeEnumRow, is
 // If dimension is enum-based then from enum id to enum code or to the "all" total enum code;
 // If dimension is simple integer type then use Itoa(integer id) as code;
 // If dimension is boolean then 0=>false, (1 or -1)=>true else error
-func cvtItemIdToCode(msgName string, typeOf *TypeMeta, enumArr []TypeEnumRow, isTotalEnabled bool, totalEnumId int,
+func cvtItemIdToCode(msgName string, typeOf *TypeMeta, isTotalEnabled bool,
 ) (
 	func(itemId int) (string, error), error,
 ) {
@@ -146,13 +146,13 @@ func cvtItemIdToCode(msgName string, typeOf *TypeMeta, enumArr []TypeEnumRow, is
 	case !typeOf.IsBuiltIn(): // enum dimension: find enum id by code
 
 		cvt = func(itemId int) (string, error) {
-			for j := range enumArr {
-				if itemId == enumArr[j].EnumId {
-					return enumArr[j].Name, nil
+			for j := range typeOf.Enum {
+				if itemId == typeOf.Enum[j].EnumId {
+					return typeOf.Enum[j].Name, nil
 				}
 			}
-			if isTotalEnabled && itemId == totalEnumId { // check is it total item
-				return totalEnumCode, nil
+			if isTotalEnabled && itemId == typeOf.TotalEnumId { // check is it total item
+				return TotalEnumCode, nil
 			}
 			return "", errors.New("invalid value: " + strconv.Itoa(itemId) + " of: " + msgName)
 		}

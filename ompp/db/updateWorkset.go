@@ -33,10 +33,49 @@ func UpdateWorksetReadonly(dbConn *sql.DB, setId int, isReadonly bool) error {
 	return nil
 }
 
-// UpdateWorkset insert new or update existing workset metadata in database.
+// UpdateWorksetReadonlyByName update workset readonly status by workset name.
+func UpdateWorksetReadonlyByName(dbConn *sql.DB, modelId int, name string, isReadonly bool) error {
+
+	// do update in transaction scope
+	trx, err := dbConn.Begin()
+	if err != nil {
+		return err
+	}
+	err = TrxUpdate(trx,
+		"UPDATE workset_lst"+
+			" SET is_readonly = "+toBoolStr(isReadonly)+", "+" update_dt = "+toQuoted(helper.MakeDateTime(time.Now()))+
+			" WHERE set_id = ("+
+			" SELECT MIN(W.set_id) FROM workset_lst W"+
+			" WHERE W.model_id = "+strconv.Itoa(modelId)+
+			" AND set_name = "+toQuoted(name)+
+			")")
+	if err != nil {
+		trx.Rollback()
+		return err
+	}
+	trx.Commit()
+
+	return nil
+}
+
+// UpdateWorkset create new workset metadata, replace or merge existing workset metadata in database.
 //
-// Set name is used to find workset and set id updated with actual database value
-func (meta *WorksetMeta) UpdateWorkset(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangMeta) error {
+// Set name is used to find workset and set id updated with actual database value.
+// Workset must be read-write for replace or merge.
+//
+// Only metadata updated: list of workset parameters not changed.
+// To add or remove parameters form workset use UpdateWorksetParameter() method.
+// It is an error if incoming list parameters include any parameter which are not already in workset_parameter table.
+//
+// If workset does not exist then empty workset created, without parameters.
+// Parameter list in workset metadata must be empty if workset does not exist.
+//
+// Replace is replace of existing metadata or create empty new workset.
+// If workset exist then workset metadata replaced and parameters text metadata replaced.
+//
+// Merge does merge of text metadata with existing workset or create empty new workset.
+// If workset exist then text is updated if such language already exist or inserted if no text in that language.
+func (meta *WorksetMeta) UpdateWorkset(dbConn *sql.DB, modelDef *ModelMeta, isReplace bool, langDef *LangMeta) error {
 
 	// validate parameters
 	if modelDef == nil {
@@ -57,7 +96,7 @@ func (meta *WorksetMeta) UpdateWorkset(dbConn *sql.DB, modelDef *ModelMeta, lang
 	if err != nil {
 		return err
 	}
-	err = doUpdateOrInsertWorkset(trx, modelDef, meta, langDef)
+	err = doUpdateWorkset(trx, modelDef, meta, isReplace, langDef)
 	if err != nil {
 		trx.Rollback()
 		return err
@@ -67,10 +106,11 @@ func (meta *WorksetMeta) UpdateWorkset(dbConn *sql.DB, modelDef *ModelMeta, lang
 	return nil
 }
 
-// doUpdateOrInsertWorkset insert new or update existing workset metadata in database.
+// doUpdateWorkset insert new or update existing workset metadata in database.
 // It does update as part of transaction
 // Set name is used to find workset and set id updated with actual database value
-func doUpdateOrInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, langDef *LangMeta) error {
+// Workset must be read-write for replace or merge.
+func doUpdateWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, isReplace bool, langDef *LangMeta) error {
 
 	smId := strconv.Itoa(modelDef.Model.ModelId)
 
@@ -104,18 +144,25 @@ func doUpdateOrInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta
 		return err
 	}
 
-	// check if this workset already exist
+	// check if this workset already exist and get readonly status
 	setId := 0
+	isReadonly := false
 	err = TrxSelectFirst(trx,
-		"SELECT set_id FROM workset_lst WHERE model_id = "+smId+" AND set_name = "+toQuoted(meta.Set.Name),
+		"SELECT set_id, is_readonly FROM workset_lst WHERE model_id = "+smId+" AND set_name = "+toQuoted(meta.Set.Name),
 		func(row *sql.Row) error {
-			return row.Scan(&setId)
+			nReadonly := 0
+			if err := row.Scan(&setId, &nReadonly); err != nil {
+				return err
+			}
+			isReadonly = nReadonly != 0 // oracle: smallint is float64
+			return nil
+
 		})
 	if err != nil && err != sql.ErrNoRows {
 		return err
 	}
 
-	// if workset not exist then insert new else update existing
+	// if workset not exist then create new empty workset
 	if setId <= 0 {
 
 		// get new set id
@@ -133,29 +180,61 @@ func doUpdateOrInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta
 
 		meta.Set.SetId = setId // update set id with actual value
 
-		// insert new workset
-		err = doInsertWorkset(trx, modelDef, meta, langDef)
-		if err != nil {
-			return err
-		}
+		// insert new workset with empty parameters list
+		return doInsertWorkset(trx, modelDef, meta, langDef)
+	}
+	// else: update existing workset
+	meta.Set.SetId = setId // workset exist, id may be different
 
-	} else { // update existing workset
-
-		meta.Set.SetId = setId // workset exist, id may be different
-
-		err = doUpdateWorkset(trx, modelDef, meta, langDef)
-		if err != nil {
-			return err
-		}
+	if isReadonly {
+		return errors.New("failed to update: workset already exists and it is read-only: " + strconv.Itoa(meta.Set.SetId) + ": " + meta.Set.Name)
 	}
 
-	return nil
+	// get Hid's of current workset parameters list
+	var hs []int
+	err = TrxSelectRows(trx,
+		"SELECT parameter_hid FROM workset_parameter WHERE set_id ="+strconv.Itoa(setId),
+		func(rows *sql.Rows) error {
+			var i int
+			err := rows.Scan(&i)
+			if err != nil {
+				return err
+			}
+			hs = append(hs, i)
+			return err
+		})
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+
+	// check: all parameters in the new incoming parameters list must be already in database
+pLoop:
+	for j := range meta.Param {
+		for _, h := range hs {
+			if meta.Param[j].ParamHid == h {
+				continue pLoop // id found in the new parameters list
+			}
+		}
+		// parameter exist in the new incoming parameters list and not in database
+		return errors.New("failed to update: workset parameter not exist in database, hId: " + strconv.Itoa(meta.Param[j].ParamHid) + " : " + meta.Set.Name)
+	}
+
+	// do replace of metadata or merge
+	if isReplace {
+		return doReplaceWorkset(trx, modelDef, meta, langDef)
+	}
+	return doMergeWorkset(trx, modelDef, meta, langDef)
 }
 
 // doInsertWorkset insert new workset metadata in database.
-// It does update as part of transaction
-// Set id updated with actual database id of that workset
+// It does update as part of transaction.
+// Workset parameters list must be empty.
 func doInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, langDef *LangMeta) error {
+
+	// workset parameters list must be empty in order to create new workset
+	if len(meta.Param) > 0 {
+		return errors.New("Error: cannot create new workset with non-empty list of parameters " + meta.Set.Name)
+	}
 
 	// if workset based on existing run then base run id must be positive
 	sbId := ""
@@ -185,18 +264,18 @@ func doInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, langDe
 		return err
 	}
 
-	// insert new rows into workset body tables: workset_txt, workset_parameter, workset_parameter_txt
+	// insert new rows into workset_txt
+	// parameters list must be empty: workset_parameter_txt not inserted
 	if err = doInsertWorksetBody(trx, modelDef, meta, langDef); err != nil {
 		return err
 	}
 	return err
 }
 
-// doUpdateWorkset update workset metadata in database.
-// It does update as part of transaction
-// Set id updated with actual database id of that workset
+// doReplaceWorkset replace workset metadata in database.
+// It does update as part of transaction.
 // It does delete existing parameter values which are not in the list of workset parameters.
-func doUpdateWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, langDef *LangMeta) error {
+func doReplaceWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, langDef *LangMeta) error {
 
 	// if workset based on existing run then base run id must be positive
 	sbId := ""
@@ -225,48 +304,8 @@ func doUpdateWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, langDe
 		return err
 	}
 
-	// get Hid's of current workset parameters list
-	var hs []int
-	err = TrxSelectRows(trx,
-		"SELECT parameter_hid FROM workset_parameter WHERE set_id ="+sId,
-		func(rows *sql.Rows) error {
-			var i int
-			err := rows.Scan(&i)
-			if err != nil {
-				return err
-			}
-			hs = append(hs, i)
-			return err
-		})
-	if err != nil && err != sql.ErrNoRows {
-		return err
-	}
-
-	// delete values for existing parameters, which are not in the new parameters list
-hidLoop:
-	for _, h := range hs {
-
-		for j := range meta.Param {
-			if meta.Param[j].ParamHid == h {
-				continue hidLoop // id found in the new parameters list
-			}
-		}
-		// parameter exist in current version workset and not in the new incoming parameters list
-
-		if idx, ok := modelDef.ParamByHid(h); ok { // delete current values of parameter
-			if err = TrxUpdate(trx,
-				"DELETE FROM "+modelDef.Param[idx].DbSetTable+" WHERE set_id = "+sId); err != nil {
-				return err
-			}
-		}
-	}
-
-	// delete existing workset_parameter_txt, workset_parameter, workset_txt
+	// delete existing workset_parameter_txt, workset_txt
 	err = TrxUpdate(trx, "DELETE FROM workset_parameter_txt WHERE set_id = "+sId)
-	if err != nil {
-		return err
-	}
-	err = TrxUpdate(trx, "DELETE FROM workset_parameter WHERE set_id = "+sId)
 	if err != nil {
 		return err
 	}
@@ -275,16 +314,15 @@ hidLoop:
 		return err
 	}
 
-	// insert new rows into workset body tables: workset_txt, workset_parameter, workset_parameter_txt
+	// insert new rows into workset body tables: workset_txt, workset_parameter_txt
 	if err = doInsertWorksetBody(trx, modelDef, meta, langDef); err != nil {
 		return err
 	}
 	return nil
 }
 
-// doInsertWorksetBody insert into workset metadata tables: workset_txt, workset_parameter, workset_parameter_txt
-// It does update as part of transaction
-// Set id updated with actual database id of that workset
+// doInsertWorksetBody insert into workset metadata tables: workset_txt, workset_parameter_txt
+// It does update as part of transaction.
 func doInsertWorksetBody(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, langDef *LangMeta) error {
 
 	sId := strconv.Itoa(meta.Set.SetId)
@@ -309,17 +347,8 @@ func doInsertWorksetBody(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, la
 		}
 	}
 
-	// insert workset parameters list
 	// insert new workset parameter text: parameter value notes
 	for k := range meta.Param {
-
-		// insert workset parameter
-		err := TrxUpdate(trx,
-			"INSERT INTO workset_parameter (set_id, parameter_hid, sub_count) VALUES ("+
-				sId+", "+strconv.Itoa(meta.Param[k].ParamHid)+", "+strconv.Itoa(meta.Param[k].SubCount)+")")
-		if err != nil {
-			return err
-		}
 
 		// insert new workset parameter text: parameter value notes
 		for j := range meta.Param[k].Txt {
@@ -335,6 +364,95 @@ func doInsertWorksetBody(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, la
 						strconv.Itoa(meta.Param[k].ParamHid)+", "+
 						strconv.Itoa(lId)+", "+
 						toQuotedOrNull(meta.Param[k].Txt[j].Note)+")")
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// doMergeWorkset merge workset metadata in database.
+// It does update as part of transaction.
+// Workset master row updated with non-empty values:
+// base run id updated if new value is positive,
+// read-only status if new read-only value is true.
+// Only parameter text is merged, not sub-value count.
+func doMergeWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, langDef *LangMeta) error {
+
+	// UPDATE workset_lst
+	// SET set_name = 'mySet', is_readonly = 0, base_run_id = 1234, update_dt = '2012-08-17 16:05:59.0123'
+	// WHERE set_id = 22
+	//
+	sId := strconv.Itoa(meta.Set.SetId)
+	sl := ""
+	if meta.Set.BaseRunId > 0 {
+		sl += " base_run_id = " + strconv.Itoa(meta.Set.BaseRunId) + ", "
+	}
+	if meta.Set.IsReadonly {
+		sl += " is_readonly = 1, "
+	}
+	meta.Set.UpdateDateTime = helper.MakeDateTime(time.Now())
+	sl += " update_dt = " + toQuoted(meta.Set.UpdateDateTime)
+
+	err := TrxUpdate(trx, "UPDATE workset_lst SET "+sl+" WHERE set_id ="+sId)
+	if err != nil {
+		return err
+	}
+
+	// merge by delete and insert into workset text (description and notes)
+	for j := range meta.Txt {
+
+		meta.Txt[j].SetId = meta.Set.SetId // update set id
+
+		if lId, ok := langDef.IdByCode(meta.Txt[j].LangCode); ok { // if language code valid
+
+			slId := strconv.Itoa(lId)
+			err = TrxUpdate(trx,
+				"DELETE FROM workset_txt WHERE set_id = "+sId+" AND lang_id = "+slId)
+			if err != nil {
+				return err
+			}
+			err = TrxUpdate(trx,
+				"INSERT INTO workset_txt (set_id, lang_id, descr, note) VALUES ("+
+					sId+", "+
+					slId+", "+
+					toQuoted(meta.Txt[j].Descr)+", "+
+					toQuotedOrNull(meta.Txt[j].Note)+")")
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// merge by delete and insert into workset parameter text: parameter value notes
+	for k := range meta.Param {
+		for j := range meta.Param[k].Txt {
+
+			meta.Param[k].Txt[j].SetId = meta.Set.SetId // update set id
+
+			if lId, ok := langDef.IdByCode(meta.Param[k].Txt[j].LangCode); ok { // if language code valid
+
+				spHid := strconv.Itoa(meta.Param[k].ParamHid)
+				slId := strconv.Itoa(lId)
+
+				err = TrxUpdate(trx,
+					"DELETE FROM workset_parameter_txt"+
+						" WHERE set_id = "+sId+
+						" AND parameter_hid = "+spHid+
+						" AND lang_id = "+slId)
+				if err != nil {
+					return err
+				}
+				err = TrxUpdate(trx,
+					"INSERT INTO workset_parameter_txt (set_id, parameter_hid, lang_id, note)"+
+						" SELECT "+
+						sId+", "+" parameter_hid, "+slId+", "+toQuotedOrNull(meta.Param[k].Txt[j].Note)+
+						" FROM workset_parameter"+
+						" WHERE set_id = "+sId+
+						" AND parameter_hid = "+spHid)
 				if err != nil {
 					return err
 				}

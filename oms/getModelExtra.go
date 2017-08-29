@@ -37,12 +37,12 @@ func (mc *ModelCatalog) LangListByDigestOrName(dn string) ([]db.LangLstRow, bool
 	return ls, true
 }
 
-// ModelProfileByName return model profile db rows by digest and by profile name.
-func (mc *ModelCatalog) ModelProfileByName(digest, profile string) (*db.ProfileMeta, bool) {
+// ModelProfileByName return model profile db rows by model digest-or-name and by profile name.
+func (mc *ModelCatalog) ModelProfileByName(dn, profile string) (*db.ProfileMeta, bool) {
 
-	// if model digest is empty or profile name is empty then return empty results
-	if digest == "" {
-		omppLog.Log("Warning: invalid (empty) model digest")
+	// if model digest-or-name is empty then return empty results
+	if dn == "" {
+		omppLog.Log("Warning: invalid (empty) model digest and name")
 		return &db.ProfileMeta{}, false
 	}
 	if profile == "" {
@@ -54,16 +54,16 @@ func (mc *ModelCatalog) ModelProfileByName(digest, profile string) (*db.ProfileM
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	idx, ok := mc.indexByDigest(digest)
+	idx, ok := mc.indexByDigestOrName(dn)
 	if !ok {
-		omppLog.Log("Warning: model digest not found: ", digest)
+		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return &db.ProfileMeta{}, false // return empty result: model not found or error
 	}
 
 	// read groups from database
 	p, err := db.GetProfile(mc.modelLst[idx].dbConn, profile)
 	if err != nil {
-		omppLog.Log("Error at get profile: ", digest, ": ", profile, ": ", err.Error())
+		omppLog.Log("Error at get profile: ", dn, ": ", profile, ": ", err.Error())
 		return &db.ProfileMeta{}, false // return empty result: model not found or error
 	}
 

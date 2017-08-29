@@ -156,7 +156,7 @@ func (CellParam) CsvToRow(
 	fd := make([]func(itemId int) (string, error), param.Rank)
 
 	for k := 0; k < param.Rank; k++ {
-		f, err := cvtItemIdToCode(name+"."+param.Dim[k].Name, param.Dim[k].typeOf, param.Dim[k].typeOf.Enum, false, 0)
+		f, err := cvtItemIdToCode(name+"."+param.Dim[k].Name, param.Dim[k].typeOf, false)
 		if err != nil {
 			return nil, err
 		}
@@ -171,7 +171,7 @@ func (CellParam) CsvToRow(
 	var fv func(itemId int) (string, error)
 
 	if isUseEnum {
-		f, err := cvtItemIdToCode(name, param.typeOf, param.typeOf.Enum, false, 0)
+		f, err := cvtItemIdToCode(name, param.typeOf, false)
 		if err != nil {
 			return nil, err
 		}
@@ -282,7 +282,7 @@ func (CellParam) CsvToCell(
 	fd := make([]func(src string) (int, error), param.Rank)
 
 	for k := 0; k < param.Rank; k++ {
-		f, err := cvtItemCodeToId(name+"."+param.Dim[k].Name, param.Dim[k].typeOf, param.Dim[k].typeOf.Enum, false, 0)
+		f, err := cvtItemCodeToId(name+"."+param.Dim[k].Name, param.Dim[k].typeOf, false)
 		if err != nil {
 			return nil, err
 		}
@@ -296,7 +296,7 @@ func (CellParam) CsvToCell(
 
 	switch {
 	case isEnum:
-		f, err := cvtItemCodeToId(name, param.typeOf, param.typeOf.Enum, false, 0)
+		f, err := cvtItemCodeToId(name, param.typeOf, false)
 		if err != nil {
 			return nil, err
 		}
@@ -389,7 +389,7 @@ func (CellParam) IdToCodeCell(modelDef *ModelMeta, name string) (
 	fd := make([]func(itemId int) (string, error), param.Rank)
 
 	for k := 0; k < param.Rank; k++ {
-		f, err := cvtItemIdToCode(name+"."+param.Dim[k].Name, param.Dim[k].typeOf, param.Dim[k].typeOf.Enum, false, 0)
+		f, err := cvtItemIdToCode(name+"."+param.Dim[k].Name, param.Dim[k].typeOf, false)
 		if err != nil {
 			return nil, err
 		}
@@ -401,7 +401,7 @@ func (CellParam) IdToCodeCell(modelDef *ModelMeta, name string) (
 	var fv func(itemId int) (string, error)
 
 	if isUseEnum {
-		f, err := cvtItemIdToCode(name, param.typeOf, param.typeOf.Enum, false, 0)
+		f, err := cvtItemIdToCode(name, param.typeOf, false)
 		if err != nil {
 			return nil, err
 		}

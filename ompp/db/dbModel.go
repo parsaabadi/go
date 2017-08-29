@@ -6,8 +6,8 @@ package db
 // maxBuiltInTypeId is max type id and Hid for openM++ built-in types, ie: int, double, logical
 const maxBuiltInTypeId = 100
 
-// totalEnumCode is predefined enum code for "total" enum
-const totalEnumCode = "all"
+// TotalEnumCode is predefined enum code for "total" enum
+const TotalEnumCode = "all"
 
 // ModelMeta is model metadata db rows, language-neutral portion of it.
 //

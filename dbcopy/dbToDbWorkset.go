@@ -172,6 +172,13 @@ func copyWorksetDbToDb(
 		return 0, errors.New("invalid (empty) source workset metadata, source workset not found or not exists")
 	}
 
+	// save workset metadata as "read-write" and after importing all parameters set it as "readonly"
+	// save workset metadata parameters list, make it empty and use add parameters to update metadata and values from csv
+	isReadonly := pub.IsReadonly
+	pub.IsReadonly = false
+	paramLst := append([]db.ParamRunSetPub{}, pub.Param...)
+	pub.Param = []db.ParamRunSetPub{}
+
 	// destination: convert from "public" format into destination db rows
 	// display warning if base run not found in destination database
 	dstWs, err := pub.FromPublic(dstDb, dstModel)
@@ -182,11 +189,20 @@ func copyWorksetDbToDb(
 		omppLog.Log("Warning: workset ", dstWs.Set.Name, ", base run not found by digest ", pub.BaseRunDigest)
 	}
 
-	// save workset metadata as "read-write" and after importing all parameters set it as "readonly"
-	isReadonly := pub.IsReadonly
-	dstWs.Set.IsReadonly = false
+	// if destination workset exists then delete it to remove all parameter values
+	wsRow, err := db.GetWorksetByName(dstDb, dstModel.Model.ModelId, pub.Name)
+	if err != nil {
+		return 0, err
+	}
+	if wsRow != nil {
+		err = db.DeleteWorkset(dstDb, wsRow.SetId) // delete existing workset
+		if err != nil {
+			return 0, errors.New("failed to delete workset " + strconv.Itoa(wsRow.SetId) + " " + wsRow.Name + " " + err.Error())
+		}
+	}
 
-	err = dstWs.UpdateWorkset(dstDb, dstModel, dstLang)
+	// create empty workset metadata or update existing workset metadata
+	err = dstWs.UpdateWorkset(dstDb, dstModel, true, dstLang)
 	if err != nil {
 		return 0, err
 	}
@@ -196,13 +212,12 @@ func copyWorksetDbToDb(
 	omppLog.Log("Workset ", dstWs.Set.Name, " from id ", srcId, " to ", dstId)
 
 	paramLt := &db.ReadParamLayout{ReadLayout: db.ReadLayout{FromId: srcId}, IsFromSet: true}
-	dstLt := db.WriteLayout{ToId: dstId}
 
 	// write parameter into destination database
-	for j := range pub.Param {
+	for j := range paramLst {
 
 		// source: read workset parameter values
-		paramLt.Name = pub.Param[j].Name
+		paramLt.Name = paramLst[j].Name
 
 		cLst, err := db.ReadParameter(srcDb, srcModel, paramLt)
 		if err != nil {
@@ -213,9 +228,7 @@ func copyWorksetDbToDb(
 		}
 
 		// destination: insert or update parameter values in workset
-		dstLt.Name = pub.Param[j].Name
-
-		err = db.WriteParameter(dstDb, dstModel, &dstLt, dstWs.Param[j].SubCount, cLst, "")
+		_, err = dstWs.UpdateWorksetParameter(dstDb, dstModel, true, &paramLst[j], cLst, dstLang)
 		if err != nil {
 			return 0, err
 		}

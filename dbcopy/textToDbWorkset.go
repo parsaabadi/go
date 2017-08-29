@@ -308,6 +308,13 @@ func fromWorksetTextToDb(
 		}
 	}
 
+	// save workset metadata as "read-write" and after importing all parameters set it as "readonly"
+	// save workset metadata parameters list, make it empty and use add parameters to update metadata and values from csv
+	isReadonly := pub.IsReadonly
+	pub.IsReadonly = false
+	paramLst := append([]db.ParamRunSetPub{}, pub.Param...)
+	pub.Param = []db.ParamRunSetPub{}
+
 	// destination: convert from "public" format into destination db rows
 	// display warning if base run not found in destination database
 	ws, err := pub.FromPublic(dbConn, modelDef)
@@ -318,11 +325,20 @@ func fromWorksetTextToDb(
 		omppLog.Log("Warning: workset ", ws.Set.Name, ", base run not found by digest ", pub.BaseRunDigest)
 	}
 
-	// save workset metadata as "read-write" and after importing all parameters set it as "readonly"
-	isReadonly := pub.IsReadonly
-	ws.Set.IsReadonly = false
+	// if destination workset exists then delete it to remove all parameter values
+	wsRow, err := db.GetWorksetByName(dbConn, modelDef.Model.ModelId, pub.Name)
+	if err != nil {
+		return 0, 0, err
+	}
+	if wsRow != nil {
+		err = db.DeleteWorkset(dbConn, wsRow.SetId) // delete existing workset
+		if err != nil {
+			return 0, 0, errors.New("failed to delete workset " + strconv.Itoa(wsRow.SetId) + " " + wsRow.Name + " " + err.Error())
+		}
+	}
 
-	err = ws.UpdateWorkset(dbConn, modelDef, langDef)
+	// create empty workset metadata or update existing workset metadata
+	err = ws.UpdateWorkset(dbConn, modelDef, true, langDef)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -332,24 +348,20 @@ func fromWorksetTextToDb(
 	omppLog.Log("Workset ", ws.Set.Name, " from id ", srcId, " to ", dstId)
 
 	// read all workset parameters from csv files
-	layout := db.WriteLayout{ToId: dstId}
-
-	for j := range pub.Param {
+	for j := range paramLst {
 
 		// read parameter values from csv file
 		var cell db.CellParam
-		cLst, err := fromCsvFile(csvDir, modelDef, pub.Param[j].Name, pub.Param[j].SubCount, &cell, encodingName)
+		cLst, err := fromCsvFile(csvDir, modelDef, paramLst[j].Name, paramLst[j].SubCount, &cell, encodingName)
 		if err != nil {
 			return 0, 0, err
 		}
 		if cLst == nil || cLst.Len() <= 0 {
-			return 0, 0, errors.New("workset: " + strconv.Itoa(srcId) + " " + ws.Set.Name + " parameter empty: " + pub.Param[j].Name)
+			return 0, 0, errors.New("workset: " + strconv.Itoa(srcId) + " " + ws.Set.Name + " parameter empty: " + paramLst[j].Name)
 		}
 
 		// insert or update parameter values in workset
-		layout.Name = pub.Param[j].Name
-
-		err = db.WriteParameter(dbConn, modelDef, &layout, pub.Param[j].SubCount, cLst, "")
+		_, err = ws.UpdateWorksetParameter(dbConn, modelDef, true, &paramLst[j], cLst, langDef)
 		if err != nil {
 			return 0, 0, err
 		}

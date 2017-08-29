@@ -202,23 +202,23 @@ func (mc *ModelCatalog) WorksetListText(dn string, preferedLang []language.Tag) 
 // WorksetText return full workset metadata by model digest-or-name and workset name.
 // Text (description and notes) can be in prefered language or all languages.
 // If prefered language requested and it is not found in db then return empty text results.
-func (mc *ModelCatalog) WorksetText(dn, wsn string, isAllLang bool, preferedLang []language.Tag) (*db.WorksetPub, bool) {
+func (mc *ModelCatalog) WorksetText(dn, wsn string, isAllLang bool, preferedLang []language.Tag) (*db.WorksetPub, bool, error) {
 
 	// if model digest-or-name or workset name is empty then return empty results
 	if dn == "" {
 		omppLog.Log("Warning: invalid (empty) model digest and name")
-		return &db.WorksetPub{}, false
+		return &db.WorksetPub{}, false, nil
 	}
 	if wsn == "" {
 		omppLog.Log("Warning: invalid (empty) workset name")
-		return &db.WorksetPub{}, false
+		return &db.WorksetPub{}, false, nil
 	}
 
 	// load model metadata in order to convert to "public"
 	idx, ok := mc.loadModelMeta(dn)
 	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return &db.WorksetPub{}, false // return empty result: model not found or error
+		return &db.WorksetPub{}, false, nil // return empty result: model not found or error
 	}
 
 	// lock catalog and find model index by digest or name
@@ -229,11 +229,11 @@ func (mc *ModelCatalog) WorksetText(dn, wsn string, isAllLang bool, preferedLang
 	w, err := db.GetWorksetByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, wsn)
 	if err != nil {
 		omppLog.Log("Error at get workset status: ", dn, ": ", wsn, ": ", err.Error())
-		return &db.WorksetPub{}, false // return empty result: workset select error
+		return &db.WorksetPub{}, false, err // return empty result: workset select error
 	}
 	if w == nil {
-		omppLog.Log("Warning workset status not found: ", dn, ": ", wsn)
-		return &db.WorksetPub{}, false // return empty result: workset_lst row not found
+		// omppLog.Log("Warning workset status not found: ", dn, ": ", wsn)
+		return &db.WorksetPub{}, false, nil // return empty result: workset_lst row not found
 	}
 
 	// get full workset metadata using matched prefered language or in all languages
@@ -246,15 +246,15 @@ func (mc *ModelCatalog) WorksetText(dn, wsn string, isAllLang bool, preferedLang
 	wm, err := db.GetWorksetFull(mc.modelLst[idx].dbConn, w, lc)
 	if err != nil {
 		omppLog.Log("Error at get workset metadata: ", dn, ": ", w.Name, ": ", err.Error())
-		return &db.WorksetPub{}, false // return empty result: workset select error
+		return &db.WorksetPub{}, false, err // return empty result: workset select error
 	}
 
 	// convert to "public" model workset format
 	wp, err := wm.ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
 	if err != nil {
 		omppLog.Log("Error at workset conversion: ", dn, ": ", w.Name, ": ", err.Error())
-		return &db.WorksetPub{}, false // return empty result: conversion error
+		return &db.WorksetPub{}, false, err // return empty result: conversion error
 	}
 
-	return wp, true
+	return wp, true, nil
 }

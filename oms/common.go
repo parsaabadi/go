@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -173,7 +174,8 @@ func jsonResponse(w http.ResponseWriter, r *http.Request, src interface{}) {
 
 // jsonListResponse set response headers and writes srcLst as json into w response writer.
 // On error it writes 500 internal server error response.
-func jsonListResponse(w http.ResponseWriter, r *http.Request, srcLst *list.List) {
+func jsonListResponse(
+	w http.ResponseWriter, r *http.Request, srcLst *list.List, cvt func(interface{}) (interface{}, error)) {
 
 	jsonSetHeaders(w, r) // set response headers, i.e. content type
 
@@ -188,8 +190,18 @@ func jsonListResponse(w http.ResponseWriter, r *http.Request, srcLst *list.List)
 			w.Write([]byte{','}) // until the last separate array items with , comma
 		}
 
+		val := src.Value // id's cell
+		var err error
+
+		// convert cell from id's to code if converter specified
+		if cvt != nil {
+			if val, err = cvt(val); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
+		}
+
 		// write actual value
-		if err := enc.Encode(src.Value); err != nil {
+		if err := enc.Encode(val); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		isNext = true
@@ -217,6 +229,42 @@ func jsonRequestDecode(w http.ResponseWriter, r *http.Request, dst interface{}) 
 			return false
 		}
 		http.Error(w, "Json decode error at "+r.URL.String(), http.StatusBadRequest)
+		return false
+	}
+	return true // completed OK
+}
+
+// jsonMultipartDecode decode json from multipart form reader.
+// It does move to next part, check part form name and decode json from part body.
+// Destination for json decode: dst must be a pointer.
+// On error it writes error response 400 or 415 and return false.
+func jsonMultipartDecode(w http.ResponseWriter, mr *multipart.Reader, name string, dst interface{}) bool {
+
+	// open next part and check part name
+	part, err := mr.NextPart()
+	if err == io.EOF {
+		http.Error(w, "Invalid (empty) next part of multipart form "+name, http.StatusBadRequest)
+		return false
+	}
+	if err != nil {
+		http.Error(w, "Failed to get next part of multipart form "+name+" : "+err.Error(), http.StatusBadRequest)
+		return false
+	}
+	defer part.Close()
+
+	if part.FormName() != name {
+		http.Error(w, "Invalid part of multipart form, expected name: "+name, http.StatusBadRequest)
+		return false
+	}
+
+	// decode json
+	err = json.NewDecoder(part).Decode(dst)
+	if err != nil {
+		if err == io.EOF {
+			http.Error(w, "Invalid (empty) json part of multipart form "+name, http.StatusBadRequest)
+			return false
+		}
+		http.Error(w, "Json decode error at part of multipart form "+name, http.StatusBadRequest)
 		return false
 	}
 	return true // completed OK

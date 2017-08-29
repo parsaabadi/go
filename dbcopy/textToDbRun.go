@@ -43,7 +43,7 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 		inpDir = filepath.Join(runOpts.String(inputDirArgKey), modelName+".run."+runName)
 	}
 
-	// unzip if required and use unzipped directory as "root" input diretory
+	// unzip if required and use unzipped directory as "root" input directory
 	if runOpts.Bool(zipArgKey) {
 		base := filepath.Base(inpDir)
 		omppLog.Log("Unpack ", base, ".zip")

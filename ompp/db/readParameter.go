@@ -101,13 +101,13 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayout)
 		}
 	}
 
-	// make sql to select parameter from model run:
+	// make sql to select parameter from model run or workset:
 	//   SELECT sub_id, dim0, dim1, param_value
 	//   FROM ageSex_p2012_817
 	//   WHERE run_id = (SELECT base_run_id FROM run_parameter WHERE run_id = 1234 AND parameter_hid = 1)
 	//   AND dim1 IN (1, 2, 3, 4)
 	//   ORDER BY 1, 2, 3
-	// or workset:
+	// or:
 	//   SELECT sub_id, dim0, dim1, param_value
 	//   FROM ageSex_w2012_817
 	//   WHERE set_id = 9876
@@ -130,7 +130,7 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayout)
 			" AND parameter_hid = " + strconv.Itoa(param.ParamHid) + ")"
 	}
 
-	// append dimension filters, if specified
+	// append dimension enum code filters, if specified
 	for k := range layout.Filter {
 
 		// find dimension index by name
@@ -146,7 +146,31 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayout)
 		}
 
 		f, err := makeDimFilter(
-			modelDef, &layout.Filter[k], param.Dim[dix].Name, param.Dim[dix].typeOf, "parameter "+param.Name)
+			modelDef, &layout.Filter[k], param.Dim[dix].Name, param.Dim[dix].typeOf, false, "parameter "+param.Name)
+		if err != nil {
+			return nil, err
+		}
+
+		q += " AND " + f
+	}
+
+	// append dimension enum id filters, if specified
+	for k := range layout.FilterById {
+
+		// find dimension index by name
+		dix := -1
+		for j := range param.Dim {
+			if param.Dim[j].Name == layout.FilterById[k].DimName {
+				dix = j
+				break
+			}
+		}
+		if dix < 0 {
+			return nil, errors.New("parameter " + param.Name + " does not have dimension " + layout.FilterById[k].DimName)
+		}
+
+		f, err := makeDimIdFilter(
+			modelDef, &layout.FilterById[k], param.Dim[dix].Name, param.Dim[dix].typeOf, "parameter "+param.Name)
 		if err != nil {
 			return nil, err
 		}

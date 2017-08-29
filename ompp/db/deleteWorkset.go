@@ -7,6 +7,9 @@ import (
 	"database/sql"
 	"errors"
 	"strconv"
+	"time"
+
+	"go.openmpp.org/ompp/helper"
 )
 
 // DeleteWorkset delete workset metadata and workset parameter values from database.
@@ -90,4 +93,129 @@ func dbDeleteWorkset(trx *sql.Tx, setId int) error {
 	}
 
 	return nil
+}
+
+// DeleteWorksetParameter do delete parameter metadata and values from workset.
+//
+// If parameter not exist in workset then nothing deleted.
+// Workset must be read-write in order to delete parameter.
+// It is return parameter Hid = 0 if nothing deleted.
+func DeleteWorksetParameter(dbConn *sql.DB, modelId int, setName, paramName string) (int, error) {
+
+	// validate parameters
+	if modelId <= 0 {
+		return 0, errors.New("invalid model id: " + strconv.Itoa(modelId))
+	}
+	if setName == "" {
+		return 0, errors.New("invalid (empty) workset name")
+	}
+	if paramName == "" {
+		return 0, errors.New("invalid (empty) parameter name")
+	}
+
+	// delete inside of transaction scope
+	trx, err := dbConn.Begin()
+	if err != nil {
+		return 0, err
+	}
+	paramHid, err := dbDeleteWorksetParameter(trx, modelId, setName, paramName)
+	if err != nil {
+		trx.Rollback()
+		return 0, err
+	}
+	trx.Commit()
+	return paramHid, nil
+}
+
+// dbDeleteWorksetParameter delete workset parameter metadata and values from database.
+// It does update as part of transaction.
+func dbDeleteWorksetParameter(trx *sql.Tx, modelId int, setName, paramName string) (int, error) {
+
+	// "lock" workset to prevent update or use by the model
+	err := TrxUpdate(trx,
+		"UPDATE workset_lst"+
+			" SET is_readonly = is_readonly + 1"+
+			" WHERE model_id = "+strconv.Itoa(modelId)+" AND set_name = "+toQuoted(setName))
+	if err != nil {
+		return 0, err
+	}
+
+	// check if workset exist and not readonly
+	setId := 0
+	nRd := 0
+	err = TrxSelectFirst(trx,
+		"SELECT set_id, is_readonly FROM workset_lst"+
+			" WHERE model_id = "+strconv.Itoa(modelId)+" AND set_name = "+toQuoted(setName),
+		func(row *sql.Row) error {
+			if err := row.Scan(&setId, &nRd); err != nil {
+				return err
+			}
+			return nil
+		})
+	switch {
+	case err == sql.ErrNoRows:
+		return 0, nil // workset not found: nothing to do
+	case err != nil:
+		return 0, err
+	case nRd != 1:
+		return 0, errors.New("failed to update: workset is read-only: " + setName)
+	}
+	sId := strconv.Itoa(setId)
+
+	// build a list of workset parameters db-tables
+	var paramHid int
+	var tblName string
+	err = TrxSelectFirst(trx,
+		"SELECT P.parameter_hid, P.db_set_table"+
+			" FROM workset_parameter W"+
+			" INNER JOIN parameter_dic P ON (P.parameter_hid = W.parameter_hid)"+
+			" WHERE W.set_id = "+sId+
+			" AND P.parameter_name = "+toQuoted(paramName),
+		func(row *sql.Row) error {
+			if err := row.Scan(&paramHid, &tblName); err != nil {
+				return err
+			}
+			return nil
+		})
+	switch {
+	case err == sql.ErrNoRows: // parameter not exist in workset: restore original value of is_readonly=0 and exit
+		err = TrxUpdate(trx,
+			"UPDATE workset_lst SET is_readonly = 0 WHERE set_id ="+strconv.Itoa(setId))
+		if err != nil {
+			return 0, err
+		}
+		return 0, nil // parameter not found: nothing to do
+	case err != nil:
+		return 0, err
+	}
+	spHid := strconv.Itoa(paramHid)
+
+	// delete workset parameter values
+	err = TrxUpdate(trx, "DELETE FROM "+tblName+" WHERE set_id = "+sId)
+	if err != nil {
+		return 0, err
+	}
+
+	// delete model workset metadata
+	err = TrxUpdate(trx, "DELETE FROM workset_parameter_txt WHERE set_id = "+sId+" AND parameter_hid = "+spHid)
+	if err != nil {
+		return 0, err
+	}
+
+	err = TrxUpdate(trx, "DELETE FROM workset_parameter WHERE set_id = "+sId+" AND parameter_hid = "+spHid)
+	if err != nil {
+		return 0, err
+	}
+
+	// "unlock" workset before commit: restore original value of is_readonly=0
+	err = TrxUpdate(trx,
+		"UPDATE workset_lst"+
+			" SET is_readonly = 0,"+
+			" update_dt = "+toQuoted(helper.MakeDateTime(time.Now()))+
+			" WHERE set_id = "+strconv.Itoa(setId))
+	if err != nil {
+		return 0, err
+	}
+
+	return paramHid, nil
 }
