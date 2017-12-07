@@ -188,7 +188,7 @@ func toRunText(
 	}
 
 	// write all output tables into csv file
-	tblLt := &db.ReadOutTableLayout{ReadLayout: db.ReadLayout{FromId: runId}}
+	tblLt := &db.ReadTableLayout{ReadLayout: db.ReadLayout{FromId: runId}}
 
 	for j := range modelDef.Table {
 

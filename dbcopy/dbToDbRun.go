@@ -199,7 +199,10 @@ func copyRunDbToDb(
 	omppLog.Log("Model run from ", srcId, " ", pub.Name, " to ", dstId)
 
 	paramLt := db.ReadParamLayout{ReadLayout: db.ReadLayout{FromId: srcId}}
-	dstLt := db.WriteLayout{ToId: dstId, IsToRun: true}
+	dstParamLt := db.WriteParamLayout{
+		WriteLayout: db.WriteLayout{ToId: dstId},
+		DoubleFmt:   doubleFmt,
+		IsToRun:     true}
 
 	// copy all parameters values for that modrel run
 	for j := range srcModel.Param {
@@ -216,15 +219,18 @@ func copyRunDbToDb(
 		}
 
 		// destination: insert parameter values in model run
-		dstLt.Name = dstModel.Param[j].Name
+		dstParamLt.Name = dstModel.Param[j].Name
 
-		if err = db.WriteParameter(dstDb, dstModel, &dstLt, dstRun.Param[j].SubCount, cLst, doubleFmt); err != nil {
+		if err = db.WriteParameter(dstDb, dstModel, &dstParamLt, dstRun.Param[j].SubCount, cLst); err != nil {
 			return 0, err
 		}
 	}
 
 	// copy all output tables values for that modrel run
-	tblLt := db.ReadOutTableLayout{ReadLayout: db.ReadLayout{FromId: srcId}}
+	tblLt := db.ReadTableLayout{ReadLayout: db.ReadLayout{FromId: srcId}}
+	dstTblLt := db.WriteTableLayout{
+		WriteLayout: db.WriteLayout{ToId: dstId},
+		DoubleFmt:   doubleFmt}
 
 	for j := range srcModel.Table {
 
@@ -246,8 +252,8 @@ func copyRunDbToDb(
 		}
 
 		// insert output table values (accumulators and expressions) in model run
-		dstLt.Name = dstModel.Table[j].Name
-		if err = db.WriteOutputTable(dstDb, dstModel, &dstLt, acLst, ecLst, doubleFmt); err != nil {
+		dstTblLt.Name = dstModel.Table[j].Name
+		if err = db.WriteOutputTable(dstDb, dstModel, &dstTblLt, acLst, ecLst); err != nil {
 			return 0, err
 		}
 	}

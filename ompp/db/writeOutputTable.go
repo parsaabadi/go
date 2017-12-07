@@ -21,7 +21,7 @@ import (
 // Model run should not already contain output table values: it can be inserted only once in model run and cannot be updated after.
 // Double format is used for float model types digest calculation, if non-empty format supplied
 func WriteOutputTable(
-	dbConn *sql.DB, modelDef *ModelMeta, layout *WriteLayout, accCellLst *list.List, exprCellLst *list.List, doubleFmt string) error {
+	dbConn *sql.DB, modelDef *ModelMeta, layout *WriteTableLayout, accCellLst *list.List, exprCellLst *list.List) error {
 
 	// validate parameters
 	if modelDef == nil {
@@ -53,7 +53,7 @@ func WriteOutputTable(
 	if err != nil {
 		return err
 	}
-	if err = doWriteOutputTable(trx, modelDef, meta, layout.ToId, accCellLst, exprCellLst, doubleFmt); err != nil {
+	if err = doWriteOutputTable(trx, modelDef, meta, layout.ToId, accCellLst, exprCellLst, layout.DoubleFmt); err != nil {
 		trx.Rollback()
 		return err
 	}
@@ -67,7 +67,9 @@ func WriteOutputTable(
 // Model run must exist and be in completed state (i.e. success or error state).
 // Model run should not already contain output table values: it can be inserted only once in model run and cannot be updated after.
 // Double format is used for float model types digest calculation, if non-empty format supplied
-func doWriteOutputTable(trx *sql.Tx, modelDef *ModelMeta, meta *TableMeta, runId int, accCellLst *list.List, exprCellLst *list.List, doubleFmt string) error {
+func doWriteOutputTable(
+	trx *sql.Tx, modelDef *ModelMeta, meta *TableMeta, runId int, accCellLst *list.List, exprCellLst *list.List, doubleFmt string,
+) error {
 
 	// start run update
 	srId := strconv.Itoa(runId)

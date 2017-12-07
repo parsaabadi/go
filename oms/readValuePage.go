@@ -72,8 +72,8 @@ func (mc *ModelCatalog) ReadParameter(dn, src string, isCode bool, layout *db.Re
 // Page of values is a rows from output table expression or accumulator table or all accumulators view.
 // Page started at zero based offset row and up to max page size rows, if page size <= 0 then all values returned.
 // Values can be from expression table, accumulator table or "all accumulators" view.
-// Rows can be filtered and ordered (see db.ReadOutTableLayout for details).
-func (mc *ModelCatalog) ReadOutTable(dn, src string, isCode bool, layout *db.ReadOutTableLayout) (*list.List, bool) {
+// Rows can be filtered and ordered (see db.ReadTableLayout for details).
+func (mc *ModelCatalog) ReadOutTable(dn, src string, isCode bool, layout *db.ReadTableLayout) (*list.List, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {

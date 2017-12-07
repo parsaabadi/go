@@ -124,7 +124,7 @@ func worksetUpdateHandler(isReplace bool, w http.ResponseWriter, r *http.Request
 	}
 	wsn := newWp.Name
 
-	oldWp, _, err := theCatalog.WorksetText(dn, wsn, true, nil)
+	oldWp, _, err := theCatalog.WorksetTextFull(dn, wsn, true, nil)
 	if err != nil {
 		http.Error(w, "Failed to get existing workset metadata "+dn+" : "+wsn, http.StatusBadRequest)
 		return

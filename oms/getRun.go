@@ -301,7 +301,7 @@ func (mc *ModelCatalog) RunListText(dn string, preferedLang []language.Tag) ([]d
 	return rpl, true
 }
 
-// RunTextFull return full run metadata by model digest-or-name and digest-or-name.
+// RunTextFull return full run metadata by model digest-or-name and run digest-or-name.
 // It does not return non-completed runs (run in progress).
 // Run completed if run status one of: s=success, x=exit, e=error.
 // Text (description and notes) can be in prefered language or all languages.

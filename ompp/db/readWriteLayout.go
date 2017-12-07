@@ -10,11 +10,25 @@ import (
 
 // WriteLayout describes parameters or output tables values for insert or update.
 //
-// Name is a parameter or output table name to read
+// Name is a parameter or output table name to read.
 type WriteLayout struct {
-	Name    string // parameter name or output table name
-	ToId    int    // run id or set id to write parameter or output table values
-	IsToRun bool   // only for parameter: if true then write into into model run else into workset
+	Name string // parameter name or output table name
+	ToId int    // run id or set id to write parameter or output table values
+}
+
+// WriteParamLayout describes parameter values for insert or update.
+// Double format string is used for digest calcultion if value type if float or double.
+type WriteParamLayout struct {
+	WriteLayout        // common write layout: parameter name, run or set id
+	IsToRun     bool   // only for parameter: if true then write into into model run else into workset
+	DoubleFmt   string // used for float model types digest calculation
+}
+
+// WriteTableLayout describes output table values for insert or update.
+// Double format string is used for digest calcultion if value type if float or double.
+type WriteTableLayout struct {
+	WriteLayout        // common write layout: output table name, run or set id
+	DoubleFmt   string // used for float model types digest calculation
 }
 
 // ReadLayout describes source and size of data page to read input parameter or output table values.
@@ -38,11 +52,11 @@ type ReadParamLayout struct {
 	IsEditSet  bool // if true then workset must be editable (readonly = false)
 }
 
-// ReadOutTableLayout describes source and size of data page to read output table values.
+// ReadTableLayout describes source and size of data page to read output table values.
 //
 // If ValueName is not empty then only accumulator or output expression
 // with that name selected (i.e: "acc1" or "expr4") else all output table accumulators (expressions) selected.
-type ReadOutTableLayout struct {
+type ReadTableLayout struct {
 	ReadLayout        // output table name, page size, where filters and order by
 	ValueName  string // if not empty then expression or accumulator name to select
 	IsAccum    bool   // if true then select output table accumulator else expression

@@ -263,7 +263,10 @@ func fromRunTextToDb(
 	omppLog.Log("Model run from ", srcId, " ", srcName, " to ", dstId)
 
 	// restore run parameters: all model parameters must be included in the run
-	layout := db.WriteLayout{ToId: meta.Run.RunId, IsToRun: true}
+	paramLt := db.WriteParamLayout{
+		WriteLayout: db.WriteLayout{ToId: meta.Run.RunId},
+		DoubleFmt:   doubleFmt,
+		IsToRun:     true}
 
 	for j := range modelDef.Param {
 
@@ -278,14 +281,18 @@ func fromRunTextToDb(
 		}
 
 		// insert parameter values in model run
-		layout.Name = modelDef.Param[j].Name
+		paramLt.Name = modelDef.Param[j].Name
 
-		if err = db.WriteParameter(dbConn, modelDef, &layout, meta.Param[j].SubCount, cLst, doubleFmt); err != nil {
+		if err = db.WriteParameter(dbConn, modelDef, &paramLt, meta.Param[j].SubCount, cLst); err != nil {
 			return 0, 0, err
 		}
 	}
 
 	// restore run output tables accumulators and expressions
+	tblLt := db.WriteTableLayout{
+		WriteLayout: db.WriteLayout{ToId: meta.Run.RunId},
+		DoubleFmt:   doubleFmt}
+
 	for j := range modelDef.Table {
 
 		// read output table accumulator(s) values from csv file
@@ -303,8 +310,8 @@ func fromRunTextToDb(
 		}
 
 		// insert output table values (accumulators and expressions) in model run
-		layout.Name = modelDef.Table[j].Name
-		if err = db.WriteOutputTable(dbConn, modelDef, &layout, acLst, ecLst, doubleFmt); err != nil {
+		tblLt.Name = modelDef.Table[j].Name
+		if err = db.WriteOutputTable(dbConn, modelDef, &tblLt, acLst, ecLst); err != nil {
 			return 0, 0, err
 		}
 	}

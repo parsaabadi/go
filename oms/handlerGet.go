@@ -396,7 +396,7 @@ func worksetTextHandler(w http.ResponseWriter, r *http.Request) {
 	wsn := getRequestParam(r, "set")
 	rqLangTags := getRequestLang(r, "lang") // get optional language argument and languages accepted by browser
 
-	wp, _, _ := theCatalog.WorksetText(dn, wsn, false, rqLangTags)
+	wp, _, _ := theCatalog.WorksetTextFull(dn, wsn, false, rqLangTags)
 	jsonResponse(w, r, wp)
 }
 
@@ -411,6 +411,6 @@ func worksetAllTextHandler(w http.ResponseWriter, r *http.Request) {
 	dn := getRequestParam(r, "model")
 	wsn := getRequestParam(r, "set")
 
-	wp, _, _ := theCatalog.WorksetText(dn, wsn, true, nil)
+	wp, _, _ := theCatalog.WorksetTextFull(dn, wsn, true, nil)
 	jsonResponse(w, r, wp)
 }

@@ -23,7 +23,7 @@ import (
 // If workset already contain parameter values then values updated else inserted.
 //
 // Double format is used for float model types digest calculation, if non-empty format supplied
-func WriteParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *WriteLayout, subCount int, cellLst *list.List, doubleFmt string) error {
+func WriteParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *WriteParamLayout, subCount int, cellLst *list.List) error {
 
 	// validate parameters
 	if modelDef == nil {
@@ -62,7 +62,7 @@ func WriteParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *WriteLayout, su
 		return err
 	}
 	if layout.IsToRun {
-		if err = doWriteRunParameter(trx, modelDef, param, layout.ToId, subCount, cellLst, doubleFmt); err != nil {
+		if err = doWriteRunParameter(trx, modelDef, param, layout.ToId, subCount, cellLst, layout.DoubleFmt); err != nil {
 			trx.Rollback()
 			return err
 		}
@@ -82,7 +82,9 @@ func WriteParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *WriteLayout, su
 // Model run must exist and be in completed state (i.e. success or error state).
 // Model run should not already contain parameter values: parameter can be inserted only once in model run and cannot be updated after.
 // Double format is used for float model types digest calculation, if non-empty format supplied
-func doWriteRunParameter(trx *sql.Tx, modelDef *ModelMeta, param *ParamMeta, runId int, subCount int, cellLst *list.List, doubleFmt string) error {
+func doWriteRunParameter(
+	trx *sql.Tx, modelDef *ModelMeta, param *ParamMeta, runId int, subCount int, cellLst *list.List, doubleFmt string,
+) error {
 
 	// start run update
 	srId := strconv.Itoa(runId)

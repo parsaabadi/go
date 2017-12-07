@@ -101,7 +101,7 @@ func runTableIdPageReadHandler(w http.ResponseWriter, r *http.Request) {
 // doReadTablePageHandler read a "page" of output table values
 // from expression table, accumulator table or "all-accumulators" view of model run.
 // Json is posted to specify parameter name, "page" size and other read arguments,
-// see db.ReadOutTableLayout for more details.
+// see db.ReadTableLayout for more details.
 // Page is part of output table values defined by zero-based "start" row number and row count.
 // If row count <= 0 then all rows returned.
 // Dimension items returned enum id's or as enum codes and for dimension type simple as string values.
@@ -112,7 +112,7 @@ func doReadTablePageHandler(w http.ResponseWriter, r *http.Request, isCode bool)
 	rdn := getRequestParam(r, "run")  // run digest-or-name
 
 	// decode json request body
-	var layout db.ReadOutTableLayout
+	var layout db.ReadTableLayout
 	if !jsonRequestDecode(w, r, &layout) {
 		return // error at json decode, response done with http error
 	}
@@ -429,7 +429,7 @@ func doTableGetPageHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllA
 	}
 
 	// setup read layout
-	layout := db.ReadOutTableLayout{
+	layout := db.ReadTableLayout{
 		ReadLayout: db.ReadLayout{Name: name, Offset: start, Size: count},
 		IsAccum:    isAcc,
 		IsAllAccum: isAllAcc,

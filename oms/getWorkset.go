@@ -199,10 +199,10 @@ func (mc *ModelCatalog) WorksetListText(dn string, preferedLang []language.Tag) 
 	return wpl, true
 }
 
-// WorksetText return full workset metadata by model digest-or-name and workset name.
+// WorksetTextFull return full workset metadata by model digest-or-name and workset name.
 // Text (description and notes) can be in prefered language or all languages.
 // If prefered language requested and it is not found in db then return empty text results.
-func (mc *ModelCatalog) WorksetText(dn, wsn string, isAllLang bool, preferedLang []language.Tag) (*db.WorksetPub, bool, error) {
+func (mc *ModelCatalog) WorksetTextFull(dn, wsn string, isAllLang bool, preferedLang []language.Tag) (*db.WorksetPub, bool, error) {
 
 	// if model digest-or-name or workset name is empty then return empty results
 	if dn == "" {
