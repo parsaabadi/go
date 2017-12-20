@@ -29,7 +29,7 @@ const (
 	uiLangsArgKey      = "oms.Languages"       // list of supported languages
 	encodingArgKey     = "oms.CodePage"        // code page for converting source files, e.g. windows-1252
 	pageSizeAgrKey     = "oms.MaxRowCount"     // max number of rows to return from read parameters or output tables
-	doubleFormatArgKey = "dbcopy.DoubleFormat" // convert to string format for float and double
+	doubleFormatArgKey = "oms.DoubleFormat"    // format to convert float or double value to string, e.g. %.15g
 )
 
 // front-end UI subdirectory with html and javascript
@@ -44,7 +44,7 @@ var isLogRequest bool
 // default "page" size: row count to read parameters or output tables
 var pageMaxSize int64 = 100
 
-// default "page" size: row count to read parameters or output tables
+// format to convert float or double value to string
 var doubleFmt string = "%.15g"
 
 // main entry point: wrapper to handle errors
@@ -72,7 +72,7 @@ func mainBody(args []string) error {
 	_ = flag.String(uiLangsArgKey, "en", "comma-separated list of supported languages")
 	_ = flag.String(encodingArgKey, "", "code page to convert source file into utf-8, e.g.: windows-1252")
 	_ = flag.Int64(pageSizeAgrKey, pageMaxSize, "max number of rows to return from read parameters or output tables")
-	_ = flag.String(doubleFormatArgKey, doubleFmt, "convert to string format for float and double")
+	_ = flag.String(doubleFormatArgKey, doubleFmt, "format to convert float or double value to string")
 
 	// pairs of full and short argument names to map short name to full name
 	var optFs = []config.FullShort{
