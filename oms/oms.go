@@ -201,19 +201,19 @@ func apiGetRoutes(router *vestigo.Router) {
 	router.Get("/api/model-list/text", modelTextListHandler, logRequest)
 	router.Get("/api/model-list/text/lang/:lang", modelTextListHandler, logRequest)
 
-	// GET /api/model?model=modelOne
+	// GET /api/model?model=modelNameOrDigest
 	// GET /api/model/:model
 	router.Get("/api/model", modelMetaHandler, logRequest)
 	router.Get("/api/model/:model", modelMetaHandler, logRequest)
 
-	// GET /api/model-text?model=modelOne&lang=en
+	// GET /api/model-text?model=modelNameOrDigest&lang=en
 	// GET /api/model/:model/text
 	// GET /api/model/:model/text/lang/:lang
 	router.Get("/api/model-text", modelTextHandler, logRequest)
 	router.Get("/api/model/:model/text", modelTextHandler, logRequest)
 	router.Get("/api/model/:model/text/lang/:lang", modelTextHandler, logRequest)
 
-	// GET /api/model-text-all?model=modelOne
+	// GET /api/model-text-all?model=modelNameOrDigest
 	// GET /api/model/:model/text/all
 	router.Get("/api/model-text-all", modelAllTextHandler, logRequest)
 	router.Get("/api/model/:model/text/all", modelAllTextHandler, logRequest)
@@ -222,82 +222,70 @@ func apiGetRoutes(router *vestigo.Router) {
 	// GET model extra: languages, groups, profile(s)
 	//
 
-	// GET /api/lang-list?model=modelOne
+	// GET /api/lang-list?model=modelNameOrDigest
 	// GET /api/model/:model/lang-list
 	router.Get("/api/lang-list", langListHandler, logRequest)
 	router.Get("/api/model/:model/lang-list", langListHandler, logRequest)
 
-	// GET /api/model-group?model=modelOne
+	// GET /api/model-group?model=modelNameOrDigest
 	// GET /api/model/:model/group
 	router.Get("/api/model-group", modelGroupHandler, logRequest)
 	router.Get("/api/model/:model/group", modelGroupHandler, logRequest)
 
-	// GET /api/model-group-text?model=modelOne&lang=en
+	// GET /api/model-group-text?model=modelNameOrDigest&lang=en
 	// GET /api/model/:model/group/text
 	// GET /api/model/:model/group/text/lang/:lang
 	router.Get("/api/model-group-text", modelGroupTextHandler, logRequest)
 	router.Get("/api/model/:model/group/text", modelGroupTextHandler, logRequest)
 	router.Get("/api/model/:model/group/text/lang/:lang", modelGroupTextHandler, logRequest)
 
-	// GET /api/model-group-text-all?model=modelOne
+	// GET /api/model-group-text-all?model=modelNameOrDigest
 	// GET /api/model/:model/group/text/all
 	router.Get("/api/model-group-text-all", modelGroupAllTextHandler, logRequest)
 	router.Get("/api/model/:model/group/text/all", modelGroupAllTextHandler, logRequest)
 
-	// GET /api/model-profile?model=modelOne&profile=profileName
+	// GET /api/model-profile?model=modelNameOrDigest&profile=profileName
 	// GET /api/model/:model/profile/:profile
 	router.Get("/api/model-profile", modelProfileHandler, logRequest)
-	router.Get("/api/model/:model/profile/:name", modelProfileHandler, logRequest)
+	router.Get("/api/model/:model/profile/:profile", modelProfileHandler, logRequest)
 
 	//
 	// GET model run results
 	//
 
-	// GET /api/run-list?model=modelOne
+	// GET /api/run-list?model=modelNameOrDigest
 	// GET /api/model/:model/run-list
 	router.Get("/api/run-list", runListHandler, logRequest)
 	router.Get("/api/model/:model/run-list", runListHandler, logRequest)
 
-	// GET /api/run-list-text?model=modelOne&lang=en
+	// GET /api/run-list-text?model=modelNameOrDigest&lang=en
 	// GET /api/model/:model/run-list/text
 	// GET /api/model/:model/run-list/text/lang/:lang
 	router.Get("/api/run-list-text", runListTextHandler, logRequest)
 	router.Get("/api/model/:model/run-list/text", runListTextHandler, logRequest)
 	router.Get("/api/model/:model/run-list/text/lang/:lang", runListTextHandler, logRequest)
 
-	// GET /api/run-status?model=modelOne&run=runNameOrDigest
+	// GET /api/run-status?model=modelNameOrDigest&run=runNameOrDigest
 	// GET /api/model/:model/run/:run/status
 	router.Get("/api/run-status", runStatusHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/status", runStatusHandler, logRequest)
 
-	// GET /api/run-first-status?model=modelOne
+	// GET /api/run-first-status?model=modelNameOrDigest
 	// GET /api/model/:model/run/status/first
 	router.Get("/api/run-first-status", firstRunStatusHandler, logRequest)
 	router.Get("/api/model/:model/run/status/first", firstRunStatusHandler, logRequest)
 
-	// GET /api/run-last-status?model=modelOne
+	// GET /api/run-last-status?model=modelNameOrDigest
 	// GET /api/model/:model/run/status/last
 	router.Get("/api/run-last-status", lastRunStatusHandler, logRequest)
 	router.Get("/api/model/:model/run/status/last", lastRunStatusHandler, logRequest)
 
-	// GET /api/run-last-completed-status?model=modelOne
+	// GET /api/run-last-completed-status?model=modelNameOrDigest
 	// GET /api/model/:model/run/status/last/completed
 	router.Get("/api/run-last-completed-status", lastCompletedRunStatusHandler, logRequest)
 	router.Get("/api/model/:model/run/status/last/completed", lastCompletedRunStatusHandler, logRequest)
 
-	// GET /api/run-last-completed-text?model=modelOne&lang=en
-	// GET /api/model/:model/run/last/completed/text
-	// GET /api/model/:model/run/last/completed/text/lang/:lang
-	router.Get("/api/run-last-completed-text", lastCompletedRunTextHandler, logRequest)
-	router.Get("/api/model/:model/run/last/completed/text", lastCompletedRunTextHandler, logRequest)
-	router.Get("/api/model/:model/run/last/completed/text/lang/:lang", lastCompletedRunTextHandler, logRequest)
-
-	// GET /api/run-last-completed-text-all?model=modelOne
-	// GET /api/model/:model/run/last/completed/text/all
-	router.Get("/api/run-last-completed-text-all", lastCompletedRunAllTextHandler, logRequest)
-	router.Get("/api/model/:model/run/last/completed/text/all", lastCompletedRunAllTextHandler, logRequest)
-
-	// GET /api/run-text?model=modelOne&run=runNameOrDigest&lang=en
+	// GET /api/run-text?model=modelNameOrDigest&run=runNameOrDigest&lang=en
 	// GET /api/model/:model/run/:run/text
 	// GET /api/model/:model/run/:run/text/
 	// GET /api/model/:model/run/:run/text/lang/
@@ -308,38 +296,50 @@ func apiGetRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/text/lang/", runTextHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/text/lang/:lang", runTextHandler, logRequest)
 
-	// GET /api/run-text-all?model=modelOne&run=runNameOrDigest
+	// GET /api/run-text-all?model=modelNameOrDigest&run=runNameOrDigest
 	// GET /api/model/:model/run/:run/text/all
 	router.Get("/api/run-text-all", runAllTextHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/text/all", runAllTextHandler, logRequest)
+
+	// GET /api/run-last-completed-text?model=modelNameOrDigest&lang=en
+	// GET /api/model/:model/run/last/completed/text
+	// GET /api/model/:model/run/last/completed/text/lang/:lang
+	router.Get("/api/run-last-completed-text", lastCompletedRunTextHandler, logRequest)
+	router.Get("/api/model/:model/run/last/completed/text", lastCompletedRunTextHandler, logRequest)
+	router.Get("/api/model/:model/run/last/completed/text/lang/:lang", lastCompletedRunTextHandler, logRequest)
+
+	// GET /api/run-last-completed-text-all?model=modelNameOrDigest
+	// GET /api/model/:model/run/last/completed/text/all
+	router.Get("/api/run-last-completed-text-all", lastCompletedRunAllTextHandler, logRequest)
+	router.Get("/api/model/:model/run/last/completed/text/all", lastCompletedRunAllTextHandler, logRequest)
 
 	//
 	// GET model set of input parameters (workset)
 	//
 
-	// GET /api/workset-list?model=modelOne
+	// GET /api/workset-list?model=modelNameOrDigest
 	// GET /api/model/:model/workset-list
 	router.Get("/api/workset-list", worksetListHandler, logRequest)
 	router.Get("/api/model/:model/workset-list", worksetListHandler, logRequest)
 
-	// GET /api/workset-list-text?model=modelOne&lang=en
+	// GET /api/workset-list-text?model=modelNameOrDigest&lang=en
 	// GET /api/model/:model/workset-list/text
 	// GET /api/model/:model/workset-list/text/lang/:lang
 	router.Get("/api/workset-list-text", worksetListTextHandler, logRequest)
 	router.Get("/api/model/:model/workset-list/text", worksetListTextHandler, logRequest)
 	router.Get("/api/model/:model/workset-list/text/lang/:lang", worksetListTextHandler, logRequest)
 
-	// GET /api/workset-status?model=modelOne&set=mySet
+	// GET /api/workset-status?model=modelNameOrDigest&set=setName
 	// GET /api/model/:model/workset/:set/status
 	router.Get("/api/workset-status", worksetStatusHandler, logRequest)
 	router.Get("/api/model/:model/workset/:set/status", worksetStatusHandler, logRequest)
 
-	// GET /api/workset-default-status?model=modelOne
+	// GET /api/workset-default-status?model=modelNameOrDigest
 	// GET /api/model/:model/workset/status/default
 	router.Get("/api/workset-default-status", worksetDefaultStatusHandler, logRequest)
 	router.Get("/api/model/:model/workset/status/default", worksetDefaultStatusHandler, logRequest)
 
-	// GET /api/workset-text?model=modelOne&set=mySet&lang=en
+	// GET /api/workset-text?model=modelNameOrDigest&set=setName&lang=en
 	// GET /api/model/:model/workset/:set/text
 	// GET /api/model/:model/workset/:set/text/
 	// GET /api/model/:model/workset/:set/text/lang/
@@ -350,7 +350,7 @@ func apiGetRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/workset/:set/text/lang/", worksetTextHandler, logRequest)
 	router.Get("/api/model/:model/workset/:set/text/lang/:lang", worksetTextHandler, logRequest)
 
-	// GET /api/workset-text-all?model=modelOne&set=mySet
+	// GET /api/workset-text-all?model=modelNameOrDigest&set=setName
 	// GET /api/model/:model/workset/:set/text/all
 	router.Get("/api/workset-text-all", worksetAllTextHandler, logRequest)
 	router.Get("/api/model/:model/workset/:set/text/all", worksetAllTextHandler, logRequest)
@@ -377,9 +377,9 @@ func apiReadRoutes(router *vestigo.Router) {
 	// POST /api/model/:model/run/:run/table/value-id
 	router.Post("/api/model/:model/run/:run/table/value-id", runTableIdPageReadHandler, logRequest)
 
-	// GET /api/workset-parameter-value?model=modelOne&set=mySet&name=ageSex
-	// GET /api/workset-parameter-value?model=modelOne&set=mySet&name=ageSex&start=0
-	// GET /api/workset-parameter-value?model=modelOne&set=mySet&name=ageSex&start=0&count=100
+	// GET /api/workset-parameter-value?model=modelNameOrDigest&set=setName&name=parameterName
+	// GET /api/workset-parameter-value?model=modelNameOrDigest&set=setName&name=parameterName&start=0
+	// GET /api/workset-parameter-value?model=modelNameOrDigest&set=setName&name=parameterName&start=0&count=100
 	// GET /api/model/:model/workset/:set/parameter/:name/value
 	// GET /api/model/:model/workset/:set/parameter/:name/value/start/:start
 	// GET /api/model/:model/workset/:set/parameter/:name/value/start/:start/count/:count
@@ -388,9 +388,9 @@ func apiReadRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/workset/:set/parameter/:name/value/start/:start", worksetParameterPageGetHandler, logRequest)
 	router.Get("/api/model/:model/workset/:set/parameter/:name/value/start/:start/count/:count", worksetParameterPageGetHandler, logRequest)
 
-	// GET /api/run-parameter-value?model=modelOne&run=myRun&name=ageSex
-	// GET /api/run-parameter-value?model=modelOne&run=myRun&name=ageSex&start=0
-	// GET /api/run-parameter-value?model=modelOne&run=myRun&name=ageSex&start=0&count=100
+	// GET /api/run-parameter-value?model=modelNameOrDigest&run=runNameOrDigest&name=parameterName
+	// GET /api/run-parameter-value?model=modelNameOrDigest&run=runNameOrDigest&name=parameterName&start=0
+	// GET /api/run-parameter-value?model=modelNameOrDigest&run=runNameOrDigest&name=parameterName&start=0&count=100
 	// GET /api/model/:model/run/:run/parameter/:name/value
 	// GET /api/model/:model/run/:run/parameter/:name/value/start/:start
 	// GET /api/model/:model/run/:run/parameter/:name/value/start/:start/count/:count
@@ -399,7 +399,7 @@ func apiReadRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/parameter/:name/value/start/:start", runParameterPageGetHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/parameter/:name/value/start/:start/count/:count", runParameterPageGetHandler, logRequest)
 
-	// GET /api/workset-parameter-csv?model=modelOne&set=mySet&name=ageSex&bom=true
+	// GET /api/workset-parameter-csv?model=modelNameOrDigest&set=setName&name=parameterName&bom=true
 	// GET /api/model/:model/workset/:set/parameter/:name/csv
 	router.Get("/api/workset-parameter-csv", worksetParameterCsvGetHandler, logRequest)
 	router.Get("/api/model/:model/workset/:set/parameter/:name/csv", worksetParameterCsvGetHandler, logRequest)
@@ -407,7 +407,7 @@ func apiReadRoutes(router *vestigo.Router) {
 	// GET /api/model/:model/workset/:set/parameter/:name/csv-bom
 	router.Get("/api/model/:model/workset/:set/parameter/:name/csv-bom", worksetParameterCsvBomGetHandler, logRequest)
 
-	// GET /api/workset-parameter-csv-id?model=modelOne&set=mySet&name=ageSex&bom=true
+	// GET /api/workset-parameter-csv-id?model=modelNameOrDigest&set=setName&name=parameterName&bom=true
 	// GET /api/model/:model/workset/:set/parameter/:name/csv-id
 	router.Get("/api/workset-parameter-csv-id", worksetParameterIdCsvGetHandler, logRequest)
 	router.Get("/api/model/:model/workset/:set/parameter/:name/csv-id", worksetParameterIdCsvGetHandler, logRequest)
@@ -415,7 +415,7 @@ func apiReadRoutes(router *vestigo.Router) {
 	// GET /api/model/:model/workset/:set/parameter/:name/csv-id-bom
 	router.Get("/api/model/:model/workset/:set/parameter/:name/csv-id-bom", worksetParameterIdCsvBomGetHandler, logRequest)
 
-	// GET /api/run-parameter-csv?model=modelOne&run=myRun&name=ageSex&bom=true
+	// GET /api/run-parameter-csv?model=modelNameOrDigest&run=runNameOrDigest&name=parameterName&bom=true
 	// GET /api/model/:model/run/:run/parameter/:name/csv
 	router.Get("/api/run-parameter-csv", runParameterCsvGetHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/parameter/:name/csv", runParameterCsvGetHandler, logRequest)
@@ -423,7 +423,7 @@ func apiReadRoutes(router *vestigo.Router) {
 	// GET /api/model/:model/run/:run/parameter/:name/csv-bom
 	router.Get("/api/model/:model/run/:run/parameter/:name/csv-bom", runParameterCsvBomGetHandler, logRequest)
 
-	// GET /api/run-parameter-csv-id?model=modelOne&run=myRun&name=ageSex&bom=true
+	// GET /api/run-parameter-csv-id?model=modelNameOrDigest&run=runNameOrDigest&name=parameterName&bom=true
 	// GET /api/model/:model/run/:run/parameter/:name/csv-id
 	router.Get("/api/run-parameter-csv-id", runParameterIdCsvGetHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/parameter/:name/csv-id", runParameterIdCsvGetHandler, logRequest)
@@ -431,8 +431,8 @@ func apiReadRoutes(router *vestigo.Router) {
 	// GET /api/model/:model/run/:run/parameter/:name/csv-id-bom
 	router.Get("/api/model/:model/run/:run/parameter/:name/csv-id-bom", runParameterIdCsvBomGetHandler, logRequest)
 
-	// GET /api/run-table-expr?model=modelOne&run=myRun&name=salarySex&start=0
-	// GET /api/run-table-expr?model=modelOne&run=myRun&name=salarySex&start=0&count=100
+	// GET /api/run-table-expr?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0
+	// GET /api/run-table-expr?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0&count=100
 	// GET /api/model/:model/run/:run/table/:name/expr
 	// GET /api/model/:model/run/:run/table/:name/expr/start/:start
 	// GET /api/model/:model/run/:run/table/:name/expr/start/:start/count/:count
@@ -441,9 +441,9 @@ func apiReadRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/table/:name/expr/start/:start", runTableExprPageGetHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/table/:name/expr/start/:start/count/:count", runTableExprPageGetHandler, logRequest)
 
-	// GET /api/run-table-acc?model=modelOne&run=myRun&name=salarySex
-	// GET /api/run-table-acc?model=modelOne&run=myRun&name=salarySex&start=0
-	// GET /api/run-table-acc?model=modelOne&run=myRun&name=salarySex&start=0&count=100
+	// GET /api/run-table-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName
+	// GET /api/run-table-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0
+	// GET /api/run-table-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0&count=100
 	// GET /api/model/:model/run/:run/table/:name/acc
 	// GET /api/model/:model/run/:run/table/:name/acc/start/:start
 	// GET /api/model/:model/run/:run/table/:name/acc/start/:start/count/:count
@@ -452,9 +452,9 @@ func apiReadRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/table/:name/acc/start/:start", runTableAccPageGetHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/table/:name/acc/start/:start/count/:count", runTableAccPageGetHandler, logRequest)
 
-	// GET /api/run-table-all-acc?model=modelOne&run=myRun&name=salarySex
-	// GET /api/run-table-all-acc?model=modelOne&run=myRun&name=salarySex&start=0
-	// GET /api/run-table-all-acc?model=modelOne&run=myRun&name=salarySex&start=0&count=100
+	// GET /api/run-table-all-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName
+	// GET /api/run-table-all-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0
+	// GET /api/run-table-all-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0&count=100
 	// GET /api/model/:model/run/:run/table/:name/all-acc
 	// GET /api/model/:model/run/:run/table/:name/all-acc/start/:start
 	// GET /api/model/:model/run/:run/table/:name/all-acc/start/:start/count/:count
@@ -467,14 +467,14 @@ func apiReadRoutes(router *vestigo.Router) {
 // add web-service /api routes to update metadata
 func apiUpdateRoutes(router *vestigo.Router) {
 
-	// POST /api/workset-readonly?model=modelOne&set=mySet&readonly=true
+	// POST /api/workset-readonly?model=modelNameOrDigest&set=setName&readonly=true
 	// POST /api/model/:model/workset/:set/readonly/:readonly
 	router.Post("/api/workset-readonly", worksetReadonlyUpdateHandler, logRequest)
 	router.Post("/api/model/:model/workset/:set/readonly/:readonly", worksetReadonlyUpdateHandler, logRequest)
 
 	// DELETE /api/model/:model/workset/:set
 	// POST /api/model/:model/workset/:set/delete
-	// POST /api/workset/delete?model=modelOne&set=mySet
+	// POST /api/workset/delete?model=modelNameOrDigest&set=setName
 	router.Delete("/api/model/:model/workset/:set", worksetDeleteHandler, logRequest)
 	router.Post("/api/model/:model/workset/:set/delete", worksetDeleteHandler, logRequest)
 	router.Post("/api/workset/delete", worksetDeleteHandler, logRequest)
@@ -491,7 +491,7 @@ func apiUpdateRoutes(router *vestigo.Router) {
 
 	// DELETE /api/model/:model/workset/:set/parameter/:name
 	// POST /api/model/:model/workset/:set/parameter/:name/delete
-	// POST /api/workset-parameter/delete?model=modelOne&set=mySet&parameter=name
+	// POST /api/workset-parameter/delete?model=modelNameOrDigest&set=setName&parameter=name
 	router.Delete("/api/model/:model/workset/:set/parameter/:name", worksetParameterDeleteHandler, logRequest)
 	router.Post("/api/model/:model/workset/:set/parameter/:name/delete", worksetParameterDeleteHandler, logRequest)
 	router.Post("/api/workset-parameter/delete", worksetParameterDeleteHandler, logRequest)

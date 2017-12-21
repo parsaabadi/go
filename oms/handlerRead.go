@@ -139,9 +139,9 @@ func doReadTablePageHandler(w http.ResponseWriter, r *http.Request, isCode bool)
 }
 
 // worksetParameterPageGetHandler read a "page" of parameter values from workset.
-// GET /api/workset-parameter-value?model=modelOne&set=mySet&name=ageSex
-// GET /api/workset-parameter-value?model=modelOne&set=mySet&name=ageSex&start=0
-// GET /api/workset-parameter-value?model=modelOne&set=mySet&name=ageSex&start=0&count=100
+// GET /api/workset-parameter-value?model=modelNameOrDigest&set=setName&name=parameterName
+// GET /api/workset-parameter-value?model=modelNameOrDigest&set=setName&name=parameterName&start=0
+// GET /api/workset-parameter-value?model=modelNameOrDigest&set=setName&name=parameterName&start=0&count=100
 // GET /api/model/:model/workset/:set/parameter/:name/value
 // GET /api/model/:model/workset/:set/parameter/:name/value/start/:start
 // GET /api/model/:model/workset/:set/parameter/:name/value/start/:start/count/:count
@@ -151,9 +151,9 @@ func worksetParameterPageGetHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // runParameterPageGetHandler read a "page" of parameter values from model run results.
-// GET /api/run-parameter-value?model=modelOne&run=myRun&name=ageSex
-// GET /api/run-parameter-value?model=modelOne&run=myRun&name=ageSex&start=0
-// GET /api/run-parameter-value?model=modelOne&run=myRun&name=ageSex&start=0&count=100
+// GET /api/run-parameter-value?model=modelNameOrDigest&run=runNameOrDigest&name=parameterName
+// GET /api/run-parameter-value?model=modelNameOrDigest&run=runNameOrDigest&name=parameterName&start=0
+// GET /api/run-parameter-value?model=modelNameOrDigest&run=runNameOrDigest&name=parameterName&start=0&count=100
 // GET /api/model/:model/run/:run/parameter/:name/value
 // GET /api/model/:model/run/:run/parameter/:name/value/start/:start
 // GET /api/model/:model/run/:run/parameter/:name/value/start/:start/count/:count
@@ -213,7 +213,7 @@ func doParameterGetPageHandler(w http.ResponseWriter, r *http.Request, srcArg st
 }
 
 // worksetParameterCsvGetHandler read a parameter values from workset and write it as csv response.
-// GET /api/workset-parameter-csv?model=modelOne&set=mySet&name=ageSex&bom=true
+// GET /api/workset-parameter-csv?model=modelNameOrDigest&set=setName&name=parameterName&bom=true
 // GET /api/model/:model/workset/:set/parameter/:name/csv
 // Dimension(s) and enum-based parameters returned as enum codes.
 func worksetParameterCsvGetHandler(w http.ResponseWriter, r *http.Request) {
@@ -230,7 +230,7 @@ func worksetParameterCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // worksetParameterIdCsvGetHandler read a parameter values from workset and write it as csv response.
-// GET /api/workset-parameter-csv-id?model=modelOne&set=mySet&name=ageSex&bom=true
+// GET /api/workset-parameter-csv-id?model=modelNameOrDigest&set=setName&name=parameterName&bom=true
 // GET /api/model/:model/workset/:set/parameter/:name/csv-id
 // Dimension(s) and enum-based parameters returned as enum id's.
 func worksetParameterIdCsvGetHandler(w http.ResponseWriter, r *http.Request) {
@@ -247,7 +247,7 @@ func worksetParameterIdCsvBomGetHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 // runParameterCsvGetHandler read a parameter values from model run results and write it as csv response.
-// GET /api/run-parameter-csv?model=modelOne&run=myRun&name=ageSex&bom=true
+// GET /api/run-parameter-csv?model=modelNameOrDigest&run=runNameOrDigest&name=parameterName&bom=true
 // GET /api/model/:model/run/:run/parameter/:name/csv
 // Dimension(s) and enum-based parameters returned as enum codes.
 func runParameterCsvGetHandler(w http.ResponseWriter, r *http.Request) {
@@ -264,7 +264,7 @@ func runParameterCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // runParameterIdCsvGetHandler read a parameter values from model run results and write it as csv response.
-// GET /api/run-parameter-csv-id?model=modelOne&run=myRun&name=ageSex&bom=true
+// GET /api/run-parameter-csv-id?model=modelNameOrDigest&run=runNameOrDigest&name=parameterName&bom=true
 // GET /api/model/:model/run/:run/parameter/:name/csv-id
 // Dimension(s) and enum-based parameters returned as enum id's.
 func runParameterIdCsvGetHandler(w http.ResponseWriter, r *http.Request) {
@@ -369,8 +369,8 @@ func doParameterGetCsvHandler(w http.ResponseWriter, r *http.Request, srcArg str
 }
 
 // runTableExprPageGetHandler read a "page" of output table expression(s) values from model run results.
-// GET /api/run-table-expr?model=modelOne&run=myRun&name=salarySex&start=0
-// GET /api/run-table-expr?model=modelOne&run=myRun&name=salarySex&start=0&count=100
+// GET /api/run-table-expr?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0
+// GET /api/run-table-expr?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0&count=100
 // GET /api/model/:model/run/:run/table/:name/expr
 // GET /api/model/:model/run/:run/table/:name/expr/start/:start
 // GET /api/model/:model/run/:run/table/:name/expr/start/:start/count/:count
@@ -380,9 +380,9 @@ func runTableExprPageGetHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // runTableAccPageGetHandler read a "page" of output table accumulator(s) values from model run results.
-// GET /api/run-table-acc?model=modelOne&run=myRun&name=salarySex
-// GET /api/run-table-acc?model=modelOne&run=myRun&name=salarySex&start=0
-// GET /api/run-table-acc?model=modelOne&run=myRun&name=salarySex&start=0&count=100
+// GET /api/run-table-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName
+// GET /api/run-table-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0
+// GET /api/run-table-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0&count=100
 // GET /api/model/:model/run/:run/table/:name/acc
 // GET /api/model/:model/run/:run/table/:name/acc/start/:start
 // GET /api/model/:model/run/:run/table/:name/acc/start/:start/count/:count
@@ -393,9 +393,9 @@ func runTableAccPageGetHandler(w http.ResponseWriter, r *http.Request) {
 
 // runTableAllAccPageGetHandler read a "page" of output table accumulator(s) values
 // from "all-accumulators" view of model run results.
-// GET /api/run-table-all-acc?model=modelOne&run=myRun&name=salarySex
-// GET /api/run-table-all-acc?model=modelOne&run=myRun&name=salarySex&start=0
-// GET /api/run-table-all-acc?model=modelOne&run=myRun&name=salarySex&start=0&count=100
+// GET /api/run-table-all-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName
+// GET /api/run-table-all-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0
+// GET /api/run-table-all-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0&count=100
 // GET /api/model/:model/run/:run/table/:name/all-acc
 // GET /api/model/:model/run/:run/table/:name/all-acc/start/:start
 // GET /api/model/:model/run/:run/table/:name/all-acc/start/:start/count/:count

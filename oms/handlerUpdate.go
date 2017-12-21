@@ -14,7 +14,7 @@ import (
 )
 
 // worksetReadonlyUpdateHandler update workset read-only status by model digest-or-name and workset name:
-// POST /api/workset-readonly?model=modelOne&set=mySet&readonly=true
+// POST /api/workset-readonly?model=modelNameOrDigest&set=setName&readonly=true
 // POST /api/model/:model/workset/:set/readonly/:readonly
 // If multiple models with same name exist then result is undefined.
 // If no such workset exist in database then empty result returned.
@@ -40,7 +40,7 @@ func worksetReadonlyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 // worksetDeleteHandler delete workset and workset parameters:
 // DELETE /api/model/:model/workset/:set
 // POST /api/model/:model/workset/:set/delete
-// POST /api/workset/delete?model=modelOne&set=mySet
+// POST /api/workset/delete?model=modelNameOrDigest&set=setName
 // If multiple models with same name exist then result is undefined.
 // If no such workset exist in database then no error, empty operation.
 func worksetDeleteHandler(w http.ResponseWriter, r *http.Request) {
@@ -239,7 +239,7 @@ func worksetUpdateHandler(isReplace bool, w http.ResponseWriter, r *http.Request
 // worksetParameterDeleteHandler delete workset parameter:
 // DELETE /api/model/:model/workset/:set/parameter/:name
 // POST /api/model/:model/workset/:set/parameter/:name/delete
-// POST /api/workset-parameter/delete?model=modelOne&set=mySet&parameter=name
+// POST /api/workset-parameter/delete?model=modelNameOrDigest&set=setName&parameter=name
 // If multiple models with same name exist then result is undefined.
 // If no such parameter or workset exist in database then no error, empty operation.
 func worksetParameterDeleteHandler(w http.ResponseWriter, r *http.Request) {
