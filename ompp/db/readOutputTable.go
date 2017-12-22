@@ -213,7 +213,7 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLayou
 
 	// append order by expr_id or acc_id, sub_id or sub_id
 	nExtraCol := 1
-	if layout.IsAllAccum && !layout.IsAllAccum {
+	if layout.IsAccum && !layout.IsAllAccum {
 		nExtraCol = 2 // extra columns: acc_id, sub_id
 	}
 	q += makeOrderBy(table.Rank, layout.OrderBy, nExtraCol)

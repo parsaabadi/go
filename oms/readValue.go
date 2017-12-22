@@ -16,7 +16,7 @@ import (
 // and up to max page size rows, if page size <= 0 then all values returned.
 // Parameter values can be read-only (select from run or read-only workset) or read-write (read-write workset).
 // Rows can be filtered and ordered (see db.ReadParamLayout for details).
-func (mc *ModelCatalog) ReadParameter(dn, src string, isCode bool, layout *db.ReadParamLayout) (*list.List, bool) {
+func (mc *ModelCatalog) ReadParameter(dn, src string, layout *db.ReadParamLayout) (*list.List, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
@@ -73,7 +73,7 @@ func (mc *ModelCatalog) ReadParameter(dn, src string, isCode bool, layout *db.Re
 // Page started at zero based offset row and up to max page size rows, if page size <= 0 then all values returned.
 // Values can be from expression table, accumulator table or "all accumulators" view.
 // Rows can be filtered and ordered (see db.ReadTableLayout for details).
-func (mc *ModelCatalog) ReadOutTable(dn, src string, isCode bool, layout *db.ReadTableLayout) (*list.List, bool) {
+func (mc *ModelCatalog) ReadOutTable(dn, src string, layout *db.ReadTableLayout) (*list.List, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
@@ -306,6 +306,72 @@ func (mc *ModelCatalog) ParameterToCsvConverter(dn string, isCode bool, name str
 	}
 	if err != nil {
 		omppLog.Log("Failed to create parameter converter to csv: ", dn, ": ", name, ": ", err.Error())
+		return []string{}, nil, false
+	}
+
+	return hdr, cvt, true
+}
+
+// TableToCsvConverter return output table cell to csv converter and csv header line.
+func (mc *ModelCatalog) TableToCsvConverter(dn string, isCode bool, name string, isAcc, isAllAcc bool,
+) (
+	[]string, func(interface{}, []string) error, bool,
+) {
+
+	// if model digest-or-name is empty then return empty results
+	if dn == "" {
+		omppLog.Log("Warning: invalid (empty) model digest and name")
+		return []string{}, nil, false
+	}
+
+	// load model metadata and return index in model catalog
+	idx, ok := mc.loadModelMeta(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return []string{}, nil, false // return empty result: model not found or error
+	}
+
+	// lock catalog and search model output table by name
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	if _, ok = mc.modelLst[idx].meta.OutTableByName(name); !ok {
+		omppLog.Log("Error: model output table not found: ", dn, ": ", name)
+		return []string{}, nil, false // return empty result: output table not found or error
+	}
+
+	// set cell conveter to csv
+	var cell db.CsvConverter
+	var ec db.CellExpr
+	var ac db.CellAcc
+	var alc db.CellAllAcc
+	if !isAcc {
+		cell = ec
+	} else {
+		if !isAllAcc {
+			cell = ac
+		} else {
+			cell = alc
+		}
+	}
+
+	// make csv header
+	hdr, err := cell.CsvHeader(mc.modelLst[idx].meta, name, !isCode, "")
+	if err != nil {
+		omppLog.Log("Failed  to make output table csv header: ", dn, ": ", name, ": ", err.Error())
+		return []string{}, nil, false
+	}
+
+	// create converter from db cell into csv row []string
+	var cvt func(interface{}, []string) error
+
+	if isCode {
+		cvt, err = cell.CsvToRow(mc.modelLst[idx].meta, name, doubleFmt, "")
+	} else {
+		cvt, err = cell.CsvToIdRow(mc.modelLst[idx].meta, name, doubleFmt, "")
+	}
+	if err != nil {
+		omppLog.Log("Failed to create output table converter to csv: ", dn, ": ", name, ": ", err.Error())
 		return []string{}, nil, false
 	}
 

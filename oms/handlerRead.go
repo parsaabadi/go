@@ -4,15 +4,9 @@
 package main
 
 import (
-	"encoding/csv"
 	"net/http"
-	"net/url"
-	"strconv"
-
-	"go.openmpp.org/ompp/omppLog"
 
 	"go.openmpp.org/ompp/db"
-	"go.openmpp.org/ompp/helper"
 )
 
 // worksetParameterPageReadHandler read a "page" of parameter values from workset.
@@ -63,7 +57,7 @@ func doReadParameterPageHandler(w http.ResponseWriter, r *http.Request, srcArg s
 	layout.IsFromSet = isSet // overwrite json value, it was likely default
 
 	// read parameter page and respond with json and convert enum id's to code if requested
-	cLst, ok := theCatalog.ReadParameter(dn, src, isCode, &layout)
+	cLst, ok := theCatalog.ReadParameter(dn, src, &layout)
 	if !ok {
 		http.Error(w, "Error at parameter read "+src+": "+layout.Name, http.StatusBadRequest)
 		return
@@ -118,7 +112,7 @@ func doReadTablePageHandler(w http.ResponseWriter, r *http.Request, isCode bool)
 	}
 
 	// read output table page and respond with json and convert enum id's to code if requested
-	cLst, ok := theCatalog.ReadOutTable(dn, rdn, isCode, &layout)
+	cLst, ok := theCatalog.ReadOutTable(dn, rdn, &layout)
 	if !ok {
 		http.Error(w, "Error at run output table read "+rdn+": "+layout.Name, http.StatusBadRequest)
 		return
@@ -192,7 +186,7 @@ func doParameterGetPageHandler(w http.ResponseWriter, r *http.Request, srcArg st
 	}
 
 	// read parameter page and respond with json
-	cLst, ok := theCatalog.ReadParameter(dn, src, isCode, &layout)
+	cLst, ok := theCatalog.ReadParameter(dn, src, &layout)
 	if !ok {
 		http.Error(w, "Error at parameter read "+src+": "+layout.Name, http.StatusBadRequest)
 		return
@@ -210,162 +204,6 @@ func doParameterGetPageHandler(w http.ResponseWriter, r *http.Request, srcArg st
 	}
 
 	jsonListResponse(w, r, cLst, cvt) // write response
-}
-
-// worksetParameterCsvGetHandler read a parameter values from workset and write it as csv response.
-// GET /api/workset-parameter-csv?model=modelNameOrDigest&set=setName&name=parameterName&bom=true
-// GET /api/model/:model/workset/:set/parameter/:name/csv
-// Dimension(s) and enum-based parameters returned as enum codes.
-func worksetParameterCsvGetHandler(w http.ResponseWriter, r *http.Request) {
-	isBom, _ := getBoolRequestParam(r, "bom") // is utf-8 bom required
-	doParameterGetCsvHandler(w, r, "set", true, true, isBom)
-}
-
-// worksetParameterCsvBomGetHandler read a parameter values from workset and write it as csv response.
-// GET /api/model/:model/workset/:set/parameter/:name/csv-bom
-// Dimension(s) and enum-based parameters returned as enum codes.
-// Response starts from utf-8 BOM bytes.
-func worksetParameterCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
-	doParameterGetCsvHandler(w, r, "set", true, true, true)
-}
-
-// worksetParameterIdCsvGetHandler read a parameter values from workset and write it as csv response.
-// GET /api/workset-parameter-csv-id?model=modelNameOrDigest&set=setName&name=parameterName&bom=true
-// GET /api/model/:model/workset/:set/parameter/:name/csv-id
-// Dimension(s) and enum-based parameters returned as enum id's.
-func worksetParameterIdCsvGetHandler(w http.ResponseWriter, r *http.Request) {
-	isBom, _ := getBoolRequestParam(r, "bom") // is utf-8 bom required
-	doParameterGetCsvHandler(w, r, "set", true, false, isBom)
-}
-
-// worksetParameterIdCsvBomGetHandler read a parameter values from workset and write it as csv response.
-// GET /api/model/:model/workset/:set/parameter/:name/csv-id-bom
-// Dimension(s) and enum-based parameters returned as enum id's.
-// Response starts from utf-8 BOM bytes.
-func worksetParameterIdCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
-	doParameterGetCsvHandler(w, r, "set", true, false, true)
-}
-
-// runParameterCsvGetHandler read a parameter values from model run results and write it as csv response.
-// GET /api/run-parameter-csv?model=modelNameOrDigest&run=runNameOrDigest&name=parameterName&bom=true
-// GET /api/model/:model/run/:run/parameter/:name/csv
-// Dimension(s) and enum-based parameters returned as enum codes.
-func runParameterCsvGetHandler(w http.ResponseWriter, r *http.Request) {
-	isBom, _ := getBoolRequestParam(r, "bom") // is utf-8 bom required
-	doParameterGetCsvHandler(w, r, "run", false, true, isBom)
-}
-
-// runParameterCsvBomGetHandler read a parameter values from model run results and write it as csv response.
-// GET /api/model/:model/run/:run/parameter/:name/csv-bom
-// Dimension(s) and enum-based parameters returned as enum codes.
-// Response starts from utf-8 BOM bytes.
-func runParameterCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
-	doParameterGetCsvHandler(w, r, "run", false, true, true)
-}
-
-// runParameterIdCsvGetHandler read a parameter values from model run results and write it as csv response.
-// GET /api/run-parameter-csv-id?model=modelNameOrDigest&run=runNameOrDigest&name=parameterName&bom=true
-// GET /api/model/:model/run/:run/parameter/:name/csv-id
-// Dimension(s) and enum-based parameters returned as enum id's.
-func runParameterIdCsvGetHandler(w http.ResponseWriter, r *http.Request) {
-	isBom, _ := getBoolRequestParam(r, "bom") // is utf-8 bom required
-	doParameterGetCsvHandler(w, r, "run", false, false, isBom)
-}
-
-// runParameterIdCsvBomGetHandler read a parameter values from model run results and write it as csv response.
-// GET /api/model/:model/run/:run/parameter/:name/csv-id-bom
-// Dimension(s) and enum-based parameters returned as enum id's.
-// Response starts from utf-8 BOM bytes.
-func runParameterIdCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
-	doParameterGetCsvHandler(w, r, "run", false, false, true)
-}
-
-// doParameterGetCsvHandler read parameter values from workset or model run and write it as csv response.
-// It does read all parameter values, not a "page" of values.
-// Dimension(s) and enum-based parameters returned as enum codes or enum id's.
-func doParameterGetCsvHandler(w http.ResponseWriter, r *http.Request, srcArg string, isSet, isCode, isBom bool) {
-
-	// url or query parameters
-	dn := getRequestParam(r, "model")  // model digest-or-name
-	src := getRequestParam(r, srcArg)  // workset name or run digest-or-name
-	name := getRequestParam(r, "name") // parameter name
-
-	// read parameter values, page size =0: read all values
-	layout := db.ReadParamLayout{
-		ReadLayout: db.ReadLayout{Name: name}, IsFromSet: isSet,
-	}
-
-	cLst, ok := theCatalog.ReadParameter(dn, src, isCode, &layout)
-	if !ok {
-		http.Error(w, "Error at parameter read "+src+": "+layout.Name, http.StatusBadRequest)
-		return
-	}
-
-	// get converter from cell list to csv rows []string
-	hdr, cvt, ok := theCatalog.ParameterToCsvConverter(dn, isCode, name)
-	if !ok {
-		http.Error(w, "Error at parameter read "+src+": "+name, http.StatusBadRequest)
-		return
-	}
-
-	// calculate Content-Length
-	nb := 0
-	if isBom {
-		nb += len(helper.Utf8bom)
-	}
-
-	// header length
-	for k := range hdr {
-		nb += len(hdr[k]) + 1
-	}
-
-	// each csv line length: comma-separated and lf as eol
-	cs := append([]string{}, hdr...)
-
-	for c := cLst.Front(); c != nil; c = c.Next() {
-		if err := cvt(c.Value, cs); err != nil {
-			omppLog.Log("Error at convert parameter cell: ", name, ": ", err.Error())
-			http.Error(w, "Error at convert cell value of: "+src+": "+name, http.StatusBadRequest)
-			return
-		}
-		for k := range cs {
-			nb += len(cs[k]) + 1
-		}
-	}
-
-	// set response headers
-	// todo: ETag instead no-cache and utf-8 file names
-	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
-	w.Header().Set("Content-Dispostion", "attachment; filename="+`"`+url.QueryEscape(name)+".csv"+`"`)
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Content-Length", strconv.Itoa(nb))
-
-	// write csv body
-	if isBom {
-		if _, err := w.Write(helper.Utf8bom); err != nil {
-			http.Error(w, "Error at csv parameter write: "+src+": "+name, http.StatusBadRequest)
-			return
-		}
-	}
-
-	csvWr := csv.NewWriter(w)
-
-	if err := csvWr.Write(hdr); err != nil {
-		http.Error(w, "Error at csv parameter write: "+src+": "+name, http.StatusBadRequest)
-		return
-	}
-
-	for c := cLst.Front(); c != nil; c = c.Next() {
-		if err := cvt(c.Value, cs); err != nil {
-			http.Error(w, "Error at convert cell value of: "+src+": "+name, http.StatusBadRequest)
-			return
-		}
-		if err := csvWr.Write(cs); err != nil {
-			http.Error(w, "Error at csv parameter write: "+src+": "+name, http.StatusBadRequest)
-			return
-		}
-	}
-	csvWr.Flush() // flush csv to response
 }
 
 // runTableExprPageGetHandler read a "page" of output table expression(s) values from model run results.
@@ -436,7 +274,7 @@ func doTableGetPageHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllA
 	}
 
 	// read output table page and respond with json
-	cLst, ok := theCatalog.ReadOutTable(dn, rdn, isCode, &layout)
+	cLst, ok := theCatalog.ReadOutTable(dn, rdn, &layout)
 	if !ok {
 		http.Error(w, "Error at run output table read "+rdn+": "+layout.Name, http.StatusBadRequest)
 		return

@@ -20,16 +20,16 @@ import (
 
 // config keys to get values from ini-file or command line arguments.
 const (
-	rootDirArgKey      = "oms.RootDir"         // root directory, expected subdir: html
-	modelDirArgKey     = "oms.ModelDir"        // models directory, if relative then must be relative to root directory
-	listenArgKey       = "oms.Listen"          // address to listen, default: localhost:4040
-	listenShortKey     = "l"                   // address to listen (short form)
-	logRequestArgKey   = "oms.LogRequest"      // if true then log http request
-	apiOnlyArgKey      = "oms.ApiOnly"         // if true then API only web-service, no UI
-	uiLangsArgKey      = "oms.Languages"       // list of supported languages
-	encodingArgKey     = "oms.CodePage"        // code page for converting source files, e.g. windows-1252
-	pageSizeAgrKey     = "oms.MaxRowCount"     // max number of rows to return from read parameters or output tables
-	doubleFormatArgKey = "oms.DoubleFormat"    // format to convert float or double value to string, e.g. %.15g
+	rootDirArgKey      = "oms.RootDir"      // root directory, expected subdir: html
+	modelDirArgKey     = "oms.ModelDir"     // models directory, if relative then must be relative to root directory
+	listenArgKey       = "oms.Listen"       // address to listen, default: localhost:4040
+	listenShortKey     = "l"                // address to listen (short form)
+	logRequestArgKey   = "oms.LogRequest"   // if true then log http request
+	apiOnlyArgKey      = "oms.ApiOnly"      // if true then API only web-service, no UI
+	uiLangsArgKey      = "oms.Languages"    // list of supported languages
+	encodingArgKey     = "oms.CodePage"     // code page for converting source files, e.g. windows-1252
+	pageSizeAgrKey     = "oms.MaxRowCount"  // max number of rows to return from read parameters or output tables
+	doubleFormatArgKey = "oms.DoubleFormat" // format to convert float or double value to string, e.g. %.15g
 )
 
 // front-end UI subdirectory with html and javascript
@@ -155,7 +155,11 @@ func mainBody(args []string) error {
 	addr := runOpts.String(listenArgKey)
 	omppLog.Log("Listen at " + addr)
 	if !isApiOnly {
-		omppLog.Log("To start open in your browser: " + addr)
+		if !strings.HasPrefix(addr, ":") {
+			omppLog.Log("To start open in your browser: " + addr)
+		} else {
+			omppLog.Log("To start open in your browser: ", "localhost", addr)
+		}
 	}
 	omppLog.Log("To finish press Ctrl+C")
 
@@ -399,6 +403,38 @@ func apiReadRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/parameter/:name/value/start/:start", runParameterPageGetHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/parameter/:name/value/start/:start/count/:count", runParameterPageGetHandler, logRequest)
 
+	// GET /api/run-table-expr?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0
+	// GET /api/run-table-expr?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0&count=100
+	// GET /api/model/:model/run/:run/table/:name/expr
+	// GET /api/model/:model/run/:run/table/:name/expr/start/:start
+	// GET /api/model/:model/run/:run/table/:name/expr/start/:start/count/:count
+	router.Get("/api/run-table-expr", runTableExprPageGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/expr", runTableExprPageGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/expr/start/:start", runTableExprPageGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/expr/start/:start/count/:count", runTableExprPageGetHandler, logRequest)
+
+	// GET /api/run-table-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName
+	// GET /api/run-table-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0
+	// GET /api/run-table-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0&count=100
+	// GET /api/model/:model/run/:run/table/:name/acc
+	// GET /api/model/:model/run/:run/table/:name/acc/start/:start
+	// GET /api/model/:model/run/:run/table/:name/acc/start/:start/count/:count
+	router.Get("/api/run-table-acc", runTableAccPageGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/acc", runTableAccPageGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/acc/start/:start", runTableAccPageGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/acc/start/:start/count/:count", runTableAccPageGetHandler, logRequest)
+
+	// GET /api/run-table-all-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName
+	// GET /api/run-table-all-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0
+	// GET /api/run-table-all-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0&count=100
+	// GET /api/model/:model/run/:run/table/:name/all-acc
+	// GET /api/model/:model/run/:run/table/:name/all-acc/start/:start
+	// GET /api/model/:model/run/:run/table/:name/all-acc/start/:start/count/:count
+	router.Get("/api/run-table-all-acc", runTableAllAccPageGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/all-acc", runTableAllAccPageGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/all-acc/start/:start", runTableAllAccPageGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/all-acc/start/:start/count/:count", runTableAllAccPageGetHandler, logRequest)
+
 	// GET /api/workset-parameter-csv?model=modelNameOrDigest&set=setName&name=parameterName&bom=true
 	// GET /api/model/:model/workset/:set/parameter/:name/csv
 	router.Get("/api/workset-parameter-csv", worksetParameterCsvGetHandler, logRequest)
@@ -431,37 +467,53 @@ func apiReadRoutes(router *vestigo.Router) {
 	// GET /api/model/:model/run/:run/parameter/:name/csv-id-bom
 	router.Get("/api/model/:model/run/:run/parameter/:name/csv-id-bom", runParameterIdCsvBomGetHandler, logRequest)
 
-	// GET /api/run-table-expr?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0
-	// GET /api/run-table-expr?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0&count=100
-	// GET /api/model/:model/run/:run/table/:name/expr
-	// GET /api/model/:model/run/:run/table/:name/expr/start/:start
-	// GET /api/model/:model/run/:run/table/:name/expr/start/:start/count/:count
-	router.Get("/api/run-table-expr", runTableExprPageGetHandler, logRequest)
-	router.Get("/api/model/:model/run/:run/table/:name/expr", runTableExprPageGetHandler, logRequest)
-	router.Get("/api/model/:model/run/:run/table/:name/expr/start/:start", runTableExprPageGetHandler, logRequest)
-	router.Get("/api/model/:model/run/:run/table/:name/expr/start/:start/count/:count", runTableExprPageGetHandler, logRequest)
+	// GET /api/run-table-expr-csv?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&bom=true
+	// GET /api/model/:model/run/:run/table/:name/expr/csv
+	router.Get("/api/run-table-expr-csv", runTableExprCsvGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/expr/csv", runTableExprCsvGetHandler, logRequest)
 
-	// GET /api/run-table-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName
-	// GET /api/run-table-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0
-	// GET /api/run-table-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0&count=100
-	// GET /api/model/:model/run/:run/table/:name/acc
-	// GET /api/model/:model/run/:run/table/:name/acc/start/:start
-	// GET /api/model/:model/run/:run/table/:name/acc/start/:start/count/:count
-	router.Get("/api/run-table-acc", runTableAccPageGetHandler, logRequest)
-	router.Get("/api/model/:model/run/:run/table/:name/acc", runTableAccPageGetHandler, logRequest)
-	router.Get("/api/model/:model/run/:run/table/:name/acc/start/:start", runTableAccPageGetHandler, logRequest)
-	router.Get("/api/model/:model/run/:run/table/:name/acc/start/:start/count/:count", runTableAccPageGetHandler, logRequest)
+	// GET /api/model/:model/run/:run/table/:name/expr/csv-bom
+	router.Get("/api/model/:model/run/:run/table/:name/expr/csv-bom", runTableExprCsvBomGetHandler, logRequest)
 
-	// GET /api/run-table-all-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName
-	// GET /api/run-table-all-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0
-	// GET /api/run-table-all-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0&count=100
-	// GET /api/model/:model/run/:run/table/:name/all-acc
-	// GET /api/model/:model/run/:run/table/:name/all-acc/start/:start
-	// GET /api/model/:model/run/:run/table/:name/all-acc/start/:start/count/:count
-	router.Get("/api/run-table-all-acc", runTableAllAccPageGetHandler, logRequest)
-	router.Get("/api/model/:model/run/:run/table/:name/all-acc", runTableAllAccPageGetHandler, logRequest)
-	router.Get("/api/model/:model/run/:run/table/:name/all-acc/start/:start", runTableAllAccPageGetHandler, logRequest)
-	router.Get("/api/model/:model/run/:run/table/:name/all-acc/start/:start/count/:count", runTableAllAccPageGetHandler, logRequest)
+	// GET /api/run-table-expr-csv-id?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&bom=true
+	// GET /api/model/:model/run/:run/table/:name/expr/csv-id
+	router.Get("/api/run-table-expr-csv-id", runTableExprIdCsvGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/expr/csv-id", runTableExprIdCsvGetHandler, logRequest)
+
+	// GET /api/model/:model/run/:run/table/:name/expr/csv-id-bom
+	router.Get("/api/model/:model/run/:run/table/:name/expr/csv-id-bom", runTableExprIdCsvBomGetHandler, logRequest)
+
+	// GET /api/run-table-acc-csv?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&bom=true
+	// GET /api/model/:model/run/:run/table/:name/acc/csv
+	router.Get("/api/run-table-acc-csv", runTableAccCsvGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/acc/csv", runTableAccCsvGetHandler, logRequest)
+
+	// GET /api/model/:model/run/:run/table/:name/acc/csv-bom
+	router.Get("/api/model/:model/run/:run/table/:name/acc/csv-bom", runTableAccCsvBomGetHandler, logRequest)
+
+	// GET /api/run-table-acc-csv-id?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&bom=true
+	// GET /api/model/:model/run/:run/table/:name/acc/csv-id
+	router.Get("/api/run-table-acc-csv-id", runTableAccIdCsvGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/acc/csv-id", runTableAccIdCsvGetHandler, logRequest)
+
+	// GET /api/model/:model/run/:run/table/:name/acc/csv-id-bom
+	router.Get("/api/model/:model/run/:run/table/:name/acc/csv-id-bom", runTableAccIdCsvBomGetHandler, logRequest)
+
+	// GET /api/run-table-all-acc-csv?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&bom=true
+	// GET /api/model/:model/run/:run/table/:name/all-acc/csv
+	router.Get("/api/run-table-all-acc-csv", runTableAllAccCsvGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/all-acc/csv", runTableAllAccCsvGetHandler, logRequest)
+
+	// GET /api/model/:model/run/:run/table/:name/all-acc/csv-bom
+	router.Get("/api/model/:model/run/:run/table/:name/all-acc/csv-bom", runTableAllAccCsvBomGetHandler, logRequest)
+
+	// GET /api/run-table-all-acc-csv-id?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&bom=true
+	// GET /api/model/:model/run/:run/table/:name/all-acc/csv-id
+	router.Get("/api/run-table-all-acc-csv-id", runTableAllAccIdCsvGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/all-acc/csv-id", runTableAllAccIdCsvGetHandler, logRequest)
+
+	// GET /api/model/:model/run/:run/table/:name/all-acc/csv-id-bom
+	router.Get("/api/model/:model/run/:run/table/:name/all-acc/csv-id-bom", runTableAllAccIdCsvBomGetHandler, logRequest)
 }
 
 // add web-service /api routes to update metadata
