@@ -282,8 +282,9 @@ func fromRunTextToDb(
 
 		// insert parameter values in model run
 		paramLt.Name = modelDef.Param[j].Name
+		paramLt.SubCount = meta.Param[j].SubCount
 
-		if err = db.WriteParameter(dbConn, modelDef, &paramLt, meta.Param[j].SubCount, cLst); err != nil {
+		if err = db.WriteParameter(dbConn, modelDef, &paramLt, cLst); err != nil {
 			return 0, 0, err
 		}
 	}

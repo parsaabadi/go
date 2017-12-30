@@ -482,3 +482,97 @@ func (CellParam) IdToCodeCell(modelDef *ModelMeta, name string) (
 
 	return cvt, nil
 }
+
+// CodeToIdCell return converter from parameter cell of codes: (sub id, dimensions as enum code, value)
+// to cell of ids: (sub id, dimensions, value)
+//
+// If dimension type is enum based then dimensions enum codes converted to enum ids.
+// If dimension type is simple (bool or int) then dimension code converted from string to dimension type.
+// If parameter type is enum based then cell value enum code converted to enum id.
+func (CellCodeParam) CodeToIdCell(modelDef *ModelMeta, name string) (
+	func(interface{}) (interface{}, error), error) {
+
+	// validate parameters
+	if modelDef == nil {
+		return nil, errors.New("invalid (empty) model metadata, look like model not found")
+	}
+	if name == "" {
+		return nil, errors.New("invalid (empty) parameter name")
+	}
+
+	// find parameter by name
+	k, ok := modelDef.ParamByName(name)
+	if !ok {
+		return nil, errors.New("parameter not found: " + name)
+	}
+	param := &modelDef.Param[k]
+
+	// for each dimension create converter from item code to id
+	fd := make([]func(itemCode string) (int, error), param.Rank)
+
+	for k := 0; k < param.Rank; k++ {
+		f, err := cvtItemCodeToId(name+"."+param.Dim[k].Name, param.Dim[k].typeOf, false)
+		if err != nil {
+			return nil, err
+		}
+		fd[k] = f
+	}
+
+	// if parameter value type is enum-based then convert from enum code to id
+	isUseEnum := !param.typeOf.IsBuiltIn()
+	var fv func(itemCode string) (int, error)
+
+	if isUseEnum {
+		f, err := cvtItemCodeToId(name, param.typeOf, false)
+		if err != nil {
+			return nil, err
+		}
+		fv = f
+	}
+
+	// create cell converter
+	cvt := func(src interface{}) (interface{}, error) {
+
+		srcCell, ok := src.(CellCodeParam)
+		if !ok {
+			return nil, errors.New("invalid type, expected: parameter code cell (internal error)")
+		}
+		if len(srcCell.Dims) != param.Rank {
+			return nil, errors.New("invalid cell rank: " + strconv.Itoa(len(srcCell.Dims)) + ", expected: " + strconv.Itoa(param.Rank))
+		}
+
+		dstCell := CellParam{
+			cellValue: cellValue{DimIds: make([]int, param.Rank)},
+			SubId:     srcCell.SubId,
+		}
+
+		// convert dimension item code to id
+		for k := range srcCell.Dims {
+			v, err := fd[k](srcCell.Dims[k])
+			if err != nil {
+				return nil, err
+			}
+			dstCell.DimIds[k] = v
+		}
+
+		// convert cell value:
+		// if not enum then copy value else find id by code
+		if !isUseEnum {
+			dstCell.Value = srcCell.Value
+		} else {
+			sv, ok := srcCell.Value.(string)
+			if !ok {
+				return nil, errors.New("invalid parameter value type, expected: string enum code")
+			}
+			v, err := fv(sv) // find value id by code
+			if err != nil {
+				return nil, err
+			}
+			dstCell.Value = v
+		}
+
+		return dstCell, nil // converted OK
+	}
+
+	return cvt, nil
+}

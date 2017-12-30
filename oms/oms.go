@@ -141,9 +141,10 @@ func mainBody(args []string) error {
 	// setup router and start server
 	router := vestigo.NewRouter()
 
-	apiGetRoutes(router)    // web-service /api routes to get metadata
-	apiReadRoutes(router)   // web-service /api routes to read values
-	apiUpdateRoutes(router) // web-service /api routes to update metadata
+	apiGetRoutes(router)     // web-service /api routes to get metadata
+	apiReadRoutes(router)    // web-service /api routes to read values
+	apiReadCsvRoutes(router) // web-service /api routes to read values into csv stream
+	apiUpdateRoutes(router)  // web-service /api routes to update metadata
 
 	// set web root handler: UI web pages or "not found" if this is web-service mode
 	if !isApiOnly {
@@ -434,6 +435,10 @@ func apiReadRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/table/:name/all-acc", runTableAllAccPageGetHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/table/:name/all-acc/start/:start", runTableAllAccPageGetHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/table/:name/all-acc/start/:start/count/:count", runTableAllAccPageGetHandler, logRequest)
+}
+
+// add http GET or POST web-service /api routes to read parameters or output tables as csv stream
+func apiReadCsvRoutes(router *vestigo.Router) {
 
 	// GET /api/workset-parameter-csv?model=modelNameOrDigest&set=setName&name=parameterName&bom=true
 	// GET /api/model/:model/workset/:set/parameter/:name/csv
@@ -547,4 +552,18 @@ func apiUpdateRoutes(router *vestigo.Router) {
 	router.Delete("/api/model/:model/workset/:set/parameter/:name", worksetParameterDeleteHandler, logRequest)
 	router.Post("/api/model/:model/workset/:set/parameter/:name/delete", worksetParameterDeleteHandler, logRequest)
 	router.Post("/api/workset-parameter/delete", worksetParameterDeleteHandler, logRequest)
+
+	// POST /api/workset-parameter-new-value?model=modelNameOrDigest&set=setName&name=parameterName
+	// PATCH /api/model/:model/workset/:set/parameter/:name/new/value
+	// POST /api/model/:model/workset/:set/parameter/:name/new/value
+	router.Post("/api/workset-parameter-new-value", parameterPageUpdateHandler, logRequest)
+	router.Patch("/api/model/:model/workset/:set/parameter/:name/new/value", parameterPageUpdateHandler, logRequest)
+	router.Post("/api/model/:model/workset/:set/parameter/:name/new/value", parameterPageUpdateHandler, logRequest)
+
+	// POST /api/workset-parameter-new-value-id?model=modelNameOrDigest&set=setName&name=parameterName
+	// PATCH /api/model/:model/workset/:set/parameter/:name/new/value-id
+	// POST /api/model/:model/workset/:set/parameter/:name/new/value-id
+	router.Post("/api/workset-parameter-new-value-id", parameterIdPageUpdateHandler, logRequest)
+	router.Patch("/api/model/:model/workset/:set/parameter/:name/new/value-id", parameterIdPageUpdateHandler, logRequest)
+	router.Post("/api/model/:model/workset/:set/parameter/:name/new/value-id", parameterIdPageUpdateHandler, logRequest)
 }

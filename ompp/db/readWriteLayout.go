@@ -20,7 +20,9 @@ type WriteLayout struct {
 // Double format string is used for digest calcultion if value type if float or double.
 type WriteParamLayout struct {
 	WriteLayout        // common write layout: parameter name, run or set id
-	IsToRun     bool   // only for parameter: if true then write into into model run else into workset
+	IsToRun     bool   // if true then write into into model run else into workset
+	IsPage      bool   // if true then write only page of data else all parameter values
+	SubCount    int    // parameter sub-values count
 	DoubleFmt   string // used for float model types digest calculation
 }
 

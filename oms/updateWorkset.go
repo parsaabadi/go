@@ -298,3 +298,67 @@ func (mc *ModelCatalog) DeleteWorksetParameter(dn, wsn, name string) (bool, erro
 	}
 	return hId > 0, nil // return success and true if parameter was found
 }
+
+// UpdateWorksetParameterPage merge "page" of parameter values into workset.
+// Parameter must be already in workset and identified by model digest-or-name, set name, parameter name.
+func (mc *ModelCatalog) UpdateWorksetParameterPage(dn, wsn, name string, cellLst *list.List) error {
+
+	// if model digest-or-name, set name or paramete name is empty then return empty results
+	if dn == "" {
+		return errors.New("Invalid (empty) model digest and name")
+	}
+	if wsn == "" {
+		return errors.New("Invalid (empty) workset name. Model: " + dn)
+	}
+	if name == "" {
+		return errors.New("Invalid (empty) parameter name. Model: " + dn + " workset: " + wsn)
+	}
+
+	// load model metadata and return index in model catalog
+	idx, ok := mc.loadModelMeta(dn)
+	if !ok {
+		return errors.New("Model digest or name not found: " + dn)
+	}
+
+	// lock catalog and search model parameter by name
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	pHid := 0
+	if k, ok := mc.modelLst[idx].meta.ParamByName(name); ok {
+		pHid = mc.modelLst[idx].meta.Param[k].ParamHid
+	} else {
+		return errors.New("Parameter " + name + " not found in model: " + dn)
+	}
+
+	// find workset id by name
+	wst, ok := mc.loadWorksetByName(idx, wsn)
+	if !ok {
+		return errors.New("Workset " + wsn + " not found in model: " + dn)
+	}
+	layout := db.WriteParamLayout{
+		WriteLayout: db.WriteLayout{Name: name, ToId: wst.SetId},
+		IsToRun:     false,
+		IsPage:      true,
+		DoubleFmt:   doubleFmt,
+	}
+
+	// parameter must be in workset already
+	hIds, nSubs, err := db.GetWorksetParamList(mc.modelLst[idx].dbConn, wst.SetId)
+	if err != nil {
+		return err
+	}
+	for k := range hIds {
+		ok = hIds[k] == pHid
+		if ok {
+			layout.SubCount = nSubs[k]
+			break
+		}
+	}
+	if !ok {
+		return errors.New("Workset: " + wsn + " must contain parameter: " + name)
+	}
+
+	// write parameter values
+	return db.WriteParameter(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, &layout, cellLst)
+}

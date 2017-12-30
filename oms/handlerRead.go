@@ -66,7 +66,7 @@ func doReadParameterPageHandler(w http.ResponseWriter, r *http.Request, srcArg s
 	// get converter from id's cell into code cell
 	var cvt func(interface{}) (interface{}, error)
 	if isCode {
-		cvt, ok = theCatalog.ParameterToCodeCellConverter(dn, src, layout.Name)
+		cvt, ok = theCatalog.ParameterCellConverter(false, dn, src, layout.Name)
 		if !ok {
 			http.Error(w, "Error at parameter read "+src+": "+layout.Name, http.StatusBadRequest)
 			return
@@ -196,7 +196,7 @@ func doParameterGetPageHandler(w http.ResponseWriter, r *http.Request, srcArg st
 	var cvt func(interface{}) (interface{}, error)
 
 	if isCode {
-		cvt, ok = theCatalog.ParameterToCodeCellConverter(dn, src, name)
+		cvt, ok = theCatalog.ParameterCellConverter(false, dn, src, name)
 		if !ok {
 			http.Error(w, "Failed to create parameter cell id's to code converter: "+name, http.StatusBadRequest)
 			return

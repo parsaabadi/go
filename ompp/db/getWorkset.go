@@ -248,25 +248,26 @@ func GetWorksetRunIds(dbConn *sql.DB, setId int) ([]int, error) {
 	return idRs, nil
 }
 
-// GetWorksetParamIds return Hid of parameters (parameter_hid) included in that workset
-func GetWorksetParamHids(dbConn *sql.DB, setId int) ([]int, error) {
+// GetWorksetParamList return Hid and sub-values count of all parameters included in that workset (parameter_hid, sub_count).
+func GetWorksetParamList(dbConn *sql.DB, setId int) ([]int, []int, error) {
 
-	var hRs []int
+	var hRs, nRs []int
 
 	err := SelectRows(dbConn,
-		"SELECT parameter_hid FROM workset_parameter WHERE set_id = "+strconv.Itoa(setId)+" ORDER BY 1",
+		"SELECT parameter_hid, sub_count FROM workset_parameter WHERE set_id = "+strconv.Itoa(setId)+" ORDER BY 1",
 		func(rows *sql.Rows) error {
-			var hId int
-			if err := rows.Scan(&hId); err != nil {
+			var h, n int
+			if err := rows.Scan(&h, &n); err != nil {
 				return err
 			}
-			hRs = append(hRs, hId)
+			hRs = append(hRs, h)
+			nRs = append(nRs, n)
 			return nil
 		})
 	if err != nil && err != sql.ErrNoRows {
-		return nil, err
+		return nil, nil, err
 	}
-	return hRs, nil
+	return hRs, nRs, nil
 }
 
 // GetWorksetParamText return parameter value notes: workset_parameter_txt table rows.

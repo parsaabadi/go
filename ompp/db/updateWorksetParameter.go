@@ -16,7 +16,7 @@ import (
 // UpdateWorksetParameter add new or replace existing workset parameter.
 //
 // If parameter already exist in workset then parameter metadata either merged or replaced.
-// If parameter not exist in workset then parameter values must be supplied, it cannobe empty.
+// If parameter not exist in workset then parameter values must be supplied, it cannot be empty.
 // If parameter not exist in workset then new parameter metadata and values inserted.
 // If list of new parameter values supplied then parameter values completely replaced.
 //
@@ -73,7 +73,7 @@ func (meta *WorksetMeta) UpdateWorksetParameter(
 			return 0, errors.New("parameter not found: " + param.Name)
 		}
 
-		err = doWriteSetParameter(trx, pm, meta.Set.SetId, param.SubCount, cellLst)
+		err = doWriteSetParameter(trx, pm, meta.Set.SetId, param.SubCount, false, cellLst)
 		if err != nil {
 			trx.Rollback()
 			return 0, err

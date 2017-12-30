@@ -21,9 +21,11 @@ import (
 // Model run should not already contain parameter values: parameter can be inserted only once in model run and cannot be updated after.
 //
 // If workset already contain parameter values then values updated else inserted.
+// If only "page" of workset parameter rows supplied (layout.IsPage is true)
+// then each row deleted by primary key before insert else all rows deleted by one delete by set id.
 //
 // Double format is used for float model types digest calculation, if non-empty format supplied
-func WriteParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *WriteParamLayout, subCount int, cellLst *list.List) error {
+func WriteParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *WriteParamLayout, cellLst *list.List) error {
 
 	// validate parameters
 	if modelDef == nil {
@@ -41,8 +43,8 @@ func WriteParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *WriteParamLayou
 		}
 		return errors.New("invalid destination set id: " + strconv.Itoa(layout.ToId))
 	}
-	if subCount <= 0 {
-		return errors.New("invalid number of parameter sub-vaules: " + strconv.Itoa(subCount))
+	if layout.SubCount <= 0 {
+		return errors.New("invalid number of parameter sub-vaules: " + strconv.Itoa(layout.SubCount))
 	}
 	if cellLst == nil {
 		return errors.New("invalid (empty) parameter values")
@@ -62,12 +64,12 @@ func WriteParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *WriteParamLayou
 		return err
 	}
 	if layout.IsToRun {
-		if err = doWriteRunParameter(trx, modelDef, param, layout.ToId, subCount, cellLst, layout.DoubleFmt); err != nil {
+		if err = doWriteRunParameter(trx, modelDef, param, layout.ToId, layout.SubCount, cellLst, layout.DoubleFmt); err != nil {
 			trx.Rollback()
 			return err
 		}
 	} else {
-		if err = doWriteSetParameter(trx, param, layout.ToId, subCount, cellLst); err != nil {
+		if err = doWriteSetParameter(trx, param, layout.ToId, layout.SubCount, layout.IsPage, cellLst); err != nil {
 			trx.Rollback()
 			return err
 		}
@@ -182,7 +184,7 @@ func doWriteRunParameter(
 		// make sql to insert parameter values into model run
 		// prepare put() closure to convert each cell into insert sql statement parameters
 		q := makeSqlInsertParamValue(param.DbRunTable, "run_id", param.Dim, runId)
-		put := makePutInsertParamValue(param, cellLst)
+		put := makePutInsertParamValue(param, subCount, cellLst)
 
 		// execute sql insert using put() above for each row
 		if err = TrxUpdateStatement(trx, q, put); err != nil {
@@ -220,7 +222,7 @@ func digestParameter(modelDef *ModelMeta, param *ParamMeta, cellLst *list.List, 
 // doWriteSetParameter insert or update parameter values in workset.
 // It does insert as part of transaction
 // If workset already contain parameter values then values updated else inserted.
-func doWriteSetParameter(trx *sql.Tx, param *ParamMeta, setId int, subCount int, cellLst *list.List) error {
+func doWriteSetParameter(trx *sql.Tx, param *ParamMeta, setId int, subCount int, isPage bool, cellLst *list.List) error {
 
 	// start workset update
 	sId := strconv.Itoa(setId)
@@ -253,14 +255,27 @@ func doWriteSetParameter(trx *sql.Tx, param *ParamMeta, setId int, subCount int,
 	}
 
 	// delete existing parameter values
-	if err = TrxUpdate(trx, "DELETE FROM "+param.DbSetTable+" WHERE set_id = "+sId); err != nil {
-		return err
+	if !isPage {
+		if err = TrxUpdate(trx, "DELETE FROM "+param.DbSetTable+" WHERE set_id = "+sId); err != nil {
+			return err
+		}
+	} else {
+
+		// make sql to delete parameter rows by primary key from workset
+		// prepare put() closure to convert each cell into delete sql statement parameters
+		q := makeSqlDeleteParamPage(param.DbSetTable, param.Dim, setId)
+		put := makePutDeleteParamPage(param, cellLst)
+
+		// execute sql delete using put() above for each row
+		if err = TrxUpdateStatement(trx, q, put); err != nil {
+			return errors.New("delete parameter failed: " + param.Name + " " + err.Error())
+		}
 	}
 
 	// make sql to insert parameter values into workset
 	// prepare put() closure to convert each cell into insert sql statement parameters
 	q := makeSqlInsertParamValue(param.DbSetTable, "set_id", param.Dim, setId)
-	put := makePutInsertParamValue(param, cellLst)
+	put := makePutInsertParamValue(param, subCount, cellLst)
 
 	// execute sql insert using put() above for each row
 	if err = TrxUpdateStatement(trx, q, put); err != nil {
@@ -278,7 +293,7 @@ func doWriteSetParameter(trx *sql.Tx, param *ParamMeta, setId int, subCount int,
 // make sql to insert parameter values into model run or workset
 func makeSqlInsertParamValue(dbTable string, runSetCol string, dims []ParamDimsRow, toId int) string {
 
-	// INSERT INTO ageSex_w2012817 (set_id, sub_id, dim0, dim1, param_value) VALUES (2, ?, ?, ?)
+	// INSERT INTO ageSex_w2012817 (set_id, sub_id, dim0, dim1, param_value) VALUES (2, ?, ?, ?, ?)
 	q := "INSERT INTO " + dbTable +
 		" (" + runSetCol + ", sub_id, "
 
@@ -297,7 +312,7 @@ func makeSqlInsertParamValue(dbTable string, runSetCol string, dims []ParamDimsR
 }
 
 // prepare put() closure to convert each cell into insert sql statement parameters
-func makePutInsertParamValue(param *ParamMeta, cellLst *list.List) func() (bool, []interface{}, error) {
+func makePutInsertParamValue(param *ParamMeta, subCount int, cellLst *list.List) func() (bool, []interface{}, error) {
 
 	// converter from value into db value:
 	// boolean is a special case because not all drivers correctly handle conversion to smallint
@@ -333,13 +348,69 @@ func makePutInsertParamValue(param *ParamMeta, cellLst *list.List) func() (bool,
 			return false, nil, errors.New("invalid size of row buffer, expected: " + strconv.Itoa(n+2))
 		}
 
-		// set sql statement parameter values: subvalue number, dimensions enum, parameter value
+		if cell.SubId < 0 || cell.SubId >= subCount {
+			return false, nil, errors.New("invalid sub-value id: " + strconv.Itoa(cell.SubId) + " parameter: " + param.Name)
+		}
+
+		// set sql statement parameter values: sub-value number, dimensions enum, parameter value
 		row[0] = cell.SubId
 
 		for k, e := range cell.DimIds {
 			row[k+1] = e
 		}
 		row[n+1] = fv(cell.Value) // parameter value converted db value
+
+		// move to next input row and return current row to sql statement
+		c = c.Next()
+		return true, row, nil
+	}
+	return put
+}
+
+// make sql to delete parameter rows from workset by specified keys: set id, sub-value number and dimension(s) items id
+func makeSqlDeleteParamPage(dbTable string, dims []ParamDimsRow, setId int) string {
+
+	// DELETE FROM ageSex_w2012817 WHERE set_id = 2 AND sub_id = ? AND dim0 = ? AND dim1 = ?
+	q := "DELETE FROM " + dbTable +
+		" WHERE set_id = " + strconv.Itoa(setId) +
+		" AND sub_id = ?"
+
+	for k := range dims {
+		q += " AND " + dims[k].Name + " = ?"
+	}
+	return q
+}
+
+// prepare put() closure to convert each cell into delete sql statement parameters
+func makePutDeleteParamPage(param *ParamMeta, cellLst *list.List) func() (bool, []interface{}, error) {
+
+	// for each cell put into row of sql statement parameters
+	row := make([]interface{}, param.Rank+1)
+	c := cellLst.Front()
+
+	put := func() (bool, []interface{}, error) {
+
+		if c == nil {
+			return false, nil, nil // end of data
+		}
+
+		// convert and check input row
+		cell, ok := c.Value.(CellParam)
+		if !ok {
+			return false, nil, errors.New("invalid type, expected: parameter cell (internal error)")
+		}
+
+		n := len(cell.DimIds)
+		if len(row) != n+1 {
+			return false, nil, errors.New("invalid size of row buffer, expected: " + strconv.Itoa(n+1))
+		}
+
+		// set sql statement parameter values: sub-value number, dimensions enum, parameter value
+		row[0] = cell.SubId
+
+		for k, e := range cell.DimIds {
+			row[k+1] = e
+		}
 
 		// move to next input row and return current row to sql statement
 		c = c.Next()

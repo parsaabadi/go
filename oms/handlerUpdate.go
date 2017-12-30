@@ -4,11 +4,14 @@
 package main
 
 import (
+	"container/list"
 	"encoding/csv"
 	"io"
 	"net/http"
 	"path"
 	"strings"
+
+	"go.openmpp.org/ompp/omppLog"
 
 	"go.openmpp.org/ompp/db"
 )
@@ -257,4 +260,86 @@ func worksetParameterDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	if ok {
 		w.Header().Set("Location", "/api/model/"+dn+"/workset/"+wsn+"/parameter/"+name)
 	}
+}
+
+// parameterPageUpdateHandler update a "page" of workset parameter values.
+// POST /api/workset-parameter-new-value?model=modelNameOrDigest&set=setName&name=parameterName
+// PATCH /api/model/:model/workset/:set/parameter/:name/new/value
+// POST /api/model/:model/workset/:set/parameter/:name/new/value
+// Dimension(s) and enum-based parameters expected to be as enum codes.
+// Input parameter "page" json expected to be identical to output of read parameter "page".
+func parameterPageUpdateHandler(w http.ResponseWriter, r *http.Request) {
+	doUpdateParameterPageHandler(w, r, true)
+}
+
+// parameterIdPageUpdateHandler update a "page" of workset parameter values.
+// POST /api/workset-parameter-new-value-id?model=modelNameOrDigest&set=setName&name=parameterName
+// PATCH /api/model/:model/workset/:set/parameter/:name/new/value-id
+// POST /api/model/:model/workset/:set/parameter/:name/new/value-id
+// Dimension(s) and enum-based parameters expected to be as enum id, not enum codes.
+// Input parameter "page" json expected to be identical to output of read parameter "page".
+func parameterIdPageUpdateHandler(w http.ResponseWriter, r *http.Request) {
+	doUpdateParameterPageHandler(w, r, false)
+}
+
+// doUpdateParameterPageHandler update a "page" of workset parameter values.
+// Page is part of parameter values defined by zero-based "start" row number and row count.
+// Dimension(s) and enum-based parameters can be as enum codes or enum id's.
+func doUpdateParameterPageHandler(w http.ResponseWriter, r *http.Request, isCode bool) {
+
+	// url or query parameters
+	dn := getRequestParam(r, "model")  // model digest-or-name
+	wsn := getRequestParam(r, "set")   // workset name
+	name := getRequestParam(r, "name") // parameter name
+
+	// decode json body and convert to id cells, if required
+	cLst := list.New()
+
+	if !isCode {
+		var cArr []db.CellParam
+		if !jsonRequestDecode(w, r, &cArr) {
+			return // error at json decode, response done with http error
+		}
+		for k := range cArr {
+			cLst.PushBack(cArr[k])
+		}
+	} else {
+
+		// decode code cells from json body
+		var cArr []db.CellCodeParam
+		if !jsonRequestDecode(w, r, &cArr) {
+			return // error at json decode, response done with http error
+		}
+
+		// convert from enum code cells to id cells
+		cvt, ok := theCatalog.ParameterCellConverter(true, dn, wsn, name)
+		if !ok {
+			http.Error(w, "Workset parameter update failed "+wsn+": "+name, http.StatusBadRequest)
+			return
+		}
+
+		for k := range cArr {
+			c, err := cvt(cArr[k])
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			cLst.PushBack(c)
+		}
+
+	}
+	if cLst.Len() <= 0 {
+		http.Error(w, "Workset parameter update failed "+wsn+" parameter empty: "+name, http.StatusInternalServerError)
+		return
+	}
+
+	// update parameter values
+	err := theCatalog.UpdateWorksetParameterPage(dn, wsn, name, cLst)
+	if err != nil {
+		omppLog.Log(err.Error())
+		http.Error(w, "Workset parameter update failed "+wsn+": "+name, http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Location", "/api/model/"+dn+"/workset/"+wsn+"/parameter/"+name) // respond with workset parameter location
 }
