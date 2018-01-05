@@ -114,13 +114,28 @@ func modelAllTextHandler(w http.ResponseWriter, r *http.Request) {
 // langListHandler return list of model langauages:
 // GET /api/lang-list?model=modelNameOrDigest
 // GET /api/model/:model/lang-list
-// If multiple models with same name exist only one is returned.
+// Model digest-or-name must specified, if multiple models with same name exist only one is returned.
 func langListHandler(w http.ResponseWriter, r *http.Request) {
 
 	dn := getRequestParam(r, "model")
 
 	m, _ := theCatalog.LangListByDigestOrName(dn)
 	jsonResponse(w, r, m)
+}
+
+// wordListHandler return list of model "words": arrays of rows from lang_word and model_word db tables.
+// GET /api/word-list?model=modelNameOrDigest&lang=en
+// GET /api/model/:model/word-list
+// GET /api/model/:model/word-list/lang/:lang
+// Model digest-or-name must specified, if multiple models with same name exist only one is returned.
+// If optional lang specified then result in that language else in browser language or model default.
+func wordListHandler(w http.ResponseWriter, r *http.Request) {
+
+	dn := getRequestParam(r, "model")
+	rqLangTags := getRequestLang(r, "lang") // get optional language argument and languages accepted by browser
+
+	wl, _ := theCatalog.WordListByDigestOrName(dn, rqLangTags)
+	jsonResponse(w, r, wl)
 }
 
 // modelGroupHandler return parameter and output table groups (language-neutral part):

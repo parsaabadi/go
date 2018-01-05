@@ -108,7 +108,7 @@ func GetModelWord(dbConn *sql.DB, modelId int, langCode string) (*ModelWordMeta,
 				}
 			}
 
-			// not such language: append new language and append word (code,value) to that language
+			// no such language: append new language and append word (code,value) to that language
 			idx := len(meta.ModelWord)
 			meta.ModelWord = append(
 				meta.ModelWord, modelLangWord{LangCode: lCode, Words: make(map[string]string)})

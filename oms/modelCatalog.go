@@ -26,15 +26,16 @@ var theCatalog ModelCatalog
 
 // modelDef is database connection and model database rows
 type modelDef struct {
-	dbConn        *sql.DB          // database connection
-	isMetaFull    bool             // if true then ModelMeta fully loaded else only ModelDicRow
-	meta          *db.ModelMeta    // model metadata, language-neutral part, should not be nil
-	isTxtMetaFull bool             // if true then ModelTxtMeta fully loaded else only []ModelTxtRow
-	txtMeta       *db.ModelTxtMeta // if not nil then language-specific model metadata
-	langCodes     []string         // language codes, first is default language
-	matcher       language.Matcher // matcher to search text by language
-	groupLst      *db.GroupLstPub  // if not nil then parameters and table groups
-	langMeta      *db.LangMeta     // list of languages: one list per db connection, order of lanuages NOT the same as language codes
+	dbConn        *sql.DB           // database connection
+	isMetaFull    bool              // if true then ModelMeta fully loaded else only ModelDicRow
+	meta          *db.ModelMeta     // model metadata, language-neutral part, should not be nil
+	isTxtMetaFull bool              // if true then ModelTxtMeta fully loaded else only []ModelTxtRow
+	txtMeta       *db.ModelTxtMeta  // if not nil then language-specific model metadata
+	langCodes     []string          // language codes, first is default language
+	matcher       language.Matcher  // matcher to search text by language
+	groupLst      *db.GroupLstPub   // if not nil then parameters and table groups
+	langMeta      *db.LangMeta      // list of languages: one list per db connection, order of languages NOT the same as language codes
+	modelWord     *db.ModelWordMeta // if not nil then list of model words, order of languages NOT the same as language codes
 }
 
 // ModelMetaFull is full model metadata: language-neutral db rows
@@ -138,4 +139,21 @@ type GroupMetaDescrNote struct {
 type GroupDescrNote struct {
 	Group     db.GroupLstRow // parameters or output tables group rows: group_lst
 	DescrNote db.DescrNote   // from group_txt
+}
+
+// ModelLangWord is (code, label) rows from lang_word and model_word language-specific db tables.
+// It is either in user prefered language or model default language.
+type ModelLangWord struct {
+	ModelName     string      // model name for text metadata
+	ModelDigest   string      // model digest for text metadata
+	LangCode      string      // language code selected for lang_word table rows
+	LangWords     []codeLabel // lang_word db table rows as (code, value)
+	ModelLangCode string      // language code selected for model_word table rows
+	ModelWords    []codeLabel // model_word db table rows as (code, value)
+}
+
+// codeLabel is code + label pair, for example, language-specific "words" db table row.
+type codeLabel struct {
+	Code  string
+	Label string
 }

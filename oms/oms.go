@@ -141,6 +141,13 @@ func mainBody(args []string) error {
 	// setup router and start server
 	router := vestigo.NewRouter()
 
+	router.SetGlobalCors(&vestigo.CorsAccessControl{
+		AllowOrigin:      []string{"*"},
+		AllowCredentials: true,
+		AllowHeaders:     []string{"Content-Type"},
+		ExposeHeaders:    []string{"Content-Type"},
+	})
+
 	apiGetRoutes(router)     // web-service /api routes to get metadata
 	apiReadRoutes(router)    // web-service /api routes to read values
 	apiReadCsvRoutes(router) // web-service /api routes to read values into csv stream
@@ -231,6 +238,13 @@ func apiGetRoutes(router *vestigo.Router) {
 	// GET /api/model/:model/lang-list
 	router.Get("/api/lang-list", langListHandler, logRequest)
 	router.Get("/api/model/:model/lang-list", langListHandler, logRequest)
+
+	// GET /api/word-list?model=modelNameOrDigest&lang=en
+	// GET /api/model/:model/word-list
+	// GET /api/model/:model/word-list/lang/:lang
+	router.Get("/api/word-list", wordListHandler, logRequest)
+	router.Get("/api/model/:model/word-list", wordListHandler, logRequest)
+	router.Get("/api/model/:model/word-list/lang/:lang", wordListHandler, logRequest)
 
 	// GET /api/model-group?model=modelNameOrDigest
 	// GET /api/model/:model/group

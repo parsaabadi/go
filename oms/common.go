@@ -153,11 +153,13 @@ func jsonSetHeaders(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// if request from localhost then allow response to any protocol or port
-	if strings.HasPrefix(r.Host, "localhost") {
-		if _, isSet := w.Header()["Access-Control-Allow-Origin"]; !isSet {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
+	/*
+		if strings.HasPrefix(r.Host, "localhost") {
+			if _, isSet := w.Header()["Access-Control-Allow-Origin"]; !isSet {
+				w.Header().Set("Access-Control-Allow-Origin", "*")
+			}
 		}
-	}
+	*/
 }
 
 // jsonResponse set response headers and writes src as json into w response writer.
@@ -216,7 +218,7 @@ func jsonListResponse(
 func jsonRequestDecode(w http.ResponseWriter, r *http.Request, dst interface{}) bool {
 
 	// json body expected
-	if r.Header.Get("Content-Type") != "application/json" {
+	if !strings.Contains(r.Header.Get("Content-Type"), "application/json") {
 		http.Error(w, "Expected Content-Type: application/json", http.StatusUnsupportedMediaType)
 		return false
 	}
