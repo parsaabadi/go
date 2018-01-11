@@ -219,7 +219,7 @@ func copyWorksetDbToDb(
 		// source: read workset parameter values
 		paramLt.Name = paramLst[j].Name
 
-		cLst, err := db.ReadParameter(srcDb, srcModel, paramLt)
+		cLst, _, err := db.ReadParameter(srcDb, srcModel, paramLt)
 		if err != nil {
 			return 0, err
 		}

@@ -11,17 +11,17 @@ import (
 )
 
 // ReadParameter read input parameter page (sub id, dimensions, value) from workset or model run results.
-func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayout) (*list.List, error) {
+func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayout) (*list.List, *ReadPageLayout, error) {
 
 	// validate parameters
 	if modelDef == nil {
-		return nil, errors.New("invalid (empty) model metadata, look like model not found")
+		return nil, nil, errors.New("invalid (empty) model metadata, look like model not found")
 	}
 	if layout == nil {
-		return nil, errors.New("invalid (empty) page layout")
+		return nil, nil, errors.New("invalid (empty) page layout")
 	}
 	if layout.Name == "" {
-		return nil, errors.New("invalid (empty) parameter name")
+		return nil, nil, errors.New("invalid (empty) parameter name")
 	}
 
 	// find parameter id by name
@@ -29,7 +29,7 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayout)
 	if k, ok := modelDef.ParamByName(layout.Name); ok {
 		param = &modelDef.Param[k]
 	} else {
-		return nil, errors.New("parameter not found: " + layout.Name)
+		return nil, nil, errors.New("parameter not found: " + layout.Name)
 	}
 
 	// if this is workset parameter then:
@@ -46,15 +46,15 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayout)
 		// validate workset: it must exist
 		setRow, err := GetWorkset(dbConn, layout.FromId)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if setRow == nil {
-			return nil, errors.New("workset not found, id: " + strconv.Itoa(layout.FromId))
+			return nil, nil, errors.New("workset not found, id: " + strconv.Itoa(layout.FromId))
 		}
 
 		// workset readonly status must be compatible with (oposite to) "edit workset" status
 		if layout.IsEditSet && setRow.IsReadonly {
-			return nil, errors.New("cannot edit parameter " + param.Name + " from read-only workset, id: " + strconv.Itoa(layout.FromId))
+			return nil, nil, errors.New("cannot edit parameter " + param.Name + " from read-only workset, id: " + strconv.Itoa(layout.FromId))
 		}
 
 		// check is this workset contain the parameter
@@ -72,15 +72,15 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayout)
 			})
 		switch {
 		case err == sql.ErrNoRows: // unknown error: should never be there
-			return nil, errors.New("cannot count parameter " + param.Name + " in workset, id: " + strconv.Itoa(layout.FromId))
+			return nil, nil, errors.New("cannot count parameter " + param.Name + " in workset, id: " + strconv.Itoa(layout.FromId))
 		case err != nil:
-			return nil, err
+			return nil, nil, err
 		}
 
 		// if parameter not in that workset then workset must have base run
 		if !isWsParam {
 			if setRow.BaseRunId <= 0 {
-				return nil, errors.New("workset does not contain parameter " + param.Name + " and not run-based, workset id: " + strconv.Itoa(layout.FromId))
+				return nil, nil, errors.New("workset does not contain parameter " + param.Name + " and not run-based, workset id: " + strconv.Itoa(layout.FromId))
 			}
 			srcRunId = setRow.BaseRunId
 		}
@@ -91,13 +91,13 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayout)
 	if !isWsParam {
 		runRow, err := GetRun(dbConn, srcRunId)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if runRow == nil {
-			return nil, errors.New("model run not found, id: " + strconv.Itoa(srcRunId))
+			return nil, nil, errors.New("model run not found, id: " + strconv.Itoa(srcRunId))
 		}
 		if !IsRunCompleted(runRow.Status) {
-			return nil, errors.New("model run not completed, id: " + strconv.Itoa(srcRunId))
+			return nil, nil, errors.New("model run not completed, id: " + strconv.Itoa(srcRunId))
 		}
 	}
 
@@ -142,13 +142,13 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayout)
 			}
 		}
 		if dix < 0 {
-			return nil, errors.New("parameter " + param.Name + " does not have dimension " + layout.Filter[k].DimName)
+			return nil, nil, errors.New("parameter " + param.Name + " does not have dimension " + layout.Filter[k].DimName)
 		}
 
 		f, err := makeDimFilter(
 			modelDef, &layout.Filter[k], param.Dim[dix].Name, param.Dim[dix].typeOf, false, "parameter "+param.Name)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		q += " AND " + f
@@ -166,13 +166,13 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayout)
 			}
 		}
 		if dix < 0 {
-			return nil, errors.New("parameter " + param.Name + " does not have dimension " + layout.FilterById[k].DimName)
+			return nil, nil, errors.New("parameter " + param.Name + " does not have dimension " + layout.FilterById[k].DimName)
 		}
 
 		f, err := makeDimIdFilter(
 			modelDef, &layout.FilterById[k], param.Dim[dix].Name, param.Dim[dix].typeOf, "parameter "+param.Name)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		q += " AND " + f
@@ -207,7 +207,7 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayout)
 	}
 
 	// select parameter cells: (sub id, dimension(s) enum ids, parameter value)
-	cLst, err := SelectToList(dbConn, q, layout.Offset, layout.Size,
+	cLst, lt, err := SelectToList(dbConn, q, layout.ReadPageLayout,
 		func(rows *sql.Rows) (interface{}, error) {
 			if err := rows.Scan(scanBuf...); err != nil {
 				return nil, err
@@ -218,8 +218,8 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayout)
 			return c, nil
 		})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return cLst, nil
+	return cLst, lt, nil
 }

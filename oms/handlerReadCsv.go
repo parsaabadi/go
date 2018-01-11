@@ -99,7 +99,7 @@ func doParameterGetCsvHandler(w http.ResponseWriter, r *http.Request, srcArg str
 		ReadLayout: db.ReadLayout{Name: name}, IsFromSet: isSet,
 	}
 
-	cLst, ok := theCatalog.ReadParameter(dn, src, &layout)
+	cLst, _, ok := theCatalog.ReadParameter(dn, src, &layout)
 	if !ok {
 		http.Error(w, "Error at parameter read "+src+": "+name, http.StatusBadRequest)
 		return
@@ -240,7 +240,7 @@ func doTableGetCsvHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllAc
 		IsAllAccum: isAllAcc,
 	}
 
-	cLst, ok := theCatalog.ReadOutTable(dn, rdn, &layout)
+	cLst, _, ok := theCatalog.ReadOutTable(dn, rdn, &layout)
 	if !ok {
 		http.Error(w, "Error at run output table read "+rdn+": "+name, http.StatusBadRequest)
 		return

@@ -234,10 +234,10 @@ func SelectRows(dbConn *sql.DB, query string, cvt func(rows *sql.Rows) error) er
 // It selects "page size" number of rows starting from row number == offset (zero based).
 // If page size <= 0 then all rows returned.
 func SelectToList(
-	dbConn *sql.DB, query string, offset, size int64, cvt func(rows *sql.Rows) (interface{}, error)) (*list.List, error) {
+	dbConn *sql.DB, query string, layout ReadPageLayout, cvt func(rows *sql.Rows) (interface{}, error)) (*list.List, *ReadPageLayout, error) {
 
 	if dbConn == nil {
-		return nil, errors.New("invalid database connection")
+		return nil, nil, errors.New("invalid database connection")
 	}
 
 	// query db rows
@@ -245,36 +245,71 @@ func SelectToList(
 
 	rows, err := dbConn.Query(query)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer rows.Close()
 
 	// convert each row and append to the result list
-	var nRow int64
-	if offset < 0 {
-		offset = 0
+	nStart := layout.Offset
+	if nStart < 0 {
+		nStart = 0
 	}
+	nSize := layout.Size
+	if nSize < 0 {
+		nSize = 0
+	}
+	var nRow int64
 
 	rs := list.New()
 	for rows.Next() {
 		nRow++
-		if nRow <= offset {
-			continue
-		}
-		if size > 0 && nRow > offset+size {
+		if nSize > 0 && nRow > nStart+nSize {
 			break
 		}
-		r, err := cvt(rows)
-		if err != nil {
-			return nil, err
+		// convert and add row to the page
+		if layout.IsLastPage || !layout.IsLastPage && nRow > nStart {
+			r, err := cvt(rows)
+			if err != nil {
+				return nil, nil, err
+			}
+			rs.PushBack(r)
 		}
-		rs.PushBack(r)
+		// if last page mode then
+		// 	 if page size limited then keep page rows
+		//   else keep only one row before page start offset
+		if layout.IsLastPage &&
+			(nSize > 0 && int64(rs.Len()) > nSize || nSize <= 0 && nRow <= nStart+1 && rs.Len() > 1) {
+			rs.Remove(rs.Front())
+		}
 	}
 	err = rows.Err()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return rs, nil
+
+	// actual start row offset, size of result and last page flag
+	lt := ReadPageLayout{
+		Offset:     nRow - int64(rs.Len()),
+		Size:       int64(rs.Len()),
+		IsLastPage: nSize <= 0 || nSize > 0 && nRow <= nStart+nSize,
+	}
+	if !lt.IsLastPage && lt.Offset > 0 {
+		lt.Offset--
+	}
+
+	// return result if last page mode then:
+	//   if actual offset < input start offset then remove extra rows from top of the page
+	//   do such remove only if last row > input start offset
+	//   otherwise keep entire page (if input offset too far and below last row)
+	if layout.IsLastPage && lt.IsLastPage && nSize > 0 && lt.Offset < nStart && nRow > nStart {
+
+		for lt.Offset < nStart && rs.Len() > 1 {
+			rs.Remove(rs.Front())
+			lt.Offset++
+		}
+		lt.Size = int64(rs.Len())
+	}
+	return rs, &lt, nil
 }
 
 // Update execute sql query outside of transaction scope (on different connection)

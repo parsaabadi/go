@@ -4,6 +4,7 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"go.openmpp.org/ompp/db"
@@ -57,7 +58,7 @@ func doReadParameterPageHandler(w http.ResponseWriter, r *http.Request, srcArg s
 	layout.IsFromSet = isSet // overwrite json value, it was likely default
 
 	// read parameter page and respond with json and convert enum id's to code if requested
-	cLst, ok := theCatalog.ReadParameter(dn, src, &layout)
+	cLst, lt, ok := theCatalog.ReadParameter(dn, src, &layout)
 	if !ok {
 		http.Error(w, "Error at parameter read "+src+": "+layout.Name, http.StatusBadRequest)
 		return
@@ -73,7 +74,19 @@ func doReadParameterPageHandler(w http.ResponseWriter, r *http.Request, srcArg s
 		}
 	}
 
-	jsonListResponse(w, r, cLst, cvt)
+	// write to response: page layout and page data
+	jsonSetHeaders(w, r) // start response with set json headers, i.e. content type
+
+	// output page layout: offset, size, last page flag
+	w.Write([]byte("{\"Layout\":"))
+	err := json.NewEncoder(w).Encode(lt)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	w.Write([]byte(",\"Page\":"))             // start of data page
+	jsonAppendListToResponse(w, r, cLst, cvt) // append data page to response
+	w.Write([]byte("}"))                      // end of data page and end of json
 }
 
 // runTablePageReadHandler read a "page" of output table values
@@ -112,7 +125,7 @@ func doReadTablePageHandler(w http.ResponseWriter, r *http.Request, isCode bool)
 	}
 
 	// read output table page and respond with json and convert enum id's to code if requested
-	cLst, ok := theCatalog.ReadOutTable(dn, rdn, &layout)
+	cLst, lt, ok := theCatalog.ReadOutTable(dn, rdn, &layout)
 	if !ok {
 		http.Error(w, "Error at run output table read "+rdn+": "+layout.Name, http.StatusBadRequest)
 		return
@@ -129,7 +142,19 @@ func doReadTablePageHandler(w http.ResponseWriter, r *http.Request, isCode bool)
 		}
 	}
 
-	jsonListResponse(w, r, cLst, cvt) // write response
+	// write to response: page layout and page data
+	jsonSetHeaders(w, r) // start response with set json headers, i.e. content type
+
+	// output page layout: offset, size, last page flag
+	w.Write([]byte("{\"Layout\":"))
+	err := json.NewEncoder(w).Encode(lt)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	w.Write([]byte(",\"Page\":"))             // start of data page
+	jsonAppendListToResponse(w, r, cLst, cvt) // append data page to response
+	w.Write([]byte("}"))                      // end of data page and end of json
 }
 
 // worksetParameterPageGetHandler read a "page" of parameter values from workset.
@@ -181,12 +206,15 @@ func doParameterGetPageHandler(w http.ResponseWriter, r *http.Request, srcArg st
 
 	// setup read layout
 	layout := db.ReadParamLayout{
-		ReadLayout: db.ReadLayout{Name: name, Offset: start, Size: count},
-		IsFromSet:  isSet,
+		ReadLayout: db.ReadLayout{
+			Name:           name,
+			ReadPageLayout: db.ReadPageLayout{Offset: start, Size: count},
+		},
+		IsFromSet: isSet,
 	}
 
 	// read parameter page and respond with json
-	cLst, ok := theCatalog.ReadParameter(dn, src, &layout)
+	cLst, _, ok := theCatalog.ReadParameter(dn, src, &layout)
 	if !ok {
 		http.Error(w, "Error at parameter read "+src+": "+layout.Name, http.StatusBadRequest)
 		return
@@ -203,7 +231,8 @@ func doParameterGetPageHandler(w http.ResponseWriter, r *http.Request, srcArg st
 		}
 	}
 
-	jsonListResponse(w, r, cLst, cvt) // write response
+	jsonSetHeaders(w, r)                      // start response with set json headers, i.e. content type
+	jsonAppendListToResponse(w, r, cLst, cvt) // append data page to response
 }
 
 // runTableExprPageGetHandler read a "page" of output table expression(s) values from model run results.
@@ -268,13 +297,15 @@ func doTableGetPageHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllA
 
 	// setup read layout
 	layout := db.ReadTableLayout{
-		ReadLayout: db.ReadLayout{Name: name, Offset: start, Size: count},
+		ReadLayout: db.ReadLayout{Name: name,
+			ReadPageLayout: db.ReadPageLayout{Offset: start, Size: count},
+		},
 		IsAccum:    isAcc,
 		IsAllAccum: isAllAcc,
 	}
 
 	// read output table page and respond with json
-	cLst, ok := theCatalog.ReadOutTable(dn, rdn, &layout)
+	cLst, _, ok := theCatalog.ReadOutTable(dn, rdn, &layout)
 	if !ok {
 		http.Error(w, "Error at run output table read "+rdn+": "+layout.Name, http.StatusBadRequest)
 		return
@@ -291,5 +322,6 @@ func doTableGetPageHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllA
 		}
 	}
 
-	jsonListResponse(w, r, cLst, cvt) // write response
+	jsonSetHeaders(w, r)                      // start response with set json headers, i.e. content type
+	jsonAppendListToResponse(w, r, cLst, cvt) // append data page to response
 }

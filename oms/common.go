@@ -174,14 +174,13 @@ func jsonResponse(w http.ResponseWriter, r *http.Request, src interface{}) {
 	}
 }
 
-// jsonListResponse set response headers and writes srcLst as json into w response writer.
+// jsonAppendListToResponse writes srcLst as json array into w response writer.
+// It is an append to response and response headers must already be set.
 // On error it writes 500 internal server error response.
-func jsonListResponse(
+func jsonAppendListToResponse(
 	w http.ResponseWriter, r *http.Request, srcLst *list.List, cvt func(interface{}) (interface{}, error)) {
 
-	jsonSetHeaders(w, r) // set response headers, i.e. content type
-
-	w.Write([]byte{'['}) // output is json array
+	w.Write([]byte{'['}) // start json output array
 
 	enc := json.NewEncoder(w)
 	isNext := false

@@ -33,15 +33,44 @@ type WriteTableLayout struct {
 	DoubleFmt   string // used for float model types digest calculation
 }
 
+// ReadPageLayout describes first row offset and size of data page to read input parameter or output table values.
+// If IsLastPage true then return non-empty last page and actual first row offset and size.
+type ReadPageLayout struct {
+	Offset     int64 // first row to return from select, zero-based ofsset
+	Size       int64 // max row count to select, if <= 0 then all rows
+	IsLastPage bool  // if true then return non-empty last page
+}
+
 // ReadLayout describes source and size of data page to read input parameter or output table values.
+//
+// If IsLastPage true then return non-empty last page and actual first row offset and size.
+//
+// Row filters combined by AND and allow to select dimension items,
+// it can be enum codes or enum id's, ex.: dim0 = 'CA' AND dim1 IN (2010, 2011, 2012)
+//
+// Order by applied to output columns, dimension columns always contain enum id's,
+// therefore result ordered by id's and not by enum codes.
+// Columns list depending on output table or parameter query,
+//
+// parameters:
+//   SELECT sub_id, dim0, dim1, param_value FROM parameterTable ORDER BY...
+//
+// output table expressions:
+//   SELECT expr_id, dim0, dim1, expr_value FROM outputTable ORDER BY...
+//
+// output table accumulators:
+//   SELECT acc_id, sub_id, dim0, dim1, acc_value FROM outputTable ORDER BY...
+//
+// all-accumulators view:
+//   SELECT sub_id, dim0, dim1, acc0_value, acc1_value... FROM outputTable ORDER BY...
+//
 type ReadLayout struct {
-	Name       string           // parameter name or output table name
-	FromId     int              // run id or set id to select input parameter or output table values
-	Offset     int64            // first row to return from select, zero-based ofsset
-	Size       int64            // max row count to select, if <= 0 then all rows
-	Filter     []FilterColumn   // dimension filters, final WHERE does join all filters by AND
-	FilterById []FilterIdColumn // dimension filters by enum ids, final WHERE does join filters by AND
-	OrderBy    []OrderByColumn  // order by columnns, if empty then dimension id ascending order is used
+	Name           string           // parameter name or output table name
+	FromId         int              // run id or set id to select input parameter or output table values
+	ReadPageLayout                  // read page first row offset, size and last page flag
+	Filter         []FilterColumn   // dimension filters, final WHERE does join all filters by AND
+	FilterById     []FilterIdColumn // dimension filters by enum ids, final WHERE does join filters by AND
+	OrderBy        []OrderByColumn  // order by columnns, if empty then dimension id ascending order is used
 }
 
 // ReadParamLayout describes source and size of data page to read input parameter values.

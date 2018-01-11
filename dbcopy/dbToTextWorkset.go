@@ -181,7 +181,7 @@ func toWorksetText(
 
 		paramLt.Name = pub.Param[j].Name
 
-		cLst, err := db.ReadParameter(dbConn, modelDef, paramLt)
+		cLst, _, err := db.ReadParameter(dbConn, modelDef, paramLt)
 		if err != nil {
 			return err
 		}

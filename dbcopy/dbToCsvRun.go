@@ -282,7 +282,7 @@ func toRunCsv(
 
 		paramLt.Name = modelDef.Param[j].Name
 
-		cLst, err := db.ReadParameter(dbConn, modelDef, paramLt)
+		cLst, _, err := db.ReadParameter(dbConn, modelDef, paramLt)
 		if err != nil {
 			return err
 		}
@@ -307,7 +307,7 @@ func toRunCsv(
 		tblLt.IsAccum = false
 		tblLt.IsAllAccum = false
 
-		cLst, err := db.ReadOutputTable(dbConn, modelDef, tblLt)
+		cLst, _, err := db.ReadOutputTable(dbConn, modelDef, tblLt)
 		if err != nil {
 			return err
 		}
@@ -322,7 +322,7 @@ func toRunCsv(
 		tblLt.IsAccum = true
 		tblLt.IsAllAccum = false
 
-		cLst, err = db.ReadOutputTable(dbConn, modelDef, tblLt)
+		cLst, _, err = db.ReadOutputTable(dbConn, modelDef, tblLt)
 		if err != nil {
 			return err
 		}
@@ -337,7 +337,7 @@ func toRunCsv(
 		tblLt.IsAccum = true
 		tblLt.IsAllAccum = true
 
-		cLst, err = db.ReadOutputTable(dbConn, modelDef, tblLt)
+		cLst, _, err = db.ReadOutputTable(dbConn, modelDef, tblLt)
 		if err != nil {
 			return err
 		}

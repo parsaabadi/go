@@ -210,7 +210,7 @@ func copyRunDbToDb(
 		// source: read parameter values
 		paramLt.Name = srcModel.Param[j].Name
 
-		cLst, err := db.ReadParameter(srcDb, srcModel, &paramLt)
+		cLst, _, err := db.ReadParameter(srcDb, srcModel, &paramLt)
 		if err != nil {
 			return 0, err
 		}
@@ -239,7 +239,7 @@ func copyRunDbToDb(
 		tblLt.Name = srcModel.Table[j].Name
 		tblLt.IsAccum = true
 
-		acLst, err := db.ReadOutputTable(srcDb, srcModel, &tblLt)
+		acLst, _, err := db.ReadOutputTable(srcDb, srcModel, &tblLt)
 		if err != nil {
 			return 0, err
 		}
@@ -247,7 +247,7 @@ func copyRunDbToDb(
 		// source: read output table expression values
 		tblLt.IsAccum = false
 
-		ecLst, err := db.ReadOutputTable(srcDb, srcModel, &tblLt)
+		ecLst, _, err := db.ReadOutputTable(srcDb, srcModel, &tblLt)
 		if err != nil {
 			return 0, err
 		}

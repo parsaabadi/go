@@ -16,19 +16,19 @@ import (
 // and up to max page size rows, if page size <= 0 then all values returned.
 // Parameter values can be read-only (select from run or read-only workset) or read-write (read-write workset).
 // Rows can be filtered and ordered (see db.ReadParamLayout for details).
-func (mc *ModelCatalog) ReadParameter(dn, src string, layout *db.ReadParamLayout) (*list.List, bool) {
+func (mc *ModelCatalog) ReadParameter(dn, src string, layout *db.ReadParamLayout) (*list.List, *db.ReadPageLayout, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
 		omppLog.Log("Warning: invalid (empty) model digest and name")
-		return nil, false
+		return nil, nil, false
 	}
 
 	// load model metadata and return index in model catalog
 	idx, ok := mc.loadModelMeta(dn)
 	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return nil, false // return empty result: model not found or error
+		return nil, nil, false // return empty result: model not found or error
 	}
 
 	// lock catalog and search model parameter by name
@@ -37,7 +37,7 @@ func (mc *ModelCatalog) ReadParameter(dn, src string, layout *db.ReadParamLayout
 
 	if _, ok = mc.modelLst[idx].meta.ParamByName(layout.Name); !ok {
 		omppLog.Log("Warning: parameter not found: ", layout.Name)
-		return nil, false // return empty result: parameter not found or error
+		return nil, nil, false // return empty result: parameter not found or error
 	}
 
 	// find workset id by name or run id by name-or-digest
@@ -46,25 +46,25 @@ func (mc *ModelCatalog) ReadParameter(dn, src string, layout *db.ReadParamLayout
 		if wst, ok := mc.loadWorksetByName(idx, src); ok {
 			layout.FromId = wst.SetId // source workset id
 		} else {
-			return nil, false // return empty result: workset select error
+			return nil, nil, false // return empty result: workset select error
 		}
 	} else {
 
 		if rst, ok := mc.loadCompletedRunByDigestOrName(idx, src); ok {
 			layout.FromId = rst.RunId // source run id
 		} else {
-			return nil, false // return empty result: run select error
+			return nil, nil, false // return empty result: run select error
 		}
 	}
 
 	// read parameter page
-	cLst, err := db.ReadParameter(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, layout)
+	cLst, lt, err := db.ReadParameter(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, layout)
 	if err != nil || cLst == nil {
 		omppLog.Log("Error at read parameter: ", dn, ": ", layout.Name, ": ", err.Error())
-		return nil, false // return empty result: values select error
+		return nil, nil, false // return empty result: values select error
 	}
 
-	return cLst, true
+	return cLst, lt, true
 }
 
 // ReadOutTable return "page" of output table values from model run.
@@ -73,19 +73,19 @@ func (mc *ModelCatalog) ReadParameter(dn, src string, layout *db.ReadParamLayout
 // Page started at zero based offset row and up to max page size rows, if page size <= 0 then all values returned.
 // Values can be from expression table, accumulator table or "all accumulators" view.
 // Rows can be filtered and ordered (see db.ReadTableLayout for details).
-func (mc *ModelCatalog) ReadOutTable(dn, src string, layout *db.ReadTableLayout) (*list.List, bool) {
+func (mc *ModelCatalog) ReadOutTable(dn, src string, layout *db.ReadTableLayout) (*list.List, *db.ReadPageLayout, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
 		omppLog.Log("Warning: invalid (empty) model digest and name")
-		return nil, false
+		return nil, nil, false
 	}
 
 	// load model metadata and return index in model catalog
 	idx, ok := mc.loadModelMeta(dn)
 	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return nil, false // return empty result: model not found or error
+		return nil, nil, false // return empty result: model not found or error
 	}
 
 	// lock catalog and search model output table by name
@@ -94,24 +94,24 @@ func (mc *ModelCatalog) ReadOutTable(dn, src string, layout *db.ReadTableLayout)
 
 	if _, ok = mc.modelLst[idx].meta.OutTableByName(layout.Name); !ok {
 		omppLog.Log("Warning: output table not found: ", layout.Name)
-		return nil, false // return empty result: output table not found or error
+		return nil, nil, false // return empty result: output table not found or error
 	}
 
 	// find model run id by digest-or-name
 	rst, ok := mc.loadCompletedRunByDigestOrName(idx, src)
 	if !ok {
-		return nil, false // return empty result: run select error
+		return nil, nil, false // return empty result: run select error
 	}
 	layout.FromId = rst.RunId // source run id
 
 	// read output table page
-	cLst, err := db.ReadOutputTable(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, layout)
+	cLst, lt, err := db.ReadOutputTable(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, layout)
 	if err != nil || cLst == nil {
 		omppLog.Log("Error at read output table: ", dn, ": ", layout.Name, ": ", err.Error())
-		return nil, false // return empty result: values select error
+		return nil, nil, false // return empty result: values select error
 	}
 
-	return cLst, true
+	return cLst, lt, true
 }
 
 // loadWorksetByName select workset_lst db row by name and model index in model catalog.

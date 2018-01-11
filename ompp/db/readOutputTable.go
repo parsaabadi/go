@@ -14,17 +14,17 @@ import (
 //
 // If layout.IsAccum true then select accumulator(s) else output expression value(s)
 // If layout.ValueName not empty then select only that expression (accumulator) else all expressions (accumulators)
-func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLayout) (*list.List, error) {
+func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLayout) (*list.List, *ReadPageLayout, error) {
 
 	// validate parameters
 	if modelDef == nil {
-		return nil, errors.New("invalid (empty) model metadata, look like model not found")
+		return nil, nil, errors.New("invalid (empty) model metadata, look like model not found")
 	}
 	if layout == nil {
-		return nil, errors.New("invalid (empty) page layout")
+		return nil, nil, errors.New("invalid (empty) page layout")
 	}
 	if layout.Name == "" {
-		return nil, errors.New("invalid (empty) ouput table name")
+		return nil, nil, errors.New("invalid (empty) ouput table name")
 	}
 
 	// find output table id by name
@@ -32,7 +32,7 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLayou
 	if k, ok := modelDef.OutTableByName(layout.Name); ok {
 		table = &modelDef.Table[k]
 	} else {
-		return nil, errors.New("output table not found: " + layout.Name)
+		return nil, nil, errors.New("output table not found: " + layout.Name)
 	}
 
 	// find expression or accumulator id by name
@@ -48,7 +48,7 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLayou
 				}
 			}
 			if valId < 0 {
-				return nil, errors.New("output table accumulator not found: " + layout.Name + " " + layout.ValueName)
+				return nil, nil, errors.New("output table accumulator not found: " + layout.Name + " " + layout.ValueName)
 			}
 
 		} else { // find expression
@@ -59,7 +59,7 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLayou
 				}
 			}
 			if valId < 0 {
-				return nil, errors.New("output table expression not found: " + layout.Name + " " + layout.ValueName)
+				return nil, nil, errors.New("output table expression not found: " + layout.Name + " " + layout.ValueName)
 			}
 		}
 
@@ -74,13 +74,13 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLayou
 	// check if model run exist and model run completed
 	runRow, err := GetRun(dbConn, layout.FromId)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if runRow == nil {
-		return nil, errors.New("model run not found, id: " + strconv.Itoa(layout.FromId))
+		return nil, nil, errors.New("model run not found, id: " + strconv.Itoa(layout.FromId))
 	}
 	if runRow.Status != DoneRunStatus {
-		return nil, errors.New("model run not completed successfully, id: " + strconv.Itoa(layout.FromId))
+		return nil, nil, errors.New("model run not completed successfully, id: " + strconv.Itoa(layout.FromId))
 	}
 
 	// make sql to select output table expression(s) from model run:
@@ -175,13 +175,13 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLayou
 			}
 		}
 		if dix < 0 {
-			return nil, errors.New("output table " + table.Name + " does not have dimension " + layout.Filter[k].DimName)
+			return nil, nil, errors.New("output table " + table.Name + " does not have dimension " + layout.Filter[k].DimName)
 		}
 
 		f, err := makeDimFilter(
 			modelDef, &layout.Filter[k], table.Dim[dix].Name, table.Dim[dix].typeOf, table.Dim[dix].IsTotal, "output table "+table.Name)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		q += " AND " + f
@@ -199,13 +199,13 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLayou
 			}
 		}
 		if dix < 0 {
-			return nil, errors.New("output table " + table.Name + " does not have dimension " + layout.FilterById[k].DimName)
+			return nil, nil, errors.New("output table " + table.Name + " does not have dimension " + layout.FilterById[k].DimName)
 		}
 
 		f, err := makeDimIdFilter(
 			modelDef, &layout.FilterById[k], table.Dim[dix].Name, table.Dim[dix].typeOf, "output table "+table.Name)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		q += " AND " + f
@@ -244,7 +244,7 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLayou
 	// select cells:
 	// expr_id or or sub_id or acc_id and sub_id, dimension(s) enum ids
 	// value or all accumulator values and null status
-	cLst, err := SelectToList(dbConn, q, layout.Offset, layout.Size,
+	cLst, lt, err := SelectToList(dbConn, q, layout.ReadPageLayout,
 		func(rows *sql.Rows) (interface{}, error) {
 
 			if err := rows.Scan(scanBuf...); err != nil {
@@ -298,8 +298,8 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLayou
 			return ce, nil
 		})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return cLst, nil
+	return cLst, lt, nil
 }
