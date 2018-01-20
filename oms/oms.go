@@ -349,8 +349,12 @@ func apiGetRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/workset-list/text/lang/:lang", worksetListTextHandler, logRequest)
 
 	// GET /api/workset-status?model=modelNameOrDigest&set=setName
+	// GET /api/model/:model/workset/:set
+	// GET /api/model/:model/workset/:set/
 	// GET /api/model/:model/workset/:set/status
 	router.Get("/api/workset-status", worksetStatusHandler, logRequest)
+	router.Get("/api/model/:model/workset/:set", worksetStatusHandler, logRequest)
+	router.Get("/api/model/:model/workset/:set/", worksetStatusHandler, logRequest)
 	router.Get("/api/model/:model/workset/:set/status", worksetStatusHandler, logRequest)
 
 	// GET /api/workset-default-status?model=modelNameOrDigest

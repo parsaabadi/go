@@ -371,6 +371,8 @@ func worksetListTextHandler(w http.ResponseWriter, r *http.Request) {
 
 // worksetStatusHandler return workset_lst db row by model digest-or-name and workset name:
 // GET /api/workset-status?model=modelNameOrDigest&set=setName
+// GET /api/model/:model/workset/:set
+// GET /api/model/:model/workset/:set/
 // GET /api/model/:model/workset/:set/status
 // If multiple models with same name exist only one is returned.
 // If no such workset exist in database then empty result returned.
