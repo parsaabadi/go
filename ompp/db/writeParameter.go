@@ -314,20 +314,10 @@ func makeSqlInsertParamValue(dbTable string, runSetCol string, dims []ParamDimsR
 // prepare put() closure to convert each cell into insert sql statement parameters
 func makePutInsertParamValue(param *ParamMeta, subCount int, cellLst *list.List) func() (bool, []interface{}, error) {
 
-	// converter from value into db value:
-	// boolean is a special case because not all drivers correctly handle conversion to smallint
-	fv := func(src interface{}) interface{} { return src }
+	// converter from value into db value
+	fv := cvtValue(param)
 
-	if param.typeOf.IsBool() {
-		fv = func(src interface{}) interface{} {
-			if is, ok := src.(bool); ok && is {
-				return 1
-			}
-			return 0
-		}
-	}
-
-	// for each cell put into row of sql statement parameters
+	//  for each cell put into row of sql statement parameters
 	row := make([]interface{}, param.Rank+2)
 	c := cellLst.Front()
 
@@ -358,7 +348,11 @@ func makePutInsertParamValue(param *ParamMeta, subCount int, cellLst *list.List)
 		for k, e := range cell.DimIds {
 			row[k+1] = e
 		}
-		row[n+1] = fv(cell.Value) // parameter value converted db value
+		if v, err := fv(cell.Value); err == nil {
+			row[n+1] = v
+		} else {
+			return false, nil, err
+		}
 
 		// move to next input row and return current row to sql statement
 		c = c.Next()
@@ -417,4 +411,153 @@ func makePutDeleteParamPage(param *ParamMeta, cellLst *list.List) func() (bool, 
 		return true, row, nil
 	}
 	return put
+}
+
+// cvtValue return converter from source value into db value
+// converter does type validation, reject NULL values (parameter value cannot be null)
+// for non built-it types validate enum id presense in enum list
+func cvtValue(param *ParamMeta) func(interface{}) (interface{}, error) {
+
+	// float parameter: check value is not null and validate type
+	if param.typeOf.IsFloat() {
+		return func(src interface{}) (interface{}, error) {
+			if src == nil {
+				return nil, errors.New("invalid parameter value, it cannot be NULL")
+			}
+			switch src.(type) {
+			case float64:
+				return src, nil
+			case float32:
+				return src, nil
+			case int:
+				return src, nil
+			case uint:
+				return src, nil
+			case int64:
+				return src, nil
+			case uint64:
+				return src, nil
+			case int32:
+				return src, nil
+			case uint32:
+				return src, nil
+			case int16:
+				return src, nil
+			case uint16:
+				return src, nil
+			case int8:
+				return src, nil
+			case uint8:
+				return src, nil
+			}
+			return nil, errors.New("invalid parameter value type, expected: float or double")
+		}
+	}
+
+	// integer parameter: check value is not null and validate type
+	if param.typeOf.IsInt() {
+		return func(src interface{}) (interface{}, error) {
+			if src == nil {
+				return nil, errors.New("invalid parameter value, it cannot be NULL")
+			}
+			switch src.(type) {
+			case int:
+				return src, nil
+			case uint:
+				return src, nil
+			case int64:
+				return src, nil
+			case uint64:
+				return src, nil
+			case int32:
+				return src, nil
+			case uint32:
+				return src, nil
+			case int16:
+				return src, nil
+			case uint16:
+				return src, nil
+			case int8:
+				return src, nil
+			case uint8:
+				return src, nil
+			case float64: // from json or oracle (often)
+				return src, nil
+			case float32: // from json or oracle (unlikely)
+				return src, nil
+			}
+			return nil, errors.New("invalid parameter value type, expected: integer")
+		}
+	}
+
+	// string parameter: check value is not null and validate type
+	if param.typeOf.IsString() {
+		return func(src interface{}) (interface{}, error) {
+			if src == nil {
+				return nil, errors.New("invalid parameter value, it cannot be NULL")
+			}
+			switch src.(type) {
+			case string:
+				return src, nil
+			}
+			return nil, errors.New("invalid parameter value type, expected: string")
+		}
+	}
+
+	// boolean is a special case because not all drivers correctly handle conversion to smallint
+	if param.typeOf.IsBool() {
+		return func(src interface{}) (interface{}, error) {
+			if is, ok := src.(bool); ok && is {
+				return 1, nil
+			}
+			return 0, nil
+		}
+	}
+
+	// enum-based type: enum id must be in enum list
+	return func(src interface{}) (interface{}, error) {
+
+		if src == nil {
+			return nil, errors.New("invalid parameter value, it cannot be NULL")
+		}
+
+		// validate type and convert to int
+		var iv int
+		switch e := src.(type) {
+		case int:
+			iv = e
+		case uint:
+			iv = int(e)
+		case int64:
+			iv = int(e)
+		case uint64:
+			iv = int(e)
+		case int32:
+			iv = int(e)
+		case uint32:
+			iv = int(e)
+		case int16:
+			iv = int(e)
+		case uint16:
+			iv = int(e)
+		case int8:
+			iv = int(e)
+		case uint8:
+			iv = int(e)
+		case float64: // from json or oracle (often)
+			iv = int(e)
+		case float32: // from json or oracle (unlikely)
+			iv = int(e)
+		default:
+			return nil, errors.New("invalid parameter value type, expected: integer enum")
+		}
+
+		// validate enum id: it must be in enum list
+		for j := range param.typeOf.Enum {
+			if iv == param.typeOf.Enum[j].EnumId {
+				return iv, nil
+			}
+		}
+		return nil, errors.New("invalid parameter value type, expected: integer enum id")
+	}
 }
