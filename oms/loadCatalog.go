@@ -109,8 +109,8 @@ func (mc *ModelCatalog) RefreshSqlite(modelDir string) error {
 	defer mc.theLock.Unlock()
 
 	// update model directory
-	theCatalog.modelDir = modelDir
-	theCatalog.isDirEnabled = isDir
+	mc.modelDir = modelDir
+	mc.isDirEnabled = isDir
 
 	// close existing connections and store updated list of models and db connections
 	for k := range mc.modelLst {

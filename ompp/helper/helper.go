@@ -11,6 +11,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 	"unicode"
@@ -41,6 +42,21 @@ func MakeTimeStamp(t time.Time) string {
 	ms := int(time.Duration(t.Nanosecond()) / time.Millisecond)
 
 	return fmt.Sprintf("%04d%02d%02d_%02d%02d%02d_%04d", y, mm, dd, h, mi, s, ms)
+}
+
+// MakeUnderscoreTimeStamp retrun timestamp string as: 2012_08_17_16_04_59_0148
+func MakeUnderscoreTimeStamp(t time.Time) string {
+	y, mm, dd := t.Date()
+	h, mi, s := t.Clock()
+	ms := int(time.Duration(t.Nanosecond()) / time.Millisecond)
+
+	return fmt.Sprintf("%04d_%02d_%02d_%02d_%02d_%02d_%04d", y, mm, dd, h, mi, s, ms)
+}
+
+// CleanSpecialChars replace all ["'`$}{@\] by _ underscore
+func CleanSpecialChars(src string) string {
+	re := regexp.MustCompile("[\"'`$}{@\\\\]")
+	return re.ReplaceAllString(src, "_")
 }
 
 // ToAlphaNumeric replace all non [A-Z,a-z,0-9] by _ underscore and remove repetitive underscores

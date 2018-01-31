@@ -22,6 +22,7 @@ import (
 const (
 	rootDirArgKey      = "oms.RootDir"      // root directory, expected subdir: html
 	modelDirArgKey     = "oms.ModelDir"     // models directory, if relative then must be relative to root directory
+	modelLogDirArgKey  = "oms.ModelLogDir"  // models log directory, if relative then must be relative to root directory
 	listenArgKey       = "oms.Listen"       // address to listen, default: localhost:4040
 	listenShortKey     = "l"                // address to listen (short form)
 	logRequestArgKey   = "oms.LogRequest"   // if true then log http request
@@ -65,6 +66,7 @@ func mainBody(args []string) error {
 	// set command line argument keys and ini-file keys
 	_ = flag.String(rootDirArgKey, "", "root directory, default: current directory")
 	_ = flag.String(modelDirArgKey, "models/bin", "models directory, if relative then must be relative to root directory")
+	_ = flag.String(modelLogDirArgKey, "log", "models log directory, if relative then must be relative to model directory")
 	_ = flag.String(listenArgKey, "localhost:4040", "address to listen")
 	_ = flag.String(listenShortKey, "localhost:4040", "address to listen (short form of "+listenArgKey+")")
 	_ = flag.Bool(logRequestArgKey, false, "if true then log HTTP requests")
@@ -125,6 +127,14 @@ func mainBody(args []string) error {
 		return err
 	}
 
+	// refresh run state catalog
+	modelLogDir := runOpts.String(modelLogDirArgKey)
+	ds := theCatalog.AllModelDigests()
+
+	if err := theRunStateCatalog.RefreshCatalog(ds, modelDir, modelLogDir); err != nil {
+		return err
+	}
+
 	// set UI languages to find model text in browser language
 	ll := strings.Split(runOpts.String(uiLangsArgKey), ",")
 	var lt []language.Tag
@@ -148,10 +158,11 @@ func mainBody(args []string) error {
 		ExposeHeaders:    []string{"Content-Type"},
 	})
 
-	apiGetRoutes(router)     // web-service /api routes to get metadata
-	apiReadRoutes(router)    // web-service /api routes to read values
-	apiReadCsvRoutes(router) // web-service /api routes to read values into csv stream
-	apiUpdateRoutes(router)  // web-service /api routes to update metadata
+	apiGetRoutes(router)      // web-service /api routes to get metadata
+	apiReadRoutes(router)     // web-service /api routes to read values
+	apiReadCsvRoutes(router)  // web-service /api routes to read values into csv stream
+	apiUpdateRoutes(router)   // web-service /api routes to update metadata
+	apiRunModelRoutes(router) // web-service /api routes to run the model
 
 	// set web root handler: UI web pages or "not found" if this is web-service mode
 	if !isApiOnly {
@@ -584,4 +595,25 @@ func apiUpdateRoutes(router *vestigo.Router) {
 	router.Post("/api/workset-parameter-new-value-id", parameterIdPageUpdateHandler, logRequest)
 	router.Patch("/api/model/:model/workset/:set/parameter/:name/new/value-id", parameterIdPageUpdateHandler, logRequest)
 	router.Post("/api/model/:model/workset/:set/parameter/:name/new/value-id", parameterIdPageUpdateHandler, logRequest)
+}
+
+// add web-service /api routes to run the model and monitor progress
+func apiRunModelRoutes(router *vestigo.Router) {
+
+	// POST /api/model/new-run?model=modelNameOrDigest&sub-count=16
+	// POST /api/model/:model/new-run
+	// POST /api/model/:model/new-run/sub-values/:sub-count
+	router.Post("/api/model/new-run", modelNewRunHandler, logRequest)
+	router.Post("/api/model/:model/new-run", modelNewRunHandler, logRequest)
+	router.Post("/api/model/:model/new-run/sub-values/:sub-count", modelNewRunHandler, logRequest)
+
+	// GET /api/model/new-run-state?model=modelNameOrDigest&start=0&count=0
+	// GET /api/model/:model/new-run-state
+	// GET /api/model/:model/new-run-state/start/:start
+	// GET /api/model/:model/new-run-state/start/:start/count/:count
+	router.Get("/api/model/new-run-state", modelNewRunLogPageHandler, logRequest)
+	router.Get("/api/model/:model/new-run-state", modelNewRunLogPageHandler, logRequest)
+	router.Get("/api/model/:model/new-run-state/start/:start", modelNewRunLogPageHandler, logRequest)
+	router.Get("/api/model/:model/new-run-state/start/:start/count/", modelNewRunLogPageHandler, logRequest)
+	router.Get("/api/model/:model/new-run-state/start/:start/count/:count", modelNewRunLogPageHandler, logRequest)
 }

@@ -29,6 +29,27 @@ func (mc *ModelCatalog) ModelDicByDigest(digest string) (db.ModelDicRow, bool) {
 	return mc.modelLst[idx].meta.Model, true
 }
 
+// ModelDicByDigestOrName return model_dic db row by model digest or name.
+func (mc *ModelCatalog) ModelDicByDigestOrName(dn string) (db.ModelDicRow, bool) {
+
+	// if model digest is empty then return empty results
+	if dn == "" {
+		omppLog.Log("Warning: invalid (empty) model digest and name")
+		return db.ModelDicRow{}, false
+	}
+
+	// find model index by digest
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		return db.ModelDicRow{}, false // model not found, empty result
+	}
+
+	return mc.modelLst[idx].meta.Model, true
+}
+
 // ModelMetaByDigestOrName return model_dic db row by model digest or name.
 func (mc *ModelCatalog) ModelMetaByDigestOrName(dn string) (*db.ModelMeta, bool) {
 
