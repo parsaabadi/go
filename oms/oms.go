@@ -22,7 +22,7 @@ import (
 const (
 	rootDirArgKey      = "oms.RootDir"      // root directory, expected subdir: html
 	modelDirArgKey     = "oms.ModelDir"     // models directory, if relative then must be relative to root directory
-	modelLogDirArgKey  = "oms.ModelLogDir"  // models log directory, if relative then must be relative to root directory
+	modelLogDirArgKey  = "oms.ModelLogDir"  // models log directory, if relative then must be relative to models directory
 	listenArgKey       = "oms.Listen"       // address to listen, default: localhost:4040
 	listenShortKey     = "l"                // address to listen (short form)
 	logRequestArgKey   = "oms.LogRequest"   // if true then log http request
@@ -66,7 +66,7 @@ func mainBody(args []string) error {
 	// set command line argument keys and ini-file keys
 	_ = flag.String(rootDirArgKey, "", "root directory, default: current directory")
 	_ = flag.String(modelDirArgKey, "models/bin", "models directory, if relative then must be relative to root directory")
-	_ = flag.String(modelLogDirArgKey, "log", "models log directory, if relative then must be relative to model directory")
+	_ = flag.String(modelLogDirArgKey, "../log", "models log directory, if relative then must be relative to models directory")
 	_ = flag.String(listenArgKey, "localhost:4040", "address to listen")
 	_ = flag.String(listenShortKey, "localhost:4040", "address to listen (short form of "+listenArgKey+")")
 	_ = flag.Bool(logRequestArgKey, false, "if true then log HTTP requests")

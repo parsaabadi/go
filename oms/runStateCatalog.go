@@ -43,6 +43,7 @@ type procRunState struct {
 // Last run log file name is time-stamped: modelName.YYYY_MM_DD_hh_mm_ss_0SSS.log
 type RunState struct {
 	RunKey         string // run key: modelName.timestamp
+	IsFinal        bool   // final state, model completed
 	RunName        string // run name
 	SetName        string // if not empty then workset name
 	SubCount       int    // subvalue count
@@ -85,22 +86,6 @@ func (rsc *RunStateCatalog) RefreshCatalog(ds []string, modelDir string, modelLo
 
 	rsc.runMap = rMap
 	return nil
-}
-
-// update model run state
-func (rsc *RunStateCatalog) storeProcRunState(digest string, rs *RunState) {
-	if digest == "" || rs == nil {
-		return
-	}
-	rsc.rscLock.Lock()
-	defer rsc.rscLock.Unlock()
-
-	prs := &procRunState{}
-	prs.RunState = *rs
-	if prs.logLineLst == nil {
-		prs.logLineLst = []string{}
-	}
-	rsc.runMap[digest] = prs
 }
 
 // getModelLogDir return model log directory
@@ -148,32 +133,6 @@ func (rsc *RunStateCatalog) readModelLastRunLog(digest string, start int, count 
 	return lrp, nil
 }
 
-// addToLog append to model log lines array
-func (rsc *RunStateCatalog) addToLog(digest string, runKey string, msg string) {
-	if digest == "" || msg == "" {
-		return // ignore empty log message
-	}
-	rsc.rscLock.Lock()
-	defer rsc.rscLock.Unlock()
-
-	// get model run state by digest
-	r, ok := rsc.runMap[digest]
-	if !ok {
-		return // model digest not found
-	}
-	if r.RunKey != runKey {
-		return // model run overriden, only last run stored
-	}
-
-	// make new log lines array if it is empty
-	if r.logLineLst == nil {
-		r.logLineLst = make([]string, 0, 32)
-	}
-
-	// append new log line
-	r.logLineLst = append(r.logLineLst, msg)
-}
-
 // getFromLog copy [strat, count] log lines from model log.
 // If count is zero or less then copy from start to the end of log.
 // Return current log line count and slice of log lines.
@@ -194,44 +153,7 @@ func (rsc *RunStateCatalog) getFromLog(digest string, runKey string, start int, 
 	}
 
 	// retrun log page from current log
-	// getFromCurrentLog() is for internal use only, must be protected by lock
 	return rsc.getFromCurrentLog(digest, start, count)
-}
-
-// For internal use only. Must be guarded with locks.
-//
-// getFromCurrentLog copy [strat, count] log lines from model log.
-// If count is zero or less then copy from start to the end of log.
-// Return current log line count and slice of log lines.
-func (rsc *RunStateCatalog) getFromCurrentLog(digest string, start int, count int) (int, int, int, []string) {
-
-	// get model run state by digest
-	r, ok := rsc.runMap[digest]
-	if !ok {
-		return 0, 0, 0, []string{} // model digest not found
-	}
-
-	if len(r.logLineLst) <= 0 { // log is empty
-		return 0, 0, 0, []string{}
-	}
-
-	// copy log lines
-	nLen := len(r.logLineLst)
-	nStart := start
-	if nStart < 0 {
-		nStart = 0
-	}
-	if nStart >= nLen {
-		return nStart, 0, nLen, []string{}
-	}
-	nCount := count
-	if nCount <= 0 || nStart+nCount > nLen {
-		nCount = nLen - nStart
-	}
-
-	ret := make([]string, nCount)
-	copy(ret, r.logLineLst[nStart:nStart+nCount])
-	return nStart, nCount, nLen, ret
 }
 
 // startModelExec starts new model run and return unique timestamped run key
@@ -275,9 +197,6 @@ func (rsc *RunStateCatalog) startModelExec(modelDigest string, modelName string,
 		mArgs = append(mArgs, "-"+config.LogFilePath, rs.logPath)
 	}
 
-	// run state initialized: save in run state list
-	rsc.storeProcRunState(modelDigest, rs)
-
 	// build model run command
 	cmd := exec.Command(mExe, mArgs...)
 	cmd.Dir = exeDir
@@ -299,7 +218,7 @@ func (rsc *RunStateCatalog) startModelExec(modelDigest string, modelName string,
 	doLog := func(digest string, runKey string, r io.Reader, done chan<- bool) {
 		sc := bufio.NewScanner(r)
 		for sc.Scan() {
-			rsc.addToLog(digest, runKey, sc.Text())
+			rsc.updateRunState(digest, runKey, false, sc.Text())
 		}
 		done <- true
 		close(done)
@@ -327,11 +246,17 @@ func (rsc *RunStateCatalog) startModelExec(modelDigest string, modelName string,
 		e = cmd.Wait()
 		if e != nil {
 			omppLog.Log(e)
-			rsc.addToLog(digest, runKey, e.Error())
+			rsc.updateRunState(digest, runKey, true, e.Error())
+			return
 		}
+		// else: completed OK
+		rsc.updateRunState(digest, runKey, true, "")
 	}
 
-	// run model and collect console output
+	// run state initialized: save in run state list
+	rsc.storeProcRunState(modelDigest, rs)
+
+	// start console output listners
 	go doLog(modelDigest, rs.RunKey, outPipe, outDoneC)
 	go doLog(modelDigest, rs.RunKey, errPipe, errDoneC)
 
@@ -339,9 +264,95 @@ func (rsc *RunStateCatalog) startModelExec(modelDigest string, modelName string,
 	err = cmd.Start()
 	if err != nil {
 		omppLog.Log("Model run error: ", err)
-		return rs, err
+		rsc.updateRunState(modelDigest, rs.RunKey, true, err.Error())
+		rs.IsFinal = true
+		return rs, err // exit with error: model failed to start
 	}
+	// else start model listener
 	go doRunWait(modelDigest, rs.RunKey, cmd)
-
 	return rs, nil
+}
+
+// update model run state
+func (rsc *RunStateCatalog) storeProcRunState(digest string, rs *RunState) {
+	if digest == "" || rs == nil {
+		return
+	}
+	rsc.rscLock.Lock()
+	defer rsc.rscLock.Unlock()
+
+	prs := &procRunState{}
+	prs.RunState = *rs
+	if prs.logLineLst == nil {
+		prs.logLineLst = make([]string, 0, 32)
+	}
+	rsc.runMap[digest] = prs
+}
+
+// updateRunState does model run state update and append to model log lines array
+func (rsc *RunStateCatalog) updateRunState(digest string, runKey string, isFinal bool, msg string) {
+	if digest == "" || runKey == "" {
+		return // model run undefined
+	}
+	dtNow := time.Now()
+
+	rsc.rscLock.Lock()
+	defer rsc.rscLock.Unlock()
+
+	// get model run state by digest
+	r, ok := rsc.runMap[digest]
+	if !ok {
+		return // model digest not found
+	}
+	if r.RunKey != runKey {
+		return // model run overriden, only last run stored
+	}
+
+	// make new log lines array if it is empty
+	if r.logLineLst == nil {
+		r.logLineLst = []string{}
+	}
+
+	// update run state and append new log line if not empty
+	r.IsFinal = isFinal
+	r.UpdateDateTime = helper.MakeDateTime(dtNow)
+	if msg != "" {
+		r.logLineLst = append(r.logLineLst, msg)
+	}
+}
+
+// For internal use only. Must be guarded with locks.
+//
+// getFromCurrentLog copy [strat, count] log lines from model log.
+// If count is zero or less then copy from start to the end of log.
+// Return current log line count and slice of log lines.
+func (rsc *RunStateCatalog) getFromCurrentLog(digest string, start int, count int) (int, int, int, []string) {
+
+	// get model run state by digest
+	r, ok := rsc.runMap[digest]
+	if !ok {
+		return 0, 0, 0, []string{} // model digest not found
+	}
+
+	if len(r.logLineLst) <= 0 { // log is empty
+		return 0, 0, 0, []string{}
+	}
+
+	// copy log lines
+	nLen := len(r.logLineLst)
+	nStart := start
+	if nStart < 0 {
+		nStart = 0
+	}
+	if nStart >= nLen {
+		return nStart, 0, nLen, []string{}
+	}
+	nCount := count
+	if nCount <= 0 || nStart+nCount > nLen {
+		nCount = nLen - nStart
+	}
+
+	ret := make([]string, nCount)
+	copy(ret, r.logLineLst[nStart:nStart+nCount])
+	return nStart, nCount, nLen, ret
 }
