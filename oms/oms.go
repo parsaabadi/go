@@ -1,6 +1,67 @@
 // Copyright (c) 2016 OpenM++
 // This code is licensed under the MIT license (see LICENSE.txt for details)
 
+/*
+oms is openM++ JSON web-service which is also used as simple web-server for openM++ UI html pages.
+
+Web-service allow to view and update model database(s) and run openM++ models from models/bin subdirectory.
+Web-server allow to serve static html (css, images, javascipt) content from html subdirectory.
+
+Arguments for oms can be specified on command line or through .ini file:
+  oms -ini my.ini
+Command line arguments take precedence over ini-file options.
+
+Following arguments supporetd by oms:
+
+  -oms.ApiOnly false
+if true then API only web-service, it is false by default and oms also act as http server for openM++ UI.
+
+  -oms.RootDir some/path
+root directory, default: current directory, must have html subdirectory unless -oms.ApiOnly true specified.
+
+  -oms.ModelDir models/bin
+models directory, default: models/bin, if relative then must be relative to root directory.
+It must contain model.sqlite database files and model executables.
+
+  -l localhost:4040
+  -oms.Listen localhost:4040
+address to listen, default: localhost:4040.
+Use -l :4040 if you need to access oms web-service from other computer (make sure firewall configured properly).
+
+  -oms.LogRequest false
+if true then log HTTP requests on console and/or log file.
+
+  -oms.ModelLogDir ../log
+models log directory, default: if relative then must be relative to models directory.
+Default value will produce model run log files in models/log subdirectory.
+
+  -oms.MaxRowCount 100
+default number of rows to return from read parameters or output tables, default: 100.
+This value is used if web-service method call does not provide explicit number of rows to read.
+
+  -oms.Languages en
+comma-separated list of supported languages, default: en.
+That list is matched with request language list and model language list in order to return proper text results.
+
+  -oms.DoubleFormat %.15g
+format to convert float or double value to string, default: %.15g.
+OpenM++ is using hash digest to compare models, input parameters and output values.
+By default float and double values converted into text with "%.15g" format.
+
+  -oms.CodePage
+"code page" to convert source file into utf-8, for example: windows-1252.
+It is used only for compatibility with old Windows files.
+
+Also oms support OpenM++ standard log settings (described in wiki at http://www.openmpp.org/wiki/):
+  -OpenM.LogToConsole:     if true then log to standard output, default: true
+  -OpenM.LogToFile:        if true then log to file
+  -OpenM.LogFilePath:      path to log file, default = current/dir/exeName.log
+  -OpenM.LogUseDailyStamp: if true then use dayily stamp in log file name (rotate log files dayily)
+  -OpenM.LogUseTs:         if true then use time-stamp in log file name
+  -OpenM.LogUsePid:        if true then use pid-stamp in log file name
+  -OpenM.LogNoMsgTime:     if true then do not prefix log messages with date-time
+  -OpenM.LogSql:           if true then log sql statements into log file
+*/
 package main
 
 import (
