@@ -20,7 +20,6 @@ That pair of input and output data called "run" and identified by run id (databa
 package db
 
 import (
-	"bytes"
 	"container/list"
 	"database/sql"
 	"errors"
@@ -174,11 +173,11 @@ func prepareSqlite(dbConnStr string) (string, string, error) {
 
 // make sql quoted string, ie: 'O''Brien'
 func toQuoted(src string) string {
-	var bt bytes.Buffer
-	bt.WriteRune('\'')
-	bt.WriteString(strings.Replace(src, "'", "''", -1))
-	bt.WriteRune('\'')
-	return bt.String()
+	var sb strings.Builder
+	sb.WriteRune('\'')
+	sb.WriteString(strings.Replace(src, "'", "''", -1))
+	sb.WriteRune('\'')
+	return sb.String()
 }
 
 // return "NULL" if string '' empty or return sql quoted string, ie: 'O''Brien'

@@ -62,22 +62,22 @@ func CleanSpecialChars(src string) string {
 // ToAlphaNumeric replace all non [A-Z,a-z,0-9] by _ underscore and remove repetitive underscores
 func ToAlphaNumeric(src string) string {
 
-	var bt bytes.Buffer
+	var sb strings.Builder
 	isPrevUnder := false
 
 	for _, r := range src {
 		if '0' <= r && r <= '9' || 'A' <= r && r <= 'Z' || 'a' <= r && r <= 'z' {
-			bt.WriteRune(r)
+			sb.WriteRune(r)
 			isPrevUnder = false
 		} else {
 			if isPrevUnder {
 				continue // skip repetitive underscore
 			}
-			bt.WriteRune('_')
+			sb.WriteRune('_')
 			isPrevUnder = true
 		}
 	}
-	return bt.String()
+	return sb.String()
 }
 
 // DeepCopy using gob to make a deep copy from src into dst, both src and dst expected to be a pointers
