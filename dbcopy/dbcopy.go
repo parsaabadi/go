@@ -69,6 +69,13 @@ If neccesary you can specify exact directory for input parameters by using "-dbc
   dbcopy -m modelOne -dbcopy.SetId 2 -p two
   dbcopy -m redModel -s Default -p 101 -dbcopy.To db -dbcopy.ToDatabase "Database=dst.sqlite;OpenMode=ReadWrite"
 
+Dbcopy create output directory and json file for each model run and input set with names like: modelName.run.MyRun.
+If run name not unique then modelName.run.NN.MyRun where NN is integer run id.
+To control usage of id's in directory name and (and file name) specify IdNames=true or IdNames=false:
+  dbcopy -m modelOne -dbcopy.To csv
+  dbcopy -m modelOne -dbcopy.To csv -dbcopy.IdNames=true
+  dbcopy -m modelOne -dbcopy.To csv -dbcopy.IdNames=false
+
 By default parameters and output results .csv files contain codes in dimension column(s), e.g.: Sex=[Male,Female].
 If you want to create csv files with numeric id's Sex=[0,1] instead then use IdCsv=true option:
   dbcopy -m modelOne -dbcopy.IdCsv
@@ -164,8 +171,18 @@ const (
 	zipArgKey          = "dbcopy.Zip"              // create output or use as input model.zip
 	doubleFormatArgKey = "dbcopy.DoubleFormat"     // convert to string format for float and double
 	useIdCsvArgKey     = "dbcopy.IdCsv"            // if true then create csv files with enum id's default: enum code
+	useIdNamesArgKey   = "dbcopy.IdNames"          // if true then always use id's in directory names, false never use it default: only if name conflict
 	encodingArgKey     = "dbcopy.CodePage"         // code page for converting source files, e.g. windows-1252
 	useUtf8CsvArgKey   = "dbcopy.Utf8BomIntoCsv"   // if true then write utf-8 BOM into csv file
+)
+
+// useIdNames is type to define how to make run and set directory and file names
+type useIdNames uint8
+
+const (
+	defaultUseIdNames useIdNames = iota // default db facet
+	yesUseIdNames                       // always use run and set id in directory and file names
+	noUseIdNames                        // never use run and set id in directory and file names
 )
 
 func main() {
@@ -205,6 +222,7 @@ func mainBody(args []string) error {
 	_ = flag.Bool(zipArgKey, false, "create output model.zip or use model.zip as input")
 	_ = flag.String(doubleFormatArgKey, "%.15g", "convert to string format for float and double")
 	_ = flag.Bool(useIdCsvArgKey, false, "if true then create csv files with enum id's default: enum code")
+	_ = flag.Bool(useIdNamesArgKey, false, "if true then always use id's in directory names, false never use it default: only if name conflict")
 	_ = flag.String(encodingArgKey, "", "code page to convert source file into utf-8, e.g.: windows-1252")
 	_ = flag.Bool(useUtf8CsvArgKey, false, "if true then write utf-8 BOM into csv file")
 

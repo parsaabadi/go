@@ -86,12 +86,23 @@ func dbToCsv(modelName string, modelDigest string, runOpts *config.RunOptions) e
 	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
 
-	if err = toRunListCsv(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom); err != nil {
+	// use of run and set id's in directory names:
+	// if true then always use id's in the names, false never use it default: only if name conflict
+	doUseIdNames := defaultUseIdNames
+	if runOpts.IsExist(useIdNamesArgKey) {
+		if runOpts.Bool(useIdNamesArgKey) {
+			doUseIdNames = yesUseIdNames
+		} else {
+			doUseIdNames = noUseIdNames
+		}
+	}
+
+	if err = toRunListCsv(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom, doUseIdNames); err != nil {
 		return err
 	}
 
 	// write all readonly workset data into csv files: input parameters
-	if err = toWorksetListCsv(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom); err != nil {
+	if err = toWorksetListCsv(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom, doUseIdNames); err != nil {
 		return err
 	}
 

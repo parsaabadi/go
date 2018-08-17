@@ -22,7 +22,8 @@ func toWorksetListCsv(
 	outDir string,
 	doubleFmt string,
 	isIdCsv bool,
-	isWriteUtf8bom bool) error {
+	isWriteUtf8bom bool,
+	doUseIdNames useIdNames) error {
 
 	// get all readonly worksets
 	wl, err := db.GetWorksetFullList(dbConn, modelDef.Model.ModelId, true, "")
@@ -32,7 +33,10 @@ func toWorksetListCsv(
 
 	// read all workset parameters and dump it into csv files
 	for k := range wl {
-		err = toWorksetCsv(dbConn, modelDef, &wl[k], outDir, doubleFmt, isIdCsv, isWriteUtf8bom)
+
+		isSetIdName := doUseIdNames == yesUseIdNames // usage of id's to make names: yes, no, default
+
+		err = toWorksetCsv(dbConn, modelDef, &wl[k], outDir, doubleFmt, isIdCsv, isWriteUtf8bom, isSetIdName)
 		if err != nil {
 			return err
 		}
@@ -225,13 +229,20 @@ func toWorksetCsv(
 	outDir string,
 	doubleFmt string,
 	isIdCsv bool,
-	isWriteUtf8bom bool) error {
+	isWriteUtf8bom bool,
+	isSetIdName bool) error {
 
 	// create workset subdir under output dir
 	setId := meta.Set.SetId
 	omppLog.Log("Workset ", setId, " ", meta.Set.Name)
 
-	csvDir := filepath.Join(outDir, "set."+strconv.Itoa(setId)+"."+helper.ToAlphaNumeric(meta.Set.Name))
+	// make output directory as set.Name_Of_the_Set or as set.NN.Name_Of_the_Set
+	var csvDir string
+	if !isSetIdName {
+		csvDir = filepath.Join(outDir, "set."+helper.ToAlphaNumeric(meta.Set.Name))
+	} else {
+		csvDir = filepath.Join(outDir, "set."+strconv.Itoa(setId)+"."+helper.ToAlphaNumeric(meta.Set.Name))
+	}
 
 	err := os.MkdirAll(csvDir, 0750)
 	if err != nil {

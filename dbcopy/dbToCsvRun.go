@@ -22,7 +22,8 @@ func toRunListCsv(
 	outDir string,
 	doubleFmt string,
 	isIdCsv bool,
-	isWriteUtf8bom bool) error {
+	isWriteUtf8bom bool,
+	doUseIdNames useIdNames) error {
 
 	// get all successfully completed model runs
 	rl, err := db.GetRunFullList(dbConn, modelDef.Model.ModelId, true, "")
@@ -32,7 +33,17 @@ func toRunListCsv(
 
 	// read all run parameters, output accumulators and expressions and dump it into csv files
 	for k := range rl {
-		err = toRunCsv(dbConn, modelDef, &rl[k], outDir, doubleFmt, isIdCsv, isWriteUtf8bom)
+
+		isRunIdName := doUseIdNames == yesUseIdNames // usage of id's to make names: yes, no, default
+		if doUseIdNames == defaultUseIdNames {
+			for i := range rl[:k] {
+				if isRunIdName = rl[i].Run.Name == rl[k].Run.Name; isRunIdName {
+					break
+				}
+			}
+		}
+
+		err = toRunCsv(dbConn, modelDef, &rl[k], outDir, doubleFmt, isIdCsv, isWriteUtf8bom, isRunIdName)
 		if err != nil {
 			return err
 		}
@@ -262,13 +273,20 @@ func toRunCsv(
 	outDir string,
 	doubleFmt string,
 	isIdCsv bool,
-	isWriteUtf8bom bool) error {
+	isWriteUtf8bom bool,
+	isRunIdName bool) error {
 
 	// create run subdir under model dir
 	runId := meta.Run.RunId
 	omppLog.Log("Model run ", runId, " ", meta.Run.Name)
 
-	csvDir := filepath.Join(outDir, "run."+strconv.Itoa(runId)+"."+helper.ToAlphaNumeric(meta.Run.Name))
+	// make output directory as run.Name_Of_the_Run or run.NN.Name_Of_the_Run
+	var csvDir string
+	if !isRunIdName {
+		csvDir = filepath.Join(outDir, "run."+helper.ToAlphaNumeric(meta.Run.Name))
+	} else {
+		csvDir = filepath.Join(outDir, "run."+strconv.Itoa(runId)+"."+helper.ToAlphaNumeric(meta.Run.Name))
+	}
 
 	err := os.MkdirAll(csvDir, 0750)
 	if err != nil {
