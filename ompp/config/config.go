@@ -67,7 +67,7 @@ type FullShort struct {
 	Short string // short option name
 }
 
-// New process command-line arguments and ini-file options.
+// New combines command-line arguments and ini-file options.
 //
 // encodingKey, if not empty, is a name of command-line option
 // to specify encoding (code page) of source text files,
