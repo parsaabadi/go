@@ -34,9 +34,9 @@ func toWorksetListCsv(
 	// read all workset parameters and dump it into csv files
 	for k := range wl {
 
-		isSetIdName := doUseIdNames == yesUseIdNames // usage of id's to make names: yes, no, default
+		isUseIdNames := doUseIdNames == yesUseIdNames // usage of id's to make names: yes, no, default
 
-		err = toWorksetCsv(dbConn, modelDef, &wl[k], outDir, doubleFmt, isIdCsv, isWriteUtf8bom, isSetIdName)
+		err = toWorksetCsv(dbConn, modelDef, &wl[k], outDir, doubleFmt, isIdCsv, isWriteUtf8bom, isUseIdNames)
 		if err != nil {
 			return err
 		}
@@ -230,7 +230,7 @@ func toWorksetCsv(
 	doubleFmt string,
 	isIdCsv bool,
 	isWriteUtf8bom bool,
-	isSetIdName bool) error {
+	isUseIdNames bool) error {
 
 	// create workset subdir under output dir
 	setId := meta.Set.SetId
@@ -238,7 +238,7 @@ func toWorksetCsv(
 
 	// make output directory as set.Name_Of_the_Set or as set.NN.Name_Of_the_Set
 	var csvDir string
-	if !isSetIdName {
+	if !isUseIdNames {
 		csvDir = filepath.Join(outDir, "set."+helper.ToAlphaNumeric(meta.Set.Name))
 	} else {
 		csvDir = filepath.Join(outDir, "set."+strconv.Itoa(setId)+"."+helper.ToAlphaNumeric(meta.Set.Name))

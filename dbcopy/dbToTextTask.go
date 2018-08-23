@@ -38,6 +38,11 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 		return errors.New("dbcopy invalid argument(s) for task id: " + runOpts.String(taskIdArgKey) + " and/or task name: " + runOpts.String(taskNameArgKey))
 	}
 
+	// use of run and set id's in directory names:
+	// do this by default or if use id name = true
+	// only if use id name = false then do not use id's in directory names
+	isUseIdNames := !runOpts.IsExist(useIdNamesArgKey) || runOpts.Bool(useIdNamesArgKey)
+
 	// open source database connection and check is it valid
 	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(dbConnStrArgKey), runOpts.String(dbDriverArgKey))
 	srcDb, _, err := db.Open(cs, dn, false)
@@ -91,7 +96,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 	}
 
 	// write task metadata into json file
-	if err = toTaskJson(srcDb, modelDef, meta, outDir); err != nil {
+	if err = toTaskJson(srcDb, modelDef, meta, outDir, isUseIdNames); err != nil {
 		return err
 	}
 
@@ -137,7 +142,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 			}
 
 			// write model run metadata into json, parameters and output result values into csv files
-			if err = toRunText(srcDb, modelDef, rm, outDir, dblFmt, isIdCsv, isWriteUtf8bom); err != nil {
+			if err = toRunText(srcDb, modelDef, rm, outDir, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames); err != nil {
 				return err
 			}
 		}
@@ -177,7 +182,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 		}
 
 		// write workset metadata into json and parameter values into csv files
-		if err = toWorksetText(dbConn, modelDef, wm, outDir, dblFmt, isIdCsv, isWriteUtf8bom); err != nil {
+		if err = toWorksetText(dbConn, modelDef, wm, outDir, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames); err != nil {
 			return err
 		}
 		return nil
@@ -226,7 +231,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 }
 
 // toTaskListJson convert all successfully completed tasks and tasks run history to json and write into json files
-func toTaskListJson(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
+func toTaskListJson(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, isUseIdNames bool) error {
 
 	// get all modeling tasks and successfully completed tasks run history
 	tl, err := db.GetTaskFullList(dbConn, modelDef.Model.ModelId, true, "")
@@ -236,7 +241,7 @@ func toTaskListJson(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error
 
 	// read each task metadata and write into json files
 	for k := range tl {
-		if err := toTaskJson(dbConn, modelDef, &tl[k], outDir); err != nil {
+		if err := toTaskJson(dbConn, modelDef, &tl[k], outDir, isUseIdNames); err != nil {
 			return err
 		}
 	}
@@ -244,7 +249,7 @@ func toTaskListJson(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error
 }
 
 // toTaskJson convert modeling task and task run history to json and write into json file
-func toTaskJson(dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.TaskMeta, outDir string) error {
+func toTaskJson(dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.TaskMeta, outDir string, isUseIdNames bool) error {
 
 	// convert db rows into "public" format
 	omppLog.Log("Modeling task ", meta.Task.TaskId, " ", meta.Task.Name)
@@ -255,9 +260,12 @@ func toTaskJson(dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.TaskMeta, outDi
 	}
 
 	// save modeling task metadata into json
-	err = helper.ToJsonFile(filepath.Join(
-		outDir,
-		modelDef.Model.Name+".task."+strconv.Itoa(meta.Task.TaskId)+"."+helper.ToAlphaNumeric(meta.Task.Name)+".json"),
-		pub)
-	return err
+	var fname string
+	if !isUseIdNames {
+		fname = modelDef.Model.Name + ".task." + helper.ToAlphaNumeric(meta.Task.Name) + ".json"
+	} else {
+		fname = modelDef.Model.Name + ".task." + strconv.Itoa(meta.Task.TaskId) + "." + helper.ToAlphaNumeric(meta.Task.Name) + ".json"
+	}
+
+	return helper.ToJsonFile(filepath.Join(outDir, fname), pub)
 }

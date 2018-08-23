@@ -34,16 +34,16 @@ func toRunListCsv(
 	// read all run parameters, output accumulators and expressions and dump it into csv files
 	for k := range rl {
 
-		isRunIdName := doUseIdNames == yesUseIdNames // usage of id's to make names: yes, no, default
+		isUseIdNames := doUseIdNames == yesUseIdNames // usage of id's to make names: yes, no, default
 		if doUseIdNames == defaultUseIdNames {
-			for i := range rl[:k] {
-				if isRunIdName = rl[i].Run.Name == rl[k].Run.Name; isRunIdName {
+			for i := range rl {
+				if isUseIdNames = i != k && rl[i].Run.Name == rl[k].Run.Name; isUseIdNames {
 					break
 				}
 			}
 		}
 
-		err = toRunCsv(dbConn, modelDef, &rl[k], outDir, doubleFmt, isIdCsv, isWriteUtf8bom, isRunIdName)
+		err = toRunCsv(dbConn, modelDef, &rl[k], outDir, doubleFmt, isIdCsv, isWriteUtf8bom, isUseIdNames)
 		if err != nil {
 			return err
 		}
@@ -274,7 +274,7 @@ func toRunCsv(
 	doubleFmt string,
 	isIdCsv bool,
 	isWriteUtf8bom bool,
-	isRunIdName bool) error {
+	isUseIdNames bool) error {
 
 	// create run subdir under model dir
 	runId := meta.Run.RunId
@@ -282,7 +282,7 @@ func toRunCsv(
 
 	// make output directory as run.Name_Of_the_Run or run.NN.Name_Of_the_Run
 	var csvDir string
-	if !isRunIdName {
+	if !isUseIdNames {
 		csvDir = filepath.Join(outDir, "run."+helper.ToAlphaNumeric(meta.Run.Name))
 	} else {
 		csvDir = filepath.Join(outDir, "run."+strconv.Itoa(runId)+"."+helper.ToAlphaNumeric(meta.Run.Name))

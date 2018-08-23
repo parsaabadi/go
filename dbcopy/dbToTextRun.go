@@ -97,11 +97,16 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 		return err
 	}
 
+	// use of run and set id's in directory names:
+	// do this by default or if use id name = true
+	// only if use id name = false then do not use id's in directory names
+	isUseIdNames := !runOpts.IsExist(useIdNamesArgKey) || runOpts.Bool(useIdNamesArgKey)
+
 	// write model run metadata into json, parameters and output result values into csv files
 	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
 	isWriteUtf8bom := runOpts.Bool(useUtf8CsvArgKey)
-	if err = toRunText(srcDb, modelDef, meta, outDir, dblFmt, isIdCsv, isWriteUtf8bom); err != nil {
+	if err = toRunText(srcDb, modelDef, meta, outDir, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames); err != nil {
 		return err
 	}
 
@@ -119,7 +124,7 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 
 // toRunListText write all model runs parameters and output tables into csv files, each run in separate subdirectory
 func toRunListText(
-	dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleFmt string, isIdCsv bool, isWriteUtf8bom bool) error {
+	dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleFmt string, isIdCsv bool, isWriteUtf8bom bool, isUseIdNames bool) error {
 
 	// get all successfully completed model runs
 	rl, err := db.GetRunFullList(dbConn, modelDef.Model.ModelId, true, "")
@@ -129,7 +134,7 @@ func toRunListText(
 
 	// read all run parameters, output accumulators and expressions and dump it into csv files
 	for k := range rl {
-		err = toRunText(dbConn, modelDef, &rl[k], outDir, doubleFmt, isIdCsv, isWriteUtf8bom)
+		err = toRunText(dbConn, modelDef, &rl[k], outDir, doubleFmt, isIdCsv, isWriteUtf8bom, isUseIdNames)
 		if err != nil {
 			return err
 		}
@@ -138,6 +143,8 @@ func toRunListText(
 }
 
 // toRunText write model run metadata, parameters and output tables into csv files, in separate subdirectory
+// by default file name and directory name include run id: modelName.run.1234.RunName
+// user can explicitly disable it by IdNames=false
 func toRunText(
 	dbConn *sql.DB,
 	modelDef *db.ModelMeta,
@@ -145,7 +152,8 @@ func toRunText(
 	outDir string,
 	doubleFmt string,
 	isIdCsv bool,
-	isWriteUtf8bom bool) error {
+	isWriteUtf8bom bool,
+	isUseIdNames bool) error {
 
 	// convert db rows into "public" format
 	runId := meta.Run.RunId
@@ -157,7 +165,12 @@ func toRunText(
 	}
 
 	// create run subdir under model dir
-	csvName := "run." + strconv.Itoa(runId) + "." + helper.ToAlphaNumeric(pub.Name)
+	var csvName string
+	if !isUseIdNames {
+		csvName = "run." + helper.ToAlphaNumeric(pub.Name)
+	} else {
+		csvName = "run." + strconv.Itoa(runId) + "." + helper.ToAlphaNumeric(pub.Name)
+	}
 	csvDir := filepath.Join(outDir, csvName)
 
 	err = os.MkdirAll(csvDir, 0750)

@@ -87,7 +87,8 @@ func dbToCsv(modelName string, modelDigest string, runOpts *config.RunOptions) e
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
 
 	// use of run and set id's in directory names:
-	// if true then always use id's in the names, false never use it default: only if name conflict
+	// if true then always use id's in the names, false never use it
+	// by default: only if name conflict
 	doUseIdNames := defaultUseIdNames
 	if runOpts.IsExist(useIdNamesArgKey) {
 		if runOpts.Bool(useIdNamesArgKey) {

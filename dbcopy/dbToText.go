@@ -52,22 +52,27 @@ func dbToText(modelName string, modelDigest string, runOpts *config.RunOptions) 
 		return err
 	}
 
+	// use of run and set id's in directory names:
+	// do this by default or if use id name = true
+	// only if use id name = false then do not use id's in directory names
+	isUseIdNames := !runOpts.IsExist(useIdNamesArgKey) || runOpts.Bool(useIdNamesArgKey)
+
 	// write all model run data into csv files: parameters, output expressions and accumulators
 	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
 	isWriteUtf8bom := runOpts.Bool(useUtf8CsvArgKey)
 
-	if err = toRunListText(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom); err != nil {
+	if err = toRunListText(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames); err != nil {
 		return err
 	}
 
 	// write all readonly workset data into csv files: input parameters
-	if err = toWorksetListText(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom); err != nil {
+	if err = toWorksetListText(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames); err != nil {
 		return err
 	}
 
 	// write all modeling tasks and task run history to json files
-	if err = toTaskListJson(srcDb, modelDef, outDir); err != nil {
+	if err = toTaskListJson(srcDb, modelDef, outDir, isUseIdNames); err != nil {
 		return err
 	}
 

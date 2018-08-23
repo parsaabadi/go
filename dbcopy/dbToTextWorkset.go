@@ -105,12 +105,17 @@ func dbToTextWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 		return err
 	}
 
+	// use of run and set id's in directory names:
+	// do this by default or if use id name = true
+	// only if use id name = false then do not use id's in directory names
+	isUseIdNames := !runOpts.IsExist(useIdNamesArgKey) || runOpts.Bool(useIdNamesArgKey)
+
 	// write workset metadata into json and parameter values into csv files
 	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
 	isWriteUtf8bom := runOpts.Bool(useUtf8CsvArgKey)
 
-	if err = toWorksetText(srcDb, modelDef, wm, outDir, dblFmt, isIdCsv, isWriteUtf8bom); err != nil {
+	if err = toWorksetText(srcDb, modelDef, wm, outDir, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames); err != nil {
 		return err
 	}
 
@@ -128,7 +133,7 @@ func dbToTextWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 
 // toWorksetListText write all readonly worksets into csv files, each set in separate subdirectory
 func toWorksetListText(
-	dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleFmt string, isIdCsv bool, isWriteUtf8bom bool) error {
+	dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleFmt string, isIdCsv bool, isWriteUtf8bom bool, isUseIdNames bool) error {
 
 	// get all readonly worksets
 	wl, err := db.GetWorksetFullList(dbConn, modelDef.Model.ModelId, true, "")
@@ -138,7 +143,7 @@ func toWorksetListText(
 
 	// read all workset parameters and dump it into csv files
 	for k := range wl {
-		err = toWorksetText(dbConn, modelDef, &wl[k], outDir, doubleFmt, isIdCsv, isWriteUtf8bom)
+		err = toWorksetText(dbConn, modelDef, &wl[k], outDir, doubleFmt, isIdCsv, isWriteUtf8bom, isUseIdNames)
 		if err != nil {
 			return err
 		}
@@ -147,6 +152,8 @@ func toWorksetListText(
 }
 
 // toWorksetText write workset into csv file, in separate subdirectory
+// by default file name and directory name include set id: modelName.set.1234.SetName
+// user can explicitly disable it by IdNames=false
 func toWorksetText(
 	dbConn *sql.DB,
 	modelDef *db.ModelMeta,
@@ -154,7 +161,8 @@ func toWorksetText(
 	outDir string,
 	doubleFmt string,
 	isIdCsv bool,
-	isWriteUtf8bom bool) error {
+	isWriteUtf8bom bool,
+	isUseIdNames bool) error {
 
 	// convert db rows into "public" format
 	setId := meta.Set.SetId
@@ -166,7 +174,12 @@ func toWorksetText(
 	}
 
 	// create workset subdir under output dir
-	csvName := "set." + strconv.Itoa(setId) + "." + helper.ToAlphaNumeric(pub.Name)
+	var csvName string
+	if !isUseIdNames {
+		csvName = "set." + helper.ToAlphaNumeric(pub.Name)
+	} else {
+		csvName = "set." + strconv.Itoa(setId) + "." + helper.ToAlphaNumeric(pub.Name)
+	}
 	csvDir := filepath.Join(outDir, csvName)
 
 	err = os.MkdirAll(csvDir, 0750)

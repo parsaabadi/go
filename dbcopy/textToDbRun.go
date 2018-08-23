@@ -8,8 +8,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
+	"strings"
 
 	"go.openmpp.org/ompp/config"
 	"go.openmpp.org/ompp/db"
@@ -34,8 +34,9 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 	}
 
 	// root for run data: input directory or name of input.zip
-	// it is input directory/modelName.run.id or input directory/modelName.run.runName
-	// for csv files this "root" combined subdirectory: root/run.id.runName
+	// it is input directory/modelName.run.id
+	// or input directory/modelName.run.runName
+	// for csv files this "root" combined subdirectory: root/run.id.runName or root/run.runName
 	inpDir := ""
 	if runId > 0 {
 		inpDir = filepath.Join(runOpts.String(inputDirArgKey), modelName+".run."+strconv.Itoa(runId))
@@ -57,26 +58,22 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 
 	// get model run metadata json path and csv directory by run id or run name or both
 	var metaPath string
-	var csvDir string
 
 	if runOpts.IsExist(runNameArgKey) && runOpts.IsExist(runIdArgKey) { // both: run id and name
 
 		metaPath = filepath.Join(inpDir,
 			modelName+".run."+strconv.Itoa(runId)+"."+helper.ToAlphaNumeric(runName)+".json")
-		csvDir = filepath.Join(inpDir,
-			"run."+strconv.Itoa(runId)+"."+helper.ToAlphaNumeric(runName))
 
 	} else { // run id or run name only
 
 		// make path search patterns for metadata json and csv directory
-		var cp string
+		var mp string
 		if runOpts.IsExist(runNameArgKey) && !runOpts.IsExist(runIdArgKey) { // run name only
-			cp = "run.[0-9]*." + helper.ToAlphaNumeric(runName)
+			mp = modelName + ".run.*" + helper.ToAlphaNumeric(runName) + ".json"
 		}
 		if !runOpts.IsExist(runNameArgKey) && runOpts.IsExist(runIdArgKey) { // run id only
-			cp = "run." + strconv.Itoa(runId) + ".*"
+			mp = modelName + ".run." + strconv.Itoa(runId) + ".*.json"
 		}
-		mp := modelName + "." + cp + ".json"
 
 		// find path to metadata json by pattern
 		fl, err := filepath.Glob(inpDir + "/" + mp)
@@ -90,36 +87,18 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 		if len(fl) > 1 {
 			omppLog.Log("found multiple model run metadata json files, using: " + filepath.Base(metaPath))
 		}
-
-		// csv directory: check if csv directory exist for that json file
-		re := regexp.MustCompile("\\.run\\.([0-9]+)\\.((_|[0-9A-Za-z])+)\\.json")
-		s := re.FindString(filepath.Base(metaPath))
-
-		if len(s) > 6 { // expected match string: .run.4.q.json, csv directory: run.4.q
-			csvDir = filepath.Join(inpDir, s[1:len(s)-5])
-		}
 	}
 
 	// check results: metadata json file or csv directory must exist
 	if metaPath == "" {
 		return errors.New("no metadata json file found for model run: " + strconv.Itoa(runId) + " " + runName)
 	}
-	if csvDir == "" {
-		return errors.New("no csv directory found for model run: " + strconv.Itoa(runId) + " " + runName)
-	}
 	if _, err := os.Stat(metaPath); err != nil {
 		return errors.New("no metadata json file found for model run: " + strconv.Itoa(runId) + " " + runName)
-	}
-	if _, err := os.Stat(csvDir); err != nil {
-		return errors.New("no csv directory found for model run: " + strconv.Itoa(runId) + " " + runName)
 	}
 
 	// get connection string and driver name
 	cs := runOpts.String(toDbConnStrArgKey)
-	// use OpenM options if DBCopy ouput database not defined
-	//	if cs == "" && runOpts.IsExist(dbConnStrArgKey) {
-	//		cs = runOpts.String(dbConnStrArgKey)
-	//	}
 
 	dn := runOpts.String(toDbDriverArgKey)
 	if dn == "" && runOpts.IsExist(dbDriverArgKey) {
@@ -153,13 +132,14 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 	}
 
 	// read from metadata json and csv files and update target database
+	dblFmt := runOpts.String(doubleFormatArgKey)
 	encName := runOpts.String(encodingArgKey)
 
-	srcId, _, err := fromRunTextToDb(dstDb, modelDef, langDef, runName, runId, metaPath, csvDir, encName)
+	dstId, err := fromRunTextToDb(dstDb, modelDef, langDef, runName, metaPath, dblFmt, encName)
 	if err != nil {
 		return err
 	}
-	if srcId <= 0 {
+	if dstId <= 0 {
 		return errors.New("model run not found or empty: " + strconv.Itoa(runId) + " " + runName)
 	}
 
@@ -174,7 +154,7 @@ func fromRunTextListToDb(
 ) error {
 
 	// get list of model run json files
-	fl, err := filepath.Glob(inpDir + "/" + modelDef.Model.Name + ".run.[0-9]*.*.json")
+	fl, err := filepath.Glob(inpDir + "/" + modelDef.Model.Name + ".run.*.json")
 	if err != nil {
 		return err
 	}
@@ -188,7 +168,7 @@ func fromRunTextListToDb(
 	// update model run digest
 	for k := range fl {
 
-		_, _, err := fromRunTextToDb(dbConn, modelDef, langDef, "", 0, fl[k], doubleFmt, encodingName)
+		_, err := fromRunTextToDb(dbConn, modelDef, langDef, "", fl[k], doubleFmt, encodingName)
 		if err != nil {
 			return err
 		}
@@ -198,17 +178,18 @@ func fromRunTextListToDb(
 }
 
 // fromRunTextToDb read model run metadata from json file,
-// read from csv files parameter values, output tables values convert it to db cells and insert into database,
+// read from csv files parameter values and output tables values,
+// convert it to db cells and insert into database,
 // and finally update model run digest.
 // Double format is used for float model types digest calculation, if non-empty format supplied
 // it return source run id (run id from metadata json file) and destination run id
 func fromRunTextToDb(
-	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, srcName string, srcId int, metaPath string, doubleFmt string, encodingName string,
-) (int, int, error) {
+	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, srcName string, metaPath string, doubleFmt string, encodingName string,
+) (int, error) {
 
 	// if no metadata file then exit: nothing to do
 	if metaPath == "" {
-		return 0, 0, nil // no model run metadata
+		return 0, nil // no model run metadata
 	}
 
 	// get model run metadata
@@ -216,51 +197,44 @@ func fromRunTextToDb(
 	var pub db.RunPub
 	isExist, err := helper.FromJsonFile(metaPath, &pub)
 	if err != nil {
-		return 0, 0, err
+		return 0, err
 	}
 	if !isExist {
-		return 0, 0, nil // no model run
-	}
-
-	// run id: parse json file name to get source run id
-	if srcId <= 0 {
-		re := regexp.MustCompile("\\.run\\.([0-9]+)\\.")
-		s2 := re.FindStringSubmatch(filepath.Base(metaPath))
-		if len(s2) >= 2 {
-			srcId, _ = strconv.Atoi(s2[1]) // if any error source run id remain default zero
-		}
-	}
-
-	// run name: use run name from json metadata, if empty
-	if pub.Name != "" && srcName != pub.Name {
-		srcName = pub.Name
+		return 0, nil // no model run
 	}
 
 	// check if run subdir exist
-	csvDir := filepath.Join(filepath.Dir(metaPath), "run."+strconv.Itoa(srcId)+"."+helper.ToAlphaNumeric(pub.Name))
+	d, f := filepath.Split(metaPath)
+	c := strings.TrimSuffix(strings.TrimPrefix(f, pub.ModelName+"."), ".json")
 
+	csvDir := filepath.Join(d, c)
 	if _, err := os.Stat(csvDir); err != nil {
-		return 0, 0, errors.New("run directory not found: " + strconv.Itoa(srcId) + " " + pub.Name)
+		return 0, errors.New("csv run directory not found: " + c)
+	}
+
+	// run name: use run name from json metadata if json metadata not empty, else use supplied run name
+	if pub.Name != "" && srcName != pub.Name {
+		srcName = pub.Name
 	}
 
 	// destination: convert from "public" format into destination db rows
 	meta, err := pub.FromPublic(dbConn, modelDef)
 	if err != nil {
-		return 0, 0, err
+		return 0, err
 	}
 
 	// save model run
 	isExist, err = meta.UpdateRun(dbConn, modelDef, langDef)
 	if err != nil {
-		return 0, 0, err
+		return 0, err
 	}
 	dstId := meta.Run.RunId
 	if isExist { // exit if model run already exist
-		omppLog.Log("Model run ", srcId, " ", srcName, " already exists as ", dstId)
-		return srcId, dstId, nil
+		omppLog.Log("Model run ", srcName, " already exists as ", dstId)
+		return dstId, nil
 	}
 
-	omppLog.Log("Model run from ", srcId, " ", srcName, " to ", dstId)
+	omppLog.Log("Model run from ", srcName, " into id: ", dstId)
 
 	// restore run parameters: all model parameters must be included in the run
 	paramLt := db.WriteParamLayout{
@@ -274,10 +248,10 @@ func fromRunTextToDb(
 		var cell db.CellParam
 		cLst, err := fromCsvFile(csvDir, modelDef, modelDef.Param[j].Name, meta.Param[j].SubCount, &cell, encodingName)
 		if err != nil {
-			return 0, 0, err
+			return 0, err
 		}
 		if cLst == nil || cLst.Len() <= 0 {
-			return 0, 0, errors.New("run: " + strconv.Itoa(srcId) + " " + meta.Run.Name + " parameter empty: " + modelDef.Param[j].Name)
+			return 0, errors.New("run: " + meta.Run.Name + " parameter empty: " + modelDef.Param[j].Name)
 		}
 
 		// insert parameter values in model run
@@ -285,7 +259,7 @@ func fromRunTextToDb(
 		paramLt.SubCount = meta.Param[j].SubCount
 
 		if err = db.WriteParameter(dbConn, modelDef, &paramLt, cLst); err != nil {
-			return 0, 0, err
+			return 0, err
 		}
 	}
 
@@ -300,20 +274,20 @@ func fromRunTextToDb(
 		var ca db.CellAcc
 		acLst, err := fromCsvFile(csvDir, modelDef, modelDef.Table[j].Name, meta.Run.SubCount, &ca, encodingName)
 		if err != nil {
-			return 0, 0, err
+			return 0, err
 		}
 
 		// read output table expression(s) values from csv file
 		var ce db.CellExpr
 		ecLst, err := fromCsvFile(csvDir, modelDef, modelDef.Table[j].Name, meta.Run.SubCount, &ce, encodingName)
 		if err != nil {
-			return 0, 0, err
+			return 0, err
 		}
 
 		// insert output table values (accumulators and expressions) in model run
 		tblLt.Name = modelDef.Table[j].Name
 		if err = db.WriteOutputTable(dbConn, modelDef, &tblLt, acLst, ecLst); err != nil {
-			return 0, 0, err
+			return 0, err
 		}
 	}
 
@@ -322,10 +296,10 @@ func fromRunTextToDb(
 
 		sd, err := db.UpdateRunDigest(dbConn, dstId)
 		if err != nil {
-			return 0, 0, err
+			return 0, err
 		}
 		meta.Run.Digest = sd
 	}
 
-	return srcId, dstId, nil
+	return dstId, nil
 }

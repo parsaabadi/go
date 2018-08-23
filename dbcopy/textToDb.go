@@ -28,10 +28,6 @@ func textToDb(modelName string, runOpts *config.RunOptions) error {
 
 	// get connection string and driver name
 	cs := runOpts.String(toDbConnStrArgKey)
-	// use OpenM options if DBCopy ouput database not defined
-	//	if cs == "" && runOpts.IsExist(dbConnStrArgKey) {
-	//		cs = runOpts.String(dbConnStrArgKey)
-	//	}
 
 	dn := runOpts.String(toDbDriverArgKey)
 	if dn == "" && runOpts.IsExist(dbDriverArgKey) {
