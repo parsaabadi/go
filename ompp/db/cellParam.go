@@ -132,7 +132,7 @@ func (CellParam) CsvToIdRow(
 // Converter will retrun error if len(row) not equal to number of fields in csv record.
 // Double format string is used if parameter type is float, double, long double
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
-// If parameter type is enum based then cell value is enum id and csv row value is enum code.
+// If parameter type is enum based then csv row value is enum code and cell value is enum id.
 func (CellParam) CsvToRow(
 	modelDef *ModelMeta, name string, doubleFmt string, valueName string) (
 	func(interface{}, []string) error, error) {
@@ -258,7 +258,7 @@ func (CellParam) CsvToRow(
 //
 // It does retrun error if len(row) not equal to number of fields in cell db-record.
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
-// If parameter type is enum based then cell value is enum id and csv row value is enum code.
+// If parameter type is enum based then csv row value is enum code and cell value is enum id.
 func (CellParam) CsvToCell(
 	modelDef *ModelMeta, name string, subCount int, valueName string) (
 	func(row []string) (interface{}, error), error) {

@@ -21,7 +21,7 @@ import (
 type lineCsvConverter func() (isEof bool, row []string, err error)
 
 // write model metadata from database into text csv files
-func dbToCsv(modelName string, modelDigest string, runOpts *config.RunOptions) error {
+func dbToCsv(modelName string, modelDigest string, isAllInOne bool, runOpts *config.RunOptions) error {
 
 	// open source database connection and check is it valid
 	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(dbConnStrArgKey), runOpts.String(dbDriverArgKey))
@@ -98,12 +98,12 @@ func dbToCsv(modelName string, modelDigest string, runOpts *config.RunOptions) e
 		}
 	}
 
-	if err = toRunListCsv(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom, doUseIdNames); err != nil {
+	if err = toRunListCsv(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom, doUseIdNames, isAllInOne); err != nil {
 		return err
 	}
 
 	// write all readonly workset data into csv files: input parameters
-	if err = toWorksetListCsv(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom, doUseIdNames); err != nil {
+	if err = toWorksetListCsv(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom, doUseIdNames, isAllInOne); err != nil {
 		return err
 	}
 

@@ -23,7 +23,8 @@ func toRunListCsv(
 	doubleFmt string,
 	isIdCsv bool,
 	isWriteUtf8bom bool,
-	doUseIdNames useIdNames) error {
+	doUseIdNames useIdNames,
+	isAllInOne bool) error {
 
 	// get all successfully completed model runs
 	rl, err := db.GetRunFullList(dbConn, modelDef.Model.ModelId, true, "")
@@ -43,7 +44,8 @@ func toRunListCsv(
 			}
 		}
 
-		err = toRunCsv(dbConn, modelDef, &rl[k], outDir, doubleFmt, isIdCsv, isWriteUtf8bom, isUseIdNames)
+		err = toRunCsv(
+			dbConn, modelDef, &rl[k], outDir, doubleFmt, isIdCsv, isWriteUtf8bom, isUseIdNames, k > 0, isAllInOne)
 		if err != nil {
 			return err
 		}
@@ -274,18 +276,25 @@ func toRunCsv(
 	doubleFmt string,
 	isIdCsv bool,
 	isWriteUtf8bom bool,
-	isUseIdNames bool) error {
+	isUseIdNames bool,
+	isNextRun bool,
+	isAllInOne bool) error {
 
 	// create run subdir under model dir
 	runId := meta.Run.RunId
 	omppLog.Log("Model run ", runId, " ", meta.Run.Name)
 
-	// make output directory as run.Name_Of_the_Run or run.NN.Name_Of_the_Run
+	// make output directory as one of:
+	// all_model_runs, run.Name_Of_the_Run, run.NN.Name_Of_the_Run
 	var csvDir string
-	if !isUseIdNames {
-		csvDir = filepath.Join(outDir, "run."+helper.ToAlphaNumeric(meta.Run.Name))
+	if isAllInOne {
+		csvDir = filepath.Join(outDir, "all_model_runs")
 	} else {
-		csvDir = filepath.Join(outDir, "run."+strconv.Itoa(runId)+"."+helper.ToAlphaNumeric(meta.Run.Name))
+		if !isUseIdNames {
+			csvDir = filepath.Join(outDir, "run."+helper.ToAlphaNumeric(meta.Run.Name))
+		} else {
+			csvDir = filepath.Join(outDir, "run."+strconv.Itoa(runId)+"."+helper.ToAlphaNumeric(meta.Run.Name))
+		}
 	}
 
 	err := os.MkdirAll(csvDir, 0750)
@@ -293,9 +302,21 @@ func toRunCsv(
 		return err
 	}
 
-	paramLt := &db.ReadParamLayout{ReadLayout: db.ReadLayout{FromId: runId}}
+	// if this is "all-in-one" output then first column is run id or run name
+	var firstCol, firstVal string
+	if isAllInOne {
+		if isIdCsv {
+			firstCol = "run_id"
+			firstVal = strconv.Itoa(runId)
+		} else {
+			firstCol = "run_name"
+			firstVal = meta.Run.Name
+		}
+	}
 
 	// write all parameters into csv file
+	paramLt := &db.ReadParamLayout{ReadLayout: db.ReadLayout{FromId: runId}}
+
 	for j := range modelDef.Param {
 
 		paramLt.Name = modelDef.Param[j].Name
@@ -309,7 +330,19 @@ func toRunCsv(
 		}
 
 		var pc db.CellParam
-		err = toCsvCellFile(csvDir, modelDef, paramLt.Name, pc, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom)
+		err = toCsvCellFile(
+			csvDir,
+			modelDef,
+			paramLt.Name,
+			isNextRun && isAllInOne,
+			pc,
+			cLst,
+			doubleFmt,
+			isIdCsv,
+			"",
+			isWriteUtf8bom,
+			firstCol,
+			firstVal)
 		if err != nil {
 			return err
 		}
@@ -331,7 +364,19 @@ func toRunCsv(
 		}
 
 		var ec db.CellExpr
-		err = toCsvCellFile(csvDir, modelDef, tblLt.Name, ec, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom)
+		err = toCsvCellFile(
+			csvDir,
+			modelDef,
+			tblLt.Name,
+			isNextRun && isAllInOne,
+			ec,
+			cLst,
+			doubleFmt,
+			isIdCsv,
+			"",
+			isWriteUtf8bom,
+			firstCol,
+			firstVal)
 		if err != nil {
 			return err
 		}
@@ -346,7 +391,19 @@ func toRunCsv(
 		}
 
 		var ac db.CellAcc
-		err = toCsvCellFile(csvDir, modelDef, tblLt.Name, ac, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom)
+		err = toCsvCellFile(
+			csvDir,
+			modelDef,
+			tblLt.Name,
+			isNextRun && isAllInOne,
+			ac,
+			cLst,
+			doubleFmt,
+			isIdCsv,
+			"",
+			isWriteUtf8bom,
+			firstCol,
+			firstVal)
 		if err != nil {
 			return err
 		}
@@ -361,7 +418,19 @@ func toRunCsv(
 		}
 
 		var al db.CellAllAcc
-		err = toCsvCellFile(csvDir, modelDef, tblLt.Name, al, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom)
+		err = toCsvCellFile(
+			csvDir,
+			modelDef,
+			tblLt.Name,
+			isNextRun && isAllInOne,
+			al,
+			cLst,
+			doubleFmt,
+			isIdCsv,
+			"",
+			isWriteUtf8bom,
+			firstCol,
+			firstVal)
 		if err != nil {
 			return err
 		}

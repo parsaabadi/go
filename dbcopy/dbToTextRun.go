@@ -194,7 +194,8 @@ func toRunText(
 		}
 
 		var pc db.CellParam
-		err = toCsvCellFile(csvDir, modelDef, paramLt.Name, pc, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom)
+		err = toCsvCellFile(
+			csvDir, modelDef, paramLt.Name, false, pc, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom, "", "")
 		if err != nil {
 			return err
 		}
@@ -216,7 +217,8 @@ func toRunText(
 		}
 
 		var ec db.CellExpr
-		err = toCsvCellFile(csvDir, modelDef, tblLt.Name, ec, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom)
+		err = toCsvCellFile(
+			csvDir, modelDef, tblLt.Name, false, ec, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom, "", "")
 		if err != nil {
 			return err
 		}
@@ -231,7 +233,8 @@ func toRunText(
 		}
 
 		var ac db.CellAcc
-		err = toCsvCellFile(csvDir, modelDef, tblLt.Name, ac, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom)
+		err = toCsvCellFile(
+			csvDir, modelDef, tblLt.Name, false, ac, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom, "", "")
 		if err != nil {
 			return err
 		}
@@ -246,7 +249,8 @@ func toRunText(
 		}
 
 		var al db.CellAllAcc
-		err = toCsvCellFile(csvDir, modelDef, tblLt.Name, al, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom)
+		err = toCsvCellFile(
+			csvDir, modelDef, tblLt.Name, false, al, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom, "", "")
 		if err != nil {
 			return err
 		}

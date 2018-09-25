@@ -150,12 +150,15 @@ func toCsvCellFile(
 	csvDir string,
 	modelDef *db.ModelMeta,
 	name string,
+	isAppend bool,
 	cell db.CsvConverter,
 	cellLst *list.List,
 	doubleFmt string,
 	isIdCsv bool,
 	valueName string,
-	isWriteUtf8bom bool) error {
+	isWriteUtf8bom bool,
+	extraFirstName string,
+	extraFirstValue string) error {
 
 	// converter from db cell to csv row []string
 	var cvt func(interface{}, []string) error
@@ -170,13 +173,18 @@ func toCsvCellFile(
 		return err
 	}
 
-	// create csv file
+	// create csv file or open existing for append
 	fn, err := cell.CsvFileName(modelDef, name)
 	if err != nil {
 		return err
 	}
 
-	f, err := os.OpenFile(filepath.Join(csvDir, fn), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	flag := os.O_CREATE | os.O_TRUNC | os.O_WRONLY
+	if isAppend {
+		flag = os.O_APPEND | os.O_WRONLY
+	}
+
+	f, err := os.OpenFile(filepath.Join(csvDir, fn), flag, 0644)
 	if err != nil {
 		return err
 	}
@@ -190,20 +198,35 @@ func toCsvCellFile(
 
 	wr := csv.NewWriter(f)
 
-	// write header line: column names
+	// if not append to already existing csv file then write header line: column names
 	cs, err := cell.CsvHeader(modelDef, name, isIdCsv, valueName)
 	if err != nil {
 		return err
 	}
-	if err = wr.Write(cs); err != nil {
-		return err
+	if extraFirstName != "" {
+		cs = append([]string{extraFirstName}, cs...) // if this is all-in-one then prepend first column name
+	}
+	if !isAppend {
+		if err = wr.Write(cs); err != nil {
+			return err
+		}
+	}
+	if extraFirstValue != "" {
+		cs[0] = extraFirstValue // if this is all-in-one then first column value is run id (or name or set id set name)
 	}
 
 	for c := cellLst.Front(); c != nil; c = c.Next() {
 
 		// write cell line: dimension(s) and value
-		if err := cvt(c.Value, cs); err != nil {
-			return err
+		// if "all-in-one" then prepend first value, e.g.: run id
+		if extraFirstValue == "" {
+			if err := cvt(c.Value, cs); err != nil {
+				return err
+			}
+		} else {
+			if err := cvt(c.Value, cs[1:]); err != nil {
+				return err
+			}
 		}
 		if err := wr.Write(cs); err != nil {
 			return err

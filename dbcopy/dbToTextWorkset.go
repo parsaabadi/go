@@ -203,7 +203,8 @@ func toWorksetText(
 		}
 
 		var pc db.CellParam
-		err = toCsvCellFile(csvDir, modelDef, paramLt.Name, pc, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom)
+		err = toCsvCellFile(
+			csvDir, modelDef, paramLt.Name, false, pc, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom, "", "")
 		if err != nil {
 			return err
 		}

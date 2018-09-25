@@ -15,7 +15,8 @@ Only model argument does not have default value and must be specified explicitly
 
 Model digest is globally unique and you may want to it if there are multiple versions of the model.
 
-There are 4 possible copy directions: "text", "db", "db2db", "csv" and default is "text".
+There are 5 possible copy directions: "text", "db", "db2db", "csv", "csv-1".
+By default it is copy to "text".
 It is also possible to delete entire model or some model data from database (see dbcopy.Delete below).
 
 Copy to "text": read from database and save into metadata .json and .csv values (parameters and output tables):
@@ -29,6 +30,12 @@ Copy to "db2db": direct copy between two databases:
 
 Copy to "csv": read entire model from database and save .csv files:
   dbcopy -m modelOne -dbcopy.To csv
+Separate sub-directory created for each input set and each model run results.
+
+Copy to "csv-1": read entire model from database and save .csv files:
+	dbcopy -m modelOne -dbcopy.To csv-1
+It dumps all input parameters sets into all_input_sets/parameterName.csv files.
+And for all model runs input parameters and output tables saved into all_model_runs/tableName.csv files.
 
 By default entire model data is copied.
 It is also possible to copy only: model run results and input parameters,
@@ -63,16 +70,19 @@ To specify output or input directory for text files:
 To avoid path conflicts InputDir and OutputDir combined with model name, model run name or name of input parameters set.
 For example:
   dbcopy -m redModel -dbcopy.OutputDir red -s Default
-will place "Default" input set of parameters into directory one/redModel.set.Default.
+will place "Default" input set of parameters into directory red/redModel.set.Default.
 If neccesary you can specify exact directory for input parameters by using "-dbcopy.ParamDir" or "-p":
   dbcopy -m modelOne -dbcopy.SetId 2 -dbcopy.ParamDir two
   dbcopy -m modelOne -dbcopy.SetId 2 -p two
   dbcopy -m redModel -s Default -p 101 -dbcopy.To db -dbcopy.ToDatabase "Database=dst.sqlite;OpenMode=ReadWrite"
 
-Dbcopy create output directories (and json files) for model data by combining model name and run name.
-By default if run name is unique then output directory name is: modelName.run.MyRun
-else it is: modelName.run.1234.MyRun where 1234 is run id.
-To explicitly control usage of id's in directory names (and file names) specify IdOutputNames=true or IdOutputNames=false:
+Dbcopy create output directories (and json files) for model data by combining model name and run name or input set name.
+By default names combined with run id (set id) to make it unique.
+For example:
+	json file: modelName.run.1234.MyRun.json
+	directory: modelName/run.1234.MyRun
+In case of output into csv by default directories and files combined with id's only if run name is not unique.
+To explicitly control usage of id's in directory and file names use IdOutputNames=true or IdOutputNames=false:
   dbcopy -m modelOne -dbcopy.To csv
   dbcopy -m modelOne -dbcopy.To csv -dbcopy.IdOutputNames=true
   dbcopy -m modelOne -dbcopy.To csv -dbcopy.IdOutputNames=false
@@ -80,6 +90,7 @@ To explicitly control usage of id's in directory names (and file names) specify 
 By default parameters and output results .csv files contain codes in dimension column(s), e.g.: Sex=[Male,Female].
 If you want to create csv files with numeric id's Sex=[0,1] instead then use IdCsv=true option:
   dbcopy -m modelOne -dbcopy.IdCsv
+  dbcopy -m modelOne -dbcopy.IdCsv -dbcopy.To csv
   dbcopy -m redModel -dbcopy.IdCsv -s Default
   dbcopy -m modelOne -dbcopy.IdCsv -dbcopy.RunId 101
   dbcopy -m modelOne -dbcopy.IdCsv -dbcopy.TaskName taskOne
@@ -149,7 +160,7 @@ import (
 
 // dbcopy config keys to get values from ini-file or command line arguments.
 const (
-	copyToArgKey       = "dbcopy.To"               // copy to: text=db-to-text, db=text-to-db, db2db=db-to-db
+	copyToArgKey       = "dbcopy.To"               // copy to: text=db-to-text, db=text-to-db, db2db=db-to-db, csv=db-to-csv, csv-1=db-to-csv-in-one
 	deleteArgKey       = "dbcopy.Delete"           // delete model or workset or model run from database
 	modelNameArgKey    = "dbcopy.ModelName"        // model name
 	modelNameShortKey  = "m"                       // model name (short form)
@@ -172,7 +183,7 @@ const (
 	zipArgKey          = "dbcopy.Zip"              // create output or use as input model.zip
 	doubleFormatArgKey = "dbcopy.DoubleFormat"     // convert to string format for float and double
 	useIdCsvArgKey     = "dbcopy.IdCsv"            // if true then create csv files with enum id's default: enum code
-	useIdNamesArgKey   = "dbcopy.IdOutputNames"    // if true then always use id's in output directory names, false never use it default: only if name conflict
+	useIdNamesArgKey   = "dbcopy.IdOutputNames"    // if true then always use id's in output directory and file names, false never use it, default: only if csv name conflict
 	encodingArgKey     = "dbcopy.CodePage"         // code page for converting source files, e.g. windows-1252
 	useUtf8CsvArgKey   = "dbcopy.Utf8BomIntoCsv"   // if true then write utf-8 BOM into csv file
 )
@@ -200,7 +211,7 @@ func main() {
 func mainBody(args []string) error {
 
 	// set dbcopy command line argument keys and ini-file keys
-	_ = flag.String(copyToArgKey, "text", "copy to: `text`=db-to-text, db=text-to-db, db2db=db-to-db, csv=db-to-csv")
+	_ = flag.String(copyToArgKey, "text", "copy to: `text`=db-to-text, db=text-to-db, db2db=db-to-db, csv=db-to-csv, csv-1=db-to-csv-in-one")
 	_ = flag.Bool(deleteArgKey, false, "delete from database: model or workset (set of model input parameters) or model run")
 	_ = flag.String(modelNameArgKey, "", "model name")
 	_ = flag.String(modelNameShortKey, "", "model name (short of "+modelNameArgKey+")")
@@ -256,7 +267,6 @@ func mainBody(args []string) error {
 
 	// minimal validation of run options:
 	// to-database can be used only with "db" or "db2db"
-	// id csv is only for output
 	copyToArg := strings.ToLower(runOpts.String(copyToArgKey))
 	isDel := runOpts.Bool(deleteArgKey)
 
@@ -267,14 +277,20 @@ func mainBody(args []string) error {
 		(runOpts.IsExist(toDbConnStrArgKey) || runOpts.IsExist(toDbDriverArgKey)) {
 		return errors.New("dbcopy invalid arguments: output database can be specified only if " + copyToArgKey + "=db or =db2db")
 	}
-	if copyToArg != "text" && copyToArg != "csv" && runOpts.IsExist(useIdCsvArgKey) {
-		return errors.New("dbcopy invalid arguments: " + useIdCsvArgKey + " can be used only if " + copyToArgKey + "=text or =csv")
+	// id csv is only for output
+	if copyToArg != "text" && copyToArg != "csv" && copyToArg != "csv-1" && runOpts.IsExist(useIdCsvArgKey) {
+		return errors.New("dbcopy invalid arguments: " + useIdCsvArgKey + " can be used only if " + copyToArgKey + "=text or =csv or =csv-1")
+	}
+	// parameter directory is only for workset copy db-to-text or text-to-db
+	if runOpts.IsExist(paramDirArgKey) &&
+		(copyToArg != "text" && copyToArg != "db" || !runOpts.IsExist(setNameArgKey) && !runOpts.IsExist(setIdArgKey)) {
+		return errors.New("dbcopy invalid arguments: " + paramDirArgKey + " can be used only with " + setNameArgKey + " or " + setIdArgKey + " and if " + copyToArgKey + "=text or =db")
 	}
 
 	// do delete model run, workset or entire model
 	// if not delete then copy: workset, model run data, modeilng task
 	// by default: copy entire model
-
+	//
 	switch {
 
 	// do delete
@@ -338,8 +354,8 @@ func mainBody(args []string) error {
 		switch copyToArg {
 		case "text":
 			err = dbToText(modelName, modelDigest, runOpts)
-		case "csv":
-			err = dbToCsv(modelName, modelDigest, runOpts)
+		case "csv", "csv-1":
+			err = dbToCsv(modelName, modelDigest, copyToArg == "csv-1", runOpts)
 		case "db":
 			err = textToDb(modelName, runOpts)
 		case "db2db":

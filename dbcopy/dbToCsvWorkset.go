@@ -23,7 +23,8 @@ func toWorksetListCsv(
 	doubleFmt string,
 	isIdCsv bool,
 	isWriteUtf8bom bool,
-	doUseIdNames useIdNames) error {
+	doUseIdNames useIdNames,
+	isAllInOne bool) error {
 
 	// get all readonly worksets
 	wl, err := db.GetWorksetFullList(dbConn, modelDef.Model.ModelId, true, "")
@@ -32,11 +33,13 @@ func toWorksetListCsv(
 	}
 
 	// read all workset parameters and dump it into csv files
+	fu := make([]bool, len(modelDef.Param))
 	for k := range wl {
 
 		isUseIdNames := doUseIdNames == yesUseIdNames // usage of id's to make names: yes, no, default
 
-		err = toWorksetCsv(dbConn, modelDef, &wl[k], outDir, doubleFmt, isIdCsv, isWriteUtf8bom, isUseIdNames)
+		err := toWorksetCsv(
+			dbConn, modelDef, &wl[k], outDir, doubleFmt, isIdCsv, isWriteUtf8bom, isUseIdNames, fu, isAllInOne)
 		if err != nil {
 			return err
 		}
@@ -230,18 +233,25 @@ func toWorksetCsv(
 	doubleFmt string,
 	isIdCsv bool,
 	isWriteUtf8bom bool,
-	isUseIdNames bool) error {
+	isUseIdNames bool,
+	firstUse []bool,
+	isAllInOne bool) error {
 
 	// create workset subdir under output dir
 	setId := meta.Set.SetId
 	omppLog.Log("Workset ", setId, " ", meta.Set.Name)
 
-	// make output directory as set.Name_Of_the_Set or as set.NN.Name_Of_the_Set
+	// make output directory as one of:
+	// all_input_sets, set.Name_Of_the_Set, as set.NN.Name_Of_the_Set
 	var csvDir string
-	if !isUseIdNames {
-		csvDir = filepath.Join(outDir, "set."+helper.ToAlphaNumeric(meta.Set.Name))
+	if isAllInOne {
+		csvDir = filepath.Join(outDir, "all_input_sets")
 	} else {
-		csvDir = filepath.Join(outDir, "set."+strconv.Itoa(setId)+"."+helper.ToAlphaNumeric(meta.Set.Name))
+		if !isUseIdNames {
+			csvDir = filepath.Join(outDir, "set."+helper.ToAlphaNumeric(meta.Set.Name))
+		} else {
+			csvDir = filepath.Join(outDir, "set."+strconv.Itoa(setId)+"."+helper.ToAlphaNumeric(meta.Set.Name))
+		}
 	}
 
 	err := os.MkdirAll(csvDir, 0750)
@@ -249,9 +259,21 @@ func toWorksetCsv(
 		return err
 	}
 
-	paramLt := &db.ReadParamLayout{ReadLayout: db.ReadLayout{FromId: setId}, IsFromSet: true}
+	// if this is "all-in-one" output then first column is set id or set name
+	var firstCol, firstVal string
+	if isAllInOne {
+		if isIdCsv {
+			firstCol = "set_id"
+			firstVal = strconv.Itoa(setId)
+		} else {
+			firstCol = "set_name"
+			firstVal = meta.Set.Name
+		}
+	}
 
 	// write parameter into csv file
+	paramLt := &db.ReadParamLayout{ReadLayout: db.ReadLayout{FromId: setId}, IsFromSet: true}
+
 	for j := range meta.Param {
 
 		idx, ok := modelDef.ParamByHid(meta.Param[j].ParamHid)
@@ -269,10 +291,23 @@ func toWorksetCsv(
 		}
 
 		var pc db.CellParam
-		err = toCsvCellFile(csvDir, modelDef, paramLt.Name, pc, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom)
+		err = toCsvCellFile(
+			csvDir,
+			modelDef,
+			paramLt.Name,
+			firstUse[idx] && isAllInOne,
+			pc,
+			cLst,
+			doubleFmt,
+			isIdCsv,
+			"",
+			isWriteUtf8bom,
+			firstCol,
+			firstVal)
 		if err != nil {
 			return err
 		}
+		firstUse[idx] = true
 	}
 
 	return nil
