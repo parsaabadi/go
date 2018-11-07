@@ -11,17 +11,15 @@ import (
 
 // CellExpr is value of output table expression.
 type CellExpr struct {
-	cellValue      // dimensions and value
-	IsNull    bool // if true then value is NULL
-	ExprId    int  // output table expression id
+	cellValue     // dimensions and value
+	ExprId    int // output table expression id
 }
 
 // CellCodeExpr is value of output table expression.
 // Dimension(s) items are enum codes, not enum ids.
 type CellCodeExpr struct {
-	cellCodeValue      // dimensions as enum codes and value
-	IsNull        bool // if true then value is NULL
-	ExprId        int  // output table expression id
+	cellCodeValue     // dimensions as enum codes and value
+	ExprId        int // output table expression id
 }
 
 // CsvFileName return file name of csv file to store output table expression rows
@@ -329,10 +327,10 @@ func (CellExpr) IdToCodeCell(modelDef *ModelMeta, name string) (
 
 		dstCell := CellCodeExpr{
 			cellCodeValue: cellCodeValue{
-				Dims:  make([]string, table.Rank),
-				Value: srcCell.Value,
+				Dims:   make([]string, table.Rank),
+				IsNull: srcCell.IsNull,
+				Value:  srcCell.Value,
 			},
-			IsNull: srcCell.IsNull,
 			ExprId: srcCell.ExprId,
 		}
 

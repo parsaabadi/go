@@ -348,7 +348,7 @@ func makePutInsertParamValue(param *ParamMeta, subCount int, cellLst *list.List)
 		for k, e := range cell.DimIds {
 			row[k+1] = e
 		}
-		if v, err := fv(cell.Value); err == nil {
+		if v, err := fv(cell.IsNull, cell.Value); err == nil {
 			row[n+1] = v
 		} else {
 			return false, nil, err
@@ -396,7 +396,7 @@ func makePutDeleteParamPage(param *ParamMeta, cellLst *list.List) func() (bool, 
 
 		n := len(cell.DimIds)
 		if len(row) != n+1 {
-			return false, nil, errors.New("invalid size of row buffer, expected: " + strconv.Itoa(n+1))
+			return false, nil, errors.New("invalid parameter row size, expected: " + strconv.Itoa(n+1))
 		}
 
 		// set sql statement parameter values: sub-value number, dimensions enum, parameter value
@@ -414,41 +414,45 @@ func makePutDeleteParamPage(param *ParamMeta, cellLst *list.List) func() (bool, 
 }
 
 // cvtValue return converter from source value into db value
-// converter does type validation, reject NULL values (parameter value cannot be null)
+// converter does type validation
 // for non built-it types validate enum id presense in enum list
-func cvtValue(param *ParamMeta) func(interface{}) (interface{}, error) {
+// only float parameter values can be NULL, for any other parameter types NULL values rejected.
+func cvtValue(param *ParamMeta) func(bool, interface{}) (interface{}, error) {
 
-	// float parameter: check value is not null and validate type
+	// float parameter: cell value is nullable, check if isNull flag, validate and convert type
 	if param.typeOf.IsFloat() {
-		return func(src interface{}) (interface{}, error) {
+		return func(isNull bool, src interface{}) (interface{}, error) {
+			if isNull {
+				return sql.NullFloat64{Float64: 0.0, Valid: false}, nil
+			}
 			if src == nil {
 				return nil, errors.New("invalid parameter value, it cannot be NULL")
 			}
 			switch src.(type) {
 			case float64:
-				return src, nil
+				return sql.NullFloat64{Float64: src.(float64), Valid: !isNull}, nil
 			case float32:
-				return src, nil
+				return sql.NullFloat64{Float64: float64(src.(float32)), Valid: !isNull}, nil
 			case int:
-				return src, nil
+				return sql.NullFloat64{Float64: float64(src.(int)), Valid: !isNull}, nil
 			case uint:
-				return src, nil
+				return sql.NullFloat64{Float64: float64(src.(uint)), Valid: !isNull}, nil
 			case int64:
-				return src, nil
+				return sql.NullFloat64{Float64: float64(src.(int64)), Valid: !isNull}, nil
 			case uint64:
-				return src, nil
+				return sql.NullFloat64{Float64: float64(src.(uint64)), Valid: !isNull}, nil
 			case int32:
-				return src, nil
+				return sql.NullFloat64{Float64: float64(src.(int32)), Valid: !isNull}, nil
 			case uint32:
-				return src, nil
+				return sql.NullFloat64{Float64: float64(src.(uint32)), Valid: !isNull}, nil
 			case int16:
-				return src, nil
+				return sql.NullFloat64{Float64: float64(src.(int16)), Valid: !isNull}, nil
 			case uint16:
-				return src, nil
+				return sql.NullFloat64{Float64: float64(src.(uint16)), Valid: !isNull}, nil
 			case int8:
-				return src, nil
+				return sql.NullFloat64{Float64: float64(src.(int8)), Valid: !isNull}, nil
 			case uint8:
-				return src, nil
+				return sql.NullFloat64{Float64: float64(src.(uint8)), Valid: !isNull}, nil
 			}
 			return nil, errors.New("invalid parameter value type, expected: float or double")
 		}
@@ -456,8 +460,8 @@ func cvtValue(param *ParamMeta) func(interface{}) (interface{}, error) {
 
 	// integer parameter: check value is not null and validate type
 	if param.typeOf.IsInt() {
-		return func(src interface{}) (interface{}, error) {
-			if src == nil {
+		return func(isNull bool, src interface{}) (interface{}, error) {
+			if isNull || src == nil {
 				return nil, errors.New("invalid parameter value, it cannot be NULL")
 			}
 			switch src.(type) {
@@ -492,8 +496,8 @@ func cvtValue(param *ParamMeta) func(interface{}) (interface{}, error) {
 
 	// string parameter: check value is not null and validate type
 	if param.typeOf.IsString() {
-		return func(src interface{}) (interface{}, error) {
-			if src == nil {
+		return func(isNull bool, src interface{}) (interface{}, error) {
+			if isNull || src == nil {
 				return nil, errors.New("invalid parameter value, it cannot be NULL")
 			}
 			switch src.(type) {
@@ -506,7 +510,10 @@ func cvtValue(param *ParamMeta) func(interface{}) (interface{}, error) {
 
 	// boolean is a special case because not all drivers correctly handle conversion to smallint
 	if param.typeOf.IsBool() {
-		return func(src interface{}) (interface{}, error) {
+		return func(isNull bool, src interface{}) (interface{}, error) {
+			if isNull || src == nil {
+				return nil, errors.New("invalid parameter value, it cannot be NULL")
+			}
 			if is, ok := src.(bool); ok && is {
 				return 1, nil
 			}
@@ -515,9 +522,9 @@ func cvtValue(param *ParamMeta) func(interface{}) (interface{}, error) {
 	}
 
 	// enum-based type: enum id must be in enum list
-	return func(src interface{}) (interface{}, error) {
+	return func(isNull bool, src interface{}) (interface{}, error) {
 
-		if src == nil {
+		if isNull || src == nil {
 			return nil, errors.New("invalid parameter value, it cannot be NULL")
 		}
 

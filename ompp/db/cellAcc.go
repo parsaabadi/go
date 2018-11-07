@@ -11,19 +11,17 @@ import (
 
 // CellAcc is value of output table accumulator.
 type CellAcc struct {
-	cellValue      // dimensions and value
-	IsNull    bool // if true then value is NULL
-	AccId     int  // output table accumulator id
-	SubId     int  // output table subvalue id
+	cellValue     // dimensions and value
+	AccId     int // output table accumulator id
+	SubId     int // output table subvalue id
 }
 
 // CellCodeAcc is value of output table accumulator.
 // Dimension(s) items are enum codes, not enum ids.
 type CellCodeAcc struct {
-	cellCodeValue      // dimensions as enum codes and value
-	IsNull        bool // if true then value is NULL
-	AccId         int  // output table accumulator id
-	SubId         int  // output table subvalue id
+	cellCodeValue     // dimensions as enum codes and value
+	AccId         int // output table accumulator id
+	SubId         int // output table subvalue id
 }
 
 // CsvFileName return file name of csv file to store output table accumulator rows
@@ -345,12 +343,12 @@ func (CellAcc) IdToCodeCell(modelDef *ModelMeta, name string) (
 
 		dstCell := CellCodeAcc{
 			cellCodeValue: cellCodeValue{
-				Dims:  make([]string, table.Rank),
-				Value: srcCell.Value,
+				Dims:   make([]string, table.Rank),
+				IsNull: srcCell.IsNull,
+				Value:  srcCell.Value,
 			},
-			IsNull: srcCell.IsNull,
-			AccId:  srcCell.AccId,
-			SubId:  srcCell.SubId,
+			AccId: srcCell.AccId,
+			SubId: srcCell.SubId,
 		}
 
 		// convert dimension item id to code

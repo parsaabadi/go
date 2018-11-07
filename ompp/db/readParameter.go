@@ -182,11 +182,13 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayout)
 	q += makeOrderBy(param.Rank, layout.OrderBy, 1)
 
 	// prepare db-row conversion buffer: sub_id, dimensions, value
+	// define conversion functin to make new cell from scan buffer
 	var nSub int
 	d := make([]int, param.Rank)
 	var v interface{}
 	var vb bool
 	var vs string
+	var vf sql.NullFloat64
 	var fc func(c *CellParam)
 	var scanBuf []interface{}
 
@@ -197,13 +199,24 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayout)
 	switch {
 	case param.typeOf.IsBool():
 		scanBuf = append(scanBuf, &vb)
-		fc = func(c *CellParam) { c.SubId = nSub; copy(c.DimIds, d); c.Value = vb }
+		fc = func(c *CellParam) { c.SubId = nSub; copy(c.DimIds, d); c.IsNull = false; c.Value = vb }
 	case param.typeOf.IsString():
 		scanBuf = append(scanBuf, &vs)
-		fc = func(c *CellParam) { c.SubId = nSub; copy(c.DimIds, d); c.Value = vs }
+		fc = func(c *CellParam) { c.SubId = nSub; copy(c.DimIds, d); c.IsNull = false; c.Value = vs }
+	case param.typeOf.IsFloat():
+		scanBuf = append(scanBuf, &vf)
+		fc = func(c *CellParam) {
+			c.SubId = nSub
+			copy(c.DimIds, d)
+			c.IsNull = !vf.Valid
+			c.Value = 0.0
+			if !c.IsNull {
+				c.Value = vf.Float64
+			}
+		}
 	default:
 		scanBuf = append(scanBuf, &v)
-		fc = func(c *CellParam) { c.SubId = nSub; copy(c.DimIds, d); c.Value = v }
+		fc = func(c *CellParam) { c.SubId = nSub; copy(c.DimIds, d); c.IsNull = false; c.Value = v }
 	}
 
 	// select parameter cells: (sub id, dimension(s) enum ids, parameter value)

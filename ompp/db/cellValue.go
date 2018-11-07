@@ -11,14 +11,16 @@ import (
 // cellValue is dimensions item as id and value of input parameter or output table.
 type cellValue struct {
 	DimIds []int       // dimensions enum ids or int values if dimension type simple
+	IsNull bool        // if true then value is NULL
 	Value  interface{} // value: int64, bool, float64 or string
 }
 
 // cellCodeValue is dimensions item as code and value of input parameter or output table.
 // Value is enum code if parameter is enum-based.
 type cellCodeValue struct {
-	Dims  []string    // dimensions as enum code or string converted built-in type
-	Value interface{} // value: int64, bool, float64 or string
+	Dims   []string    // dimensions as enum code or string converted built-in type
+	IsNull bool        // if true then value is NULL
+	Value  interface{} // value: int64, bool, float64 or string
 }
 
 // CsvConverter provide methods to convert parameters or output table data from or to row []string for csv file.

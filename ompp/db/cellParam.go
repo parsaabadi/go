@@ -116,14 +116,19 @@ func (CellParam) CsvToIdRow(
 		for k, e := range cell.DimIds {
 			row[k+1] = fmt.Sprint(e)
 		}
-		if isUseFmt {
-			row[n+1] = fmt.Sprintf(doubleFmt, cell.Value)
+
+		// use "null" string for db NULL values and format for model float types
+		if cell.IsNull {
+			row[n+1] = "null"
 		} else {
-			row[n+1] = fmt.Sprint(cell.Value)
+			if isUseFmt {
+				row[n+1] = fmt.Sprintf(doubleFmt, cell.Value)
+			} else {
+				row[n+1] = fmt.Sprint(cell.Value)
+			}
 		}
 		return nil
 	}
-
 	return cvt, nil
 }
 
@@ -203,11 +208,15 @@ func (CellParam) CsvToRow(
 
 		// convert cell value:
 		// if float then use format, if enum then find code by id, default: Sprint(value)
-		if isUseFmt {
-			row[n+1] = fmt.Sprintf(doubleFmt, cell.Value)
-		}
-		if !isUseFmt && isUseEnum {
+		// use "null" string for db NULL values and format for model float types
+		switch {
+		case cell.IsNull:
+			row[n+1] = "null"
 
+		case isUseFmt:
+			row[n+1] = fmt.Sprintf(doubleFmt, cell.Value)
+
+		case isUseEnum:
 			// depending on sql + driver it can be different type
 			var iv int
 			switch e := cell.Value.(type) {
@@ -244,7 +253,8 @@ func (CellParam) CsvToRow(
 				return err
 			}
 			row[n+1] = v
-		} else {
+
+		default:
 			row[n+1] = fmt.Sprint(cell.Value)
 		}
 
@@ -292,6 +302,8 @@ func (CellParam) CsvToCell(
 	// cell value converter: float, bool, string or integer by default
 	var fc func(src string) (interface{}, error)
 	var fe func(src string) (int, error)
+	var ff func(src string) (bool, float64, error)
+	isFloat := param.typeOf.IsFloat()
 	isEnum := !param.typeOf.IsBuiltIn()
 
 	switch {
@@ -301,8 +313,18 @@ func (CellParam) CsvToCell(
 			return nil, err
 		}
 		fe = f
-	case param.typeOf.IsFloat():
-		fc = func(src string) (interface{}, error) { return strconv.ParseFloat(src, 64) }
+	case isFloat:
+		ff = func(src string) (bool, float64, error) {
+
+			if src == "" || src == "null" {
+				return true, 0.0, nil
+			}
+			vf, e := strconv.ParseFloat(src, 64)
+			if e != nil {
+				return false, 0.0, e
+			}
+			return false, vf, nil
+		}
 	case param.typeOf.IsBool():
 		fc = func(src string) (interface{}, error) { return strconv.ParseBool(src) }
 	case param.typeOf.IsString():
@@ -343,16 +365,23 @@ func (CellParam) CsvToCell(
 			cell.DimIds[k] = i
 		}
 
-		// value conversion
+		// value conversion, float value can be NULL
 		var v interface{}
-		if isEnum {
+		var isNull bool
+		switch {
+		case isEnum:
+			isNull = false
 			v, err = fe(row[n+1])
-		} else {
+		case isFloat:
+			isNull, v, err = ff(row[n+1])
+		default:
+			isNull = false
 			v, err = fc(row[n+1])
 		}
 		if err != nil {
 			return nil, err
 		}
+		cell.IsNull = isNull
 		cell.Value = v
 
 		return cell, nil
@@ -420,8 +449,11 @@ func (CellParam) IdToCodeCell(modelDef *ModelMeta, name string) (
 		}
 
 		dstCell := CellCodeParam{
-			cellCodeValue: cellCodeValue{Dims: make([]string, param.Rank)},
-			SubId:         srcCell.SubId,
+			cellCodeValue: cellCodeValue{
+				Dims:   make([]string, param.Rank),
+				IsNull: srcCell.IsNull,
+			},
+			SubId: srcCell.SubId,
 		}
 
 		// convert dimension item id to code
@@ -542,8 +574,11 @@ func (CellCodeParam) CodeToIdCell(modelDef *ModelMeta, name string) (
 		}
 
 		dstCell := CellParam{
-			cellValue: cellValue{DimIds: make([]int, param.Rank)},
-			SubId:     srcCell.SubId,
+			cellValue: cellValue{
+				DimIds: make([]int, param.Rank),
+				IsNull: srcCell.IsNull,
+			},
+			SubId: srcCell.SubId,
 		}
 
 		// convert dimension item code to id
