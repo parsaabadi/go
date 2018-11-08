@@ -261,18 +261,18 @@ func doTableGetCsvHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllAc
 func writeCsvResponse(
 	w http.ResponseWriter, name, src string, isBom bool, hdr []string, cLst *list.List, cvt func(interface{}, []string) error,
 ) {
-	// calculate Content-Length
+	// calculate Content-Length: start from BOM length, if BOM required
 	nb := 0
 	if isBom {
 		nb += len(helper.Utf8bom)
 	}
 
-	// header length
+	// Content-Length: csv header length
 	for k := range hdr {
 		nb += len(hdr[k]) + 1
 	}
 
-	// each csv line length: comma-separated and lf as eol
+	// add each csv line length: comma-separated and lf as eol
 	cs := append([]string{}, hdr...)
 
 	for c := cLst.Front(); c != nil; c = c.Next() {

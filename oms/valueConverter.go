@@ -10,7 +10,8 @@ import (
 
 // ParameterCellConverter return parameter value converter between code cell and id's cell.
 // If isToId true then from code to id cell else other way around
-func (mc *ModelCatalog) ParameterCellConverter(isToId bool, dn, src string, name string,
+func (mc *ModelCatalog) ParameterCellConverter(
+	isToId bool, dn, src string, name string,
 ) (
 	func(interface{}) (interface{}, error), bool,
 ) {
@@ -57,7 +58,8 @@ func (mc *ModelCatalog) ParameterCellConverter(isToId bool, dn, src string, name
 }
 
 // TableToCodeCellConverter return output table value converter from id's cell into code cell.
-func (mc *ModelCatalog) TableToCodeCellConverter(dn string, name string, isAcc, isAllAcc bool,
+func (mc *ModelCatalog) TableToCodeCellConverter(
+	dn string, name string, isAcc, isAllAcc bool,
 ) (
 	func(interface{}) (interface{}, error), bool,
 ) {
@@ -107,8 +109,9 @@ func (mc *ModelCatalog) TableToCodeCellConverter(dn string, name string, isAcc, 
 	return cvt, true
 }
 
-// ParameterToCsvConverter return parameter csv converter and csv header line.
-func (mc *ModelCatalog) ParameterToCsvConverter(dn string, isCode bool, name string,
+// ParameterToCsvConverter return parameter csv converter and csv header as string array.
+func (mc *ModelCatalog) ParameterToCsvConverter(
+	dn string, isCode bool, name string,
 ) (
 	[]string, func(interface{}, []string) error, bool,
 ) {
@@ -160,8 +163,9 @@ func (mc *ModelCatalog) ParameterToCsvConverter(dn string, isCode bool, name str
 	return hdr, cvt, true
 }
 
-// TableToCsvConverter return output table cell to csv converter and csv header line.
-func (mc *ModelCatalog) TableToCsvConverter(dn string, isCode bool, name string, isAcc, isAllAcc bool,
+// TableToCsvConverter return output table cell to csv converter and csv header as staring array.
+func (mc *ModelCatalog) TableToCsvConverter(
+	dn string, isCode bool, name string, isAcc, isAllAcc bool,
 ) (
 	[]string, func(interface{}, []string) error, bool,
 ) {

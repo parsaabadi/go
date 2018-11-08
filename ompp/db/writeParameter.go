@@ -420,13 +420,14 @@ func cvtValue(param *ParamMeta) func(bool, interface{}) (interface{}, error) {
 	// float parameter: check if isNull flag, validate and convert type
 	// cell value is nullable for extended parameters only
 	var isNullable = param.IsExtendable
+
 	if param.typeOf.IsFloat() {
 		return func(isNull bool, src interface{}) (interface{}, error) {
-			if isNull && isNullable {
-				return sql.NullFloat64{Float64: 0.0, Valid: false}, nil
-			}
 			if isNull && !isNullable || src == nil {
 				return nil, errors.New("invalid parameter value, it cannot be NULL")
+			}
+			if isNull && isNullable {
+				return sql.NullFloat64{Float64: 0.0, Valid: false}, nil
 			}
 			switch src.(type) {
 			case float64:

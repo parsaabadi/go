@@ -111,7 +111,7 @@ func (mc *ModelCatalog) UpdateWorkset(isReplace bool, wp *db.WorksetPub) (bool, 
 	isEraseParam := w == nil && len(wp.Param) > 0
 	if isEraseParam {
 		wp.Param = []db.ParamRunSetPub{}
-		omppLog.Log("Warning: workset not found, create new empty workset (without parameters): ", wp.Name)
+		omppLog.Log("Warning: existing workset not found, create new empty workset (without parameters): ", wp.Name)
 	}
 
 	// convert workset from "public" into db rows
@@ -177,7 +177,9 @@ func (mc *ModelCatalog) DeleteWorkset(dn, wsn string) (bool, error) {
 
 // UpdateWorksetParameter replace or merge parameter metadata into workset and replace parameter values from csv reader.
 func (mc *ModelCatalog) UpdateWorksetParameter(
-	isReplace bool, wp *db.WorksetPub, param *db.ParamRunSetPub, csvRd *csv.Reader) (bool, error) {
+	isReplace bool, wp *db.WorksetPub, param *db.ParamRunSetPub, csvRd *csv.Reader,
+) (
+	bool, error) {
 
 	// if model digest-or-name or workset name is empty then return empty results
 	dn := wp.ModelDigest
