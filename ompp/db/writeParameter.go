@@ -64,15 +64,13 @@ func WriteParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *WriteParamLayou
 		return err
 	}
 	if layout.IsToRun {
-		if err = doWriteRunParameter(trx, modelDef, param, layout.ToId, layout.SubCount, cellLst, layout.DoubleFmt); err != nil {
-			trx.Rollback()
-			return err
-		}
+		err = doWriteRunParameter(trx, modelDef, param, layout.ToId, layout.SubCount, cellLst, layout.DoubleFmt)
 	} else {
-		if err = doWriteSetParameter(trx, param, layout.ToId, layout.SubCount, layout.IsPage, cellLst); err != nil {
-			trx.Rollback()
-			return err
-		}
+		err = doWriteSetParameter(trx, param, layout.ToId, layout.SubCount, layout.IsPage, cellLst)
+	}
+	if err != nil {
+		trx.Rollback()
+		return err
 	}
 
 	trx.Commit()
@@ -419,13 +417,15 @@ func makePutDeleteParamPage(param *ParamMeta, cellLst *list.List) func() (bool, 
 // only float parameter values can be NULL, for any other parameter types NULL values rejected.
 func cvtValue(param *ParamMeta) func(bool, interface{}) (interface{}, error) {
 
-	// float parameter: cell value is nullable, check if isNull flag, validate and convert type
+	// float parameter: check if isNull flag, validate and convert type
+	// cell value is nullable for extended parameters only
+	var isNullable = param.IsExtendable
 	if param.typeOf.IsFloat() {
 		return func(isNull bool, src interface{}) (interface{}, error) {
-			if isNull {
+			if isNull && isNullable {
 				return sql.NullFloat64{Float64: 0.0, Valid: false}, nil
 			}
-			if src == nil {
+			if isNull && !isNullable || src == nil {
 				return nil, errors.New("invalid parameter value, it cannot be NULL")
 			}
 			switch src.(type) {

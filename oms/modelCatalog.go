@@ -87,7 +87,7 @@ type ParamDimsDescrNote struct {
 	DescrNote db.DescrNote    // from parameter_dims_txt
 }
 
-// TableDescrNote is join of able_dic, model_table_dic, table_dic_txt
+// TableDescrNote is join of table_dic, model_table_dic, table_dic_txt
 type TableDescrNote struct {
 	Table        db.TableDicRow       // output table row: table_dic join to model_table_dic
 	LangCode     string               // table_dic_txt.lang_code

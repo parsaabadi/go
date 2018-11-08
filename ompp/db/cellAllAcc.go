@@ -96,7 +96,8 @@ func (CellAllAcc) CsvHeader(modelDef *ModelMeta, name string, isIdHeader bool, v
 // Double format string is used if parameter type is float, double, long double
 // If valueName is "" empty then all accumulators converted else one
 func (CellAllAcc) CsvToIdRow(
-	modelDef *ModelMeta, name string, doubleFmt string, valueName string) (
+	modelDef *ModelMeta, name string, doubleFmt string, valueName string,
+) (
 	func(interface{}, []string) error, error) {
 
 	// validate parameters
@@ -166,7 +167,8 @@ func (CellAllAcc) CsvToIdRow(
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
 // If valueName is "" empty then all accumulators converted else one
 func (CellAllAcc) CsvToRow(
-	modelDef *ModelMeta, name string, doubleFmt string, valueName string) (
+	modelDef *ModelMeta, name string, doubleFmt string, valueName string,
+) (
 	func(interface{}, []string) error, error) {
 
 	// validate parameters
@@ -248,7 +250,8 @@ func (CellAllAcc) CsvToRow(
 // It does retrun error if len(row) not equal to number of fields in cell db-record.
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
 func (CellAllAcc) CsvToCell(
-	modelDef *ModelMeta, name string, subCount int, valueName string) (
+	modelDef *ModelMeta, name string, subCount int, valueName string,
+) (
 	func(row []string) (interface{}, error), error) {
 
 	// validate parameters
@@ -342,7 +345,9 @@ func (CellAllAcc) CsvToCell(
 //
 // If dimension type is enum based then dimensions enum ids can be converted to enum code.
 // If dimension type is simple (bool or int) then dimension value converted to string.
-func (CellAllAcc) IdToCodeCell(modelDef *ModelMeta, name string) (
+func (CellAllAcc) IdToCodeCell(
+	modelDef *ModelMeta, name string,
+) (
 	func(interface{}) (interface{}, error), error) {
 
 	// validate parameters

@@ -229,7 +229,7 @@ func (mc *ModelCatalog) ModelMetaTextByDigestOrName(dn string, preferedLang []la
 		}
 	}
 
-	// model output tables
+	// model output tables, remove sql for accumulators and expressions
 	for k := range mt.TableTxt {
 		mt.TableTxt[k].Table = mc.modelLst[idx].meta.Table[k].TableDicRow
 		mt.TableTxt[k].TableDimsTxt = make([]TableDimsDescrNote, len(mc.modelLst[idx].meta.Table[k].Dim))
@@ -241,9 +241,11 @@ func (mc *ModelCatalog) ModelMetaTextByDigestOrName(dn string, preferedLang []la
 		}
 		for j := range mt.TableTxt[k].TableAccTxt {
 			mt.TableTxt[k].TableAccTxt[j].Acc = mc.modelLst[idx].meta.Table[k].Acc[j]
+			mt.TableTxt[k].TableAccTxt[j].Acc.AccSql = "" // remove sql of accumulator
 		}
 		for j := range mt.TableTxt[k].TableExprTxt {
 			mt.TableTxt[k].TableExprTxt[j].Expr = mc.modelLst[idx].meta.Table[k].Expr[j]
+			mt.TableTxt[k].TableExprTxt[j].Expr.ExprSql = "" // remove sql of expression
 		}
 	}
 

@@ -197,9 +197,9 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 	// select db rows from parameter_dic join to model_parameter_dic
 	err = SelectRows(dbConn,
 		"SELECT"+
-			" M.model_id, M.model_parameter_id, D.parameter_hid, D.parameter_name,"+
-			" D.parameter_digest, D.db_run_table, D.db_set_table, D.parameter_rank,"+
-			" T.model_type_id, M.is_hidden, D.num_cumulated"+
+			" M.model_id, M.model_parameter_id, D.parameter_hid, D.parameter_name, D.parameter_digest,"+
+			" D.parameter_rank, T.model_type_id, D.is_extendable, M.is_hidden, D.num_cumulated,"+
+			" D.db_run_table, D.db_set_table"+
 			" FROM parameter_dic D"+
 			" INNER JOIN model_parameter_dic M ON (M.parameter_hid = D.parameter_hid)"+
 			" INNER JOIN model_type_dic T ON (T.type_hid = D.type_hid AND T.model_id = M.model_id)"+
@@ -207,14 +207,16 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 			" ORDER BY 1, 2",
 		func(rows *sql.Rows) error {
 			var r ParamDicRow
+			nExt := 0
 			nHidden := 0
 			if err := rows.Scan(
-				&r.ModelId, &r.ParamId, &r.ParamHid, &r.Name,
-				&r.Digest, &r.DbRunTable, &r.DbSetTable, &r.Rank,
-				&r.TypeId, &nHidden, &r.NumCumulated); err != nil {
+				&r.ModelId, &r.ParamId, &r.ParamHid, &r.Name, &r.Digest,
+				&r.Rank, &r.TypeId, &nExt, &nHidden, &r.NumCumulated,
+				&r.DbRunTable, &r.DbSetTable); err != nil {
 				return err
 			}
-			r.IsHidden = nHidden != 0 // oracle: smallint is float64
+			r.IsExtendable = nExt != 0 // oracle: smallint is float64
+			r.IsHidden = nHidden != 0  // oracle: smallint is float64
 
 			k, ok := meta.TypeByKey(r.TypeId) // find parameter type
 			if !ok {

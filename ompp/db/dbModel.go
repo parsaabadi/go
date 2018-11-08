@@ -202,12 +202,13 @@ type ParamDicRow struct {
 	ParamHid     int    // parameter_hid      INT          NOT NULL, -- unique parameter id
 	Name         string // parameter_name     VARCHAR(255) NOT NULL
 	Digest       string // parameter_digest   VARCHAR(32)  NOT NULL
-	DbRunTable   string // db_run_table       VARCHAR(64)  NOT NULL
-	DbSetTable   string // db_set_table       VARCHAR(64)  NOT NULL
 	Rank         int    // parameter_rank     INT          NOT NULL
 	TypeId       int    // model_type_id      INT          NOT NULL
+	IsExtendable bool   // is_extendable      SMALLINT     NOT NULL
 	IsHidden     bool   // is_hidden          SMALLINT     NOT NULL
 	NumCumulated int    // num_cumulated      INT          NOT NULL
+	DbRunTable   string // db_run_table       VARCHAR(64)  NOT NULL
+	DbSetTable   string // db_set_table       VARCHAR(64)  NOT NULL
 }
 
 // ParamTxtRow is db row of parameter_dic_txt join to model_parameter_dic table

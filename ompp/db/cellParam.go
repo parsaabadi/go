@@ -78,7 +78,8 @@ func (CellParam) CsvHeader(modelDef *ModelMeta, name string, isIdHeader bool, va
 // Converter will retrun error if len(row) not equal to number of fields in csv record.
 // Double format string is used if parameter type is float, double, long double
 func (CellParam) CsvToIdRow(
-	modelDef *ModelMeta, name string, doubleFmt string, valueName string) (
+	modelDef *ModelMeta, name string, doubleFmt string, valueName string,
+) (
 	func(interface{}, []string) error, error) {
 
 	// validate parameters
@@ -139,7 +140,8 @@ func (CellParam) CsvToIdRow(
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
 // If parameter type is enum based then csv row value is enum code and cell value is enum id.
 func (CellParam) CsvToRow(
-	modelDef *ModelMeta, name string, doubleFmt string, valueName string) (
+	modelDef *ModelMeta, name string, doubleFmt string, valueName string,
+) (
 	func(interface{}, []string) error, error) {
 
 	// validate parameters
@@ -270,7 +272,8 @@ func (CellParam) CsvToRow(
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
 // If parameter type is enum based then csv row value is enum code and cell value is enum id.
 func (CellParam) CsvToCell(
-	modelDef *ModelMeta, name string, subCount int, valueName string) (
+	modelDef *ModelMeta, name string, subCount int, valueName string,
+) (
 	func(row []string) (interface{}, error), error) {
 
 	// validate parameters
@@ -305,6 +308,7 @@ func (CellParam) CsvToCell(
 	var ff func(src string) (bool, float64, error)
 	isFloat := param.typeOf.IsFloat()
 	isEnum := !param.typeOf.IsBuiltIn()
+	isNullable := param.IsExtendable // only extended parameter value can be NULL
 
 	switch {
 	case isEnum:
@@ -317,7 +321,11 @@ func (CellParam) CsvToCell(
 		ff = func(src string) (bool, float64, error) {
 
 			if src == "" || src == "null" {
-				return true, 0.0, nil
+				if isNullable {
+					return true, 0.0, nil
+				}
+				// else parameter is not nullable
+				return true, 0.0, errors.New("invalid parameter value, it cannot be NULL")
 			}
 			vf, e := strconv.ParseFloat(src, 64)
 			if e != nil {
@@ -396,7 +404,8 @@ func (CellParam) CsvToCell(
 // If dimension type is enum based then dimensions enum ids can be converted to enum code.
 // If dimension type is simple (bool or int) then dimension value converted to string.
 // If parameter type is enum based then cell value enum id converted to enum code.
-func (CellParam) IdToCodeCell(modelDef *ModelMeta, name string) (
+func (CellParam) IdToCodeCell(modelDef *ModelMeta, name string,
+) (
 	func(interface{}) (interface{}, error), error) {
 
 	// validate parameters
@@ -521,7 +530,8 @@ func (CellParam) IdToCodeCell(modelDef *ModelMeta, name string) (
 // If dimension type is enum based then dimensions enum codes converted to enum ids.
 // If dimension type is simple (bool or int) then dimension code converted from string to dimension type.
 // If parameter type is enum based then cell value enum code converted to enum id.
-func (CellCodeParam) CodeToIdCell(modelDef *ModelMeta, name string) (
+func (CellCodeParam) CodeToIdCell(modelDef *ModelMeta, name string,
+) (
 	func(interface{}) (interface{}, error), error) {
 
 	// validate parameters

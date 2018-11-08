@@ -196,13 +196,16 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayout)
 	for k := 0; k < param.Rank; k++ {
 		scanBuf = append(scanBuf, &d[k])
 	}
+
 	switch {
 	case param.typeOf.IsBool():
 		scanBuf = append(scanBuf, &vb)
 		fc = func(c *CellParam) { c.SubId = nSub; copy(c.DimIds, d); c.IsNull = false; c.Value = vb }
+
 	case param.typeOf.IsString():
 		scanBuf = append(scanBuf, &vs)
 		fc = func(c *CellParam) { c.SubId = nSub; copy(c.DimIds, d); c.IsNull = false; c.Value = vs }
+
 	case param.typeOf.IsFloat():
 		scanBuf = append(scanBuf, &vf)
 		fc = func(c *CellParam) {
@@ -214,6 +217,7 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayout)
 				c.Value = vf.Float64
 			}
 		}
+
 	default:
 		scanBuf = append(scanBuf, &v)
 		fc = func(c *CellParam) { c.SubId = nSub; copy(c.DimIds, d); c.IsNull = false; c.Value = v }
