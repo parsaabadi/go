@@ -78,6 +78,8 @@ func (facet Facet) maxTableNameSize() int {
 	case OracleFacet:
 		return 30
 	}
+	// MySQL=64, MSSQL=128, DB2=128
+	// limit to 64 to create similar names for all db providers, except Oracle
 	return 64
 }
 
