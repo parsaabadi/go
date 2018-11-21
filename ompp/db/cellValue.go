@@ -46,7 +46,7 @@ type CsvConverter interface {
 	CsvToRow(modelDef *ModelMeta, name string, doubleFmt string, valueName string) (
 		func(interface{}, []string) error, error)
 
-	// return converter from csv row []string to parameter cell (dimensions and value)
+	// return converter from csv row []string to parameter or output table cell (dimensions and value)
 	CsvToCell(modelDef *ModelMeta, name string, subCount int, valueName string) (
 		func(row []string) (interface{}, error), error)
 }
@@ -106,6 +106,10 @@ func cvtItemCodeToId(msgName string, typeOf *TypeMeta, isTotalEnabled bool,
 	case typeOf.IsBool(): // boolean dimension: false=>0, true=>1
 
 		cvt = func(src string) (int, error) {
+			if isTotalEnabled && src == TotalEnumCode { // check is it total item
+				return typeOf.TotalEnumId, nil
+			}
+			// convert boolean enum codes to id's
 			is, err := strconv.ParseBool(src)
 			if err != nil {
 				return 0, errors.New("invalid value: " + src + " of: " + msgName)
@@ -167,6 +171,9 @@ func cvtItemIdToCode(msgName string, typeOf *TypeMeta, isTotalEnabled bool,
 				return "false", nil
 			case 1, -1:
 				return "true", nil
+			}
+			if isTotalEnabled && itemId == typeOf.TotalEnumId { // check is it total item
+				return TotalEnumCode, nil
 			}
 			return "", errors.New("invalid value: " + strconv.Itoa(itemId) + " of: " + msgName)
 		}
