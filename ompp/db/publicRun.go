@@ -32,6 +32,7 @@ func (meta *RunMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunPub, err
 		Opts:           make(map[string]string, len(meta.Opts)),
 		Txt:            make([]DescrNote, len(meta.Txt)),
 		Param:          make([]ParamRunSetPub, len(meta.Param)),
+		Progress:       make([]RunProgress, len(meta.Progress)),
 	}
 
 	// copy run_option rows
@@ -69,6 +70,9 @@ func (meta *RunMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunPub, err
 		}
 	}
 
+	// copy run_progress rows
+	copy(pub.Progress, meta.Progress)
+
 	return &pub, nil
 }
 
@@ -103,9 +107,10 @@ func (pub *RunPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunMeta, er
 			UpdateDateTime: pub.UpdateDateTime,
 			Digest:         pub.Digest,
 		},
-		Txt:   make([]RunTxtRow, len(pub.Txt)),
-		Opts:  make(map[string]string, len(pub.Opts)),
-		Param: make([]runParam, len(pub.Param)),
+		Txt:      make([]RunTxtRow, len(pub.Txt)),
+		Opts:     make(map[string]string, len(pub.Opts)),
+		Param:    make([]runParam, len(pub.Param)),
+		Progress: make([]RunProgress, len(pub.Progress)),
 	}
 
 	// model run description and notes: run_txt rows
@@ -144,6 +149,9 @@ func (pub *RunPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunMeta, er
 			}
 		}
 	}
+
+	// copy run_progress rows
+	copy(meta.Progress, pub.Progress)
 
 	return &meta, nil
 }

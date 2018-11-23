@@ -185,7 +185,7 @@ func copyRunDbToDb(
 	}
 
 	// destination: save model run metadata
-	isExist, err := dstRun.UpdateRun(dstDb, dstModel, dstLang)
+	isExist, err := dstRun.UpdateRun(dstDb, dstModel, dstLang, doubleFmt)
 	if err != nil {
 		return 0, err
 	}

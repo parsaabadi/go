@@ -8,7 +8,8 @@ import (
 	"strconv"
 )
 
-const MinSchemaVersion = 100 // min compatible db schema version
+// MinSchemaVersion is a minimal compatible db schema version
+const MinSchemaVersion = 100
 
 // OpenmppSchemaVersion return db schema: select id_value from id_lst where id_key = 'openmpp'
 func OpenmppSchemaVersion(dbConn *sql.DB) (int, error) {

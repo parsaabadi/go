@@ -224,7 +224,7 @@ func fromRunTextToDb(
 	}
 
 	// save model run
-	isExist, err = meta.UpdateRun(dbConn, modelDef, langDef)
+	isExist, err = meta.UpdateRun(dbConn, modelDef, langDef, doubleFmt)
 	if err != nil {
 		return 0, err
 	}

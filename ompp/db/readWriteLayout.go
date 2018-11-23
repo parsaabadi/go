@@ -119,7 +119,7 @@ type FilterIdColumn struct {
 	EnumIds []int    // enum id(s): one, two or many ids depending on filter condition
 }
 
-// OrderBy define column to order by rows selected from parameter or output table.
+// OrderByColumn define column to order by rows selected from parameter or output table.
 type OrderByColumn struct {
 	IndexOne int  // one-based column index
 	IsDesc   bool // if true then descending order

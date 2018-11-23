@@ -153,6 +153,9 @@ import (
 	"os"
 	"strings"
 
+	_ "github.com/alexbrainman/odbc"
+	_ "github.com/mattn/go-sqlite3"
+
 	"go.openmpp.org/ompp/config"
 	"go.openmpp.org/ompp/db"
 	"go.openmpp.org/ompp/omppLog"

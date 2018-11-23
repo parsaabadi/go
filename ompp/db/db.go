@@ -15,8 +15,7 @@ After model run user can again open workset as read-write and continue input edi
 Each workset has a name (unique inside of the model) and set id (database unique positive int).
 
 Result of model run stored in output tables and also include copy of all input parameters used to run the model.
-That pair of input and output data called "run" and identified by run id (database unique positive int).
-*/
+That pair of input and output data called "run" and identified by run id (database unique positive int). */
 package db
 
 import (
@@ -27,8 +26,6 @@ import (
 	"strconv"
 	"strings"
 
-	_ "github.com/alexbrainman/odbc"
-	_ "github.com/mattn/go-sqlite3"
 	"go.openmpp.org/ompp/helper"
 	"go.openmpp.org/ompp/omppLog"
 )

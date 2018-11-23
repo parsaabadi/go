@@ -6,6 +6,7 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -262,6 +263,55 @@ func toRunListCsv(
 		})
 	if err != nil {
 		return errors.New("failed to write model run parameter text into csv " + err.Error())
+	}
+
+	// write run progress rows into csv
+	row = make([]string, 7)
+
+	idx = 0
+	j = 0
+	err = toCsvFile(
+		outDir,
+		"run_progress.csv",
+		isWriteUtf8bom,
+		[]string{"run_id", "sub_id", "create_dt", "status", "update_dt", "progress_count", "progress_value"},
+		func() (bool, []string, error) {
+
+			if idx < 0 || idx >= len(rl) { // end of model run rows
+				return true, row, nil
+			}
+
+			// if end of current run progress then find next run with progress rows
+			if j < 0 || j >= len(rl[idx].Progress) {
+				j = 0
+				for {
+					idx++
+					if idx < 0 || idx >= len(rl) { // end of run rows
+						return true, row, nil
+					}
+					if len(rl[idx].Param) > 0 {
+						break
+					}
+				}
+			}
+
+			// make run progress []string row
+			row[0] = strconv.Itoa(rl[idx].Run.RunId)
+			row[1] = strconv.Itoa(rl[idx].Progress[j].SubId)
+			row[2] = rl[idx].Progress[j].CreateDateTime
+			row[3] = rl[idx].Progress[j].Status
+			row[4] = rl[idx].Progress[j].UpdateDateTime
+			row[5] = strconv.Itoa(rl[idx].Progress[j].Count)
+			if doubleFmt != "" {
+				row[6] = fmt.Sprintf(doubleFmt, rl[idx].Progress[j].Value)
+			} else {
+				row[6] = fmt.Sprint(rl[idx].Progress[j].Value)
+			}
+			j++
+			return false, row, nil
+		})
+	if err != nil {
+		return errors.New("failed to write run progress into csv " + err.Error())
 	}
 
 	return nil

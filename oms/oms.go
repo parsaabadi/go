@@ -72,7 +72,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	_ "github.com/alexbrainman/odbc"
 	"github.com/husobee/vestigo"
+	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/text/language"
 
 	"go.openmpp.org/ompp/config"

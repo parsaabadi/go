@@ -329,8 +329,52 @@ func getRunParamText(dbConn *sql.DB, query string) ([]RunParamTxtRow, error) {
 	return txtLst, nil
 }
 
+// GetRunProgress return sub-values run progress for specified run id: run_progress table rows.
+func GetRunProgress(dbConn *sql.DB, runId int) ([]RunProgress, error) {
+
+	rs, err := getRunProgress(
+		dbConn,
+		"SELECT"+
+			" RP.run_id, RP.sub_id, RP.create_dt, RP.status, RP.update_dt, RP.progress_count, RP.progress_value"+
+			" FROM run_progress RP"+
+			" WHERE RP.run_id = "+strconv.Itoa(runId)+
+			" ORDER BY 1, 2")
+	if err != nil {
+		return nil, err
+	}
+
+	rpLst := make([]RunProgress, len(rs))
+	for k := range rpLst {
+		rpLst[k] = rs[k].Progress
+	}
+	return rpLst, err
+}
+
+// getRunProgress return sub-values run progress: run_progress table rows.
+func getRunProgress(dbConn *sql.DB, query string) ([]runProgressRow, error) {
+
+	var rpLst []runProgressRow
+
+	err := SelectRows(dbConn, query,
+		func(rows *sql.Rows) error {
+			var r runProgressRow
+			if err := rows.Scan(
+				&r.RunId, &r.Progress.SubId, &r.Progress.CreateDateTime, &r.Progress.Status,
+				&r.Progress.UpdateDateTime, &r.Progress.Count, &r.Progress.Value); err != nil {
+				return err
+			}
+			rpLst = append(rpLst, r)
+			return nil
+		})
+	if err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+
+	return rpLst, nil
+}
+
 // GetRunFull return full metadata for completed model run:
-// run_lst, run_txt, run_option, run_parameter, run_parameter_txt rows.
+// run_lst, run_txt, run_option, run_parameter, run_parameter_txt, run_progress rows.
 //
 // It does not return non-completed runs (run in progress).
 // If langCode not empty then only specified language selected else all languages
@@ -430,11 +474,18 @@ func GetRunFull(dbConn *sql.DB, runRow *RunRow, langCode string) (*RunMeta, erro
 		meta.Param[i].Txt = append(meta.Param[i].Txt, paramTxtRs[k])
 	}
 
+	// get run sub-values progress for that run id
+	rpRs, err := GetRunProgress(dbConn, runRow.RunId)
+	if err != nil {
+		return nil, err
+	}
+	meta.Progress = rpRs
+
 	return meta, nil
 }
 
 // GetRunFullList return list of full metadata for completed model runs:
-// run_lst, run_txt, run_option, run_parameter, run_parameter_txt rows.
+// run_lst, run_txt, run_option, run_parameter, run_parameter_txt, run_progress rows.
 //
 // If isSuccess true then return only successfully completed runs else all completed runs.
 // It does not return non-completed runs (run in progress).
@@ -516,6 +567,20 @@ func GetRunFullList(dbConn *sql.DB, modelId int, isSuccess bool, langCode string
 		return nil, err
 	}
 
+	// get sub-values run progress by model id
+	q = "SELECT" +
+		" RP.run_id, RP.sub_id, RP.create_dt, RP.status, RP.update_dt, RP.progress_count, RP.progress_value" +
+		" FROM run_lst H" +
+		" INNER JOIN run_progress RP ON (RP.run_id = H.run_id)" +
+		" WHERE H.model_id = " + smId +
+		statusFilter +
+		" ORDER BY 1, 2"
+
+	rpRs, err := getRunProgress(dbConn, q)
+	if err != nil {
+		return nil, err
+	}
+
 	// convert to output result: join run pieces in struct by run id
 	rl := make([]RunMeta, len(runRs))
 	m := make(map[int]int) // map[run id] => index of run_lst row
@@ -529,6 +594,11 @@ func GetRunFullList(dbConn *sql.DB, modelId int, isSuccess bool, langCode string
 	for k := range runTxtRs {
 		if i, ok := m[runTxtRs[k].RunId]; ok {
 			rl[i].Txt = append(rl[i].Txt, runTxtRs[k])
+		}
+	}
+	for k := range rpRs {
+		if i, ok := m[rpRs[k].RunId]; ok {
+			rl[i].Progress = append(rl[i].Progress, rpRs[k].Progress)
 		}
 	}
 

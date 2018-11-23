@@ -22,8 +22,10 @@ import (
 // if digest not "" empty then by run digest;
 // else if status is error then by run_name, sub_count, sub_completed, status, create_dt.
 //
+// Double format is used for progress value float conversion, if non-empty format supplied.
+//
 // It return "is found" flag and update metadata with actual run id in database.
-func (meta *RunMeta) UpdateRun(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangMeta) (bool, error) {
+func (meta *RunMeta) UpdateRun(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangMeta, doubleFmt string) (bool, error) {
 
 	// validate parameters
 	if modelDef == nil {
@@ -100,7 +102,7 @@ func (meta *RunMeta) UpdateRun(dbConn *sql.DB, modelDef *ModelMeta, langDef *Lan
 	if err != nil {
 		return false, err
 	}
-	err = doInsertRun(trx, modelDef, meta, langDef)
+	err = doInsertRun(trx, modelDef, meta, langDef, doubleFmt)
 	if err != nil {
 		trx.Rollback()
 		return false, err
@@ -259,9 +261,10 @@ func doUpdateRunDigest(trx *sql.Tx, runId int) (string, error) {
 }
 
 // doInsertRun insert new model run metadata in database.
-// It does update as part of transaction
+// It does update as part of transaction.
 // Run status must be completed (success, exit or error) otherwise error returned.
-func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, meta *RunMeta, langDef *LangMeta) error {
+// Double format is used for progress value float conversion, if non-empty format supplied.
+func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, meta *RunMeta, langDef *LangMeta, doubleFmt string) error {
 
 	// validate: run must be completed
 	if !IsRunCompleted(meta.Run.Status) {
@@ -382,6 +385,34 @@ func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, meta *RunMeta, langDef *LangM
 					return err
 				}
 			}
+		}
+	}
+
+	// update sub-values run progress
+	for k := range meta.Progress {
+
+		// convert progress value using double format, if non-empty
+		sVal := ""
+		if doubleFmt != "" {
+			sVal = fmt.Sprintf(doubleFmt, meta.Progress[k].Value)
+		} else {
+			sVal = fmt.Sprint(meta.Progress[k].Value)
+		}
+
+		// insert into run_progress
+		err = TrxUpdate(trx,
+			"INSERT INTO run_progress"+
+				" (run_id, sub_id, create_dt, status, update_dt, progress_count, progress_value)"+
+				" VALUES ("+
+				srId+", "+
+				strconv.Itoa(meta.Progress[k].SubId)+", "+
+				toQuoted(meta.Progress[k].CreateDateTime)+", "+
+				toQuoted(meta.Progress[k].Status)+", "+
+				toQuoted(meta.Progress[k].UpdateDateTime)+", "+
+				strconv.Itoa(meta.Progress[k].Count)+", "+
+				sVal+")")
+		if err != nil {
+			return err
 		}
 	}
 

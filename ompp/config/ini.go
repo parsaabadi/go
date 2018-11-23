@@ -16,7 +16,7 @@ NewIni read ini-file content into  map of (section.key)=>value.
 It is very light and able to parse:
   dsn = "DSN='server'; UID='user'; PWD='pas#word';"   ; comments are # here
 
-Section and key trimed and cannot contain comments ; or # chars inside.
+Section and key are trimed and cannot contain comments ; or # chars inside.
 Key and values trimed and "unquoted".
 Multi-line values not supported.
 Key or value escaped with "double" or 'single' quotes can include spaces or ; or # chars
@@ -53,6 +53,9 @@ func NewIni(iniPath string, encodingName string) (map[string]string, error) {
 	}
 	return kvIni, nil
 }
+
+// iniKey return ini-file key as concatenation: section.key
+func iniKey(section, key string) string { return section + "." + key }
 
 // Parse ini-file content into strings map of (section.key)=>value
 func loadIni(iniContent string) (map[string]string, error) {
@@ -177,6 +180,3 @@ func loadIni(iniContent string) (map[string]string, error) {
 
 	return kvIni, nil
 }
-
-// iniKey return ini-file key as concatenation: section.key
-func iniKey(section, key string) string { return section + "." + key }

@@ -22,10 +22,11 @@ const (
 
 // RunMeta is metadata of model run: name, status, run options, description, notes.
 type RunMeta struct {
-	Run   RunRow            // model run master row: run_lst
-	Txt   []RunTxtRow       // run text rows: run_txt
-	Opts  map[string]string // options used to run the model: run_option
-	Param []runParam        // run parameters: parameter_hid, sub-value count, run_parameter_txt table rows
+	Run      RunRow            // model run master row: run_lst
+	Txt      []RunTxtRow       // run text rows: run_txt
+	Opts     map[string]string // options used to run the model: run_option
+	Param    []runParam        // run parameters: parameter_hid, sub-value count, run_parameter_txt table rows
+	Progress []RunProgress     // run progress by sub-values: run_progress table rows
 }
 
 // RunPub is "public" model run metadata for json import-export
@@ -43,6 +44,7 @@ type RunPub struct {
 	Txt            []DescrNote       // run text: description and notes by language
 	Opts           map[string]string // options used to run the model: run_option
 	Param          []ParamRunSetPub  // run parameters: name, sub-value count and value notes by language
+	Progress       []RunProgress     // run progress by sub-values: run_progress table rows
 }
 
 // ParamRunSetPub is "public" run or workset parameter metadata for json import-export
@@ -59,7 +61,7 @@ type ParamRunSetPub struct {
 type RunRow struct {
 	RunId          int    // run_id        INT          NOT NULL, -- unique run id
 	ModelId        int    // model_id      INT          NOT NULL
-	Name           string // run_name      VARCHAR(255) NOT NULL
+	Name           string // run_name      VARCHAR(255) NOT NULL, -- model run name
 	SubCount       int    // sub_count     INT          NOT NULL, -- subvalue count
 	SubStarted     int    // sub_started   INT          NOT NULL, -- number of subvalues started
 	SubCompleted   int    // sub_completed INT          NOT NULL, -- number of subvalues completed
@@ -92,7 +94,23 @@ type RunParamTxtRow struct {
 	Note     string // note          VARCHAR(32000)
 }
 
-// Model workset metadata: name, parameters, decription, notes.
+// RunProgress is a "public" sub-value run_progress db row
+type RunProgress struct {
+	SubId          int     // sub_id         INT         NOT NULL, -- sub-value id (zero based index)
+	CreateDateTime string  // create_dt      VARCHAR(32) NOT NULL, -- start date-time
+	Status         string  // status         VARCHAR(1)  NOT NULL, -- run status: i=init p=progress s=success x=exit e=error(failed)
+	UpdateDateTime string  // update_dt      VARCHAR(32) NOT NULL, -- last update date-time
+	Count          int     // progress_count INT         NOT NULL, -- progress count: percent completed
+	Value          float64 // progress_value FLOAT       NOT NULL, -- progress value: number of cases (case based) or time (time based)
+}
+
+// runProgressRow is db row of run_progress
+type runProgressRow struct {
+	RunId    int         // run_id         INT         NOT NULL
+	Progress RunProgress // sub-value run progress
+}
+
+// WorksetMeta is a model workset metadata: name, parameters, decription, notes.
 //
 // Workset (working set of model input parameters):
 // it can be a full set, which include all model parameters
