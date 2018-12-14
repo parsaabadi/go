@@ -423,10 +423,10 @@ func cvtValue(param *ParamMeta) func(bool, interface{}) (interface{}, error) {
 
 	if param.typeOf.IsFloat() {
 		return func(isNull bool, src interface{}) (interface{}, error) {
-			if isNull && !isNullable || src == nil {
+			if isNull && !isNullable || !isNull && src == nil {
 				return nil, errors.New("invalid parameter value, it cannot be NULL")
 			}
-			if isNull && isNullable {
+			if isNull {
 				return sql.NullFloat64{Float64: 0.0, Valid: false}, nil
 			}
 			switch src.(type) {
