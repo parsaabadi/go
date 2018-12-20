@@ -218,7 +218,7 @@ func mainBody(args []string) error {
 		AllowOrigin:      []string{"*"},
 		AllowCredentials: true,
 		AllowHeaders:     []string{"Content-Type"},
-		ExposeHeaders:    []string{"Content-Type"},
+		ExposeHeaders:    []string{"Content-Type", "Content-Location"},
 	})
 
 	apiGetRoutes(router)      // web-service /api routes to get metadata

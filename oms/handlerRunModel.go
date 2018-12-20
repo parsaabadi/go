@@ -58,7 +58,7 @@ func modelNewRunHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// write new model run key and json response
-	w.Header().Set("Location", "/api/model/"+modelDigest+"/new-run/"+prs.RunKey)
+	w.Header().Set("Content-Location", "/api/model/"+modelDigest+"/new-run/"+prs.RunKey)
 	jsonResponse(w, r, prs)
 }
 

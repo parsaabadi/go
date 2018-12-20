@@ -36,8 +36,11 @@ func worksetReadonlyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	// update workset read-only status
 	digest, ws, ok := theCatalog.UpdateWorksetReadonly(dn, wsn, isReadonly)
 	if ok {
-		w.Header().Set("Location", "/api/model/"+digest+"/workset/"+ws.Name)
+		w.Header().Set("Content-Location", "/api/model/"+digest+"/workset/"+ws.Name)
+	} else {
+		ws = &db.WorksetRow{}
 	}
+	jsonResponse(w, r, ws)
 }
 
 // worksetDeleteHandler delete workset and workset parameters:
@@ -58,7 +61,7 @@ func worksetDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if ok {
-		w.Header().Set("Location", "/api/model/"+dn+"/workset/"+wsn)
+		w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+wsn)
 	}
 }
 
@@ -236,7 +239,7 @@ func worksetUpdateHandler(isReplace bool, w http.ResponseWriter, r *http.Request
 		theCatalog.UpdateWorksetReadonly(dn, wsn, isReadonly)
 	}
 
-	w.Header().Set("Location", "/api/model/"+dn+"/workset/"+wsn) // respond with workset location
+	w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+wsn) // respond with workset location
 }
 
 // worksetParameterDeleteHandler delete workset parameter:
@@ -258,7 +261,7 @@ func worksetParameterDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if ok {
-		w.Header().Set("Location", "/api/model/"+dn+"/workset/"+wsn+"/parameter/"+name)
+		w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+wsn+"/parameter/"+name)
 	}
 }
 
@@ -341,5 +344,5 @@ func doUpdateParameterPageHandler(w http.ResponseWriter, r *http.Request, isCode
 		return
 	}
 
-	w.Header().Set("Location", "/api/model/"+dn+"/workset/"+wsn+"/parameter/"+name) // respond with workset parameter location
+	w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+wsn+"/parameter/"+name) // respond with workset parameter location
 }
