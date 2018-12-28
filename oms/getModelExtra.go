@@ -61,7 +61,7 @@ func (mc *ModelCatalog) ModelProfileByName(dn, profile string) (*db.ProfileMeta,
 		return &db.ProfileMeta{}, false // return empty result: model not found or error
 	}
 
-	// read groups from database
+	// read profile from database
 	p, err := db.GetProfile(mc.modelLst[idx].dbConn, profile)
 	if err != nil {
 		omppLog.Log("Error at get profile: ", dn, ": ", profile, ": ", err.Error())

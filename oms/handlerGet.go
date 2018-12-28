@@ -178,7 +178,7 @@ func modelGroupAllTextHandler(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, r, mt)
 }
 
-// modelProfileHandler return profile db rows by model digest-or-name must and profile name:
+// modelProfileHandler return profile db rows by model digest-or-name and profile name:
 // GET /api/model-profile?model=modelNameOrDigest&profile=profileName
 // GET /api/model/:model/profile/:profile
 // If no such profile exist in database then empty result returned.

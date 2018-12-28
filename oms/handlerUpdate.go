@@ -11,10 +11,100 @@ import (
 	"path"
 	"strings"
 
-	"go.openmpp.org/ompp/omppLog"
-
 	"go.openmpp.org/ompp/db"
+	"go.openmpp.org/ompp/omppLog"
 )
+
+// profileReplaceHandler replace existing or insert new profile and all profile options.
+// POST /api/model-profile?model=modelNameOrDigest
+// PATCH /api/model/:model/profile
+// POST /api/model/:model/profile
+// Json content: same as return of GET /api/model/:model/profile/:profile.
+// Existing profile rows deleted from database and replaced with new content.
+func profileReplaceHandler(w http.ResponseWriter, r *http.Request) {
+
+	dn := getRequestParam(r, "model")
+
+	var pm db.ProfileMeta
+	if !jsonRequestDecode(w, r, &pm) {
+		return // error at json decode, response done with http error
+	}
+
+	// replace profile in model catalog
+	ok, err := theCatalog.ReplaceProfile(dn, &pm)
+	if err != nil {
+		omppLog.Log(err.Error())
+		http.Error(w, "Profile update failed: "+pm.Name, http.StatusBadRequest)
+		return
+	}
+	if ok {
+		w.Header().Set("Content-Location", "/api/model/"+dn+"/profile/"+pm.Name) // respond with model and profile location
+	}
+}
+
+// profileDeleteHandler delete profile and all profile options:
+// DELETE /api/model/:model/profile/:profile
+// POST /api/model/:model/profile/:profile/delete
+// POST /api/model-profile/delete?model=modelNameOrDigest&profile=profileName
+// If multiple models with same name exist then result is undefined.
+// If no such profile exist in database then no error, empty operation.
+func profileDeleteHandler(w http.ResponseWriter, r *http.Request) {
+
+	dn := getRequestParam(r, "model")
+	profile := getRequestParam(r, "profile")
+
+	ok, err := theCatalog.DeleteProfile(dn, profile)
+	if err != nil {
+		http.Error(w, "Profile delete failed "+dn+": "+profile, http.StatusBadRequest)
+		return
+	}
+	if ok {
+		w.Header().Set("Content-Location", "/api/model/"+dn+"/profile/"+profile)
+	}
+}
+
+// profileOptionReplaceHandler insert new or replace existsing profile and profile option key-value:
+// PATCH /api/model/:model/profile/:profile/key/:key/value/:value
+// POST /api/model/:model/profile/:profile/key/:key/value/:value
+// If multiple models with same name exist then result is undefined.
+// If no such profile or option exist in database then new profile and option inserted.
+func profileOptionReplaceHandler(w http.ResponseWriter, r *http.Request) {
+
+	dn := getRequestParam(r, "model")
+	profile := getRequestParam(r, "profile")
+	key := getRequestParam(r, "key")
+	val := getRequestParam(r, "value")
+
+	ok, err := theCatalog.ReplaceProfileOption(dn, profile, key, val)
+	if err != nil {
+		http.Error(w, "Profile option update failed: "+profile+": "+key, http.StatusBadRequest)
+		return
+	}
+	if ok {
+		w.Header().Set("Content-Location", "/api/model/"+dn+"/profile/"+profile+"/key/"+key)
+	}
+}
+
+// profileOptionDeleteHandler delete profile option key-value pair:
+// DELETE /api/model/:model/profile/:profile/key/:key
+// POST /api/model/:model/profile/:profile/key/:key/delete
+// If multiple models with same name exist then result is undefined.
+// If no such profile or profile option key exist in database then no error, empty operation.
+func profileOptionDeleteHandler(w http.ResponseWriter, r *http.Request) {
+
+	dn := getRequestParam(r, "model")
+	profile := getRequestParam(r, "profile")
+	key := getRequestParam(r, "key")
+
+	ok, err := theCatalog.DeleteProfileOption(dn, profile, key)
+	if err != nil {
+		http.Error(w, "Profile option delete failed: "+profile+": "+key, http.StatusBadRequest)
+		return
+	}
+	if ok {
+		w.Header().Set("Content-Location", "/api/model/"+dn+"/profile/"+profile+"/key/"+key)
+	}
+}
 
 // worksetReadonlyUpdateHandler update workset read-only status by model digest-or-name and workset name:
 // POST /api/workset-readonly?model=modelNameOrDigest&set=setName&readonly=true
