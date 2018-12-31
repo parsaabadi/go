@@ -372,7 +372,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 				smId+", "+
 				strconv.Itoa(modelDef.Param[idx].ParamId)+", "+
 				" D.parameter_hid, "+
-				toBoolStr(modelDef.Param[idx].IsHidden)+
+				toBoolSqlConst(modelDef.Param[idx].IsHidden)+
 				" FROM parameter_dic D"+
 				" WHERE D.parameter_digest = "+toQuoted(modelDef.Param[idx].Digest)+
 				" AND NOT EXISTS"+
@@ -470,7 +470,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 					toQuoted(modelDef.Table[idx].Name)+", "+
 					toQuoted(modelDef.Table[idx].Digest)+", "+
 					strconv.Itoa(modelDef.Table[idx].Rank)+", "+
-					toBoolStr(modelDef.Table[idx].IsSparse)+", "+
+					toBoolSqlConst(modelDef.Table[idx].IsSparse)+", "+
 					toQuoted(modelDef.Table[idx].DbExprTable)+", "+
 					toQuoted(modelDef.Table[idx].DbAccTable)+", "+
 					toQuoted(modelDef.Table[idx].DbAccAllView)+
@@ -494,7 +494,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 						strconv.Itoa(modelDef.Table[idx].Dim[j].DimId)+", "+
 						toQuoted(modelDef.Table[idx].Dim[j].Name)+", "+
 						strconv.Itoa(modelDef.Table[idx].Dim[j].typeOf.TypeHid)+", "+
-						toBoolStr(modelDef.Table[idx].Dim[j].IsTotal)+", "+
+						toBoolSqlConst(modelDef.Table[idx].Dim[j].IsTotal)+", "+
 						strconv.Itoa(modelDef.Table[idx].Dim[j].DimSize)+")")
 				if err != nil {
 					return err
@@ -513,7 +513,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 						strconv.Itoa(modelDef.Table[idx].TableHid)+", "+
 						strconv.Itoa(modelDef.Table[idx].Acc[j].AccId)+", "+
 						toQuoted(modelDef.Table[idx].Acc[j].Name)+", "+
-						toBoolStr(modelDef.Table[idx].Acc[j].IsDerived)+", "+
+						toBoolSqlConst(modelDef.Table[idx].Acc[j].IsDerived)+", "+
 						toQuoted(modelDef.Table[idx].Acc[j].SrcAcc)+", "+
 						toQuoted(modelDef.Table[idx].Acc[j].AccSql)+")")
 				if err != nil {
@@ -584,7 +584,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 				smId+", "+
 				strconv.Itoa(modelDef.Table[idx].TableId)+", "+
 				" D.table_hid, "+
-				toBoolStr(modelDef.Table[idx].IsUser)+", "+
+				toBoolSqlConst(modelDef.Table[idx].IsUser)+", "+
 				strconv.Itoa(modelDef.Table[idx].ExprPos)+
 				" FROM table_dic D"+
 				" WHERE D.table_digest = "+toQuoted(modelDef.Table[idx].Digest)+

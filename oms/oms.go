@@ -617,28 +617,20 @@ func apiReadCsvRoutes(router *vestigo.Router) {
 func apiUpdateRoutes(router *vestigo.Router) {
 
 	// PATCH /api/model/:model/profile
-	// POST /api/model/:model/profile
 	// POST /api/model-profile?model=modelNameOrDigest
 	router.Patch("/api/model/:model/profile", profileReplaceHandler, logRequest)
-	router.Post("/api/model/:model/profile", profileReplaceHandler, logRequest)
 	router.Post("/api/model-profile", profileReplaceHandler, logRequest)
 
 	// DELETE /api/model/:model/profile/:profile
-	// POST /api/model/:model/profile/:profile/delete
-	// POST /api/model-profile/delete?model=modelNameOrDigest&profile=profileName
+	// POST /api/model-profile-delete?model=modelNameOrDigest&profile=profileName
 	router.Delete("/api/model/:model/profile/:profile", profileDeleteHandler, logRequest)
-	router.Post("/api/model/:model/profile/:profile/delete", profileDeleteHandler, logRequest)
-	router.Post("/api/model-profile/delete", profileDeleteHandler, logRequest)
+	router.Post("/api/model-profile-delete", profileDeleteHandler, logRequest)
 
-	// PATCH /api/model/:model/profile/:profile/key/:key/value/:value
 	// POST /api/model/:model/profile/:profile/key/:key/value/:value
-	router.Patch("/api/model/:model/profile/:profile/key/:key/value/:value", profileOptionReplaceHandler, logRequest)
 	router.Post("/api/model/:model/profile/:profile/key/:key/value/:value", profileOptionReplaceHandler, logRequest)
 
 	// DELETE /api/model/:model/profile/:profile/key/:key
-	// POST /api/model/:model/profile/:profile/key/:key/delete
 	router.Delete("/api/model/:model/profile/:profile/key/:key", profileOptionDeleteHandler, logRequest)
-	router.Post("/api/model/:model/profile/:profile/key/:key/delete", profileOptionDeleteHandler, logRequest)
 
 	// POST /api/workset-readonly?model=modelNameOrDigest&set=setName&readonly=true
 	// POST /api/model/:model/workset/:set/readonly/:readonly
@@ -682,6 +674,16 @@ func apiUpdateRoutes(router *vestigo.Router) {
 	router.Post("/api/workset-parameter-new-value-id", parameterIdPageUpdateHandler, logRequest)
 	router.Patch("/api/model/:model/workset/:set/parameter/:name/new/value-id", parameterIdPageUpdateHandler, logRequest)
 	router.Post("/api/model/:model/workset/:set/parameter/:name/new/value-id", parameterIdPageUpdateHandler, logRequest)
+
+	// PUT /api/model/:model/workset/:set/copy/parameter/:name/from-run/:run
+	// POST /api/copy-parameter-from-run?model=modelNameOrDigest&set=setName&name=parameterName&run=runNameOrDigest"
+	router.Put("/api/model/:model/workset/:set/copy/parameter/:name/from-run/:run", worksetParameterRunCopyHandler, logRequest)
+	router.Post("/api/copy-parameter-from-run", worksetParameterRunCopyHandler, logRequest)
+
+	// PUT /api/model/:model/workset/:set/copy/parameter/:name/from-workset/:from-set
+	// POST /api/copy-parameter-from-workset?model=modelNameOrDigest&set=dstSetName&name=parameterName&from-set=srcSetName"
+	router.Put("/api/model/:model/workset/:set/copy/parameter/:name/from-workset/:from-set", worksetParameterCopyFromWsHandler, logRequest)
+	router.Post("/api/copy-parameter-from-workset", worksetParameterCopyFromWsHandler, logRequest)
 }
 
 // add web-service /api routes to run the model and monitor progress

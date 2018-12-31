@@ -16,9 +16,8 @@ import (
 )
 
 // profileReplaceHandler replace existing or insert new profile and all profile options.
-// POST /api/model-profile?model=modelNameOrDigest
 // PATCH /api/model/:model/profile
-// POST /api/model/:model/profile
+// POST /api/model-profile?model=modelNameOrDigest
 // Json content: same as return of GET /api/model/:model/profile/:profile.
 // Existing profile rows deleted from database and replaced with new content.
 func profileReplaceHandler(w http.ResponseWriter, r *http.Request) {
@@ -44,8 +43,7 @@ func profileReplaceHandler(w http.ResponseWriter, r *http.Request) {
 
 // profileDeleteHandler delete profile and all profile options:
 // DELETE /api/model/:model/profile/:profile
-// POST /api/model/:model/profile/:profile/delete
-// POST /api/model-profile/delete?model=modelNameOrDigest&profile=profileName
+// POST /api/model-profile-delete?model=modelNameOrDigest&profile=profileName
 // If multiple models with same name exist then result is undefined.
 // If no such profile exist in database then no error, empty operation.
 func profileDeleteHandler(w http.ResponseWriter, r *http.Request) {
@@ -64,7 +62,6 @@ func profileDeleteHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // profileOptionReplaceHandler insert new or replace existsing profile and profile option key-value:
-// PATCH /api/model/:model/profile/:profile/key/:key/value/:value
 // POST /api/model/:model/profile/:profile/key/:key/value/:value
 // If multiple models with same name exist then result is undefined.
 // If no such profile or option exist in database then new profile and option inserted.
@@ -87,7 +84,6 @@ func profileOptionReplaceHandler(w http.ResponseWriter, r *http.Request) {
 
 // profileOptionDeleteHandler delete profile option key-value pair:
 // DELETE /api/model/:model/profile/:profile/key/:key
-// POST /api/model/:model/profile/:profile/key/:key/delete
 // If multiple models with same name exist then result is undefined.
 // If no such profile or profile option key exist in database then no error, empty operation.
 func profileOptionDeleteHandler(w http.ResponseWriter, r *http.Request) {
@@ -435,4 +431,53 @@ func doUpdateParameterPageHandler(w http.ResponseWriter, r *http.Request, isCode
 	}
 
 	w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+wsn+"/parameter/"+name) // respond with workset parameter location
+}
+
+// worksetParameterRunCopyHandler copy parameter into workset from model run:
+// PUT /api/model/:model/workset/:set/copy/parameter/:name/from-run/:run
+// POST /api/copy-parameter-from-run?model=modelNameOrDigest&set=setName&name=parameterName&run=runNameOrDigest"
+// If multiple models with same name exist then result is undefined.
+// If such parameter already exist in destination workset then return error.
+// Destination workset must be in read-write state.
+// Run must be completed, run status one of: s=success, x=exit, e=error.
+func worksetParameterRunCopyHandler(w http.ResponseWriter, r *http.Request) {
+
+	// url or query parameters
+	dn := getRequestParam(r, "model")  // model digest-or-name
+	wsn := getRequestParam(r, "set")   // workset name
+	name := getRequestParam(r, "name") // parameter name
+	rdn := getRequestParam(r, "run")   // source run digest or name
+
+	// copy workset parameter from model run
+	err := theCatalog.CopyParameterToWsFromRun(dn, wsn, name, rdn)
+	if err != nil {
+		omppLog.Log(err.Error())
+		http.Error(w, "Workset parameter copy failed "+wsn+": "+name+" from run: "+rdn, http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+wsn+"/parameter/"+name)
+}
+
+// worksetParameterCopyFromWsHandler copy parameter from one workset to another:
+// PUT /api/model/:model/workset/:set/copy/parameter/:name/from-workset/:from-set
+// POST /api/copy-parameter-from-workset?model=modelNameOrDigest&set=dstSetName&name=parameterName&from-set=srcSetName"
+// If multiple models with same name exist then result is undefined.
+// If such parameter already exist in destination workset then return error.
+// Destination workset must be in read-write state, source workset must be read-only.
+func worksetParameterCopyFromWsHandler(w http.ResponseWriter, r *http.Request) {
+
+	// url or query parameters
+	dn := getRequestParam(r, "model")           // model digest-or-name
+	dstWsName := getRequestParam(r, "set")      // workset name
+	name := getRequestParam(r, "name")          // parameter name
+	srcWsName := getRequestParam(r, "from-set") // source run digest or name
+
+	// copy workset parameter from other workset
+	err := theCatalog.CopyParameterBetweenWs(dn, dstWsName, name, srcWsName)
+	if err != nil {
+		omppLog.Log(err.Error())
+		http.Error(w, "Workset parameter copy failed "+dstWsName+": "+name+" from run: "+srcWsName, http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+dstWsName+"/parameter/"+name)
 }

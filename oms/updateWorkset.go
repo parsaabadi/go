@@ -364,3 +364,150 @@ func (mc *ModelCatalog) UpdateWorksetParameterPage(dn, wsn, name string, cellLst
 	// write parameter values
 	return db.WriteParameter(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, &layout, cellLst)
 }
+
+// CopyParameterToWsFromRun copy parameter metadata and values into workset from model run.
+// If parameter already exist in destination workset then error returned.
+// Destination workset must be in read-write state.
+// Source model run must be completed, run status one of: s=success, x=exit, e=error.
+func (mc *ModelCatalog) CopyParameterToWsFromRun(dn, wsn, name, rdn string) error {
+
+	// validate parameters
+	if dn == "" {
+		return errors.New("Parameter copy failed: invalid (empty) model digest and name")
+	}
+	if wsn == "" {
+		return errors.New("Parameter copy failed: invalid (empty) workset name")
+	}
+	if name == "" {
+		return errors.New("Parameter copy failed: invalid (empty) parameter name")
+	}
+	if rdn == "" {
+		return errors.New("Parameter copy failed: invalid (empty) model run name")
+	}
+
+	// if model metadata not loaded then read it from database
+	idx, ok := mc.loadModelMeta(dn)
+	if !ok {
+		return errors.New("Model digest or name not found: " + dn)
+	}
+
+	// lock catalog to update workset
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	// search model parameter by name
+	pHid := 0
+	if k, ok := mc.modelLst[idx].meta.ParamByName(name); ok {
+		pHid = mc.modelLst[idx].meta.Param[k].ParamHid
+	} else {
+		return errors.New("Parameter " + name + " not found in model: " + dn)
+	}
+
+	// find workset by name: it must be read-write
+	wst, ok := mc.loadWorksetByName(idx, wsn)
+	if !ok || wst == nil {
+		return errors.New("Workset not found or error at get workset status: " + dn + ": " + wsn)
+	}
+	if wst.IsReadonly {
+		return errors.New("Parameter copy failed, destination workset is read-only: " + wsn + ": " + name)
+	}
+
+	// if parameter already in the workset then return error
+	hIds, _, err := db.GetWorksetParamList(mc.modelLst[idx].dbConn, wst.SetId)
+	if err != nil {
+		return errors.New("Error at getting workset parameters list: " + wsn + ": " + err.Error())
+	}
+	for _, h := range hIds {
+		if h == pHid {
+			return errors.New("Parameter copy failed, workset already contains parameter: " + wsn + ": " + name)
+		}
+	}
+
+	// find run by digest or name: it must be completed
+	rst, ok := mc.loadCompletedRunByDigestOrName(idx, rdn)
+	if !ok || rst == nil {
+		return errors.New("Model not found or not completed: " + dn + ": " + rdn)
+	}
+
+	// copy parameter into workset from model run
+	err = db.CopyParameterFromRun(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, wst, name, rst)
+	if err != nil {
+		return errors.New("Parameter copy failed: " + wsn + ": " + name + ": " + err.Error())
+	}
+	return nil
+}
+
+// CopyParameterBetweenWs copy parameter metadata and values into workset from other workset.
+// If parameter already exist in destination workset then error returned.
+// Destination workset must be in read-write state, source workset must be read-only.
+// Source model run must be completed, run status one of: s=success, x=exit, e=error.
+func (mc *ModelCatalog) CopyParameterBetweenWs(dn, dstWsName, name, srcWsName string) error {
+
+	// validate parameters
+	if dn == "" {
+		return errors.New("Parameter copy failed: invalid (empty) model digest and name")
+	}
+	if dstWsName == "" {
+		return errors.New("Parameter copy failed: invalid (empty) destination workset name")
+	}
+	if name == "" {
+		return errors.New("Parameter copy failed: invalid (empty) parameter name")
+	}
+	if srcWsName == "" {
+		return errors.New("Parameter copy failed: invalid (empty) source workset name")
+	}
+
+	// if model metadata not loaded then read it from database
+	idx, ok := mc.loadModelMeta(dn)
+	if !ok {
+		return errors.New("Model digest or name not found: " + dn)
+	}
+
+	// lock catalog to update workset
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	// search model parameter by name
+	pHid := 0
+	if k, ok := mc.modelLst[idx].meta.ParamByName(name); ok {
+		pHid = mc.modelLst[idx].meta.Param[k].ParamHid
+	} else {
+		return errors.New("Parameter " + name + " not found in model: " + dn)
+	}
+
+	// find destination workset by name: it must be read-write
+	dstWs, ok := mc.loadWorksetByName(idx, dstWsName)
+	if !ok || dstWs == nil {
+		return errors.New("Workset not found or error at get workset status: " + dn + ": " + dstWsName)
+	}
+	if dstWs.IsReadonly {
+		return errors.New("Parameter copy failed, destination workset is read-only: " + dstWsName + ": " + name)
+	}
+
+	// if parameter already in the workset then return error
+	hIds, _, err := db.GetWorksetParamList(mc.modelLst[idx].dbConn, dstWs.SetId)
+	if err != nil {
+		return errors.New("Error at getting workset parameters list: " + dstWsName + ": " + err.Error())
+	}
+	for _, h := range hIds {
+		if h == pHid {
+			return errors.New("Parameter copy failed, workset already contains parameter: " + dstWsName + ": " + name)
+		}
+	}
+
+	// find source workset by name: it must be read-only
+	srcWs, ok := mc.loadWorksetByName(idx, srcWsName)
+	if !ok || srcWs == nil {
+		return errors.New("Workset not found or error at get workset status: " + dn + ": " + srcWsName)
+	}
+	if !srcWs.IsReadonly {
+		return errors.New("Parameter copy failed, source workset must be read-only: " + srcWsName + ": " + name)
+	}
+
+	// copy parameter from one workset to another
+	err = db.CopyParameterFromWorkset(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, dstWs, name, srcWs)
+	if err != nil {
+		return errors.New("Parameter copy failed: " + dstWsName + ": " + name + ": " + err.Error())
+	}
+	return nil
+}

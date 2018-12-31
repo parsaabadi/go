@@ -7,9 +7,8 @@ import (
 	"database/sql"
 	"sync"
 
-	"golang.org/x/text/language"
-
 	"go.openmpp.org/ompp/db"
+	"golang.org/x/text/language"
 )
 
 // ModelCatalog is a list of the models and database connections.

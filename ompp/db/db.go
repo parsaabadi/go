@@ -186,7 +186,7 @@ func toQuotedOrNull(src string) string {
 }
 
 // convert boolean to sql value: true=1, false=0
-func toBoolStr(isValue bool) string {
+func toBoolSqlConst(isValue bool) string {
 	if isValue {
 		return "1"
 	}

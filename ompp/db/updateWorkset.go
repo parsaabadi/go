@@ -22,7 +22,7 @@ func UpdateWorksetReadonly(dbConn *sql.DB, setId int, isReadonly bool) error {
 	}
 	err = TrxUpdate(trx,
 		"UPDATE workset_lst"+
-			" SET is_readonly = "+toBoolStr(isReadonly)+", "+" update_dt = "+toQuoted(helper.MakeDateTime(time.Now()))+
+			" SET is_readonly = "+toBoolSqlConst(isReadonly)+", "+" update_dt = "+toQuoted(helper.MakeDateTime(time.Now()))+
 			" WHERE set_id ="+strconv.Itoa(setId))
 	if err != nil {
 		trx.Rollback()
@@ -43,7 +43,7 @@ func UpdateWorksetReadonlyByName(dbConn *sql.DB, modelId int, name string, isRea
 	}
 	err = TrxUpdate(trx,
 		"UPDATE workset_lst"+
-			" SET is_readonly = "+toBoolStr(isReadonly)+", "+" update_dt = "+toQuoted(helper.MakeDateTime(time.Now()))+
+			" SET is_readonly = "+toBoolSqlConst(isReadonly)+", "+" update_dt = "+toQuoted(helper.MakeDateTime(time.Now()))+
 			" WHERE set_id = ("+
 			" SELECT MIN(W.set_id) FROM workset_lst W"+
 			" WHERE W.model_id = "+strconv.Itoa(modelId)+
@@ -258,7 +258,7 @@ func doInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, langDe
 			sbId+", "+
 			strconv.Itoa(modelDef.Model.ModelId)+", "+
 			toQuoted(meta.Set.Name)+", "+
-			toBoolStr(meta.Set.IsReadonly)+", "+
+			toBoolSqlConst(meta.Set.IsReadonly)+", "+
 			toQuoted(meta.Set.UpdateDateTime)+")")
 	if err != nil {
 		return err
@@ -296,7 +296,7 @@ func doReplaceWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, langD
 	}
 	err := TrxUpdate(trx,
 		"UPDATE workset_lst"+
-			" SET is_readonly = "+toBoolStr(meta.Set.IsReadonly)+", "+
+			" SET is_readonly = "+toBoolSqlConst(meta.Set.IsReadonly)+", "+
 			" base_run_id = "+sbId+", "+
 			" update_dt = "+toQuoted(meta.Set.UpdateDateTime)+
 			" WHERE set_id ="+sId)

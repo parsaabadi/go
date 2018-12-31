@@ -99,9 +99,9 @@ func doUpdateGroupAll(trx *sql.Tx, modelId int, langDef *LangMeta, modelGroup *G
 				" VALUES ("+
 				smId+", "+
 				strconv.Itoa(modelGroup.GroupLst[idx].GroupId)+", "+
-				toBoolStr(modelGroup.GroupLst[idx].IsParam)+", "+
+				toBoolSqlConst(modelGroup.GroupLst[idx].IsParam)+", "+
 				toQuoted(modelGroup.GroupLst[idx].Name)+", "+
-				toBoolStr(modelGroup.GroupLst[idx].IsHidden)+")")
+				toBoolSqlConst(modelGroup.GroupLst[idx].IsHidden)+")")
 		if err != nil {
 			return err
 		}
