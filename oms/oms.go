@@ -630,7 +630,9 @@ func apiUpdateRoutes(router *vestigo.Router) {
 	router.Post("/api/model/:model/profile/:profile/key/:key/value/:value", profileOptionReplaceHandler, logRequest)
 
 	// DELETE /api/model/:model/profile/:profile/key/:key
+	// POST /api/model-profile-key-delete?model=modelNameOrDigest&profile=profileName&key=someKey
 	router.Delete("/api/model/:model/profile/:profile/key/:key", profileOptionDeleteHandler, logRequest)
+	router.Post("/api/model-profile-key-delete", profileOptionDeleteHandler, logRequest)
 
 	// POST /api/workset-readonly?model=modelNameOrDigest&set=setName&readonly=true
 	// POST /api/model/:model/workset/:set/readonly/:readonly

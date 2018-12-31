@@ -84,6 +84,7 @@ func profileOptionReplaceHandler(w http.ResponseWriter, r *http.Request) {
 
 // profileOptionDeleteHandler delete profile option key-value pair:
 // DELETE /api/model/:model/profile/:profile/key/:key
+// POST /api/model-profile-key-delete?model=modelNameOrDigest&profile=profileName&key=someKey
 // If multiple models with same name exist then result is undefined.
 // If no such profile or profile option key exist in database then no error, empty operation.
 func profileOptionDeleteHandler(w http.ResponseWriter, r *http.Request) {

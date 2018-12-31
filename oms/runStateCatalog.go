@@ -40,7 +40,6 @@ type procRunState struct {
 }
 
 // RunState is model run state.
-// Last run log file name is time-stamped: modelName.YYYY_MM_DD_hh_mm_ss_0SSS.log
 type RunState struct {
 	RunKey         string // run key: modelName.timestamp
 	IsFinal        bool   // final state, model completed
