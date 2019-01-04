@@ -305,13 +305,14 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 
 			// INSERT INTO parameter_dic
 			//   (parameter_hid, parameter_name, parameter_digest, db_run_table,
-			//   db_set_table, parameter_rank, type_hid, num_cumulated)
+			//   db_set_table, parameter_rank, type_hid, is_extendable, num_cumulated)
 			// VALUES
-			//   (4, 'ageSex', '978abf5', 'ageSex', '2012817', 2, 14, 0)
+			//   (4, 'ageSex', '978abf5', 'ageSex', '2012817', 2, 14, 1, 0)
 			err = TrxUpdate(trx,
 				"INSERT INTO parameter_dic"+
 					" (parameter_hid, parameter_name, parameter_digest, db_run_table,"+
-					" db_set_table, parameter_rank, type_hid, num_cumulated)"+
+					" db_set_table, parameter_rank, type_hid, is_extendable,"+
+					" num_cumulated)"+
 					" VALUES ("+
 					strconv.Itoa(modelDef.Param[idx].ParamHid)+", "+
 					toQuoted(modelDef.Param[idx].Name)+", "+
@@ -320,6 +321,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 					toQuoted(modelDef.Param[idx].DbSetTable)+", "+
 					strconv.Itoa(modelDef.Param[idx].Rank)+", "+
 					strconv.Itoa(modelDef.Param[idx].typeOf.TypeHid)+", "+
+					toBoolSqlConst(modelDef.Param[idx].IsExtendable)+", "+
 					strconv.Itoa(modelDef.Param[idx].NumCumulated)+")")
 			if err != nil {
 				return err
@@ -609,7 +611,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 //  sub_id      INT   NOT NULL,
 //  dim0        INT   NOT NULL,
 //  dim1        INT   NOT NULL,
-//  param_value FLOAT NOT NULL,
+//  param_value FLOAT NOT NULL, -- can be NULL
 //  PRIMARY KEY (run_id, sub_id, dim0, dim1)
 // )
 //
@@ -619,7 +621,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 //  sub_id      INT   NOT NULL,
 //  dim0        INT   NOT NULL,
 //  dim1        INT   NOT NULL,
-//  param_value FLOAT NOT NULL,
+//  param_value FLOAT NOT NULL, -- can be NULL
 //  PRIMARY KEY (set_id, sub_id, dim0, dim1)
 // )
 func paramCreateTable(dbFacet Facet, param *ParamMeta) (string, string, error) {
@@ -633,7 +635,11 @@ func paramCreateTable(dbFacet Facet, param *ParamMeta) (string, string, error) {
 	if err != nil {
 		return "", "", nil
 	}
-	colPart += "param_value " + tname + " NOT NULL, "
+	if param.IsExtendable {
+		colPart += "param_value " + tname + " NULL, " // "extendable" parameter means value can be NULL
+	} else {
+		colPart += "param_value " + tname + " NOT NULL, "
+	}
 
 	keyPart := ""
 	for k := range param.Dim {

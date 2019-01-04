@@ -251,14 +251,19 @@ type TaskRunSetRow struct {
 	TaskId    int // task_id     INT NOT NULL
 }
 
-// TaskPub is "public" modeling task metadata for json import-export
+// TaskPub is "public" modeling task metadata, task input worksets and task run history for json import-export
 type TaskPub struct {
-	ModelName   string       // model name for that task list
-	ModelDigest string       // model digest for that task list
-	Name        string       // task_name    VARCHAR(255) NOT NULL
-	Txt         []DescrNote  // task text: description and notes by language
-	Set         []string     // task body: list of workset names
-	TaskRun     []taskRunPub // task run history: task_run_lst
+	TaskDefPub              // task definition: metadata and input worksets
+	TaskRun    []taskRunPub // task run history: task_run_lst
+}
+
+// TaskDefPub is "public" modeling task metadata and task input worksets for json import-export
+type TaskDefPub struct {
+	ModelName   string      // model name for that task list
+	ModelDigest string      // model digest for that task list
+	Name        string      // task_name    VARCHAR(255) NOT NULL
+	Txt         []DescrNote // task text: description and notes by language
+	Set         []string    // task body: list of workset names
 }
 
 // taskRunPub is "public" metadata of task run history.
