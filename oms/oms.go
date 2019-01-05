@@ -346,111 +346,132 @@ func apiGetRoutes(router *vestigo.Router) {
 	// GET model run results
 	//
 
-	// GET /api/run-list?model=modelNameOrDigest
 	// GET /api/model/:model/run-list
-	router.Get("/api/run-list", runListHandler, logRequest)
+	// GET /api/run-list?model=modelNameOrDigest
 	router.Get("/api/model/:model/run-list", runListHandler, logRequest)
+	router.Get("/api/run-list", runListHandler, logRequest)
 
-	// GET /api/run-list-text?model=modelNameOrDigest&lang=en
 	// GET /api/model/:model/run-list/text
 	// GET /api/model/:model/run-list/text/lang/:lang
-	router.Get("/api/run-list-text", runListTextHandler, logRequest)
+	// GET /api/run-list-text?model=modelNameOrDigest&lang=en
 	router.Get("/api/model/:model/run-list/text", runListTextHandler, logRequest)
 	router.Get("/api/model/:model/run-list/text/lang/:lang", runListTextHandler, logRequest)
+	router.Get("/api/run-list-text", runListTextHandler, logRequest)
 
-	// GET /api/run-status?model=modelNameOrDigest&run=runNameOrDigest
 	// GET /api/model/:model/run/:run/status
-	router.Get("/api/run-status", runStatusHandler, logRequest)
+	// GET /api/run-status?model=modelNameOrDigest&run=runNameOrDigest
 	router.Get("/api/model/:model/run/:run/status", runStatusHandler, logRequest)
+	router.Get("/api/run-status", runStatusHandler, logRequest)
 
-	// GET /api/run-first-status?model=modelNameOrDigest
 	// GET /api/model/:model/run/status/first
-	router.Get("/api/run-first-status", firstRunStatusHandler, logRequest)
+	// GET /api/run-first-status?model=modelNameOrDigest
 	router.Get("/api/model/:model/run/status/first", firstRunStatusHandler, logRequest)
+	router.Get("/api/run-first-status", firstRunStatusHandler, logRequest)
 
-	// GET /api/run-last-status?model=modelNameOrDigest
 	// GET /api/model/:model/run/status/last
-	router.Get("/api/run-last-status", lastRunStatusHandler, logRequest)
+	// GET /api/run-last-status?model=modelNameOrDigest
 	router.Get("/api/model/:model/run/status/last", lastRunStatusHandler, logRequest)
+	router.Get("/api/run-last-status", lastRunStatusHandler, logRequest)
 
-	// GET /api/run-last-completed-status?model=modelNameOrDigest
 	// GET /api/model/:model/run/status/last/completed
-	router.Get("/api/run-last-completed-status", lastCompletedRunStatusHandler, logRequest)
+	// GET /api/run-last-completed-status?model=modelNameOrDigest
 	router.Get("/api/model/:model/run/status/last/completed", lastCompletedRunStatusHandler, logRequest)
+	router.Get("/api/run-last-completed-status", lastCompletedRunStatusHandler, logRequest)
 
-	// GET /api/run-text?model=modelNameOrDigest&run=runNameOrDigest&lang=en
 	// GET /api/model/:model/run/:run/text
-	// GET /api/model/:model/run/:run/text/
-	// GET /api/model/:model/run/:run/text/lang/
 	// GET /api/model/:model/run/:run/text/lang/:lang
-	router.Get("/api/run-text", runTextHandler, logRequest)
+	// GET /api/run-text?model=modelNameOrDigest&run=runNameOrDigest&lang=en
 	router.Get("/api/model/:model/run/:run/text", runTextHandler, logRequest)
-	router.Get("/api/model/:model/run/:run/text/", runTextHandler, logRequest)
-	router.Get("/api/model/:model/run/:run/text/lang/", runTextHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/text/lang/:lang", runTextHandler, logRequest)
+	router.Get("/api/run-text", runTextHandler, logRequest)
 
-	// GET /api/run-text-all?model=modelNameOrDigest&run=runNameOrDigest
 	// GET /api/model/:model/run/:run/text/all
-	router.Get("/api/run-text-all", runAllTextHandler, logRequest)
+	// GET /api/run-text-all?model=modelNameOrDigest&run=runNameOrDigest
 	router.Get("/api/model/:model/run/:run/text/all", runAllTextHandler, logRequest)
+	router.Get("/api/run-text-all", runAllTextHandler, logRequest)
 
-	// GET /api/run-last-completed-text?model=modelNameOrDigest&lang=en
 	// GET /api/model/:model/run/last/completed/text
 	// GET /api/model/:model/run/last/completed/text/lang/:lang
-	router.Get("/api/run-last-completed-text", lastCompletedRunTextHandler, logRequest)
+	// GET /api/run-last-completed-text?model=modelNameOrDigest&lang=en
 	router.Get("/api/model/:model/run/last/completed/text", lastCompletedRunTextHandler, logRequest)
 	router.Get("/api/model/:model/run/last/completed/text/lang/:lang", lastCompletedRunTextHandler, logRequest)
+	router.Get("/api/run-last-completed-text", lastCompletedRunTextHandler, logRequest)
 
-	// GET /api/run-last-completed-text-all?model=modelNameOrDigest
 	// GET /api/model/:model/run/last/completed/text/all
-	router.Get("/api/run-last-completed-text-all", lastCompletedRunAllTextHandler, logRequest)
+	// GET /api/run-last-completed-text-all?model=modelNameOrDigest
 	router.Get("/api/model/:model/run/last/completed/text/all", lastCompletedRunAllTextHandler, logRequest)
+	router.Get("/api/run-last-completed-text-all", lastCompletedRunAllTextHandler, logRequest)
 
 	//
 	// GET model set of input parameters (workset)
 	//
 
-	// GET /api/workset-list?model=modelNameOrDigest
 	// GET /api/model/:model/workset-list
+	// GET /api/workset-list?model=modelNameOrDigest
 	router.Get("/api/workset-list", worksetListHandler, logRequest)
 	router.Get("/api/model/:model/workset-list", worksetListHandler, logRequest)
 
-	// GET /api/workset-list-text?model=modelNameOrDigest&lang=en
 	// GET /api/model/:model/workset-list/text
 	// GET /api/model/:model/workset-list/text/lang/:lang
+	// GET /api/workset-list-text?model=modelNameOrDigest&lang=en
 	router.Get("/api/workset-list-text", worksetListTextHandler, logRequest)
 	router.Get("/api/model/:model/workset-list/text", worksetListTextHandler, logRequest)
 	router.Get("/api/model/:model/workset-list/text/lang/:lang", worksetListTextHandler, logRequest)
 
-	// GET /api/workset-status?model=modelNameOrDigest&set=setName
 	// GET /api/model/:model/workset/:set
-	// GET /api/model/:model/workset/:set/
-	// GET /api/model/:model/workset/:set/status
+	// GET /api/workset-status?model=modelNameOrDigest&set=setName
 	router.Get("/api/workset-status", worksetStatusHandler, logRequest)
-	router.Get("/api/model/:model/workset/:set", worksetStatusHandler, logRequest)
-	router.Get("/api/model/:model/workset/:set/", worksetStatusHandler, logRequest)
 	router.Get("/api/model/:model/workset/:set/status", worksetStatusHandler, logRequest)
 
-	// GET /api/workset-default-status?model=modelNameOrDigest
 	// GET /api/model/:model/workset/status/default
+	// GET /api/workset-default-status?model=modelNameOrDigest
 	router.Get("/api/workset-default-status", worksetDefaultStatusHandler, logRequest)
 	router.Get("/api/model/:model/workset/status/default", worksetDefaultStatusHandler, logRequest)
 
-	// GET /api/workset-text?model=modelNameOrDigest&set=setName&lang=en
 	// GET /api/model/:model/workset/:set/text
-	// GET /api/model/:model/workset/:set/text/
-	// GET /api/model/:model/workset/:set/text/lang/
 	// GET /api/model/:model/workset/:set/text/lang/:lang
+	// GET /api/workset-text?model=modelNameOrDigest&set=setName&lang=en
 	router.Get("/api/workset-text", worksetTextHandler, logRequest)
 	router.Get("/api/model/:model/workset/:set/text", worksetTextHandler, logRequest)
-	router.Get("/api/model/:model/workset/:set/text/", worksetTextHandler, logRequest)
-	router.Get("/api/model/:model/workset/:set/text/lang/", worksetTextHandler, logRequest)
 	router.Get("/api/model/:model/workset/:set/text/lang/:lang", worksetTextHandler, logRequest)
 
-	// GET /api/workset-text-all?model=modelNameOrDigest&set=setName
 	// GET /api/model/:model/workset/:set/text/all
+	// GET /api/workset-text-all?model=modelNameOrDigest&set=setName
 	router.Get("/api/workset-text-all", worksetAllTextHandler, logRequest)
 	router.Get("/api/model/:model/workset/:set/text/all", worksetAllTextHandler, logRequest)
+
+	//
+	// GET model tasks and task run history
+	//
+
+	// GET /api/model/:model/task-list
+	// GET /api/task-list?model=modelNameOrDigest
+	router.Get("/api/model/:model/task-list", taskListHandler, logRequest)
+	router.Get("/api/task-list", taskListHandler, logRequest)
+
+	// GET /api/model/:model/task-list/text
+	// GET /api/model/:model/task-list/text/lang/:lang
+	// GET /api/task-list-text?model=modelNameOrDigest&lang=en
+	router.Get("/api/model/:model/task-list/text", taskListTextHandler, logRequest)
+	router.Get("/api/model/:model/task-list/text/lang/:lang", taskListTextHandler, logRequest)
+	router.Get("/api/task-list-text", taskListTextHandler, logRequest)
+
+	// GET /api/model/:model/task/:task/sets
+	// GET /api/task-text-sets?model=modelNameOrDigest&task=taskName
+	router.Get("/api/model/:model/task/:task/sets", taskSetsHandler, logRequest)
+	router.Get("/api/task-text-sets", taskSetsHandler, logRequest)
+
+	// GET /api/model/:model/task/:task/text
+	// GET /api/model/:model/task/:task/text/lang/:lang
+	// GET /api/task-text?model=modelNameOrDigest&task=taskName&lang=en
+	router.Get("/api/model/:model/task/:task/text", taskTextHandler, logRequest)
+	router.Get("/api/model/:model/task/:task/text/lang/:lang", taskTextHandler, logRequest)
+	router.Get("/api/task-text", taskTextHandler, logRequest)
+
+	// GET /api/model/:model/task/:task/text/all
+	// GET /api/task-text-all?model=modelNameOrDigest&task=taskName
+	router.Get("/api/model/:model/task/:task/text/all", taskAllTextHandler, logRequest)
+	router.Get("/api/task-text-all", taskAllTextHandler, logRequest)
 }
 
 // add http GET or POST web-service /api routes to read parameters or output tables

@@ -208,8 +208,7 @@ func (mc *ModelCatalog) RunList(dn string) ([]db.RunPub, bool) {
 		return []db.RunPub{}, false // return empty result: run select error
 	}
 	if len(rl) <= 0 {
-		// omppLog.Log("Warning: there is no runs found for the model: ", dn)
-		return []db.RunPub{}, false // return empty result: run_lst rows not found for that model
+		return []db.RunPub{}, true // return empty result: run_lst rows not found for that model
 	}
 
 	// for each run_lst convert it to "public" run format
@@ -231,7 +230,7 @@ func (mc *ModelCatalog) RunList(dn string) ([]db.RunPub, bool) {
 }
 
 // RunListText return list of run_lst and run_txt db rows by model digest-or-name.
-// Text (description and notes) are in prefered language or empty if text in such language exists.
+// Text (description and notes) are in prefered language or if text in such language exists.
 func (mc *ModelCatalog) RunListText(dn string, preferedLang []language.Tag) ([]db.RunPub, bool) {
 
 	// if model digest-or-name is empty then return empty results
@@ -251,7 +250,7 @@ func (mc *ModelCatalog) RunListText(dn string, preferedLang []language.Tag) ([]d
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	// get run_txt db row for each run_lst using matched prefered languag
+	// get run_txt db row for each run_lst using matched prefered language
 	_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
 	lc := mc.modelLst[idx].langCodes[np]
 
@@ -261,8 +260,7 @@ func (mc *ModelCatalog) RunListText(dn string, preferedLang []language.Tag) ([]d
 		return []db.RunPub{}, false // return empty result: run select error
 	}
 	if len(rl) <= 0 {
-		// omppLog.Log("Warning: there is no runs found for the model: ", dn)
-		return []db.RunPub{}, false // return empty result: run_lst rows not found for that model
+		return []db.RunPub{}, true // return empty result: run_lst rows not found for that model
 	}
 
 	// for each run_lst find run_txt row if exist and convert to "public" run format

@@ -27,10 +27,33 @@ func GetTaskByName(dbConn *sql.DB, modelId int, name string) (*TaskRow, error) {
 			" )")
 }
 
-// GetTaskByModelId return list of modeling tasks with description and notes: task_lst and task_txt rows.
+// GetTaskList return list of model tasks: task_lst rows.
+func GetTaskList(dbConn *sql.DB, modelId int) ([]TaskRow, error) {
+
+	// model not found: model id must be positive
+	if modelId <= 0 {
+		return nil, nil
+	}
+
+	// get list of modeling task for that model id
+	q := "SELECT K.task_id, K.model_id, K.task_name FROM task_lst K" +
+		" WHERE K.model_id =" + strconv.Itoa(modelId) +
+		" ORDER BY 1"
+
+	taskRs, err := getTaskLst(dbConn, q)
+	if err != nil {
+		return nil, err
+	}
+	if len(taskRs) <= 0 { // no tasks found
+		return nil, nil
+	}
+	return taskRs, nil
+}
+
+// GetTaskListText return list of modeling tasks with description and notes: task_lst and task_txt rows.
 //
 // If langCode not empty then only specified language selected else all languages
-func GetTaskByModelId(dbConn *sql.DB, modelId int, langCode string) ([]TaskRow, []TaskTxtRow, error) {
+func GetTaskListText(dbConn *sql.DB, modelId int, langCode string) ([]TaskRow, []TaskTxtRow, error) {
 
 	// model not found: model id must be positive
 	if modelId <= 0 {

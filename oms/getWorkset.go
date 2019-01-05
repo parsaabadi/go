@@ -129,7 +129,7 @@ func (mc *ModelCatalog) WorksetList(dn string) ([]db.WorksetPub, bool) {
 }
 
 // WorksetListText return list of workset_lst and workset_txt db rows by model digest-or-name.
-// Text (description and notes) are in prefered language or empty if text in such language exists.
+// Text (description and notes) are in prefered language or if text in such language exists.
 func (mc *ModelCatalog) WorksetListText(dn string, preferedLang []language.Tag) ([]db.WorksetPub, bool) {
 
 	// if model digest-or-name is empty then return empty results
@@ -159,8 +159,8 @@ func (mc *ModelCatalog) WorksetListText(dn string, preferedLang []language.Tag) 
 		return []db.WorksetPub{}, false // return empty result: workset select error
 	}
 	if len(wl) <= 0 {
-		// omppLog.Log("Warning: there is no any worksets found for the model: ", dn)
-		return []db.WorksetPub{}, false // return empty result: workset_lst rows not found for that model
+		omppLog.Log("Warning: default workset not exist for the model: ", dn) // at least default workset must exist for every model
+		return []db.WorksetPub{}, false                                       // return empty result: workset_lst rows not found for that model
 	}
 
 	// for each workset_lst find workset_txt row if exist and convert to "public" workset format

@@ -24,7 +24,10 @@ func (meta *TaskMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskPub, e
 			ModelName:   modelDef.Model.Name,
 			ModelDigest: modelDef.Model.Digest,
 			Name:        meta.Task.Name,
-			Txt:         make([]DescrNote, len(meta.Txt))}}
+			Txt:         make([]DescrNote, len(meta.Txt)),
+			Set:         []string{}},
+		TaskRun: []taskRunPub{},
+	}
 
 	// task description and notes by language
 	for k := range meta.Txt {
@@ -37,104 +40,108 @@ func (meta *TaskMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskPub, e
 	// task workset list:
 	// select workset names for the task
 	// ignore worksets if id is not in the input list of task set id's
-	err := SelectRows(dbConn,
-		"SELECT W.set_id, W.set_name"+
-			" FROM task_set TS"+
-			" INNER JOIN workset_lst W ON (W.set_id = TS.set_id)"+
-			" WHERE TS.task_id = "+strconv.Itoa(meta.Task.TaskId)+
-			" ORDER BY 1",
-		func(rows *sql.Rows) error {
-			var id int
-			var sn string
-			if err := rows.Scan(&id, &sn); err != nil {
-				return err
-			}
-			for _, i := range meta.Set { // include only set id's which are in the meta list of set id's
-				if i == id {
-					pub.Set = append(pub.Set, sn) // workset found
-					return nil
+	if len(meta.Set) > 0 {
+		err := SelectRows(dbConn,
+			"SELECT W.set_id, W.set_name"+
+				" FROM task_set TS"+
+				" INNER JOIN workset_lst W ON (W.set_id = TS.set_id)"+
+				" WHERE TS.task_id = "+strconv.Itoa(meta.Task.TaskId)+
+				" ORDER BY 1",
+			func(rows *sql.Rows) error {
+				var id int
+				var sn string
+				if err := rows.Scan(&id, &sn); err != nil {
+					return err
 				}
-			}
-			return nil // ignore set id which is not found in the input list of task set id's
-		})
-	if err != nil && err != sql.ErrNoRows {
-		return nil, err
+				for _, i := range meta.Set { // include only set id's which are in the meta list of set id's
+					if i == id {
+						pub.Set = append(pub.Set, sn) // workset found
+						return nil
+					}
+				}
+				return nil // ignore set id which is not found in the input list of task set id's
+			})
+		if err != nil && err != sql.ErrNoRows {
+			return nil, err
+		}
 	}
 
 	// task run history: header rows
 	// select list task run's
 	// ignore task run if id is not in the input list of task run id's
+	if len(meta.TaskRun) > 0 {
 
-	ri := make(map[int]int) // map (task run id) => index in task run array
+		ri := make(map[int]int) // map (task run id) => index in task run array
 
-	err = SelectRows(dbConn,
-		"SELECT TR.task_run_id, TR.sub_count, TR.create_dt, TR.status, TR.update_dt"+
-			" FROM task_run_lst TR"+
-			" WHERE TR.task_id = "+strconv.Itoa(meta.Task.TaskId)+
-			" ORDER BY 1",
-		func(rows *sql.Rows) error {
-			var id int
-			var r taskRunPub
-			if err := rows.Scan(&id, &r.SubCount, &r.CreateDateTime, &r.Status, &r.UpdateDateTime); err != nil {
-				return err
-			}
-			for k := range meta.TaskRun { // include only task run id's which are in the meta list of run id's
-				if id == meta.TaskRun[k].TaskRunId {
-					ri[meta.TaskRun[k].TaskRunId] = len(pub.TaskRun) // index of task run id
-					pub.TaskRun = append(pub.TaskRun, r)             // task run id found
-					return nil
+		err := SelectRows(dbConn,
+			"SELECT TR.task_run_id, TR.sub_count, TR.create_dt, TR.status, TR.update_dt"+
+				" FROM task_run_lst TR"+
+				" WHERE TR.task_id = "+strconv.Itoa(meta.Task.TaskId)+
+				" ORDER BY 1",
+			func(rows *sql.Rows) error {
+				var id int
+				var r taskRunPub
+				if err := rows.Scan(&id, &r.SubCount, &r.CreateDateTime, &r.Status, &r.UpdateDateTime); err != nil {
+					return err
 				}
-			}
-			return nil // ignore task run id which is not found in the input list of run id's
-		})
-	if err != nil && err != sql.ErrNoRows {
-		return nil, err
-	}
-
-	// task run history body: pairs of (set id, run id)
-	// select list task run's body rows
-	// ignore task run body row if any of: (task run id, run id, set id) is not in the input list of id's
-	err = SelectRows(dbConn,
-		"SELECT"+
-			" TRS.task_run_id, TRS.run_id, TRS.set_id, W.set_name,"+
-			" R.run_name, R.sub_completed, R.create_dt, R.status, R.run_digest"+
-			" FROM task_run_set TRS"+
-			" INNER JOIN workset_lst W ON (W.set_id = TRS.set_id)"+
-			" INNER JOIN run_lst R ON (R.run_id = TRS.run_id)"+
-			" WHERE TRS.task_id = "+strconv.Itoa(meta.Task.TaskId)+
-			" ORDER BY 1, 2",
-		func(rows *sql.Rows) error {
-			var trId, wId, rId int
-			var r taskRunSetPub
-			if err := rows.Scan(&trId, &rId, &wId, &r.SetName,
-				&r.Run.Name, &r.Run.SubCompleted, &r.Run.CreateDateTime, &r.Run.Status, &r.Run.Digest); err != nil {
-				return err
-			}
-			for k := range meta.TaskRun { // include only task run id's which are in the meta list of run id's
-
-				if trId != meta.TaskRun[k].TaskRunId { // skip if task run id not the same as in db row
-					continue
-				}
-
-				// find pair of (run id, set id) in the metadata
-				for j := range meta.TaskRun[k].TaskRunSet {
-
-					if rId != meta.TaskRun[k].TaskRunSet[j].RunId || wId != meta.TaskRun[k].TaskRunSet[j].SetId {
-						continue // skip if db row run id or set id is not in the metadata
+				for k := range meta.TaskRun { // include only task run id's which are in the meta list of run id's
+					if id == meta.TaskRun[k].TaskRunId {
+						ri[meta.TaskRun[k].TaskRunId] = len(pub.TaskRun) // index of task run id
+						pub.TaskRun = append(pub.TaskRun, r)             // task run id found
+						return nil
 					}
-					// task run id, run id, set id found in the input meta task run list
-					// get index of that task run id in the "public" task run list
-					if i, ok := ri[meta.TaskRun[k].TaskRunId]; ok {
-						pub.TaskRun[i].TaskRunSet = append(pub.TaskRun[i].TaskRunSet, r) // found
-					}
-					return nil // done with that db row
 				}
-				return nil // db row not found: no such run id or set id
-			}
-			return nil // ignore task run id which is not found in the input list of run id's
-		})
-	if err != nil && err != sql.ErrNoRows {
-		return nil, err
+				return nil // ignore task run id which is not found in the input list of run id's
+			})
+		if err != nil && err != sql.ErrNoRows {
+			return nil, err
+		}
+
+		// task run history body: pairs of (set id, run id)
+		// select list task run's body rows
+		// ignore task run body row if any of: (task run id, run id, set id) is not in the input list of id's
+		err = SelectRows(dbConn,
+			"SELECT"+
+				" TRS.task_run_id, TRS.run_id, TRS.set_id, W.set_name,"+
+				" R.run_name, R.sub_completed, R.create_dt, R.status, R.run_digest"+
+				" FROM task_run_set TRS"+
+				" INNER JOIN workset_lst W ON (W.set_id = TRS.set_id)"+
+				" INNER JOIN run_lst R ON (R.run_id = TRS.run_id)"+
+				" WHERE TRS.task_id = "+strconv.Itoa(meta.Task.TaskId)+
+				" ORDER BY 1, 2",
+			func(rows *sql.Rows) error {
+				var trId, wId, rId int
+				var r taskRunSetPub
+				if err := rows.Scan(&trId, &rId, &wId, &r.SetName,
+					&r.Run.Name, &r.Run.SubCompleted, &r.Run.CreateDateTime, &r.Run.Status, &r.Run.Digest); err != nil {
+					return err
+				}
+				for k := range meta.TaskRun { // include only task run id's which are in the meta list of run id's
+
+					if trId != meta.TaskRun[k].TaskRunId { // skip if task run id not the same as in db row
+						continue
+					}
+
+					// find pair of (run id, set id) in the metadata
+					for j := range meta.TaskRun[k].TaskRunSet {
+
+						if rId != meta.TaskRun[k].TaskRunSet[j].RunId || wId != meta.TaskRun[k].TaskRunSet[j].SetId {
+							continue // skip if db row run id or set id is not in the metadata
+						}
+						// task run id, run id, set id found in the input meta task run list
+						// get index of that task run id in the "public" task run list
+						if i, ok := ri[meta.TaskRun[k].TaskRunId]; ok {
+							pub.TaskRun[i].TaskRunSet = append(pub.TaskRun[i].TaskRunSet, r) // found
+						}
+						return nil // done with that db row
+					}
+					return nil // db row not found: no such run id or set id
+				}
+				return nil // ignore task run id which is not found in the input list of run id's
+			})
+		if err != nil && err != sql.ErrNoRows {
+			return nil, err
+		}
 	}
 
 	return &pub, nil
