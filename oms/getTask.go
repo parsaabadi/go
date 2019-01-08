@@ -127,7 +127,7 @@ func (mc *ModelCatalog) TaskListText(dn string, preferedLang []language.Tag) ([]
 	return tpl, true
 }
 
-// TaskSets return task_lst row and task sets by model digest-or-name and task name.
+// TaskSets return task definition: task_lst master row and task sets by model digest-or-name and task name.
 func (mc *ModelCatalog) TaskSets(dn, tn string) (*db.TaskPub, bool) {
 
 	// if model digest-or-name or task name is empty then return empty results
@@ -151,7 +151,7 @@ func (mc *ModelCatalog) TaskSets(dn, tn string) (*db.TaskPub, bool) {
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	// get task_lst db row by task name
+	// find modeling task: get task_lst db row by task name
 	tr, err := db.GetTaskByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, tn)
 	if err != nil {
 		omppLog.Log("Error at get modeling task: ", dn, ": ", tn, ": ", err.Error())
@@ -170,14 +170,177 @@ func (mc *ModelCatalog) TaskSets(dn, tn string) (*db.TaskPub, bool) {
 	}
 
 	// convert to "public" modeling task format
-	tm := db.TaskMeta{Task: *tr, Set: setIds}
-	tp, err := tm.ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
+	tp, err := (&db.TaskMeta{Task: *tr, Set: setIds}).ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
 	if err != nil {
 		omppLog.Log("Error at modeling task conversion: ", dn, ": ", tn, ": ", err.Error())
-		return &db.TaskPub{}, false // return empty result: task set id's select error
+		return &db.TaskPub{}, false // return empty result: error to convert task to pulic format
 	}
 
 	return tp, true
+}
+
+// TaskRuns return task run history by model digest-or-name and task name:
+// task_lst master row and task run(s) details from task_run_lst and task_run_set tables.
+func (mc *ModelCatalog) TaskRuns(dn, tn string) (*db.TaskPub, bool) {
+
+	// if model digest-or-name or task name is empty then return empty results
+	if dn == "" {
+		omppLog.Log("Warning: invalid (empty) model digest and name")
+		return &db.TaskPub{}, false
+	}
+	if tn == "" {
+		omppLog.Log("Warning: invalid (empty) task name")
+		return &db.TaskPub{}, false
+	}
+
+	// load model metadata in order to convert to "public"
+	idx, ok := mc.loadModelMeta(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return &db.TaskPub{}, false // return empty result: model not found or error
+	}
+
+	// lock catalog and find model index by digest or name
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	// find modeling task: get task_lst db row by task name
+	tr, err := db.GetTaskByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, tn)
+	if err != nil {
+		omppLog.Log("Error at get modeling task: ", dn, ": ", tn, ": ", err.Error())
+		return &db.TaskPub{}, false // return empty result: task select error
+	}
+	if tr == nil {
+		omppLog.Log("Warning modeling task not found: ", dn, ": ", tn)
+		return &db.TaskPub{}, false // return empty result: task_lst row not found
+	}
+
+	// get task run history
+	tm, err := db.GetTaskRunList(mc.modelLst[idx].dbConn, tr)
+	if err != nil {
+		omppLog.Log("Error at get modeling task run history: ", dn, ": ", tn, ": ", err.Error())
+		return &db.TaskPub{}, false // return empty result: select error
+	}
+
+	// convert to "public" modeling task format
+	tp, err := tm.ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
+	if err != nil {
+		omppLog.Log("Error at modeling task conversion: ", dn, ": ", tn, ": ", err.Error())
+		return &db.TaskPub{}, false // return empty result: error to convert task to pulic format
+	}
+
+	return tp, true
+}
+
+// TaskRunStatus return task_run_lst db row by model digest-or-name, task name and task run name.
+func (mc *ModelCatalog) TaskRunStatus(dn, tn, rn string) (*db.TaskRunRow, bool) {
+
+	// if model digest-or-name or task name or task run nam is empty then return empty results
+	if dn == "" {
+		omppLog.Log("Warning: invalid (empty) model digest and name")
+		return &db.TaskRunRow{}, false
+	}
+	if tn == "" {
+		omppLog.Log("Warning: invalid (empty) task name")
+		return &db.TaskRunRow{}, false
+	}
+	if rn == "" {
+		omppLog.Log("Warning: invalid (empty) task run name")
+		return &db.TaskRunRow{}, false
+	}
+
+	// load model metadata in order to convert to "public"
+	idx, ok := mc.loadModelMeta(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return &db.TaskRunRow{}, false // return empty result: model not found or error
+	}
+
+	// lock catalog and find model index by digest or name
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	// find modeling task: get task_lst db row by task name
+	tr, err := db.GetTaskByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, tn)
+	if err != nil {
+		omppLog.Log("Error at get modeling task: ", dn, ": ", tn, ": ", err.Error())
+		return &db.TaskRunRow{}, false // return empty result: task select error
+	}
+	if tr == nil {
+		omppLog.Log("Warning modeling task not found: ", dn, ": ", tn)
+		return &db.TaskRunRow{}, false // return empty result: task_lst row not found
+	}
+
+	// get task run row by name and task id
+	rst, err := db.GetTaskRunByName(mc.modelLst[idx].dbConn, tr.TaskId, rn)
+	if err != nil {
+		omppLog.Log("Error at get modeling task run status: ", dn, ": ", tn, ": ", rn, ": ", err.Error())
+		return &db.TaskRunRow{}, false // return empty result: select error
+	}
+	if rst == nil {
+		omppLog.Log("Warning modeling task run not found: ", dn, ": ", tn, ": ", rn)
+		return &db.TaskRunRow{}, false // return empty result: task_lst row not found or not belong to the task
+	}
+
+	return rst, true
+}
+
+// TaskRunStatus return first or last task_run_lst db row by model digest-or-name and task name.
+func (mc *ModelCatalog) FirstOrLastTaskRunStatus(dn, tn string, isFirst, isCompleted bool) (*db.TaskRunRow, bool) {
+
+	// if model digest-or-name or task name is empty then return empty results
+	if dn == "" {
+		omppLog.Log("Warning: invalid (empty) model digest and name")
+		return &db.TaskRunRow{}, false
+	}
+	if tn == "" {
+		omppLog.Log("Warning: invalid (empty) task name")
+		return &db.TaskRunRow{}, false
+	}
+
+	// load model metadata in order to convert to "public"
+	idx, ok := mc.loadModelMeta(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return &db.TaskRunRow{}, false // return empty result: model not found or error
+	}
+
+	// lock catalog and find model index by digest or name
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	// find modeling task: get task_lst db row by task name
+	tr, err := db.GetTaskByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, tn)
+	if err != nil {
+		omppLog.Log("Error at get modeling task: ", dn, ": ", tn, ": ", err.Error())
+		return &db.TaskRunRow{}, false // return empty result: task select error
+	}
+	if tr == nil {
+		omppLog.Log("Warning modeling task not found: ", dn, ": ", tn)
+		return &db.TaskRunRow{}, false // return empty result: task_lst row not found
+	}
+
+	// get first or last task run row
+	rst := &db.TaskRunRow{}
+	if isFirst {
+		rst, err = db.GetTaskFirstRun(mc.modelLst[idx].dbConn, tr.TaskId)
+	} else {
+		if isCompleted {
+			rst, err = db.GetTaskLastCompletedRun(mc.modelLst[idx].dbConn, tr.TaskId)
+		} else {
+			rst, err = db.GetTaskLastRun(mc.modelLst[idx].dbConn, tr.TaskId)
+		}
+	}
+	if err != nil {
+		omppLog.Log("Error at get modeling task run status: ", dn, ": ", tn, ": ", err.Error())
+		return &db.TaskRunRow{}, false // return empty result: select error
+	}
+	if rst == nil {
+		omppLog.Log("Warning modeling task run not found: ", dn, ": ", tn)
+		return &db.TaskRunRow{}, false // return empty result: task_lst row not found or not belong to the task
+	}
+
+	return rst, true
 }
 
 // TaskTextFull return full task metadata, description, notes, run history by model digest-or-name and task name

@@ -259,7 +259,7 @@ func lastRunStatusHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // lastCompletedRunStatusHandler return last compeleted run_lst db row by model digest-or-name:
-// GET /api/model/:model/run/status/last/completed
+// GET /api/model/:model/run/status/last-completed
 // GET /api/run-last-completed-status?model=modelNameOrDigest
 // Run completed if run status one of: s=success, x=exit, e=error
 // If multiple models or runs with same name exist only one is returned.
@@ -268,8 +268,8 @@ func lastCompletedRunStatusHandler(w http.ResponseWriter, r *http.Request) {
 
 	dn := getRequestParam(r, "model")
 
-	rp, _ := theCatalog.LastCompletedRunStatus(dn)
-	jsonResponse(w, r, rp)
+	rst, _ := theCatalog.LastCompletedRunStatus(dn)
+	jsonResponse(w, r, rst)
 }
 
 // runTextHandler return full run metadata: run_lst, run_txt, parameter sub-value counts and text db rows
@@ -309,8 +309,8 @@ func runAllTextHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // lastCompletedRunTextHandler return last compeleted run_lst and run_txt db rows by model digest-or-name:
-// GET /api/model/:model/run/last/completed/text
-// GET /api/model/:model/run/last/completed/text/lang/:lang
+// GET /api/model/:model/run/last-completed/text
+// GET /api/model/:model/run/last-completed/text/lang/:lang
 // GET /api/run-last-completed-text?model=modelNameOrDigest&lang=en
 // Run completed if run status one of: s=success, x=exit, e=error
 // If multiple models or runs with same name exist only one is returned.
@@ -326,7 +326,7 @@ func lastCompletedRunTextHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // lastCompletedRunAllTextHandler return last compeleted run_lst and run_txt db rows by model digest-or-name:
-// GET /api/model/:model/run/last/completed/text/all
+// GET /api/model/:model/run/last-completed/text/all
 // GET /api/run-last-completed-text-all?model=modelNameOrDigest
 // Run completed if run status one of: s=success, x=exit, e=error
 // If multiple models or runs with same name exist only one is returned.
@@ -455,7 +455,7 @@ func taskListTextHandler(w http.ResponseWriter, r *http.Request) {
 
 // taskSetsHandler return task_lst row and task sets by model digest-or-name and task name:
 // GET /api/model/:model/task/:task/sets
-// GET /api/task-text-sets?model=modelNameOrDigest&task=taskName
+// GET /api/task-sets?model=modelNameOrDigest&task=taskName
 // If multiple models with same name exist only one is returned.
 func taskSetsHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -464,6 +464,81 @@ func taskSetsHandler(w http.ResponseWriter, r *http.Request) {
 
 	tpl, _ := theCatalog.TaskSets(dn, name)
 	jsonResponse(w, r, tpl)
+}
+
+// taskRunsHandler return task run history from task_lst, task_run_lst, task_run_set tables by model digest-or-name and task name:
+// GET /api/model/:model/task/:task/runs
+// GET /api/task-runs?model=modelNameOrDigest&task=taskName
+// If multiple models with same name exist only one is returned.
+// It does not return non-completed task runs (run in progress).
+// Task run history may contain model runs and input sets (worksets) which are deleted or modified by user,
+// there is no guaratntee model runs still exists or worksets contain same input parameter values
+// as it was at the time of task run.
+func taskRunsHandler(w http.ResponseWriter, r *http.Request) {
+
+	dn := getRequestParam(r, "model")
+	name := getRequestParam(r, "task")
+
+	tpl, _ := theCatalog.TaskRuns(dn, name)
+	jsonResponse(w, r, tpl)
+}
+
+// taskRunStatusHandler return task_run_lst db row by model digest-or-name, task name and task run name:
+// GET /api/model/:model/task/:task/run-status/run/:run-name
+// GET /api/task-run-status?model=modelNameOrDigest&task=taskName&run-name=runName
+// If multiple models or runs with same name exist only one is returned.
+// If no such task or run exist in database then empty result returned.
+func taskRunStatusHandler(w http.ResponseWriter, r *http.Request) {
+
+	dn := getRequestParam(r, "model")
+	tn := getRequestParam(r, "task")
+	rn := getRequestParam(r, "run-name")
+
+	rst, _ := theCatalog.TaskRunStatus(dn, tn, rn)
+	jsonResponse(w, r, rst)
+}
+
+// firstTaskRunStatusHandler return first task_run_lst db row by model digest-or-name and task name:
+// GET /api/model/:model/task/:task/run-status/first
+// GET /api/task-first-run-status?model=modelNameOrDigest&task=taskName
+// If multiple models with same name exist only one is returned.
+// If no such task or run exist in database then empty result returned.
+func firstTaskRunStatusHandler(w http.ResponseWriter, r *http.Request) {
+
+	dn := getRequestParam(r, "model")
+	tn := getRequestParam(r, "task")
+
+	rst, _ := theCatalog.FirstOrLastTaskRunStatus(dn, tn, true, false)
+	jsonResponse(w, r, rst)
+}
+
+// lastTaskRunStatusHandler return last task_run_lst db row by model digest-or-name and task name:
+// GET /api/model/:model/task/:task/run-status/last
+// GET /api/task-last-run-status?model=modelNameOrDigest&task=taskName
+// If multiple models with same name exist only one is returned.
+// If no such task or run exist in database then empty result returned.
+func lastTaskRunStatusHandler(w http.ResponseWriter, r *http.Request) {
+
+	dn := getRequestParam(r, "model")
+	tn := getRequestParam(r, "task")
+
+	rst, _ := theCatalog.FirstOrLastTaskRunStatus(dn, tn, false, false)
+	jsonResponse(w, r, rst)
+}
+
+// lastCompletedTaskRunStatusHandler return last compeleted task_run_lst db row by model digest-or-name and task name:
+// GET /api/model/:model/task/:task/run-status/last-completed
+// GET /api/task-last-completed-run-status?model=modelNameOrDigest&task=taskName
+// task completed if task status one of: s=success, x=exit, e=error
+// If multiple models with same name exist only one is returned.
+// If no such task or run exist in database then empty result returned.
+func lastCompletedTaskRunStatusHandler(w http.ResponseWriter, r *http.Request) {
+
+	dn := getRequestParam(r, "model")
+	tn := getRequestParam(r, "task")
+
+	rst, _ := theCatalog.FirstOrLastTaskRunStatus(dn, tn, false, true)
+	jsonResponse(w, r, rst)
 }
 
 // taskTextHandler return full task metadata, description, notes, run history by model digest-or-name and task name

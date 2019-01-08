@@ -74,14 +74,14 @@ func (meta *TaskMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskPub, e
 		ri := make(map[int]int) // map (task run id) => index in task run array
 
 		err := SelectRows(dbConn,
-			"SELECT TR.task_run_id, TR.sub_count, TR.create_dt, TR.status, TR.update_dt"+
+			"SELECT TR.task_run_id, TR.run_name, TR.sub_count, TR.create_dt, TR.status, TR.update_dt"+
 				" FROM task_run_lst TR"+
 				" WHERE TR.task_id = "+strconv.Itoa(meta.Task.TaskId)+
 				" ORDER BY 1",
 			func(rows *sql.Rows) error {
 				var id int
 				var r taskRunPub
-				if err := rows.Scan(&id, &r.SubCount, &r.CreateDateTime, &r.Status, &r.UpdateDateTime); err != nil {
+				if err := rows.Scan(&id, &r.Name, &r.SubCount, &r.CreateDateTime, &r.Status, &r.UpdateDateTime); err != nil {
 					return err
 				}
 				for k := range meta.TaskRun { // include only task run id's which are in the meta list of run id's
@@ -312,7 +312,8 @@ func (pub *TaskPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskMeta, 
 	meta.TaskRun = make([]taskRunItem, len(idxArr))
 	for k, idx := range idxArr {
 
-		// header: task run status,...
+		// header: task run name, status,...
+		meta.TaskRun[k].Name = pub.TaskRun[idx].Name
 		meta.TaskRun[k].Status = pub.TaskRun[idx].Status
 		meta.TaskRun[k].SubCount = pub.TaskRun[idx].SubCount
 		meta.TaskRun[k].CreateDateTime = pub.TaskRun[idx].CreateDateTime

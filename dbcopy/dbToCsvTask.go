@@ -131,7 +131,7 @@ func toTaskListCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom bo
 	}
 
 	// write task run history rows into csv
-	row = make([]string, 6)
+	row = make([]string, 7)
 
 	idx = 0
 	j = 0
@@ -139,7 +139,7 @@ func toTaskListCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom bo
 		outDir,
 		"task_run_lst.csv",
 		isWriteUtf8bom,
-		[]string{"task_run_id", "task_id", "sub_count", "create_dt", "status", "update_dt"},
+		[]string{"task_run_id", "task_id", "run_name", "sub_count", "create_dt", "status", "update_dt"},
 		func() (bool, []string, error) {
 
 			if idx < 0 || idx >= len(tl) { // end of task rows
@@ -163,10 +163,11 @@ func toTaskListCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom bo
 			// make task run history []string row
 			row[0] = strconv.Itoa(tl[idx].TaskRun[j].TaskRunId)
 			row[1] = strconv.Itoa(tl[idx].TaskRun[j].TaskId)
-			row[2] = strconv.Itoa(tl[idx].TaskRun[j].SubCount)
-			row[3] = tl[idx].TaskRun[j].CreateDateTime
-			row[4] = tl[idx].TaskRun[j].Status
-			row[5] = tl[idx].TaskRun[j].UpdateDateTime
+			row[2] = tl[idx].TaskRun[j].Name
+			row[3] = strconv.Itoa(tl[idx].TaskRun[j].SubCount)
+			row[4] = tl[idx].TaskRun[j].CreateDateTime
+			row[5] = tl[idx].TaskRun[j].Status
+			row[6] = tl[idx].TaskRun[j].UpdateDateTime
 			j++
 			return false, row, nil
 		})

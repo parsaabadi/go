@@ -373,9 +373,9 @@ func apiGetRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/status/last", lastRunStatusHandler, logRequest)
 	router.Get("/api/run-last-status", lastRunStatusHandler, logRequest)
 
-	// GET /api/model/:model/run/status/last/completed
+	// GET /api/model/:model/run/status/last-completed
 	// GET /api/run-last-completed-status?model=modelNameOrDigest
-	router.Get("/api/model/:model/run/status/last/completed", lastCompletedRunStatusHandler, logRequest)
+	router.Get("/api/model/:model/run/status/last-completed", lastCompletedRunStatusHandler, logRequest)
 	router.Get("/api/run-last-completed-status", lastCompletedRunStatusHandler, logRequest)
 
 	// GET /api/model/:model/run/:run/text
@@ -390,16 +390,16 @@ func apiGetRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/text/all", runAllTextHandler, logRequest)
 	router.Get("/api/run-text-all", runAllTextHandler, logRequest)
 
-	// GET /api/model/:model/run/last/completed/text
-	// GET /api/model/:model/run/last/completed/text/lang/:lang
+	// GET /api/model/:model/run/last-completed/text
+	// GET /api/model/:model/run/last-completed/text/lang/:lang
 	// GET /api/run-last-completed-text?model=modelNameOrDigest&lang=en
-	router.Get("/api/model/:model/run/last/completed/text", lastCompletedRunTextHandler, logRequest)
-	router.Get("/api/model/:model/run/last/completed/text/lang/:lang", lastCompletedRunTextHandler, logRequest)
+	router.Get("/api/model/:model/run/last-completed/text", lastCompletedRunTextHandler, logRequest)
+	router.Get("/api/model/:model/run/last-completed/text/lang/:lang", lastCompletedRunTextHandler, logRequest)
 	router.Get("/api/run-last-completed-text", lastCompletedRunTextHandler, logRequest)
 
-	// GET /api/model/:model/run/last/completed/text/all
+	// GET /api/model/:model/run/last-completed/text/all
 	// GET /api/run-last-completed-text-all?model=modelNameOrDigest
-	router.Get("/api/model/:model/run/last/completed/text/all", lastCompletedRunAllTextHandler, logRequest)
+	router.Get("/api/model/:model/run/last-completed/text/all", lastCompletedRunAllTextHandler, logRequest)
 	router.Get("/api/run-last-completed-text-all", lastCompletedRunAllTextHandler, logRequest)
 
 	//
@@ -457,9 +457,34 @@ func apiGetRoutes(router *vestigo.Router) {
 	router.Get("/api/task-list-text", taskListTextHandler, logRequest)
 
 	// GET /api/model/:model/task/:task/sets
-	// GET /api/task-text-sets?model=modelNameOrDigest&task=taskName
+	// GET /api/task-sets?model=modelNameOrDigest&task=taskName
 	router.Get("/api/model/:model/task/:task/sets", taskSetsHandler, logRequest)
-	router.Get("/api/task-text-sets", taskSetsHandler, logRequest)
+	router.Get("/api/task-sets", taskSetsHandler, logRequest)
+
+	// GET /api/model/:model/task/:task/runs
+	// GET /api/task-runs?model=modelNameOrDigest&task=taskName
+	router.Get("/api/model/:model/task/:task/runs", taskRunsHandler, logRequest)
+	router.Get("/api/task-runs", taskRunsHandler, logRequest)
+
+	// GET /api/model/:model/task/:task/run-status/run/:run-name
+	// GET /api/task-run-status?model=modelNameOrDigest&task=taskName&run-name=runName
+	router.Get("/api/model/:model/task/:task/run-status/run/:run-name", taskRunStatusHandler, logRequest)
+	router.Get("/api/task-run-status", taskRunStatusHandler, logRequest)
+
+	// GET /api/model/:model/task/:task/run-status/first
+	// GET /api/task-first-run-status?model=modelNameOrDigest&task=taskName
+	router.Get("/api/model/:model/task/:task/run-status/first", firstTaskRunStatusHandler, logRequest)
+	router.Get("/api/task-first-run-status", firstTaskRunStatusHandler, logRequest)
+
+	// GET /api/model/:model/task/:task/run-status/last
+	// GET /api/task-last-run-status?model=modelNameOrDigest&task=taskName
+	router.Get("/api/model/:model/task/:task/run-status/last", lastTaskRunStatusHandler, logRequest)
+	router.Get("/api/task-last-run-status", lastTaskRunStatusHandler, logRequest)
+
+	// GET /api/model/:model/task/:task/run-status/last-completed
+	// GET /api/task-last-completed-run-status?model=modelNameOrDigest&task=taskName
+	router.Get("/api/model/:model/task/:task/run-status/last-completed", lastCompletedTaskRunStatusHandler, logRequest)
+	router.Get("/api/task-last-completed-run-status", lastCompletedTaskRunStatusHandler, logRequest)
 
 	// GET /api/model/:model/task/:task/text
 	// GET /api/model/:model/task/:task/text/lang/:lang

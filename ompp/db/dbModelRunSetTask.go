@@ -234,12 +234,13 @@ type TaskTxtRow struct {
 //      model wait and NOT completed until other process set status to one of finals: s,x,e
 //      model check if any new sets inserted into task_set and run it as they arrive
 type TaskRunRow struct {
-	TaskRunId      int    // task_run_id INT         NOT NULL, -- unique task run id
-	TaskId         int    // task_id     INT         NOT NULL
-	SubCount       int    // sub_count   INT         NOT NULL, -- subvalue count of task run
-	CreateDateTime string // create_dt   VARCHAR(32) NOT NULL, -- start date-time
-	Status         string // status      VARCHAR(1)  NOT NULL, -- task status: i=init p=progress w=wait s=success x=exit e=error(failed)
-	UpdateDateTime string // update_dt   VARCHAR(32) NOT NULL, -- last update date-time
+	TaskRunId      int    // task_run_id INT          NOT NULL, -- unique task run id
+	TaskId         int    // task_id     INT          NOT NULL
+	Name           string // run_name    VARCHAR(255) NOT NULL, -- task run name
+	SubCount       int    // sub_count   INT          NOT NULL, -- subvalue count of task run
+	CreateDateTime string // create_dt   VARCHAR(32)  NOT NULL, -- start date-time
+	Status         string // status      VARCHAR(1)   NOT NULL, -- task status: i=init p=progress w=wait s=success x=exit e=error(failed)
+	UpdateDateTime string // update_dt   VARCHAR(32)  NOT NULL, -- last update date-time
 }
 
 // TaskRunSetRow is db row of task_run_set.
@@ -268,10 +269,11 @@ type TaskDefPub struct {
 
 // taskRunPub is "public" metadata of task run history.
 type taskRunPub struct {
-	SubCount       int             // sub_count   INT         NOT NULL, -- subvalue count of task run
-	CreateDateTime string          // create_dt   VARCHAR(32) NOT NULL, -- start date-time
-	Status         string          // status      VARCHAR(1)  NOT NULL, -- task status: i=init p=progress w=wait s=success x=exit e=error(failed)
-	UpdateDateTime string          // update_dt   VARCHAR(32) NOT NULL, -- last update date-time
+	Name           string          // run_name    VARCHAR(255) NOT NULL, -- task run name
+	SubCount       int             // sub_count   INT          NOT NULL, -- subvalue count of task run
+	CreateDateTime string          // create_dt   VARCHAR(32)  NOT NULL, -- start date-time
+	Status         string          // status      VARCHAR(1)   NOT NULL, -- task status: i=init p=progress w=wait s=success x=exit e=error(failed)
+	UpdateDateTime string          // update_dt   VARCHAR(32)  NOT NULL, -- last update date-time
 	TaskRunSet     []taskRunSetPub // task run history body: run and set pairs
 }
 

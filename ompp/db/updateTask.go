@@ -265,10 +265,11 @@ func doInsertTaskBody(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta, langDef 
 
 		// insert into task_run_lst
 		err = TrxUpdate(trx,
-			"INSERT INTO task_run_lst (task_run_id, task_id, sub_count, create_dt, status, update_dt)"+
+			"INSERT INTO task_run_lst (task_run_id, task_id, run_name, sub_count, create_dt, status, update_dt)"+
 				" VALUES ("+
 				strconv.Itoa(id)+", "+
 				stId+", "+
+				toQuoted(meta.TaskRun[k].Name)+", "+
 				strconv.Itoa(meta.TaskRun[k].SubCount)+", "+
 				toQuoted(meta.TaskRun[k].CreateDateTime)+", "+
 				toQuoted(meta.TaskRun[k].Status)+", "+
