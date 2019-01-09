@@ -542,14 +542,14 @@ func lastCompletedTaskRunStatusHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // taskTextHandler return full task metadata, description, notes, run history by model digest-or-name and task name
-// from db-tables: task_lst, task_txt, task_set, task_run_lst, task_run_set.
+// from db-tables: task_lst, task_txt, task_set, task_run_lst, task_run_set and also from workset_txt, run_txt.
 // GET /api/model/:model/task/:task/text
 // GET /api/model/:model/task/:task/text/lang/:lang
 // GET /api/task-text?model=modelNameOrDigest&task=taskName&lang=en
 // If multiple models with same name exist only one is returned.
 // It does not return non-completed task runs (run in progress).
 // Run completed if run status one of: s=success, x=exit, e=error.
-// It does not return workset metadata or run metadata.
+// It also return description and notes for all input worksets, task run(s) workset and model runs.
 // If optional lang specified then result in that language else in browser language.
 func taskTextHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -557,24 +557,34 @@ func taskTextHandler(w http.ResponseWriter, r *http.Request) {
 	tn := getRequestParam(r, "task")
 	rqLangTags := getRequestLang(r, "lang") // get optional language argument and languages accepted by browser
 
-	tp, _ := theCatalog.TaskTextFull(dn, tn, false, rqLangTags)
-	jsonResponse(w, r, tp)
+	tp, trs, _ := theCatalog.TaskTextFull(dn, tn, false, rqLangTags)
+
+	jsonResponse(w, r,
+		&struct {
+			T *db.TaskPub
+			A *db.TaskRunSetTxt
+		}{T: tp, A: trs})
 }
 
 // taskAllTextHandler return full task metadata, description, notes, run history by model digest-or-name and task name
-// from db-tables: task_lst, task_txt, task_set, task_run_lst, task_run_set.
+// from db-tables: task_lst, task_txt, task_set, task_run_lst, task_run_set and also from workset_txt, run_txt.
 // GET /api/model/:model/task/:task/text/all
 // GET /api/task-text-all?model=modelNameOrDigest&task=taskName
 // If multiple models with same name exist only one is returned.
 // It does not return non-completed runs (run in progress).
 // Run completed if run status one of: s=success, x=exit, e=error.
-// It does not return workset metadata or run metadata.
+// It also return description and notes for all input worksets, task run(s) workset and model runs.
 // Text rows returned in all languages.
 func taskAllTextHandler(w http.ResponseWriter, r *http.Request) {
 
 	dn := getRequestParam(r, "model")
 	tn := getRequestParam(r, "task")
 
-	tp, _ := theCatalog.TaskTextFull(dn, tn, true, nil)
-	jsonResponse(w, r, tp)
+	tp, trs, _ := theCatalog.TaskTextFull(dn, tn, true, nil)
+
+	jsonResponse(w, r,
+		&struct {
+			T *db.TaskPub
+			A *db.TaskRunSetTxt
+		}{T: tp, A: trs})
 }

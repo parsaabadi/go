@@ -176,21 +176,163 @@ func getTaskSetLst(dbConn *sql.DB, query string) (map[int][]int, error) {
 	return tsRs, nil
 }
 
-// GetTaskText return modeling task description and notes: task_txt table rows.
+// GetTaskRunSetText return additinal modeling task text description and notes for all task worksets and model runs: workset_txt, run_txt table rows.
 //
-// If langCode not empty then only specified language selected else all languages
-func GetTaskText(dbConn *sql.DB, taskId int, langCode string) ([]TaskTxtRow, error) {
+// It includes all input worksets text (description and notes) and comlpleted model runs text (description and notes).
+// Task run completed if run status one of: s=success, x=exit, e=error
+// If langCode not empty then only specified language selected else all languages.
+func GetTaskRunSetText(dbConn *sql.DB, taskId int, langCode string) (*TaskRunSetTxt, error) {
 
-	q := "SELECT M.task_id, M.lang_id, L.lang_code, M.descr, M.note" +
-		" FROM task_txt M" +
+	tp := TaskRunSetTxt{
+		SetTxt: map[string][]DescrNote{},
+		RunTxt: map[string][]DescrNote{}}
+
+	// select description and notes for task input worksets from task_set table
+	q := "SELECT M.set_id, M.lang_id, H.set_name, L.lang_code, M.descr, M.note" +
+		" FROM task_set TS" +
+		" INNER JOIN workset_lst H ON (H.set_id = TS.set_id)" +
+		" INNER JOIN workset_txt M ON (M.set_id = H.set_id)" +
 		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)" +
-		" WHERE M.task_id = " + strconv.Itoa(taskId)
+		" WHERE TS.task_id = " + strconv.Itoa(taskId)
 	if langCode != "" {
 		q += " AND L.lang_code = " + toQuoted(langCode)
 	}
 	q += " ORDER BY 1, 2"
 
-	return getTaskText(dbConn, q)
+	err := SelectRows(dbConn, q,
+		func(rows *sql.Rows) error {
+			var setId, lId int
+			var name string
+			var r DescrNote
+			var note sql.NullString
+			if err := rows.Scan(&setId, &lId, &name, &r.LangCode, &r.Descr, &note); err != nil {
+				return err
+			}
+			if note.Valid {
+				r.Note = note.String
+			}
+			// if such language not exist for that workset name then append language, description, notes to that name
+			if v, ok := tp.SetTxt[name]; !ok {
+				tp.SetTxt[name] = append(tp.SetTxt[name], r)
+			} else {
+				isExist := false
+				for k := range v {
+					isExist = v[k].LangCode == r.LangCode
+					if isExist {
+						break
+					}
+				}
+				if !isExist {
+					tp.SetTxt[name] = append(v, r)
+				}
+			}
+			return nil
+		})
+	if err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+
+	// select description and notes for task run worksets from task_run_set table
+	// use only input worksets from completed model runs
+	q = "SELECT M.set_id, M.lang_id, WS.set_name, L.lang_code, M.descr, M.note" +
+		" FROM task_run_lst TRL" +
+		" INNER JOIN task_run_set TRS ON (TRS.task_run_id = TRL.task_run_id)" +
+		" INNER JOIN run_lst RL ON (RL.run_id = TRS.run_id)" +
+		" INNER JOIN workset_lst WS ON (WS.set_id = TRS.set_id)" +
+		" INNER JOIN workset_txt M ON (M.set_id = WS.set_id)" +
+		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)" +
+		" WHERE TRL.task_id = " + strconv.Itoa(taskId) +
+		" AND RL.status IN (" + toQuoted(DoneRunStatus) + ", " + toQuoted(ErrorRunStatus) + ", " + toQuoted(ExitRunStatus) + ")"
+	if langCode != "" {
+		q += " AND L.lang_code = " + toQuoted(langCode)
+	}
+	q += " ORDER BY 1, 2"
+
+	err = SelectRows(dbConn, q,
+		func(rows *sql.Rows) error {
+			var setId, lId int
+			var name string
+			var r DescrNote
+			var note sql.NullString
+			if err := rows.Scan(&setId, &lId, &name, &r.LangCode, &r.Descr, &note); err != nil {
+				return err
+			}
+			if note.Valid {
+				r.Note = note.String
+			}
+			// if such language not exist for that workset name then append language, description, notes to that name
+			if v, ok := tp.SetTxt[name]; !ok {
+				tp.SetTxt[name] = append(tp.SetTxt[name], r)
+			} else {
+				isExist := false
+				for k := range v {
+					isExist = v[k].LangCode == r.LangCode
+					if isExist {
+						break
+					}
+				}
+				if !isExist {
+					tp.SetTxt[name] = append(v, r)
+				}
+			}
+			return nil
+		})
+	if err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+
+	// select description and notes for model runs from task_run_set table
+	// use only completed model runs
+	q = "SELECT M.run_id, M.lang_id, RL.run_name, RL.run_digest, L.lang_code, M.descr, M.note" +
+		" FROM task_run_lst TRL" +
+		" INNER JOIN task_run_set TRS ON (TRS.task_run_id = TRL.task_run_id)" +
+		" INNER JOIN run_lst RL ON (RL.run_id = TRS.run_id)" +
+		" INNER JOIN run_txt M ON (M.run_id = RL.run_id)" +
+		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)" +
+		" WHERE TRL.task_id = " + strconv.Itoa(taskId) +
+		" AND RL.status IN (" + toQuoted(DoneRunStatus) + ", " + toQuoted(ErrorRunStatus) + ", " + toQuoted(ExitRunStatus) + ")"
+	if langCode != "" {
+		q += " AND L.lang_code = " + toQuoted(langCode)
+	}
+	q += " ORDER BY 1, 2"
+
+	err = SelectRows(dbConn, q,
+		func(rows *sql.Rows) error {
+			var runId, lId int
+			var dn string
+			var r DescrNote
+			var digest, note sql.NullString
+			if err := rows.Scan(&runId, &lId, &dn, &digest, &r.LangCode, &r.Descr, &note); err != nil {
+				return err
+			}
+			if digest.Valid {
+				dn = digest.String
+			}
+			if note.Valid {
+				r.Note = note.String
+			}
+			// if such language not exist for that run digest-or-name then append language, description, notes to that run
+			if v, ok := tp.RunTxt[dn]; !ok {
+				tp.RunTxt[dn] = append(tp.RunTxt[dn], r)
+			} else {
+				isExist := false
+				for k := range v {
+					isExist = v[k].LangCode == r.LangCode
+					if isExist {
+						break
+					}
+				}
+				if !isExist {
+					tp.RunTxt[dn] = append(v, r)
+				}
+			}
+			return nil
+		})
+	if err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+
+	return &tp, nil
 }
 
 // getRunText return modeling task description and notes: task_txt table rows.

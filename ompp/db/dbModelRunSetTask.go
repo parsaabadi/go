@@ -283,12 +283,19 @@ type taskRunPub struct {
 // if digest not empty then use digest;
 // else if status is error then by run_name, sub_count, sub_completed, status, create_dt.
 type taskRunSetPub struct {
-	SetName string   // workset name
-	Run     struct { // "public" link to model run
+	Run struct { // "public" link to model run
 		Name           string // run_name      VARCHAR(255) NOT NULL
 		SubCompleted   int    // sub_completed INT          NOT NULL, -- number of subvalues completed
 		CreateDateTime string // create_dt     VARCHAR(32)  NOT NULL, -- start date-time
 		Status         string // status        VARCHAR(1)   NOT NULL, -- run status: i=init p=progress s=success x=exit e=error(failed)
 		Digest         string // run_digest    VARCHAR(32)  NULL,     -- digest of the run
 	}
+	SetName string // name of input workset which used for that model run
+}
+
+// TaskRunSetTxt is additional task text: description and notes by language for all input worksets and model runs of the task.
+// Run identified by run digest or, if digest is null then by run name
+type TaskRunSetTxt struct {
+	SetTxt map[string][]DescrNote // map workset name to description and notes by language
+	RunTxt map[string][]DescrNote // map run digest-or-name to description and notes by language
 }

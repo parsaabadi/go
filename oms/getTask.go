@@ -349,19 +349,19 @@ func (mc *ModelCatalog) FirstOrLastTaskRunStatus(dn, tn string, isFirst, isCompl
 // Run completed if run status one of: s=success, x=exit, e=error.
 // Text (description and notes) can be in prefered language or all languages.
 // If prefered language requested and it is not found in db then return empty text results.
-func (mc *ModelCatalog) TaskTextFull(dn, tn string, isAllLang bool, preferedLang []language.Tag) (*db.TaskPub, bool) {
+func (mc *ModelCatalog) TaskTextFull(dn, tn string, isAllLang bool, preferedLang []language.Tag) (*db.TaskPub, *db.TaskRunSetTxt, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
 		omppLog.Log("Warning: invalid (empty) model digest and name")
-		return &db.TaskPub{}, false
+		return &db.TaskPub{}, nil, false
 	}
 
 	// load model metadata in order to convert to "public"
 	idx, ok := mc.loadModelMeta(dn)
 	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return &db.TaskPub{}, false // return empty result: model not found or error
+		return &db.TaskPub{}, nil, false // return empty result: model not found or error
 	}
 
 	// lock catalog and find model index by digest or name
@@ -372,11 +372,11 @@ func (mc *ModelCatalog) TaskTextFull(dn, tn string, isAllLang bool, preferedLang
 	tr, err := db.GetTaskByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, tn)
 	if err != nil {
 		omppLog.Log("Error at get modeling task: ", dn, ": ", tn, ": ", err.Error())
-		return &db.TaskPub{}, false // return empty result: task select error
+		return &db.TaskPub{}, nil, false // return empty result: task select error
 	}
 	if tr == nil {
 		omppLog.Log("Warning modeling task not found: ", dn, ": ", tn)
-		return &db.TaskPub{}, false // return empty result: task_lst row not found
+		return &db.TaskPub{}, nil, false // return empty result: task_lst row not found
 	}
 
 	// get full metadata db rows using matched prefered language or in all languages
@@ -388,16 +388,23 @@ func (mc *ModelCatalog) TaskTextFull(dn, tn string, isAllLang bool, preferedLang
 
 	tm, err := db.GetTaskFull(mc.modelLst[idx].dbConn, tr, lc)
 	if err != nil {
-		omppLog.Log("Error at get task text: ", dn, ": ", tr.Name, ": ", err.Error())
-		return &db.TaskPub{}, false // return empty result: run select error
+		omppLog.Log("Error at get modeling task text: ", dn, ": ", tr.Name, ": ", err.Error())
+		return &db.TaskPub{}, nil, false // return empty result: run select error
 	}
 
 	// convert to "public" model run format
 	tp, err := tm.ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
 	if err != nil {
 		omppLog.Log("Error at modeling task conversion: ", dn, ": ", tn, ": ", err.Error())
-		return &db.TaskPub{}, false // return empty result: conversion error
+		return &db.TaskPub{}, nil, false // return empty result: conversion error
 	}
 
-	return tp, true
+	// get additinal task text: description and notes for worksets and model runs
+	at, err := db.GetTaskRunSetText(mc.modelLst[idx].dbConn, tr.TaskId, lc)
+	if err != nil {
+		omppLog.Log("Error at get additional modeling task text: ", dn, ": ", tr.Name, ": ", err.Error())
+		return &db.TaskPub{}, nil, false // return empty result: conversion error
+	}
+
+	return tp, at, true
 }

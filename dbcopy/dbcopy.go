@@ -38,8 +38,8 @@ It dumps all input parameters sets into all_input_sets/parameterName.csv files.
 And for all model runs input parameters and output tables saved into all_model_runs/tableName.csv files.
 
 By default entire model data is copied.
-It is also possible to copy only: model run results and input parameters,
-set of input parameters (workset), modeling task metadata and run history.
+It is also possible to copy only:
+model run results and input parameters, set of input parameters (workset), modeling task metadata and run history.
 
 To copy only one set of input parameters:
   dbcopy -m redModel -dbcopy.SetName Default
@@ -164,7 +164,7 @@ import (
 // dbcopy config keys to get values from ini-file or command line arguments.
 const (
 	copyToArgKey       = "dbcopy.To"               // copy to: text=db-to-text, db=text-to-db, db2db=db-to-db, csv=db-to-csv, csv-1=db-to-csv-in-one
-	deleteArgKey       = "dbcopy.Delete"           // delete model or workset or model run from database
+	deleteArgKey       = "dbcopy.Delete"           // delete model or workset or model run or modeling task from database
 	modelNameArgKey    = "dbcopy.ModelName"        // model name
 	modelNameShortKey  = "m"                       // model name (short form)
 	modelDigestArgKey  = "dbcopy.ModelDigest"      // model hash digest
