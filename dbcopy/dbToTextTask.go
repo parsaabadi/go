@@ -131,7 +131,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 			}
 
 			// run must be completed: status success, error or exit
-			if runRow.Status != db.DoneRunStatus && runRow.Status != db.ExitRunStatus && runRow.Status != db.ErrorRunStatus {
+			if !db.IsRunCompleted(runRow.Status) {
 				isRunNotCompleted = true
 				continue // skip: run not completed
 			}

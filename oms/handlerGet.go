@@ -241,7 +241,7 @@ func firstRunStatusHandler(w http.ResponseWriter, r *http.Request) {
 
 	dn := getRequestParam(r, "model")
 
-	rst, _ := theCatalog.FirstOrLastRunStatus(dn, true)
+	rst, _ := theCatalog.FirstOrLastRunStatus(dn, true, false)
 	jsonResponse(w, r, rst)
 }
 
@@ -254,7 +254,7 @@ func lastRunStatusHandler(w http.ResponseWriter, r *http.Request) {
 
 	dn := getRequestParam(r, "model")
 
-	rst, _ := theCatalog.FirstOrLastRunStatus(dn, false)
+	rst, _ := theCatalog.FirstOrLastRunStatus(dn, false, false)
 	jsonResponse(w, r, rst)
 }
 
@@ -268,7 +268,7 @@ func lastCompletedRunStatusHandler(w http.ResponseWriter, r *http.Request) {
 
 	dn := getRequestParam(r, "model")
 
-	rst, _ := theCatalog.LastCompletedRunStatus(dn)
+	rst, _ := theCatalog.FirstOrLastRunStatus(dn, false, true)
 	jsonResponse(w, r, rst)
 }
 
@@ -561,9 +561,9 @@ func taskTextHandler(w http.ResponseWriter, r *http.Request) {
 
 	jsonResponse(w, r,
 		&struct {
-			T *db.TaskPub
-			A *db.TaskRunSetTxt
-		}{T: tp, A: trs})
+			Task *db.TaskPub
+			Txt  *db.TaskRunSetTxt
+		}{Task: tp, Txt: trs})
 }
 
 // taskAllTextHandler return full task metadata, description, notes, run history by model digest-or-name and task name
@@ -584,7 +584,7 @@ func taskAllTextHandler(w http.ResponseWriter, r *http.Request) {
 
 	jsonResponse(w, r,
 		&struct {
-			T *db.TaskPub
-			A *db.TaskRunSetTxt
-		}{T: tp, A: trs})
+			Task *db.TaskPub
+			Txt  *db.TaskRunSetTxt
+		}{Task: tp, Txt: trs})
 }

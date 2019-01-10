@@ -662,6 +662,10 @@ func apiReadCsvRoutes(router *vestigo.Router) {
 // add web-service /api routes to update metadata
 func apiUpdateRoutes(router *vestigo.Router) {
 
+	//
+	// update profile
+	//
+
 	// PATCH /api/model/:model/profile
 	// POST /api/model-profile?model=modelNameOrDigest
 	router.Patch("/api/model/:model/profile", profileReplaceHandler, logRequest)
@@ -680,50 +684,46 @@ func apiUpdateRoutes(router *vestigo.Router) {
 	router.Delete("/api/model/:model/profile/:profile/key/:key", profileOptionDeleteHandler, logRequest)
 	router.Post("/api/model-profile-key-delete", profileOptionDeleteHandler, logRequest)
 
-	// POST /api/workset-readonly?model=modelNameOrDigest&set=setName&readonly=true
+	//
+	// update model set of input parameters (workset)
+	//
+
 	// POST /api/model/:model/workset/:set/readonly/:readonly
-	router.Post("/api/workset-readonly", worksetReadonlyUpdateHandler, logRequest)
+	// POST /api/workset-readonly?model=modelNameOrDigest&set=setName&readonly=true
 	router.Post("/api/model/:model/workset/:set/readonly/:readonly", worksetReadonlyUpdateHandler, logRequest)
+	router.Post("/api/workset-readonly", worksetReadonlyUpdateHandler, logRequest)
 
 	// DELETE /api/model/:model/workset/:set
-	// POST /api/model/:model/workset/:set/delete
-	// POST /api/workset/delete?model=modelNameOrDigest&set=setName
+	// POST   /api/workset/delete?model=modelNameOrDigest&set=setName
 	router.Delete("/api/model/:model/workset/:set", worksetDeleteHandler, logRequest)
-	router.Post("/api/model/:model/workset/:set/delete", worksetDeleteHandler, logRequest)
 	router.Post("/api/workset/delete", worksetDeleteHandler, logRequest)
 
-	// PUT /api/workset-new
+	// PUT  /api/workset-new
 	// POST /api/workset-new
 	router.Put("/api/workset-new", worksetReplaceHandler, logRequest)
 	router.Post("/api/workset-new", worksetReplaceHandler, logRequest)
 
 	// PATCH /api/workset
-	// POST /api/workset
+	// POST  /api/workset
 	router.Patch("/api/workset", worksetMergeHandler, logRequest)
 	router.Post("/api/workset", worksetMergeHandler, logRequest)
 
 	// DELETE /api/model/:model/workset/:set/parameter/:name
-	// POST /api/model/:model/workset/:set/parameter/:name/delete
-	// POST /api/workset-parameter/delete?model=modelNameOrDigest&set=setName&parameter=name
+	// POST   /api/workset-parameter/delete?model=modelNameOrDigest&set=setName&parameter=name
 	router.Delete("/api/model/:model/workset/:set/parameter/:name", worksetParameterDeleteHandler, logRequest)
-	router.Post("/api/model/:model/workset/:set/parameter/:name/delete", worksetParameterDeleteHandler, logRequest)
 	router.Post("/api/workset-parameter/delete", worksetParameterDeleteHandler, logRequest)
 
-	// POST /api/workset-parameter-new-value?model=modelNameOrDigest&set=setName&name=parameterName
 	// PATCH /api/model/:model/workset/:set/parameter/:name/new/value
-	// POST /api/model/:model/workset/:set/parameter/:name/new/value
-	router.Post("/api/workset-parameter-new-value", parameterPageUpdateHandler, logRequest)
+	// POST  /api/workset-parameter-new-value?model=modelNameOrDigest&set=setName&name=parameterName
 	router.Patch("/api/model/:model/workset/:set/parameter/:name/new/value", parameterPageUpdateHandler, logRequest)
-	router.Post("/api/model/:model/workset/:set/parameter/:name/new/value", parameterPageUpdateHandler, logRequest)
+	router.Post("/api/workset-parameter-new-value", parameterPageUpdateHandler, logRequest)
 
-	// POST /api/workset-parameter-new-value-id?model=modelNameOrDigest&set=setName&name=parameterName
 	// PATCH /api/model/:model/workset/:set/parameter/:name/new/value-id
-	// POST /api/model/:model/workset/:set/parameter/:name/new/value-id
-	router.Post("/api/workset-parameter-new-value-id", parameterIdPageUpdateHandler, logRequest)
+	// POST  /api/workset-parameter-new-value-id?model=modelNameOrDigest&set=setName&name=parameterName
 	router.Patch("/api/model/:model/workset/:set/parameter/:name/new/value-id", parameterIdPageUpdateHandler, logRequest)
-	router.Post("/api/model/:model/workset/:set/parameter/:name/new/value-id", parameterIdPageUpdateHandler, logRequest)
+	router.Post("/api/workset-parameter-new-value-id", parameterIdPageUpdateHandler, logRequest)
 
-	// PUT /api/model/:model/workset/:set/copy/parameter/:name/from-run/:run
+	// PUT  /api/model/:model/workset/:set/copy/parameter/:name/from-run/:run
 	// POST /api/copy-parameter-from-run?model=modelNameOrDigest&set=setName&name=parameterName&run=runNameOrDigest"
 	router.Put("/api/model/:model/workset/:set/copy/parameter/:name/from-run/:run", worksetParameterRunCopyHandler, logRequest)
 	router.Post("/api/copy-parameter-from-run", worksetParameterRunCopyHandler, logRequest)
@@ -732,6 +732,20 @@ func apiUpdateRoutes(router *vestigo.Router) {
 	// POST /api/copy-parameter-from-workset?model=modelNameOrDigest&set=dstSetName&name=parameterName&from-set=srcSetName"
 	router.Put("/api/model/:model/workset/:set/copy/parameter/:name/from-workset/:from-set", worksetParameterCopyFromWsHandler, logRequest)
 	router.Post("/api/copy-parameter-from-workset", worksetParameterCopyFromWsHandler, logRequest)
+
+	//
+	// update model run
+	//
+
+	// DELETE /api/model/:model/run/:run
+	// POST   /api/run/delete?model=modelNameOrDigest&run=runNameOrDigest
+	router.Patch("/api/model/:model/run/:run", runDeleteHandler, logRequest)
+	router.Post("/api/run/delete", runDeleteHandler, logRequest)
+
+	// PATCH /api/model/:model/run/:run/text
+	// POST  /api/run-text?model=modelNameOrDigest&run=runNameOrDigest
+	router.Patch("/api/model/:model/run/:run/text", runTextMergeHandler, logRequest)
+	router.Post("/api/run-text", runTextMergeHandler, logRequest)
 }
 
 // add web-service /api routes to run the model and monitor progress

@@ -80,7 +80,7 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 	}
 
 	// run must be completed: status success, error or exit
-	if runRow.Status != db.DoneRunStatus && runRow.Status != db.ExitRunStatus && runRow.Status != db.ErrorRunStatus {
+	if !db.IsRunCompleted(runRow.Status) {
 		return errors.New("model run not completed: " + strconv.Itoa(runRow.RunId) + " " + runRow.Name)
 	}
 

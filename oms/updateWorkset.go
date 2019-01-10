@@ -151,7 +151,7 @@ func (mc *ModelCatalog) DeleteWorkset(dn, wsn string) (bool, error) {
 		return false, nil // return empty result: model not found or error
 	}
 
-	// lock catalog and update workset
+	// lock catalog and delete workset
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
@@ -168,7 +168,7 @@ func (mc *ModelCatalog) DeleteWorkset(dn, wsn string) (bool, error) {
 	// delete workset from database
 	err = db.DeleteWorkset(mc.modelLst[idx].dbConn, w.SetId)
 	if err != nil {
-		omppLog.Log("Error at update workset: ", dn, ": ", wsn, ": ", err.Error())
+		omppLog.Log("Error at delete workset: ", dn, ": ", wsn, ": ", err.Error())
 		return false, err
 	}
 

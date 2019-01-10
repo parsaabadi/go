@@ -10,16 +10,16 @@ import (
 )
 
 // RunStatusByDigestOrName return run_lst db row by model digest-or-name and run digest-or-name.
-func (mc *ModelCatalog) RunStatus(dn, rdn string) (*db.RunRow, bool) {
+func (mc *ModelCatalog) RunStatus(dn, rdn string) (*db.RunPub, bool) {
 
 	// if model digest-or-name or run digest-or-name is empty then return empty results
 	if dn == "" {
 		omppLog.Log("Warning: invalid (empty) model digest and name")
-		return &db.RunRow{}, false
+		return &db.RunPub{}, false
 	}
 	if rdn == "" {
 		omppLog.Log("Warning: invalid (empty) run digest and name")
-		return &db.RunRow{}, false
+		return &db.RunPub{}, false
 	}
 
 	// lock catalog and find model index by digest or name
@@ -29,7 +29,7 @@ func (mc *ModelCatalog) RunStatus(dn, rdn string) (*db.RunRow, bool) {
 	idx, ok := mc.indexByDigestOrName(dn)
 	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return &db.RunRow{}, false // return empty result: model not found or error
+		return &db.RunPub{}, false // return empty result: model not found or error
 	}
 
 	// get run_lst db row by digest or run name
@@ -39,23 +39,37 @@ func (mc *ModelCatalog) RunStatus(dn, rdn string) (*db.RunRow, bool) {
 	}
 	if err != nil {
 		omppLog.Log("Error at get run status: ", dn, ": ", rdn, ": ", err.Error())
-		return &db.RunRow{}, false // return empty result: run select error
+		return &db.RunPub{}, false // return empty result: run select error
 	}
 	if r == nil {
 		omppLog.Log("Warning run status not found: ", dn, ": ", rdn)
-		return &db.RunRow{}, false // return empty result: run_lst row not found
+		return &db.RunPub{}, false // return empty result: run_lst row not found
 	}
 
-	return r, true
+	// get run sub-values progress for that run id
+	rpRs, err := db.GetRunProgress(mc.modelLst[idx].dbConn, r.RunId)
+	if err != nil {
+		omppLog.Log("Error at get run progress: ", dn, ": ", rdn, ": ", err.Error())
+		return &db.RunPub{}, false // return empty result: run progress select error
+	}
+
+	// convert to "public" format
+	rp, err := (&db.RunMeta{Run: *r, Progress: rpRs}).ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
+	if err != nil {
+		omppLog.Log("Error at run status conversion: ", dn, ": ", rdn, ": ", err.Error())
+		return &db.RunPub{}, false // return empty result
+	}
+
+	return rp, true
 }
 
-// FirstOrLastRunStatus return first or last run_lst db row by model digest-or-name.
-func (mc *ModelCatalog) FirstOrLastRunStatus(dn string, isFisrt bool) (*db.RunRow, bool) {
+// FirstOrLastRunStatus return first or last or last completed run_lst db row and run_progress db rows by model digest-or-name.
+func (mc *ModelCatalog) FirstOrLastRunStatus(dn string, isFisrt, isCompleted bool) (*db.RunPub, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
 		omppLog.Log("Warning: invalid (empty) model digest and name")
-		return &db.RunRow{}, false
+		return &db.RunPub{}, false
 	}
 
 	// lock catalog and find model index by digest or name
@@ -65,63 +79,46 @@ func (mc *ModelCatalog) FirstOrLastRunStatus(dn string, isFisrt bool) (*db.RunRo
 	idx, ok := mc.indexByDigestOrName(dn)
 	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return &db.RunRow{}, false // return empty result: model not found or error
+		return &db.RunPub{}, false // return empty result: model not found or error
 	}
 
-	// get first or last run_lst db row
+	// get first or last or last completed run_lst db row
 	rst := &db.RunRow{}
 	var err error
 
 	if isFisrt {
 		rst, err = db.GetFirstRun(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId)
 	} else {
-		rst, err = db.GetLastRun(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId)
+		if !isCompleted {
+			rst, err = db.GetLastRun(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId)
+		} else {
+			rst, err = db.GetLastCompletedRun(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId)
+		}
 	}
-
 	if err != nil {
 		omppLog.Log("Error at get run status: ", dn, ": ", err.Error())
-		return &db.RunRow{}, false // return empty result: run select error
+		return &db.RunPub{}, false // return empty result: run select error
 	}
 	if rst == nil {
 		// omppLog.Log("Warning: there is no run status not found for the model: ", dn)
-		return &db.RunRow{}, false // return empty result: run_lst row not found
+		return &db.RunPub{}, false // return empty result: run_lst row not found
 	}
 
-	return rst, true
-}
-
-// LastCompletedRunStatus return last compeleted run_lst db row by model digest-or-name.
-// Run completed if run status one of: s=success, x=exit, e=error.
-func (mc *ModelCatalog) LastCompletedRunStatus(dn string) (*db.RunRow, bool) {
-
-	// if model digest-or-name is empty then return empty results
-	if dn == "" {
-		omppLog.Log("Warning: invalid (empty) model digest and name")
-		return &db.RunRow{}, false
-	}
-
-	// lock catalog and find model index by digest or name
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
-	if !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return &db.RunRow{}, false // return empty result: model not found or error
-	}
-
-	// get last completed run_lst db row
-	rst, err := db.GetLastCompletedRun(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId)
+	// get run sub-values progress for that run id
+	rpRs, err := db.GetRunProgress(mc.modelLst[idx].dbConn, rst.RunId)
 	if err != nil {
-		omppLog.Log("Error at get last completed run: ", dn, ": ", err.Error())
-		return &db.RunRow{}, false // return empty result: run select error
-	}
-	if rst == nil {
-		// omppLog.Log("Warning: there is no completed run not found for the model: ", dn)
-		return &db.RunRow{}, false // return empty result: run_lst row not found
+		omppLog.Log("Error at get run progress: ", dn, ": ", err.Error())
+		return &db.RunPub{}, false // return empty result: run progress select error
 	}
 
-	return rst, true
+	// convert to "public" format
+	rp, err := (&db.RunMeta{Run: *rst, Progress: rpRs}).ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
+	if err != nil {
+		omppLog.Log("Error at run status conversion: ", dn, ": ", err.Error())
+		return &db.RunPub{}, false // return empty result
+	}
+
+	return rp, true
 }
 
 // LastCompletedRunText return last compeleted run_lst and run_txt db rows by model digest-or-name.
