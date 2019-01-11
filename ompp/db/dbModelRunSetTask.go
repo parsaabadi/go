@@ -198,10 +198,15 @@ type WorksetParamTxtRow struct {
 // or contain same input parameter values as it was at the time of task run.
 // To find actual input for any particular model run and/or task run we must use run_id.
 type TaskMeta struct {
-	Task    TaskRow       // modeling task row: task_lst
-	Txt     []TaskTxtRow  // task text rows: task_txt
-	Set     []int         // task body (current list of workset id's): task_set
+	TaskDef               // task definition: metadata and input worksets
 	TaskRun []taskRunItem // task run history: task_run_lst and task_run_set rows
+}
+
+// TaskDef is modeling task definition: metadata and input worksets
+type TaskDef struct {
+	Task TaskRow      // modeling task row: task_lst
+	Txt  []TaskTxtRow // task text rows: task_txt
+	Set  []int        // task body (current list of workset id's): task_set
 }
 
 // taskRunItem is master task_run_lst row (task run status, date-time...)

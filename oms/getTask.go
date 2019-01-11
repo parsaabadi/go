@@ -44,7 +44,7 @@ func (mc *ModelCatalog) TaskList(dn string) ([]db.TaskPub, bool) {
 
 	for ni := range tl {
 
-		p, err := (&db.TaskMeta{Task: tl[ni]}).ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
+		p, err := (&db.TaskMeta{TaskDef: db.TaskDef{Task: tl[ni]}}).ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
 		if err != nil {
 			omppLog.Log("Error at task conversion: ", dn, ": ", err.Error())
 			return []db.TaskPub{}, false // return empty result: conversion error
@@ -111,9 +111,9 @@ func (mc *ModelCatalog) TaskListText(dn string, preferedLang []language.Tag) ([]
 		var err error
 
 		if isFound && nt < len(txl) {
-			p, err = (&db.TaskMeta{Task: tl[ni], Txt: []db.TaskTxtRow{txl[nt]}}).ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
+			p, err = (&db.TaskMeta{TaskDef: db.TaskDef{Task: tl[ni], Txt: []db.TaskTxtRow{txl[nt]}}}).ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
 		} else {
-			p, err = (&db.TaskMeta{Task: tl[ni]}).ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
+			p, err = (&db.TaskMeta{TaskDef: db.TaskDef{Task: tl[ni]}}).ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
 		}
 		if err != nil {
 			omppLog.Log("Error at task conversion: ", dn, ": ", err.Error())
@@ -170,7 +170,7 @@ func (mc *ModelCatalog) TaskSets(dn, tn string) (*db.TaskPub, bool) {
 	}
 
 	// convert to "public" modeling task format
-	tp, err := (&db.TaskMeta{Task: *tr, Set: setIds}).ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
+	tp, err := (&db.TaskMeta{TaskDef: db.TaskDef{Task: *tr, Set: setIds}}).ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
 	if err != nil {
 		omppLog.Log("Error at modeling task conversion: ", dn, ": ", tn, ": ", err.Error())
 		return &db.TaskPub{}, false // return empty result: error to convert task to pulic format

@@ -175,12 +175,15 @@ func (pub *TaskPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskMeta, 
 
 	// task header: task_lst row with zero default task id
 	meta := TaskMeta{
-		Task: TaskRow{
-			TaskId:  0, // task id is undefined
-			ModelId: modelDef.Model.ModelId,
-			Name:    pub.Name,
+		TaskDef: TaskDef{
+			Task: TaskRow{
+				TaskId:  0, // task id is undefined
+				ModelId: modelDef.Model.ModelId,
+				Name:    pub.Name,
+			},
+			Txt: make([]TaskTxtRow, len(pub.Txt)),
 		},
-		Txt: make([]TaskTxtRow, len(pub.Txt)),
+		TaskRun: []taskRunItem{},
 	}
 
 	// task description and notes: task_txt rows

@@ -158,24 +158,20 @@ func doReadTablePageHandler(w http.ResponseWriter, r *http.Request, isCode bool)
 }
 
 // worksetParameterPageGetHandler read a "page" of parameter values from workset.
-// GET /api/workset-parameter-value?model=modelNameOrDigest&set=setName&name=parameterName
-// GET /api/workset-parameter-value?model=modelNameOrDigest&set=setName&name=parameterName&start=0
-// GET /api/workset-parameter-value?model=modelNameOrDigest&set=setName&name=parameterName&start=0&count=100
 // GET /api/model/:model/workset/:set/parameter/:name/value
 // GET /api/model/:model/workset/:set/parameter/:name/value/start/:start
 // GET /api/model/:model/workset/:set/parameter/:name/value/start/:start/count/:count
+// GET /api/workset-parameter-value?model=modelNameOrDigest&set=setName&name=parameterName&start=0&count=100
 // Dimension(s) and enum-based parameters returned as enum codes.
 func worksetParameterPageGetHandler(w http.ResponseWriter, r *http.Request) {
 	doParameterGetPageHandler(w, r, "set", true, true)
 }
 
 // runParameterPageGetHandler read a "page" of parameter values from model run results.
-// GET /api/run-parameter-value?model=modelNameOrDigest&run=runNameOrDigest&name=parameterName
-// GET /api/run-parameter-value?model=modelNameOrDigest&run=runNameOrDigest&name=parameterName&start=0
-// GET /api/run-parameter-value?model=modelNameOrDigest&run=runNameOrDigest&name=parameterName&start=0&count=100
 // GET /api/model/:model/run/:run/parameter/:name/value
 // GET /api/model/:model/run/:run/parameter/:name/value/start/:start
 // GET /api/model/:model/run/:run/parameter/:name/value/start/:start/count/:count
+// GET /api/run-parameter-value?model=modelNameOrDigest&run=runNameOrDigest&name=parameterName&start=0&count=100
 // Dimension(s) and enum-based parameters returned as enum codes.
 func runParameterPageGetHandler(w http.ResponseWriter, r *http.Request) {
 	doParameterGetPageHandler(w, r, "run", false, true)
@@ -236,23 +232,19 @@ func doParameterGetPageHandler(w http.ResponseWriter, r *http.Request, srcArg st
 }
 
 // runTableExprPageGetHandler read a "page" of output table expression(s) values from model run results.
-// GET /api/run-table-expr?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0
-// GET /api/run-table-expr?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0&count=100
 // GET /api/model/:model/run/:run/table/:name/expr
 // GET /api/model/:model/run/:run/table/:name/expr/start/:start
 // GET /api/model/:model/run/:run/table/:name/expr/start/:start/count/:count
+// GET /api/run-table-expr?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0&count=100
 // Enum-based dimension items returned as enum codes.
 func runTableExprPageGetHandler(w http.ResponseWriter, r *http.Request) {
 	doTableGetPageHandler(w, r, false, false, true)
 }
 
 // runTableAccPageGetHandler read a "page" of output table accumulator(s) values from model run results.
-// GET /api/run-table-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName
-// GET /api/run-table-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0
-// GET /api/run-table-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0&count=100
-// GET /api/model/:model/run/:run/table/:name/acc
 // GET /api/model/:model/run/:run/table/:name/acc/start/:start
 // GET /api/model/:model/run/:run/table/:name/acc/start/:start/count/:count
+// GET /api/run-table-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0&count=100
 // Enum-based dimension items returned as enum codes.
 func runTableAccPageGetHandler(w http.ResponseWriter, r *http.Request) {
 	doTableGetPageHandler(w, r, true, false, true)
@@ -260,12 +252,10 @@ func runTableAccPageGetHandler(w http.ResponseWriter, r *http.Request) {
 
 // runTableAllAccPageGetHandler read a "page" of output table accumulator(s) values
 // from "all-accumulators" view of model run results.
-// GET /api/run-table-all-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName
-// GET /api/run-table-all-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0
-// GET /api/run-table-all-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0&count=100
 // GET /api/model/:model/run/:run/table/:name/all-acc
 // GET /api/model/:model/run/:run/table/:name/all-acc/start/:start
 // GET /api/model/:model/run/:run/table/:name/all-acc/start/:start/count/:count
+// GET /api/run-table-all-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0&count=100
 // Enum-based dimension items returned as enum codes.
 func runTableAllAccPageGetHandler(w http.ResponseWriter, r *http.Request) {
 	doTableGetPageHandler(w, r, true, true, true)

@@ -309,7 +309,7 @@ func copyTaskDbToDb(
 	}
 
 	// destination: save modeling task metadata
-	err = dstTask.UpdateTask(dstDb, dstModel, dstLang)
+	err = dstTask.UpdateTaskFull(dstDb, dstModel, dstLang)
 	if err != nil {
 		return 0, err
 	}

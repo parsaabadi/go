@@ -391,7 +391,7 @@ func fromTaskJsonToDb(
 	}
 
 	// save modeling task metadata
-	err = meta.UpdateTask(dbConn, modelDef, langDef)
+	err = meta.UpdateTaskFull(dbConn, modelDef, langDef)
 	if err != nil {
 		return 0, err
 	}

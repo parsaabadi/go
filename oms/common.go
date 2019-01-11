@@ -120,7 +120,7 @@ func getRequestLang(r *http.Request, name string) []language.Tag {
 }
 
 // set Content-Type header by extension and invoke next handler.
-// This function exist to supress Windows registry content type overrides
+// This function exist to suppress Windows registry content type overrides
 func setContentType(next http.Handler) http.Handler {
 
 	var ctDef = map[string]string{

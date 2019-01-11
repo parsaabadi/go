@@ -427,11 +427,11 @@ func GetTaskRunList(dbConn *sql.DB, taskRow *TaskRow) (*TaskMeta, error) {
 	}
 
 	// task meta header: task_lst master row and empty details
-	meta := &TaskMeta{
+	meta := &TaskMeta{TaskDef: TaskDef{
 		Task: *taskRow,
 		Txt:  []TaskTxtRow{},
 		Set:  []int{},
-	}
+	}}
 
 	// get task run history and status
 	runRs, err := getTaskRunLst(dbConn,
@@ -562,7 +562,7 @@ func GetTaskFull(dbConn *sql.DB, taskRow *TaskRow, langCode string) (*TaskMeta, 
 	}
 
 	// task meta header: task_lst master row
-	meta := &TaskMeta{Task: *taskRow}
+	meta := &TaskMeta{TaskDef: TaskDef{Task: *taskRow}}
 
 	// get tasks description and notes by model id
 	q := "SELECT M.task_id, M.lang_id, L.lang_code, M.descr, M.note" +

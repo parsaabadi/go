@@ -17,7 +17,6 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 
 // modelListHandler return list of model_dic rows:
 // GET /api/model-list
-// GET /api/model-list/
 func modelListHandler(w http.ResponseWriter, r *http.Request) {
 
 	// list of models digest and for each model in catalog and get model_dic row
@@ -33,10 +32,9 @@ func modelListHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // modelTextListHandler return list of model_dic and model_dic_txt rows:
-// GET /api/model-list-text?lang=en
-// GET /api/model-list-text/
 // GET /api/model-list/text
 // GET /api/model-list/text/lang/:lang
+// GET /api/model-list-text?lang=en
 // If optional lang specified then result in that language else in browser language or model default.
 func modelTextListHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -57,8 +55,8 @@ func modelTextListHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // modelMetaHandler return language-indepedent model metadata:
-// GET /api/model?model=modelNameOrDigest
 // GET /api/model/:model
+// GET /api/model?model=modelNameOrDigest
 // If multiple models with same name exist only one is returned.
 func modelMetaHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -69,9 +67,9 @@ func modelMetaHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // modelTextHandler return language-specific model metadata:
-// GET /api/model-text?model=modelNameOrDigest&lang=en
 // GET /api/model/:model/text
 // GET /api/model/:model/text/lang/:lang
+// GET /api/model-text?model=modelNameOrDigest&lang=en
 // Model digest-or-name must specified, if multiple models with same name exist only one is returned.
 // If optional lang specified then result in that language else in browser language or model default.
 func modelTextHandler(w http.ResponseWriter, r *http.Request) {
@@ -84,8 +82,8 @@ func modelTextHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // modelAllTextHandler return language-specific model metadata:
-// GET /api/model-text-all?model=modelNameOrDigest
 // GET /api/model/:model/text/all
+// GET /api/model-text-all?model=modelNameOrDigest
 // Model digest-or-name must specified, if multiple models with same name exist only one is returned.
 // Text rows returned in all languages.
 func modelAllTextHandler(w http.ResponseWriter, r *http.Request) {
@@ -112,8 +110,8 @@ func modelAllTextHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // langListHandler return list of model langauages:
-// GET /api/lang-list?model=modelNameOrDigest
 // GET /api/model/:model/lang-list
+// GET /api/lang-list?model=modelNameOrDigest
 // Model digest-or-name must specified, if multiple models with same name exist only one is returned.
 func langListHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -124,9 +122,9 @@ func langListHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // wordListHandler return list of model "words": arrays of rows from lang_word and model_word db tables.
-// GET /api/word-list?model=modelNameOrDigest&lang=en
 // GET /api/model/:model/word-list
 // GET /api/model/:model/word-list/lang/:lang
+// GET /api/word-list?model=modelNameOrDigest&lang=en
 // Model digest-or-name must specified, if multiple models with same name exist only one is returned.
 // If optional lang specified then result in that language else in browser language or model default.
 func wordListHandler(w http.ResponseWriter, r *http.Request) {
@@ -139,8 +137,8 @@ func wordListHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // modelGroupHandler return parameter and output table groups (language-neutral part):
-// GET /api/model-group?model=modelNameOrDigest
 // GET /api/model/:model/group
+// GET /api/model-group?model=modelNameOrDigest
 // If multiple models with same name exist only one is returned.
 func modelGroupHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -151,9 +149,9 @@ func modelGroupHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // modelGroupTextHandler return parameter and output table groups with text (description and notes):
-// GET /api/model-group-text?model=modelNameOrDigest&lang=en
 // GET /api/model/:model/group/text
 // GET /api/model/:model/group/text/lang/:lang
+// GET /api/model-group-text?model=modelNameOrDigest&lang=en
 // Model digest-or-name must specified, if multiple models with same name exist only one is returned.
 // If optional lang specified then result in that language else in browser language or model default.
 func modelGroupTextHandler(w http.ResponseWriter, r *http.Request) {

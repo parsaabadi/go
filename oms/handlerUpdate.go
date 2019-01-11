@@ -130,27 +130,6 @@ func worksetReadonlyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, r, ws)
 }
 
-// worksetDeleteHandler delete workset and workset parameters:
-// DELETE /api/model/:model/workset/:set
-// POST /api/workset/delete?model=modelNameOrDigest&set=setName
-// If multiple models with same name exist then result is undefined.
-// If no such workset exist in database then no error, empty operation.
-func worksetDeleteHandler(w http.ResponseWriter, r *http.Request) {
-
-	dn := getRequestParam(r, "model")
-	wsn := getRequestParam(r, "set")
-
-	// update workset metadata
-	ok, err := theCatalog.DeleteWorkset(dn, wsn)
-	if err != nil {
-		http.Error(w, "Workset delete failed "+dn+": "+wsn, http.StatusBadRequest)
-		return
-	}
-	if ok {
-		w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+wsn)
-	}
-}
-
 // worksetReplaceHandler replace workset and all parameters from multipart-form:
 // PUT /api/workset-new
 // POST /api/workset-new
@@ -328,25 +307,24 @@ func worksetUpdateHandler(isReplace bool, w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+wsn) // respond with workset location
 }
 
-// worksetParameterDeleteHandler delete workset parameter:
-// DELETE /api/model/:model/workset/:set/parameter/:name
-// POST /api/workset-parameter/delete?model=modelNameOrDigest&set=setName&parameter=name
+// worksetDeleteHandler delete workset and workset parameters:
+// DELETE /api/model/:model/workset/:set
+// POST /api/workset-delete?model=modelNameOrDigest&set=setName
 // If multiple models with same name exist then result is undefined.
-// If no such parameter or workset exist in database then no error, empty operation.
-func worksetParameterDeleteHandler(w http.ResponseWriter, r *http.Request) {
+// If no such workset exist in database then no error, empty operation.
+func worksetDeleteHandler(w http.ResponseWriter, r *http.Request) {
 
 	dn := getRequestParam(r, "model")
 	wsn := getRequestParam(r, "set")
-	name := getRequestParam(r, "name")
 
-	// delete workset parameter
-	ok, err := theCatalog.DeleteWorksetParameter(dn, wsn, name)
+	// update workset metadata
+	ok, err := theCatalog.DeleteWorkset(dn, wsn)
 	if err != nil {
-		http.Error(w, "Workset parameter delete failed "+wsn+": "+name, http.StatusBadRequest)
+		http.Error(w, "Workset delete failed "+dn+": "+wsn, http.StatusBadRequest)
 		return
 	}
 	if ok {
-		w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+wsn+"/parameter/"+name)
+		w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+wsn)
 	}
 }
 
@@ -430,6 +408,28 @@ func doUpdateParameterPageHandler(w http.ResponseWriter, r *http.Request, isCode
 	w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+wsn+"/parameter/"+name) // respond with workset parameter location
 }
 
+// worksetParameterDeleteHandler delete workset parameter:
+// DELETE /api/model/:model/workset/:set/parameter/:name
+// POST /api/workset-parameter-delete?model=modelNameOrDigest&set=setName&parameter=name
+// If multiple models with same name exist then result is undefined.
+// If no such parameter or workset exist in database then no error, empty operation.
+func worksetParameterDeleteHandler(w http.ResponseWriter, r *http.Request) {
+
+	dn := getRequestParam(r, "model")
+	wsn := getRequestParam(r, "set")
+	name := getRequestParam(r, "name")
+
+	// delete workset parameter
+	ok, err := theCatalog.DeleteWorksetParameter(dn, wsn, name)
+	if err != nil {
+		http.Error(w, "Workset parameter delete failed "+wsn+": "+name, http.StatusBadRequest)
+		return
+	}
+	if ok {
+		w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+wsn+"/parameter/"+name)
+	}
+}
+
 // worksetParameterRunCopyHandler copy parameter into workset from model run:
 // PUT /api/model/:model/workset/:set/copy/parameter/:name/from-run/:run
 // POST /api/copy-parameter-from-run?model=modelNameOrDigest&set=setName&name=parameterName&run=runNameOrDigest"
@@ -482,7 +482,7 @@ func worksetParameterCopyFromWsHandler(w http.ResponseWriter, r *http.Request) {
 // runDeleteHandler delete model run including output table values and run input parameters
 // by model digest-or-name and run digest-or-name:
 // DELETE /api/model/:model/run/:run
-// POST   /api/run/delete?model=modelNameOrDigest&run=runNameOrDigest
+// POST   /api/run-delete?model=modelNameOrDigest&run=runNameOrDigest
 // If multiple models with same name exist then result is undefined.
 // If multiple runs with same name exist then result is undefined.
 // If no such model run exist in database then no error, empty operation.
@@ -503,49 +503,22 @@ func runDeleteHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // runTextMergeHandler merge model run text (description and notes) and run parameter value notes into database.
-// PATCH /api/model/:model/run/:run/text
-// POST  /api/run-text?model=modelNameOrDigest&run=runNameOrDigest
-// Request parameters must contain model digest-or-name and run digest-or-name.
-// Request json body must contain same model digest-or-name and run digest-or-name.
+// PATCH /api/run/text
+// POST  /api/run/text
+// Model can be identified by digest or name and model run also identified by run digest-or-name.
 // If multiple models with same name exist then result is undefined.
 // If multiple runs with same name exist then result is undefined.
 // If no such model run exist in database then no error, empty operation.
 func runTextMergeHandler(w http.ResponseWriter, r *http.Request) {
 
-	dn := getRequestParam(r, "model")
-	rdn := getRequestParam(r, "run")
-
 	// decode json run "public" metadata
-	// validate: model digest-or-name and run digest-or-name must same as request parameters
 	var rp db.RunPub
 	if !jsonRequestDecode(w, r, &rp) {
 		return // error at json decode, response done with http error
 	}
-	if dn != "" {
-		if rp.ModelDigest == "" || rp.ModelDigest != "" && dn != rp.ModelDigest {
-			if dn != rp.ModelName {
-				http.Error(w, "Model run update failed, invalid (or empty) model digest and name "+dn+": "+rdn, http.StatusBadRequest)
-				return
-			}
-		}
-		if dn == rp.ModelName && rp.ModelDigest != "" { // request parameter is model name and digest in json then use model digest instead of name
-			dn = rp.ModelDigest
-		}
-	}
-	if rdn != "" {
-		if rp.Digest == "" || rp.Digest != "" && rdn != rp.Digest {
-			if rdn != rp.Name {
-				http.Error(w, "Model run update failed, invalid (or empty) run digest and name "+dn+": "+rdn, http.StatusBadRequest)
-				return
-			}
-		}
-		if rdn == rp.Name && rp.Digest != "" { // request parameter is run name and digest in json then use run digest instead of name
-			rdn = rp.Digest
-		}
-	}
 
 	// update run text in model catalog
-	ok, err := theCatalog.UpdateRunText(dn, rdn, &rp)
+	ok, dn, rdn, err := theCatalog.UpdateRunText(&rp)
 	if err != nil {
 		omppLog.Log(err.Error())
 		http.Error(w, "Model run update failed "+dn+": "+rdn, http.StatusBadRequest)
@@ -553,5 +526,76 @@ func runTextMergeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if ok {
 		w.Header().Set("Content-Location", "/api/model/"+dn+"/run/"+rdn)
+	}
+}
+
+// taskDeleteHandler do delete modeling task, task run history from database.
+// DELETE /api/model/:model/task/:task
+// POST   /api/task-delete?model=modelNameOrDigest&task=taskName
+// Task run history deleted only from task_run_lst and task_run_set tables,
+// it does not delete model runs or any model input sets (worksets).
+// If multiple models with same name exist then result is undefined.
+// If task does not exists in database then it is empty operation.
+// If modeling task is running during delete then result is undefined and model may fail with database error.
+func taskDeleteHandler(w http.ResponseWriter, r *http.Request) {
+
+	dn := getRequestParam(r, "model")
+	tn := getRequestParam(r, "task")
+
+	// delete modeling task
+	ok, err := theCatalog.DeleteTask(dn, tn)
+	if err != nil {
+		http.Error(w, "Task delete failed "+dn+": "+tn, http.StatusBadRequest)
+		return
+	}
+	if ok {
+		w.Header().Set("Content-Location", "/api/model/"+dn+"/task/"+tn)
+	}
+}
+
+// taskDefReplaceHandler replace task definition: task text (description and notes) and task input worksets into database.
+// PUT  /api/task-new
+// POST /api/task-new
+// It does delete existing and insert new rows into task_txt and task_set db tables.
+// If task does not exist then new task created.
+// Json body expected to contain TaskDefPub, any other TaskPub data silently ignored.
+// Model can be identified by digest or name and model run also identified by run digest-or-name.
+// If multiple models with same name exist then result is undefined.
+func taskDefReplaceHandler(w http.ResponseWriter, r *http.Request) {
+	taskDefUpdateHandler(w, r, true)
+}
+
+// taskDefMergeHandler merge task definition: task text (description and notes) and task input worksets into database.
+// PATCH /api/task
+// POST  /api/task
+// It does update existing or insert new rows into task_txt and task_set db tables.
+// If task does not exist then new task created.
+// Json body expected to contain TaskDefPub, any other TaskPub data silently ignored.
+// Model can be identified by digest or name and model run also identified by run digest-or-name.
+// If multiple models with same name exist then result is undefined.
+func taskDefMergeHandler(w http.ResponseWriter, r *http.Request) {
+	taskDefUpdateHandler(w, r, false)
+}
+
+// taskDefUpdateHandler replace or merge task definition: task text (description and notes) and task input worksets into database.
+// It does replace or merge task_txt and task_set db rows.
+// If task does not exist then new task created.
+func taskDefUpdateHandler(w http.ResponseWriter, r *http.Request, isReplace bool) {
+
+	// decode json run "public" metadata
+	var tpd db.TaskDefPub
+	if !jsonRequestDecode(w, r, &tpd) {
+		return // error at json decode, response done with http error
+	}
+
+	// update task definition in model catalog
+	ok, dn, tn, err := theCatalog.UpdateTaskDef(isReplace, &tpd)
+	if err != nil {
+		omppLog.Log(err.Error())
+		http.Error(w, "Modeling task merge failed "+dn+": "+tn, http.StatusBadRequest)
+		return
+	}
+	if ok {
+		w.Header().Set("Content-Location", "/api/model/"+dn+"/task/"+tn)
 	}
 }
