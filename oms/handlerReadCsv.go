@@ -289,7 +289,7 @@ func writeCsvResponse(
 	// set response headers
 	// todo: ETag instead no-cache and utf-8 file names
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
-	w.Header().Set("Content-Dispostion", "attachment; filename="+`"`+url.QueryEscape(name)+".csv"+`"`)
+	w.Header().Set("Content-Disposition", "attachment; filename="+`"`+url.QueryEscape(name)+".csv"+`"`)
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Content-Length", strconv.Itoa(nb))
 
