@@ -47,7 +47,7 @@ To copy only one set of input parameters:
 
 To copy only one model run results and input parameters:
   dbcopy -m modelOne -dbcopy.RunId 101
-  dbcopy -m modelOne -dbcopy.RunName modelOne_2016_09_28_11_38_49_0945_101
+  dbcopy -m modelOne -dbcopy.RunName MyFirstRun
 
 To copy only one modeling task metadata and run history:
   dbcopy -m modelOne -dbcopy.TaskId 1
@@ -106,7 +106,7 @@ If you want to write utf-8 BOM into output csv file then:
 To delete from database entire model, model run results, set of input parameters or modeling task:
   dbcopy -m modelOne -dbcopy.Delete
   dbcopy -m modelOne -dbcopy.Delete -dbcopy.RunId 101
-  dbcopy -m modelOne -dbcopy.Delete -dbcopy.RunName modelOne_2016_09_28_11_38_49_0945_101
+  dbcopy -m modelOne -dbcopy.Delete -dbcopy.RunName MyFirstRun
   dbcopy -m modelOne -dbcopy.Delete -dbcopy.SetId 2
   dbcopy -m modelOne -dbcopy.Delete -s Default
   dbcopy -m modelOne -dbcopy.Delete -dbcopy.TaskId 1

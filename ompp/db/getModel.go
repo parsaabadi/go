@@ -39,7 +39,7 @@ func GetModelList(dbConn *sql.DB) ([]ModelDicRow, error) {
 
 // GetModelId return model id if exists.
 //
-// Model selected by name and/or digest, i.e.: ("modelOne", "20120817_1604590148")
+// Model selected by name and/or digest, i.e.: ("modelOne", "abcd20120817160459148")
 // if digest is empty then first model with min(model_id) is used
 func GetModelId(dbConn *sql.DB, name, digest string) (bool, int, error) {
 
@@ -81,7 +81,7 @@ func GetModelId(dbConn *sql.DB, name, digest string) (bool, int, error) {
 
 // GetModel return model metadata: parameters and output tables definition.
 //
-// Model selected by name and/or digest, i.e.: ("modelOne", "20120817_1604590148")
+// Model selected by name and/or digest, i.e.: ("modelOne", "abcd201208171604590148")
 // if digest is empty then first model with min(model_id) is used
 func GetModel(dbConn *sql.DB, name, digest string) (*ModelMeta, error) {
 

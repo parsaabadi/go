@@ -19,8 +19,8 @@ import (
 
 // Standard config keys to get values from ini-file or command line arguments
 const (
-	OptionsFile      = "OpenM.OptionsFile" // ini-file path
-	OptionsFileShort = "ini"               // ini-file path (short form)
+	IniFile      = "OpenM.IniFile" // ini-file path
+	IniFileShort = "ini"           // ini-file path (short form)
 )
 
 /* Log config keys.
@@ -28,7 +28,7 @@ Log can be enabled/disabled for two independent streams:
     console  => standard output stream
     log file => log file, truncated on every run, (optional) unique "stamped" name
 "Stamped" file name produced by adding time-stamp and/or pid-stamp, i.e.:
-    exeName.log => exeName_20120817_160459_0148.1234.log
+    exeName.log => exeName.2012_08_17_16_04_59_148.123.log
 */
 const (
 	LogToConsole      = "OpenM.LogToConsole"     // if true then log to standard output
@@ -57,8 +57,8 @@ type LogOptions struct {
 	IsFile      bool   // if true then log to file
 	IsNoMsgTime bool   // if true then do not prefix log messages with date-time
 	IsLogSql    bool   // if true then log sql statements
-	TimeStamp   string // log timestamp string, ie: 20120817_160459_0148
-	IsDaily     bool   // if true then use daily log file names, ie: exeName_20120817.log
+	TimeStamp   string // log timestamp string, ie: 2012_08_17_16_04_59_148
+	IsDaily     bool   // if true then use daily log file names, ie: exeName.20120817.log
 }
 
 // FullShort is pair of full option name and short option name
@@ -116,8 +116,8 @@ func New(encodingKey string, optFs []FullShort) (*RunOptions, *LogOptions, []str
 
 	// override ini-file file values with command-line arguments
 	flag.Visit(func(f *flag.Flag) {
-		if f.Name == OptionsFile || f.Name == OptionsFileShort {
-			runOpts.KeyValue[OptionsFile] = runOpts.iniPath
+		if f.Name == IniFile || f.Name == IniFileShort {
+			runOpts.KeyValue[IniFile] = runOpts.iniPath
 			return
 		}
 		if f.Name == LogToConsole || f.Name == LogToConsoleShort {
@@ -139,8 +139,8 @@ func New(encodingKey string, optFs []FullShort) (*RunOptions, *LogOptions, []str
 			return
 		}
 		n := f.Name
-		if n == OptionsFileShort {
-			n = OptionsFile
+		if n == IniFileShort {
+			n = IniFile
 		}
 		if n == LogToConsoleShort {
 			n = LogToConsole
@@ -264,8 +264,8 @@ func (opts *RunOptions) Float(key string, defaultValue float64) float64 {
 // add "standard" config options to command line arguments
 func addStandardFlags(runOpts *RunOptions, logOpts *LogOptions) {
 
-	flag.StringVar(&runOpts.iniPath, OptionsFile, "", "path to `ini-file`")
-	flag.StringVar(&runOpts.iniPath, OptionsFileShort, "", "path to `ini-file` (short of "+OptionsFile+")")
+	flag.StringVar(&runOpts.iniPath, IniFile, "", "path to `ini-file`")
+	flag.StringVar(&runOpts.iniPath, IniFileShort, "", "path to `ini-file` (short of "+IniFile+")")
 
 	// add log options to command line arguments
 	flag.BoolVar(&logOpts.IsConsole, LogToConsole, true, "if true then log to standard output")
@@ -282,7 +282,7 @@ func addStandardFlags(runOpts *RunOptions, logOpts *LogOptions) {
 // adjust log settings by merging command line arguments and ini-file options
 // make sure if LogToFile then log file path is defined and vice versa
 // make "stamped" log file name, if required, by adding time-stamp and/or pid-stamp, i.e.:
-//   exeName.log => exeName_20120817_160459_0148.1234.log
+//   exeName.log => exeName.2012_08_17_16_04_59_148.123.log
 func adjustLogOptions(runOpts *RunOptions, logOpts *LogOptions) {
 
 	// if log file path is not empty then LogToFile must be true
@@ -313,7 +313,7 @@ func adjustLogOptions(runOpts *RunOptions, logOpts *LogOptions) {
 	logOpts.IsLogSql = runOpts.Bool(LogSql)
 
 	// update file name with time stamp and pid stamp, if required:
-	// exeName.log => exeName_20120817_160459_0148.1234.log
+	// exeName.log => exeName.2012_08_17_16_04_59_148.123.log
 	isTs := logOpts.IsFile && runOpts.Bool(LogUseTs)
 	isPid := logOpts.IsFile && runOpts.Bool(LogUsePid)
 
@@ -325,7 +325,7 @@ func adjustLogOptions(runOpts *RunOptions, logOpts *LogOptions) {
 			fName = fName[:len(fName)-len(ext)]
 		}
 		if isTs {
-			fName += "_" + logOpts.TimeStamp
+			fName += "." + logOpts.TimeStamp
 		}
 		if isPid {
 			fName += "." + strconv.Itoa(os.Getpid())

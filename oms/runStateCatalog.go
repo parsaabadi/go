@@ -33,7 +33,7 @@ var theRunStateCatalog RunStateCatalog
 const logTickTimeout = 7
 
 // procRunState is model run state.
-// Last run log file name is time-stamped: modelName.YYYY_MM_DD_hh_mm_ss_0SSS.log
+// Last run log file name is time-stamped: modelName.YYYY_MM_DD_hh_mm_ss_SSS.log
 type procRunState struct {
 	RunState            // model run state
 	logLineLst []string // model run log lines
@@ -100,11 +100,11 @@ func (rsc *RunStateCatalog) getNewTimeStamp() (string, time.Time) {
 	defer rsc.rscLock.Unlock()
 
 	dtNow := time.Now()
-	ts := helper.MakeUnderscoreTimeStamp(dtNow)
+	ts := helper.MakeTimeStamp(dtNow)
 	if ts == rsc.lastTimeStamp {
 		time.Sleep(2 * time.Millisecond)
 		dtNow = time.Now()
-		ts = helper.MakeUnderscoreTimeStamp(dtNow)
+		ts = helper.MakeTimeStamp(dtNow)
 	}
 	rsc.lastTimeStamp = ts
 	return ts, dtNow

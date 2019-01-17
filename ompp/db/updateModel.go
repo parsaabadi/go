@@ -102,7 +102,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 	// INSERT INTO model_dic
 	//   (model_id, model_name, model_digest, model_type, model_ver, create_dt, default_lang_id)
 	// VALUES
-	//   (1234, 'modelOne', '1234abcd', 0, '1.0.0.0', '2012-08-17 16:04:59.0148')
+	//   (1234, 'modelOne', '1234abcd', 0, '1.0.0.0', '2012-08-17 16:04:59.148')
 	err = TrxUpdate(trx,
 		"INSERT INTO model_dic"+
 			" (model_id, model_name, model_digest, model_type, model_ver, create_dt, default_lang_id)"+

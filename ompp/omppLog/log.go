@@ -10,9 +10,9 @@ Log can be enabled/disabled for two independent streams:
   log file => log file, truncated on every run, (optional) unique "stamped" name
 
 "Stamped" file name produced by adding time-stamp and/or pid-stamp, i.e.:
-  exeName.log => exeName_20120817_160459_0148.1234.log
+  exeName.log => exeName.2012_08_17_16_04_59_148.123.log
 
-Log message by default prefixed with date-time: 2012-08-17 16:04:59.0148 ....
+Log message by default prefixed with date-time: 2012-08-17 16:04:59.148 ....
 It can be disabled by log setting "is no msg time" = true, i.e.:
   exeName -v -OpenM.LogNoMsgTime
 */
@@ -119,7 +119,7 @@ func createLogFile(nowTime time.Time) bool {
 		lastYear = nowTime.Year()
 		lastMonth = nowTime.Month()
 		lastDay = nowTime.Day()
-		logPath = filepath.Join(dir, fName+"_"+fmt.Sprintf("%04d%02d%02d", lastYear, lastMonth, lastDay)+ext)
+		logPath = filepath.Join(dir, fName+"."+fmt.Sprintf("%04d%02d%02d", lastYear, lastMonth, lastDay)+ext)
 	}
 
 	// create log file or truncate existing

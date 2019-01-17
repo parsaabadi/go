@@ -250,7 +250,7 @@ func doInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, langDe
 	}
 
 	// INSERT INTO workset_lst (set_id, base_run_id, model_id, set_name, is_readonly, update_dt)
-	// VALUES (22, NULL, 1, 'set 22', 0, '2012-08-17 16:05:59.0123')
+	// VALUES (22, NULL, 1, 'set 22', 0, '2012-08-17 16:05:59.123')
 	err := TrxUpdate(trx,
 		"INSERT INTO workset_lst (set_id, base_run_id, model_id, set_name, is_readonly, update_dt)"+
 			" VALUES ("+
@@ -288,7 +288,7 @@ func doReplaceWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, langD
 	sId := strconv.Itoa(meta.Set.SetId)
 
 	// UPDATE workset_lst
-	// SET is_readonly = 0, base_run_id = 1234, update_dt = '2012-08-17 16:05:59.0123'
+	// SET is_readonly = 0, base_run_id = 1234, update_dt = '2012-08-17 16:05:59.123'
 	// WHERE set_id = 22
 	//
 	if meta.Set.UpdateDateTime == "" {
@@ -383,7 +383,7 @@ func doInsertWorksetBody(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, la
 func doMergeWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, langDef *LangMeta) error {
 
 	// UPDATE workset_lst
-	// SET set_name = 'mySet', is_readonly = 0, base_run_id = 1234, update_dt = '2012-08-17 16:05:59.0123'
+	// SET set_name = 'mySet', is_readonly = 0, base_run_id = 1234, update_dt = '2012-08-17 16:05:59.123'
 	// WHERE set_id = 22
 	//
 	sId := strconv.Itoa(meta.Set.SetId)

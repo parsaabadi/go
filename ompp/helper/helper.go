@@ -26,31 +26,22 @@ func UnQuote(src string) string {
 	return s
 }
 
-// MakeDateTime return date-time string, ie: 2012-08-17 16:04:59.0148
+// MakeDateTime return date-time string, ie: 2012-08-17 16:04:59.148
 func MakeDateTime(t time.Time) string {
 	y, mm, dd := t.Date()
 	h, mi, s := t.Clock()
 	ms := int(time.Duration(t.Nanosecond()) / time.Millisecond)
 
-	return fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d.%04d", y, mm, dd, h, mi, s, ms)
+	return fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d.%03d", y, mm, dd, h, mi, s, ms)
 }
 
-// MakeTimeStamp retrun timestamp string, ie: 20120817_160459_0148
+// MakeTimeStamp retrun timestamp string as: 2012_08_17_16_04_59_148
 func MakeTimeStamp(t time.Time) string {
 	y, mm, dd := t.Date()
 	h, mi, s := t.Clock()
 	ms := int(time.Duration(t.Nanosecond()) / time.Millisecond)
 
-	return fmt.Sprintf("%04d%02d%02d_%02d%02d%02d_%04d", y, mm, dd, h, mi, s, ms)
-}
-
-// MakeUnderscoreTimeStamp retrun timestamp string as: 2012_08_17_16_04_59_0148
-func MakeUnderscoreTimeStamp(t time.Time) string {
-	y, mm, dd := t.Date()
-	h, mi, s := t.Clock()
-	ms := int(time.Duration(t.Nanosecond()) / time.Millisecond)
-
-	return fmt.Sprintf("%04d_%02d_%02d_%02d_%02d_%02d_%04d", y, mm, dd, h, mi, s, ms)
+	return fmt.Sprintf("%04d_%02d_%02d_%02d_%02d_%02d_%03d", y, mm, dd, h, mi, s, ms)
 }
 
 // CleanSpecialChars replace all ["'`$}{@\] by _ underscore
