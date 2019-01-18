@@ -365,7 +365,7 @@ func getTaskText(dbConn *sql.DB, query string) ([]TaskTxtRow, error) {
 // GetTaskRun return modeling task run status: task_run_lst table row.
 func GetTaskRun(dbConn *sql.DB, taskRunId int) (*TaskRunRow, error) {
 	return getTaskRunRow(dbConn,
-		"SELECT task_run_id, task_id, run_name, sub_count, create_dt, status, update_dt"+
+		"SELECT task_run_id, task_id, run_name, sub_count, create_dt, status, update_dt, run_stamp"+
 			" FROM task_run_lst"+
 			" WHERE task_run_id = "+strconv.Itoa(taskRunId))
 }
@@ -373,7 +373,7 @@ func GetTaskRun(dbConn *sql.DB, taskRunId int) (*TaskRunRow, error) {
 // GetTaskRunByName return modeling task run status by task id and task run name: task_run_lst table row.
 func GetTaskRunByName(dbConn *sql.DB, taskId int, name string) (*TaskRunRow, error) {
 	return getTaskRunRow(dbConn,
-		"SELECT task_run_id, task_id, run_name, sub_count, create_dt, status, update_dt"+
+		"SELECT task_run_id, task_id, run_name, sub_count, create_dt, status, update_dt, run_stamp"+
 			" FROM task_run_lst"+
 			" WHERE task_id = "+strconv.Itoa(taskId)+
 			" AND run_name = "+toQuoted(name))
@@ -383,7 +383,7 @@ func GetTaskRunByName(dbConn *sql.DB, taskId int, name string) (*TaskRunRow, err
 func GetTaskFirstRun(dbConn *sql.DB, taskId int) (*TaskRunRow, error) {
 	return getTaskRunRow(dbConn,
 		"SELECT"+
-			" R.task_run_id, R.task_id, R.run_name, R.sub_count, R.create_dt, R.status, R.update_dt"+
+			" R.task_run_id, R.task_id, R.run_name, R.sub_count, R.create_dt, R.status, R.update_dt, R.run_stamp"+
 			" FROM task_run_lst R"+
 			" WHERE R.task_run_id ="+
 			" (SELECT MIN(M.task_run_id) FROM task_run_lst M WHERE M.task_id = "+strconv.Itoa(taskId)+")")
@@ -393,7 +393,7 @@ func GetTaskFirstRun(dbConn *sql.DB, taskId int) (*TaskRunRow, error) {
 func GetTaskLastRun(dbConn *sql.DB, taskId int) (*TaskRunRow, error) {
 	return getTaskRunRow(dbConn,
 		"SELECT"+
-			" R.task_run_id, R.task_id, R.run_name, R.sub_count, R.create_dt, R.status, R.update_dt"+
+			" R.task_run_id, R.task_id, R.run_name, R.sub_count, R.create_dt, R.status, R.update_dt, R.run_stamp"+
 			" FROM task_run_lst R"+
 			" WHERE R.task_run_id ="+
 			" (SELECT MAX(M.task_run_id) FROM task_run_lst M WHERE M.task_id = "+strconv.Itoa(taskId)+")")
@@ -405,7 +405,7 @@ func GetTaskLastRun(dbConn *sql.DB, taskId int) (*TaskRunRow, error) {
 func GetTaskLastCompletedRun(dbConn *sql.DB, taskId int) (*TaskRunRow, error) {
 	return getTaskRunRow(dbConn,
 		"SELECT"+
-			" R.task_run_id, R.task_id, R.run_name, R.sub_count, R.create_dt, R.status, R.update_dt"+
+			" R.task_run_id, R.task_id, R.run_name, R.sub_count, R.create_dt, R.status, R.update_dt, R.run_stamp"+
 			" FROM task_run_lst R"+
 			" WHERE R.task_run_id ="+
 			" ("+
@@ -435,7 +435,7 @@ func GetTaskRunList(dbConn *sql.DB, taskRow *TaskRow) (*TaskMeta, error) {
 
 	// get task run history and status
 	runRs, err := getTaskRunLst(dbConn,
-		"SELECT M.task_run_id, M.task_id, M.run_name, M.sub_count, M.create_dt, M.status, M.update_dt"+
+		"SELECT M.task_run_id, M.task_id, M.run_name, M.sub_count, M.create_dt, M.status, M.update_dt, M.run_stamp"+
 			" FROM task_run_lst M"+
 			" WHERE M.task_id = "+strconv.Itoa(taskRow.TaskId)+
 			" AND M.status IN ("+toQuoted(DoneRunStatus)+", "+toQuoted(ErrorRunStatus)+", "+toQuoted(ExitRunStatus)+")"+
@@ -481,7 +481,7 @@ func getTaskRunRow(dbConn *sql.DB, query string) (*TaskRunRow, error) {
 	err := SelectFirst(dbConn, query,
 		func(row *sql.Row) error {
 			if err := row.Scan(
-				&r.TaskRunId, &r.TaskId, &r.Name, &r.SubCount, &r.CreateDateTime, &r.Status, &r.UpdateDateTime); err != nil {
+				&r.TaskRunId, &r.TaskId, &r.Name, &r.SubCount, &r.CreateDateTime, &r.Status, &r.UpdateDateTime, &r.RunStamp); err != nil {
 				return err
 			}
 			return nil
@@ -505,7 +505,7 @@ func getTaskRunLst(dbConn *sql.DB, query string) ([]TaskRunRow, error) {
 		func(rows *sql.Rows) error {
 			var r TaskRunRow
 			if err := rows.Scan(
-				&r.TaskRunId, &r.TaskId, &r.Name, &r.SubCount, &r.CreateDateTime, &r.Status, &r.UpdateDateTime); err != nil {
+				&r.TaskRunId, &r.TaskId, &r.Name, &r.SubCount, &r.CreateDateTime, &r.Status, &r.UpdateDateTime, &r.RunStamp); err != nil {
 				return err
 			}
 			trRs = append(trRs, r)
@@ -584,7 +584,7 @@ func GetTaskFull(dbConn *sql.DB, taskRow *TaskRow, langCode string) (*TaskMeta, 
 	meta.Set = setRs
 
 	// get task run history and status
-	q = "SELECT H.task_run_id, H.task_id, H.run_name, H.sub_count, H.create_dt, H.status, H.update_dt" +
+	q = "SELECT H.task_run_id, H.task_id, H.run_name, H.sub_count, H.create_dt, H.status, H.update_dt, H.run_stamp" +
 		" FROM task_run_lst H" +
 		" INNER JOIN task_lst K ON (K.task_id = H.task_id)" +
 		taskWhere +
@@ -685,7 +685,7 @@ func GetTaskFullList(dbConn *sql.DB, modelId int, isSuccess bool, langCode strin
 	}
 
 	// get task run history and status
-	q = "SELECT H.task_run_id, H.task_id, H.run_name, H.sub_count, H.create_dt, H.status, H.update_dt" +
+	q = "SELECT H.task_run_id, H.task_id, H.run_name, H.sub_count, H.create_dt, H.status, H.update_dt, H.run_stamp" +
 		" FROM task_run_lst H" +
 		" INNER JOIN task_lst K ON (K.task_id = H.task_id)" +
 		" WHERE K.model_id = " + smId +

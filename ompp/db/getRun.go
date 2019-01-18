@@ -15,7 +15,7 @@ func GetRun(dbConn *sql.DB, runId int) (*RunRow, error) {
 		"SELECT"+
 			" H.run_id, H.model_id, H.run_name, H.sub_count,"+
 			" H.sub_started, H.sub_completed, H.create_dt, H.status,"+
-			" H.update_dt, H.run_digest"+
+			" H.update_dt, H.run_digest, H.run_stamp"+
 			" FROM run_lst H"+
 			" WHERE H.run_id = "+strconv.Itoa(runId))
 }
@@ -26,7 +26,7 @@ func GetFirstRun(dbConn *sql.DB, modelId int) (*RunRow, error) {
 		"SELECT"+
 			" H.run_id, H.model_id, H.run_name, H.sub_count,"+
 			" H.sub_started, H.sub_completed, H.create_dt, H.status,"+
-			" H.update_dt, H.run_digest"+
+			" H.update_dt, H.run_digest, H.run_stamp"+
 			" FROM run_lst H"+
 			" WHERE H.run_id ="+
 			" (SELECT MIN(M.run_id) FROM run_lst M WHERE M.model_id = "+strconv.Itoa(modelId)+")")
@@ -38,7 +38,7 @@ func GetLastRun(dbConn *sql.DB, modelId int) (*RunRow, error) {
 		"SELECT"+
 			" H.run_id, H.model_id, H.run_name, H.sub_count,"+
 			" H.sub_started, H.sub_completed, H.create_dt, H.status,"+
-			" H.update_dt, H.run_digest"+
+			" H.update_dt, H.run_digest, H.run_stamp"+
 			" FROM run_lst H"+
 			" WHERE H.run_id ="+
 			" (SELECT MAX(M.run_id) FROM run_lst M WHERE M.model_id = "+strconv.Itoa(modelId)+")")
@@ -52,7 +52,7 @@ func GetLastCompletedRun(dbConn *sql.DB, modelId int) (*RunRow, error) {
 		"SELECT"+
 			" H.run_id, H.model_id, H.run_name, H.sub_count,"+
 			" H.sub_started, H.sub_completed, H.create_dt, H.status,"+
-			" H.update_dt, H.run_digest"+
+			" H.update_dt, H.run_digest, H.run_stamp"+
 			" FROM run_lst H"+
 			" WHERE H.run_id ="+
 			" ("+
@@ -68,7 +68,7 @@ func GetRunByDigest(dbConn *sql.DB, digest string) (*RunRow, error) {
 		"SELECT"+
 			" H.run_id, H.model_id, H.run_name, H.sub_count,"+
 			" H.sub_started, H.sub_completed, H.create_dt, H.status,"+
-			" H.update_dt, H.run_digest"+
+			" H.update_dt, H.run_digest, H.run_stamp"+
 			" FROM run_lst H"+
 			" WHERE H.run_digest = "+toQuoted(digest))
 }
@@ -81,7 +81,7 @@ func GetRunByName(dbConn *sql.DB, modelId int, name string) (*RunRow, error) {
 		"SELECT"+
 			" H.run_id, H.model_id, H.run_name, H.sub_count,"+
 			" H.sub_started, H.sub_completed, H.create_dt, H.status,"+
-			" H.update_dt, H.run_digest"+
+			" H.update_dt, H.run_digest, H.run_stamp"+
 			" FROM run_lst H"+
 			" WHERE H.run_id = "+
 			" ("+
@@ -94,19 +94,19 @@ func GetRunByName(dbConn *sql.DB, modelId int, name string) (*RunRow, error) {
 // getRunRow return run_lst table row.
 func getRunRow(dbConn *sql.DB, query string) (*RunRow, error) {
 
-	var runRow RunRow
+	var r RunRow
 
 	err := SelectFirst(dbConn, query,
 		func(row *sql.Row) error {
 			var sd sql.NullString
 			if err := row.Scan(
-				&runRow.RunId, &runRow.ModelId, &runRow.Name, &runRow.SubCount,
-				&runRow.SubStarted, &runRow.SubCompleted, &runRow.CreateDateTime, &runRow.Status,
-				&runRow.UpdateDateTime, &sd); err != nil {
+				&r.RunId, &r.ModelId, &r.Name, &r.SubCount,
+				&r.SubStarted, &r.SubCompleted, &r.CreateDateTime, &r.Status,
+				&r.UpdateDateTime, &sd, &r.RunStamp); err != nil {
 				return err
 			}
 			if sd.Valid {
-				runRow.Digest = sd.String
+				r.Digest = sd.String
 			}
 			return nil
 		})
@@ -117,7 +117,7 @@ func getRunRow(dbConn *sql.DB, query string) (*RunRow, error) {
 		return nil, err
 	}
 
-	return &runRow, nil
+	return &r, nil
 }
 
 // getRunLst return run_lst table rows.
@@ -132,7 +132,7 @@ func getRunLst(dbConn *sql.DB, query string) ([]RunRow, error) {
 			if err := rows.Scan(
 				&r.RunId, &r.ModelId, &r.Name, &r.SubCount,
 				&r.SubStarted, &r.SubCompleted, &r.CreateDateTime, &r.Status,
-				&r.UpdateDateTime, &sd); err != nil {
+				&r.UpdateDateTime, &sd, &r.RunStamp); err != nil {
 				return err
 			}
 			if sd.Valid {
@@ -159,7 +159,7 @@ func GetRunList(dbConn *sql.DB, modelId int) ([]RunRow, error) {
 	q := "SELECT" +
 		" H.run_id, H.model_id, H.run_name, H.sub_count," +
 		" H.sub_started, H.sub_completed, H.create_dt, H.status," +
-		" H.update_dt, H.run_digest" +
+		" H.update_dt, H.run_digest, H.run_stamp" +
 		" FROM run_lst H" +
 		" WHERE H.model_id = " + strconv.Itoa(modelId) +
 		" ORDER BY 1"
@@ -189,7 +189,7 @@ func GetRunListText(dbConn *sql.DB, modelId int, langCode string) ([]RunRow, []R
 	q := "SELECT" +
 		" H.run_id, H.model_id, H.run_name, H.sub_count," +
 		" H.sub_started, H.sub_completed, H.create_dt, H.status," +
-		" H.update_dt, H.run_digest" +
+		" H.update_dt, H.run_digest, H.run_stamp" +
 		" FROM run_lst H" +
 		" WHERE H.model_id = " + strconv.Itoa(modelId) +
 		" ORDER BY 1"
@@ -512,7 +512,7 @@ func GetRunFullList(dbConn *sql.DB, modelId int, isSuccess bool, langCode string
 	q := "SELECT" +
 		" H.run_id, H.model_id, H.run_name, H.sub_count," +
 		" H.sub_started, H.sub_completed, H.create_dt, H.status," +
-		" H.update_dt, H.run_digest" +
+		" H.update_dt, H.run_digest, H.run_stamp" +
 		" FROM run_lst H" +
 		" WHERE H.model_id = " + smId +
 		statusFilter +

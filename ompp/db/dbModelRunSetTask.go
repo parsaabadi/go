@@ -41,6 +41,7 @@ type RunPub struct {
 	Status         string            // status        VARCHAR(1)   NOT NULL, -- run status: i=init p=progress s=success x=exit e=error(failed)
 	UpdateDateTime string            // update_dt     VARCHAR(32)  NOT NULL, -- last update date-time
 	Digest         string            // run_digest    VARCHAR(32)  NULL,     -- digest of the run
+	RunStamp       string            // run_stamp     VARCHAR(32)  NOT NULL, -- process run stamp, by default is log time stamp
 	Txt            []DescrNote       // run text: description and notes by language
 	Opts           map[string]string // options used to run the model: run_option
 	Param          []ParamRunSetPub  // run parameters: name, sub-value count and value notes by language
@@ -69,6 +70,7 @@ type RunRow struct {
 	Status         string // status        VARCHAR(1)   NOT NULL, -- run status: i=init p=progress s=success x=exit e=error(failed)
 	UpdateDateTime string // update_dt     VARCHAR(32)  NOT NULL, -- last update date-time
 	Digest         string // run_digest    VARCHAR(32)  NULL,     -- digest of the run
+	RunStamp       string // run_stamp     VARCHAR(32)  NOT NULL, -- process run stamp, by default is log time stamp
 }
 
 // RunTxtRow is db row of run_txt
@@ -246,6 +248,7 @@ type TaskRunRow struct {
 	CreateDateTime string // create_dt   VARCHAR(32)  NOT NULL, -- start date-time
 	Status         string // status      VARCHAR(1)   NOT NULL, -- task status: i=init p=progress w=wait s=success x=exit e=error(failed)
 	UpdateDateTime string // update_dt   VARCHAR(32)  NOT NULL, -- last update date-time
+	RunStamp       string // run_stamp   VARCHAR(32)  NOT NULL, -- process run stamp, by default is log time stamp
 }
 
 // TaskRunSetRow is db row of task_run_set.
@@ -274,11 +277,12 @@ type TaskDefPub struct {
 
 // taskRunPub is "public" metadata of task run history.
 type taskRunPub struct {
-	Name           string          // run_name    VARCHAR(255) NOT NULL, -- task run name
-	SubCount       int             // sub_count   INT          NOT NULL, -- subvalue count of task run
-	CreateDateTime string          // create_dt   VARCHAR(32)  NOT NULL, -- start date-time
-	Status         string          // status      VARCHAR(1)   NOT NULL, -- task status: i=init p=progress w=wait s=success x=exit e=error(failed)
-	UpdateDateTime string          // update_dt   VARCHAR(32)  NOT NULL, -- last update date-time
+	Name           string          // run_name   VARCHAR(255) NOT NULL, -- task run name
+	SubCount       int             // sub_count  INT          NOT NULL, -- subvalue count of task run
+	CreateDateTime string          // create_dt  VARCHAR(32)  NOT NULL, -- start date-time
+	Status         string          // status     VARCHAR(1)   NOT NULL, -- task status: i=init p=progress w=wait s=success x=exit e=error(failed)
+	UpdateDateTime string          // update_dt  VARCHAR(32)  NOT NULL, -- last update date-time
+	RunStamp       string          // run_stamp  VARCHAR(32)  NOT NULL, -- process run stamp, by default is log time stamp
 	TaskRunSet     []taskRunSetPub // task run history body: run and set pairs
 }
 
@@ -294,6 +298,7 @@ type taskRunSetPub struct {
 		CreateDateTime string // create_dt     VARCHAR(32)  NOT NULL, -- start date-time
 		Status         string // status        VARCHAR(1)   NOT NULL, -- run status: i=init p=progress s=success x=exit e=error(failed)
 		Digest         string // run_digest    VARCHAR(32)  NULL,     -- digest of the run
+		RunStamp       string // run_stamp     VARCHAR(32)  NOT NULL, -- process run stamp, by default is log time stamp
 	}
 	SetName string // name of input workset which used for that model run
 }

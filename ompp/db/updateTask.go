@@ -161,7 +161,7 @@ func doInsertTaskBody(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta, langDef 
 
 		// insert into task_run_lst
 		err = TrxUpdate(trx,
-			"INSERT INTO task_run_lst (task_run_id, task_id, run_name, sub_count, create_dt, status, update_dt)"+
+			"INSERT INTO task_run_lst (task_run_id, task_id, run_name, sub_count, create_dt, status, update_dt, run_stamp)"+
 				" VALUES ("+
 				strconv.Itoa(id)+", "+
 				stId+", "+
@@ -169,7 +169,8 @@ func doInsertTaskBody(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta, langDef 
 				strconv.Itoa(meta.TaskRun[k].SubCount)+", "+
 				toQuoted(meta.TaskRun[k].CreateDateTime)+", "+
 				toQuoted(meta.TaskRun[k].Status)+", "+
-				toQuoted(meta.TaskRun[k].UpdateDateTime)+")")
+				toQuoted(meta.TaskRun[k].UpdateDateTime)+", "+
+				toQuoted(meta.TaskRun[k].RunStamp)+")")
 		if err != nil {
 			return err
 		}
@@ -214,7 +215,9 @@ func (meta *TaskMeta) ReplaceTaskDef(dbConn *sql.DB, modelDef *ModelMeta, langDe
 		return errors.New("invalid (empty) language list")
 	}
 	if meta.Task.ModelId != modelDef.Model.ModelId {
-		return errors.New("model task: " + strconv.Itoa(meta.Task.TaskId) + " " + meta.Task.Name + " invalid model id " + strconv.Itoa(meta.Task.ModelId) + " expected: " + strconv.Itoa(modelDef.Model.ModelId))
+		return errors.New("model task: " + strconv.Itoa(meta.Task.TaskId) + " " + meta.Task.Name +
+			" invalid model id " + strconv.Itoa(meta.Task.ModelId) +
+			" expected: " + strconv.Itoa(modelDef.Model.ModelId))
 	}
 
 	// do update in transaction scope
@@ -248,7 +251,9 @@ func (meta *TaskMeta) MergeTaskDef(dbConn *sql.DB, modelDef *ModelMeta, langDef 
 		return errors.New("invalid (empty) language list")
 	}
 	if meta.Task.ModelId != modelDef.Model.ModelId {
-		return errors.New("model task: " + strconv.Itoa(meta.Task.TaskId) + " " + meta.Task.Name + " invalid model id " + strconv.Itoa(meta.Task.ModelId) + " expected: " + strconv.Itoa(modelDef.Model.ModelId))
+		return errors.New("model task: " + strconv.Itoa(meta.Task.TaskId) + " " + meta.Task.Name +
+			" invalid model id " + strconv.Itoa(meta.Task.ModelId) +
+			" expected: " + strconv.Itoa(modelDef.Model.ModelId))
 	}
 
 	// do update in transaction scope

@@ -20,7 +20,7 @@ import (
 // If this run already exist then nothing is updated in database, only metadata updated with actual run id.
 // Following is used to find existing model run:
 // if digest not "" empty then by run digest;
-// else if status is error then by run_name, sub_count, sub_completed, status, create_dt.
+// else if status is error then by run_name, sub_count, sub_completed, status, create_dt, run_stamp.
 //
 // Double format is used for progress value float conversion, if non-empty format supplied.
 //
@@ -43,7 +43,7 @@ func (meta *RunMeta) UpdateRun(dbConn *sql.DB, modelDef *ModelMeta, langDef *Lan
 
 	// find existing run:
 	// if digest not "" empty then by run digest
-	// else if status is error then by run_name, sub_count, sub_completed, status, create_dt
+	// else if status is error then by run_name, sub_count, sub_completed, status, create_dt, run_stamp
 	var dstId int
 
 	if meta.Run.Digest != "" || (meta.Run.Status == ErrorRunStatus && meta.Run.Name != "" && meta.Run.CreateDateTime != "") {
@@ -59,7 +59,8 @@ func (meta *RunMeta) UpdateRun(dbConn *sql.DB, modelDef *ModelMeta, langDef *Lan
 				" AND R.sub_count = " + strconv.Itoa(meta.Run.SubCount) +
 				" AND R.sub_completed = " + strconv.Itoa(meta.Run.SubCompleted) +
 				" AND R.status = " + toQuoted(meta.Run.Status) +
-				" AND R.create_dt = " + toQuoted(meta.Run.CreateDateTime)
+				" AND R.create_dt = " + toQuoted(meta.Run.CreateDateTime) +
+				" AND R.run_stamp = " + toQuoted(meta.Run.RunStamp)
 		}
 
 		err := SelectFirst(dbConn,
@@ -314,7 +315,7 @@ func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, meta *RunMeta, langDef *LangM
 	}
 	err = TrxUpdate(trx,
 		"INSERT INTO run_lst"+
-			" (run_id, model_id, run_name, sub_count, sub_started, sub_completed, sub_restart, create_dt, status, update_dt, run_digest)"+
+			" (run_id, model_id, run_name, sub_count, sub_started, sub_completed, sub_restart, create_dt, status, update_dt, run_digest, run_stamp)"+
 			" VALUES ("+
 			srId+", "+
 			strconv.Itoa(modelDef.Model.ModelId)+", "+
@@ -326,7 +327,8 @@ func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, meta *RunMeta, langDef *LangM
 			toQuoted(meta.Run.CreateDateTime)+", "+
 			toQuoted(meta.Run.Status)+", "+
 			toQuoted(meta.Run.UpdateDateTime)+", "+
-			toQuoted(sd)+")")
+			toQuoted(sd)+", "+
+			toQuoted(meta.Run.RunStamp)+")")
 	if err != nil {
 		return err
 	}

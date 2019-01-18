@@ -53,7 +53,7 @@ func toRunListCsv(
 	}
 
 	// write model run rows into csv
-	row := make([]string, 10)
+	row := make([]string, 11)
 
 	idx := 0
 	err = toCsvFile(
@@ -63,7 +63,7 @@ func toRunListCsv(
 		[]string{
 			"run_id", "model_id", "run_name", "sub_count",
 			"sub_started", "sub_completed", "create_dt", "status",
-			"update_dt", "run_digest"},
+			"update_dt", "run_digest", "run_stamp"},
 		func() (bool, []string, error) {
 			if 0 <= idx && idx < len(rl) {
 				row[0] = strconv.Itoa(rl[idx].Run.RunId)
@@ -76,6 +76,7 @@ func toRunListCsv(
 				row[7] = rl[idx].Run.Status
 				row[8] = rl[idx].Run.UpdateDateTime
 				row[9] = rl[idx].Run.Digest
+				row[10] = rl[idx].Run.RunStamp
 				idx++
 				return false, row, nil
 			}

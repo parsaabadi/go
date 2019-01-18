@@ -131,7 +131,7 @@ func toTaskListCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom bo
 	}
 
 	// write task run history rows into csv
-	row = make([]string, 7)
+	row = make([]string, 8)
 
 	idx = 0
 	j = 0
@@ -139,7 +139,7 @@ func toTaskListCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom bo
 		outDir,
 		"task_run_lst.csv",
 		isWriteUtf8bom,
-		[]string{"task_run_id", "task_id", "run_name", "sub_count", "create_dt", "status", "update_dt"},
+		[]string{"task_run_id", "task_id", "run_name", "sub_count", "create_dt", "status", "update_dt", "run_stamp"},
 		func() (bool, []string, error) {
 
 			if idx < 0 || idx >= len(tl) { // end of task rows
@@ -168,6 +168,7 @@ func toTaskListCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom bo
 			row[4] = tl[idx].TaskRun[j].CreateDateTime
 			row[5] = tl[idx].TaskRun[j].Status
 			row[6] = tl[idx].TaskRun[j].UpdateDateTime
+			row[7] = tl[idx].TaskRun[j].RunStamp
 			j++
 			return false, row, nil
 		})

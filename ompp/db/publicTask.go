@@ -74,14 +74,15 @@ func (meta *TaskMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskPub, e
 		ri := make(map[int]int) // map (task run id) => index in task run array
 
 		err := SelectRows(dbConn,
-			"SELECT TR.task_run_id, TR.run_name, TR.sub_count, TR.create_dt, TR.status, TR.update_dt"+
+			"SELECT TR.task_run_id, TR.run_name, TR.sub_count, TR.create_dt, TR.status, TR.update_dt, TR.run_stamp"+
 				" FROM task_run_lst TR"+
 				" WHERE TR.task_id = "+strconv.Itoa(meta.Task.TaskId)+
 				" ORDER BY 1",
 			func(rows *sql.Rows) error {
 				var id int
 				var r taskRunPub
-				if err := rows.Scan(&id, &r.Name, &r.SubCount, &r.CreateDateTime, &r.Status, &r.UpdateDateTime); err != nil {
+				if err := rows.Scan(
+					&id, &r.Name, &r.SubCount, &r.CreateDateTime, &r.Status, &r.UpdateDateTime, &r.RunStamp); err != nil {
 					return err
 				}
 				for k := range meta.TaskRun { // include only task run id's which are in the meta list of run id's
@@ -103,7 +104,8 @@ func (meta *TaskMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskPub, e
 		err = SelectRows(dbConn,
 			"SELECT"+
 				" TRS.task_run_id, TRS.run_id, TRS.set_id, W.set_name,"+
-				" R.run_name, R.sub_completed, R.create_dt, R.status, R.run_digest"+
+				" R.run_name, R.sub_completed, R.create_dt, R.status,"+
+				" R.run_digest, R.run_stamp"+
 				" FROM task_run_set TRS"+
 				" INNER JOIN workset_lst W ON (W.set_id = TRS.set_id)"+
 				" INNER JOIN run_lst R ON (R.run_id = TRS.run_id)"+
@@ -113,7 +115,8 @@ func (meta *TaskMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskPub, e
 				var trId, wId, rId int
 				var r taskRunSetPub
 				if err := rows.Scan(&trId, &rId, &wId, &r.SetName,
-					&r.Run.Name, &r.Run.SubCompleted, &r.Run.CreateDateTime, &r.Run.Status, &r.Run.Digest); err != nil {
+					&r.Run.Name, &r.Run.SubCompleted, &r.Run.CreateDateTime, &r.Run.Status,
+					&r.Run.Digest, &r.Run.RunStamp); err != nil {
 					return err
 				}
 				for k := range meta.TaskRun { // include only task run id's which are in the meta list of run id's
@@ -243,7 +246,7 @@ func (pub *TaskPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskMeta, 
 	tri := make(map[int][]TaskRunSetRow, len(pub.TaskRun)) // map [index in pub.TaskRun] => [](run id, set id)
 
 	err = SelectRows(dbConn,
-		"SELECT R.run_id, R.run_name, R.sub_count, R.sub_completed, R.create_dt, R.status, R.run_digest"+
+		"SELECT R.run_id, R.run_name, R.sub_count, R.sub_completed, R.create_dt, R.status, R.run_digest, R.run_stamp"+
 			" FROM run_lst R"+
 			" WHERE R.model_id = "+strconv.Itoa(modelDef.Model.ModelId)+
 			" AND R.status IN ("+toQuoted(DoneRunStatus)+", "+toQuoted(ErrorRunStatus)+", "+toQuoted(ExitRunStatus)+")"+
@@ -257,8 +260,9 @@ func (pub *TaskPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskMeta, 
 			var trsCreateDateTime string
 			var trsStatus string
 			var dg sql.NullString
+			var trsStamp string
 			if err := rows.Scan(
-				&rId, &trsName, &trsSubCount, &trsSubCompleted, &trsCreateDateTime, &trsStatus, &dg); err != nil {
+				&rId, &trsName, &trsSubCount, &trsSubCompleted, &trsCreateDateTime, &trsStatus, &dg, &trsStamp); err != nil {
 				return err
 			}
 			sd := ""
@@ -286,7 +290,8 @@ func (pub *TaskPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskMeta, 
 							trsSubCount == pub.TaskRun[k].SubCount &&
 							trsSubCompleted == pub.TaskRun[k].TaskRunSet[j].Run.SubCompleted &&
 							trsCreateDateTime == pub.TaskRun[k].TaskRunSet[j].Run.CreateDateTime &&
-							trsStatus == pub.TaskRun[k].TaskRunSet[j].Run.Status) {
+							trsStatus == pub.TaskRun[k].TaskRunSet[j].Run.Status &&
+							trsStamp == pub.TaskRun[k].TaskRunSet[j].Run.RunStamp) {
 
 						rsLst := tri[k]
 						tri[k] = append(rsLst, TaskRunSetRow{RunId: rId, SetId: sId}) // add (run id, set id) to task run history
@@ -321,6 +326,7 @@ func (pub *TaskPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskMeta, 
 		meta.TaskRun[k].SubCount = pub.TaskRun[idx].SubCount
 		meta.TaskRun[k].CreateDateTime = pub.TaskRun[idx].CreateDateTime
 		meta.TaskRun[k].UpdateDateTime = pub.TaskRun[idx].UpdateDateTime
+		meta.TaskRun[k].RunStamp = pub.TaskRun[idx].RunStamp
 
 		// task run body: pairs of (run id, set id)
 		meta.TaskRun[k].TaskRunSet = tri[idx]
