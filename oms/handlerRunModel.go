@@ -9,38 +9,24 @@ import (
 	"go.openmpp.org/ompp/omppLog"
 )
 
-// modelNewRunHandler run the model identified by model digest-or-name with specified number of sub-values.
-// Json is posted to specify run name, input workset name and other run parameters,
-// see RunState structre for details.
-// POST /api/model/:model/new-run?model=modelNameOrDigest&sub-count=16
-// POST /api/model/:model/new-run
-// POST /api/model/:model/new-run/sub-values/:sub-count
+// runModelHandler run the model identified by model digest-or-name with specified run options.
+// POST /api/run
+// Json RunRequest structre is posted to specify model digest-or-name, run stamp and othe run options.
 // If multiple models with same name exist then result is undefined.
-// If workset not specified then default workset is used.
 // Model run log redirected to log file with unique timestamped file name.
-func modelNewRunHandler(w http.ResponseWriter, r *http.Request) {
-
-	dn := getRequestParam(r, "model")
-
-	// convert sub-value count, if specified
-	subCount, ok := getIntRequestParam(r, "sub-count", 0)
-	if !ok {
-		http.Error(w, "Invalid sub-value count ", http.StatusBadRequest)
-		return
-	}
+func runModelHandler(w http.ResponseWriter, r *http.Request) {
 
 	// decode json request body
-	var src RunState
+	var src RunRequest
 	if !jsonRequestDecode(w, r, &src) {
 		return // error at json decode, response done with http error
 	}
 
-	// if sub-count not specified by url then use json body value
-	if subCount <= 0 {
-		subCount = src.SubCount
-	}
-
 	// find model metadata by digest or name
+	dn := src.ModelDigest
+	if dn == "" {
+		dn = src.ModelName
+	}
 	m, ok := theCatalog.ModelDicByDigestOrName(dn)
 	if !ok {
 		http.Error(w, "Model not found: "+dn, http.StatusBadRequest)
@@ -50,7 +36,7 @@ func modelNewRunHandler(w http.ResponseWriter, r *http.Request) {
 	modelName := m.Name
 
 	// start model run
-	prs, e := theRunStateCatalog.startModelExec(modelDigest, modelName, subCount, &src)
+	prs, e := theRunStateCatalog.runModel(modelDigest, modelName, &src)
 	if e != nil {
 		omppLog.Log(e)
 		http.Error(w, "Model start failed: "+dn, http.StatusBadRequest)
@@ -58,23 +44,23 @@ func modelNewRunHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// write new model run key and json response
-	w.Header().Set("Content-Location", "/api/model/"+modelDigest+"/new-run/"+prs.RunKey)
+	w.Header().Set("Content-Location", "/api/model/"+modelDigest+"/run/"+prs.RunStamp)
 	jsonResponse(w, r, prs)
 }
 
-// modelNewRunLogPageHandler return model current (most recent) run status and log by model digest-or-name.
-// GET /api/model/new-run-state?model=modelNameOrDigest&start=0&count=0
-// GET /api/model/:model/new-run-state
-// GET /api/model/:model/new-run-state/start/:start
-// GET /api/model/:model/new-run-state/start/:start/count/:count
+// runModelLogPageHandler return model run status and log by model digest-or-name and run stamp.
+// GET /api/run/log/model/:model/stamp/:stamp
+// GET /api/run/log/model/:model/stamp/:stamp/start/:start/count/:count
+// GET /api/run-log?model=modelNameOrDigest&stamp=runStamp&start=0&count=0
 // If multiple models with same name exist then result is undefined.
 // Model run log is same as console output and include stdout and stderr.
 // Run log can be returned by page defined by zero-based "start" line and line count.
 // If count <= 0 then all log lines until eof returned, complete current log: start=0, count=0
-func modelNewRunLogPageHandler(w http.ResponseWriter, r *http.Request) {
+func runModelLogPageHandler(w http.ResponseWriter, r *http.Request) {
 
 	// url or query parameters:  model digest-or-name, page offset and page size
 	dn := getRequestParam(r, "model")
+	runStamp := getRequestParam(r, "stamp")
 
 	start, ok := getIntRequestParam(r, "start", 0)
 	if !ok {
@@ -97,10 +83,10 @@ func modelNewRunLogPageHandler(w http.ResponseWriter, r *http.Request) {
 	modelName := m.Name
 
 	// get current run status and page of log lines
-	lrp, e := theRunStateCatalog.readModelLastRunLog(modelDigest, start, count)
+	lrp, e := theRunStateCatalog.readModelLastRunLog(modelDigest, runStamp, start, count)
 	if e != nil {
 		omppLog.Log(e)
-		http.Error(w, "Model run status red failed: "+modelName+": "+dn, http.StatusBadRequest)
+		http.Error(w, "Model run status read failed: "+modelName+": "+dn, http.StatusBadRequest)
 		return
 	}
 

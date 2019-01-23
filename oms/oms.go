@@ -192,9 +192,9 @@ func mainBody(args []string) error {
 
 	// refresh run state catalog
 	modelLogDir := runOpts.String(modelLogDirArgKey)
-	ds := theCatalog.AllModelDigests()
+	digestLst := theCatalog.AllModelDigests()
 
-	if err := theRunStateCatalog.RefreshCatalog(ds, modelDir, modelLogDir); err != nil {
+	if err := theRunStateCatalog.RefreshCatalog(digestLst, modelDir, modelLogDir); err != nil {
 		return err
 	}
 
@@ -785,20 +785,18 @@ func apiUpdateRoutes(router *vestigo.Router) {
 // add web-service /api routes to run the model and monitor progress
 func apiRunModelRoutes(router *vestigo.Router) {
 
-	// POST /api/model/new-run?model=modelNameOrDigest&sub-count=16
-	// POST /api/model/:model/new-run
-	// POST /api/model/:model/new-run/sub-values/:sub-count
-	router.Post("/api/model/new-run", modelNewRunHandler, logRequest)
-	router.Post("/api/model/:model/new-run", modelNewRunHandler, logRequest)
-	router.Post("/api/model/:model/new-run/sub-values/:sub-count", modelNewRunHandler, logRequest)
+	// POST /api/run
+	router.Post("/api/run", runModelHandler, logRequest)
 
-	// GET /api/model/new-run-state?model=modelNameOrDigest&start=0&count=0
-	// GET /api/model/:model/new-run-state
-	// GET /api/model/:model/new-run-state/start/:start
-	// GET /api/model/:model/new-run-state/start/:start/count/:count
-	router.Get("/api/model/new-run-state", modelNewRunLogPageHandler, logRequest)
-	router.Get("/api/model/:model/new-run-state", modelNewRunLogPageHandler, logRequest)
-	router.Get("/api/model/:model/new-run-state/start/:start", modelNewRunLogPageHandler, logRequest)
-	router.Get("/api/model/:model/new-run-state/start/:start/count/", modelNewRunLogPageHandler, logRequest)
-	router.Get("/api/model/:model/new-run-state/start/:start/count/:count", modelNewRunLogPageHandler, logRequest)
+	// GET /api/run/log/model/:model/stamp/:stamp
+	// GET /api/run/log/model/:model/stamp/:stamp/start/:start/count/:count
+	// GET /api/run-log?model=modelNameOrDigest&stamp=runStamp&start=0&count=0
+	router.Get("/api/run/log/model/:model/stamp/:stamp", runModelLogPageHandler, logRequest)
+	router.Get("/api/run/log/model/:model/stamp/:stamp/start/:start", runModelLogPageHandler, logRequest)
+	router.Get("/api/run/log/model/:model/stamp/:stamp/start/:start/count/:count", runModelLogPageHandler, logRequest)
+	router.Get("/api/run-log", runModelLogPageHandler, logRequest)
+	router.Get("/api/run/log/model/", http.NotFound)
+	router.Get("/api/run/log/model/:model/stamp/", http.NotFound)
+	router.Get("/api/run/log/model/:model/stamp/:stamp/start/", http.NotFound)
+	router.Get("/api/run/log/model/:model/stamp/:stamp/start/:start/count/", http.NotFound)
 }
