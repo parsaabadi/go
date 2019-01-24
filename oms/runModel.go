@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,13 +36,38 @@ func (rsc *RunStateCatalog) runModel(modelDigest, modelName string, req *RunRequ
 		UpdateDateTime: helper.MakeDateTime(dtNow),
 	}
 
+	// set directories: work directory, bin model.exe directory, log directory
+	// if any of those is relative then it must be reletive to oms root directory
+	// re-base it to model work directory
+	binRoot, _ := theCatalog.getModelDir()
+
+	wDir := req.Dir
+	if wDir == "" || wDir == "." || wDir == "./" {
+		wDir = binRoot
+	}
+
+	binDir, ok := theCatalog.binDirectoryByDigestOrName(modelDigest)
+	if !ok || binDir == "" || binDir == "." || binDir == "./" {
+		binDir = binRoot
+	}
+	binDir, err := filepath.Rel(wDir, binDir)
+	if err != nil {
+		binDir = binRoot
+	}
+
+	logDir, isLog := rsc.getModelLogDir()
+	if isLog && logDir != "" && !filepath.IsAbs(logDir) {
+		if logDir, err = filepath.Rel(wDir, logDir); err != nil {
+			isLog = false
+		}
+	}
+
 	// make model run command line arguments, starting from process run stamp and log options
 	mArgs := []string{}
 	mArgs = append(mArgs, "-OpenM.RunStamp", rStamp)
 	mArgs = append(mArgs, "-OpenM.LogToConsole", "true")
 
-	logDir, isDir := rsc.getModelLogDir()
-	if isDir && logDir != "" {
+	if isLog && logDir != "" {
 		rs.logPath = filepath.Join(logDir, rs.ModelName+"."+rStamp+".log")
 		mArgs = append(mArgs, "-OpenM.LogToFile", "true")
 		mArgs = append(mArgs, "-OpenM.LogFilePath", rs.logPath)
@@ -55,7 +82,7 @@ func (rsc *RunStateCatalog) runModel(modelDigest, modelName string, req *RunRequ
 
 		// command line argument key starts with "-" ex: "-OpenM.Threads"
 		key := krq
-		if krq[1] != '-' {
+		if krq[0] != '-' {
 			key = "-" + krq
 		}
 
@@ -74,28 +101,81 @@ func (rsc *RunStateCatalog) runModel(modelDigest, modelName string, req *RunRequ
 		}
 	}
 
-	// build model run command, assume model exe name same as model name
-	exeDir, _ := theCatalog.getModelDir()
-	mExe := "./" + helper.CleanSpecialChars(modelName)
-
-	cmd := exec.Command(mExe, mArgs...)
-
-	// work directory for model exe
-	if req.Dir != "" {
-		cmd.Dir = req.Dir
+	// make model exe or use mpi run exe, assume model exe name same as model name
+	mExe := helper.CleanSpecialChars(modelName)
+	if req.Use64Suffix {
+		mExe += "64"
+	}
+	if binDir == "" || binDir == "." || binDir == "./" {
+		mExe = "./" + mExe
 	} else {
-		cmd.Dir = exeDir
+		mExe = filepath.Join(binDir, mExe)
 	}
 
-	// append environment variables, if additional environment specified to run the model
-	if len(req.Env) > 0 {
-		env := os.Environ()
-		for key, val := range req.Env {
-			if key != "" && val != "" {
-				env = append(env, key+"="+val)
+	var cmd *exec.Cmd
+
+	if !req.IsMpi { // run command line model.exe on local host
+
+		// build model run command and set working directory
+		cmd = exec.Command(mExe, mArgs...)
+		cmd.Dir = wDir
+
+		// append environment variables, if additional environment specified to run the model
+		if len(req.Env) > 0 {
+			env := os.Environ()
+			for key, val := range req.Env {
+				if key != "" && val != "" {
+					env = append(env, key+"="+val)
+				}
+			}
+			cmd.Env = env
+		}
+
+	} else { // use MPI to run multiple model.exe on cluster
+
+		// use mpiexec to run model exe, similar to:
+		// mpiexec -wdir models/bin -n 16 -host omm,om1,om2  -x   key1=val1 model_mpi.exe ...arguments
+		// mpiexec -wdir models/bin -n 16 -host omm,om1,om2  -env key1 val1 model_mpi.exe ...arguments
+		// mpiexec -wdir models/bin -n 16 -machinefile afile -env key1 val1 model_mpi.exe ...arguments
+
+		cArgs := []string{}
+		if wDir != "" && wDir != "." && wDir != "./" {
+			cArgs = append(cArgs, "-wdir", wDir)
+		}
+		if req.Mpi.Np > 0 {
+			cArgs = append(cArgs, "-n", strconv.Itoa(req.Mpi.Np))
+		}
+		if req.Mpi.Host != "" {
+			cArgs = append(cArgs, "-host", req.Mpi.Host)
+		}
+		if req.Mpi.MachineFile != "" {
+			cArgs = append(cArgs, "-machinefile", req.Mpi.MachineFile)
+		}
+
+		// append environment variables, if additional environment specified to run the model
+		if len(req.Env) > 0 {
+			if runtime.GOOS == "windows" { // MS MPI on Windows: mpiexec -env k1 v1 -env k2 v2 model.exe
+				for key, val := range req.Env {
+					if key != "" && val != "" {
+						cArgs = append(cArgs, "-env", key, val)
+					}
+				}
+			} else { // Open MPI on Linux: mpiexec -x k1=v1 -x k2=v2 model.exe
+				for key, val := range req.Env {
+					if key != "" && val != "" {
+						cArgs = append(cArgs, "-x", key+"="+val)
+					}
+				}
 			}
 		}
-		cmd.Env = env
+
+		// append model name and model run options to mpiexec command line
+		mExe += "_mpi"
+		cArgs = append(cArgs, mExe)
+		cArgs = append(cArgs, mArgs...)
+
+		// build model run command
+		cmd = exec.Command("mpiexec", cArgs...)
 	}
 
 	// connect console output to log line array
@@ -158,6 +238,8 @@ func (rsc *RunStateCatalog) runModel(modelDigest, modelName string, req *RunRequ
 	go doLog(modelDigest, rs.RunStamp, errPipe, errDoneC)
 
 	// start the model
+	omppLog.Log("Starting ", mExe, " in ", wDir)
+
 	err = cmd.Start()
 	if err != nil {
 		omppLog.Log("Model run error: ", err)

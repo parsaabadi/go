@@ -5,7 +5,9 @@ package main
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
+	"strings"
 
 	"golang.org/x/text/language"
 
@@ -28,7 +30,19 @@ func (mc *ModelCatalog) RefreshSqlite(modelDir string) error {
 	}
 
 	// get list of model/dir/*.sqlite files
-	pathLst, err := filepath.Glob(filepath.Join(modelDir, "*.sqlite"))
+	pathLst := []string{}
+	err := filepath.Walk(modelDir, func(src string, info os.FileInfo, err error) error {
+		if err != nil {
+			if err != filepath.SkipDir {
+				omppLog.Log("Error at refresh model catalog, path: ", src, " : ", err.Error())
+			}
+			return err
+		}
+		if strings.EqualFold(filepath.Ext(src), ".sqlite") {
+			pathLst = append(pathLst, src)
+		}
+		return nil
+	})
 	if err != nil {
 		omppLog.Log("Error: fail to list model directory: ", err.Error())
 		return errors.New("Error: fail to list model directory")
@@ -51,6 +65,7 @@ func (mc *ModelCatalog) RefreshSqlite(modelDir string) error {
 			omppLog.Log("Error: invalid database, likely not an openM++ database", fp)
 			dbc.Close()
 		}
+		d := filepath.Dir(fp)
 
 		// read list of models: model_dic rows
 		dicLst, err := db.GetModelList(dbc)
@@ -96,6 +111,7 @@ func (mc *ModelCatalog) RefreshSqlite(modelDir string) error {
 			// append to model list
 			mLst = append(mLst, modelDef{
 				dbConn:     dbc,
+				binDir:     d,
 				isMetaFull: false,
 				meta:       &db.ModelMeta{Model: dicLst[idx]},
 				langCodes:  ml,
@@ -180,16 +196,16 @@ func (mc *ModelCatalog) paramIndexByDigestOrName(modelIdx int, pdn string) (int,
 // It can be used only inside of lock.
 // If digest exist in model output table list then return index by digest else index of name.
 // Return -1 if no digest or name found.
-func (mc *ModelCatalog) outTblIndexByDigestOrName(modelIdx int, pdn string) (int, bool) {
+func (mc *ModelCatalog) outTblIndexByDigestOrName(modelIdx int, tdn string) (int, bool) {
 
 	if modelIdx < 0 || modelIdx >= len(mc.modelLst) {
 		return -1, false
 	}
 
-	if n, ok := mc.modelLst[modelIdx].meta.OutTableByDigest(pdn); ok {
+	if n, ok := mc.modelLst[modelIdx].meta.OutTableByDigest(tdn); ok {
 		return n, ok
 	}
-	return mc.modelLst[modelIdx].meta.OutTableByName(pdn)
+	return mc.modelLst[modelIdx].meta.OutTableByName(tdn)
 }
 
 // AllModelDigests return copy of all model digests.
@@ -202,4 +218,17 @@ func (mc *ModelCatalog) AllModelDigests() []string {
 		ds = append(ds, mc.modelLst[idx].meta.Model.Digest)
 	}
 	return ds
+}
+
+// binDirectoryByDigestOrName return model bin where model.exe expected to be located by model digest or name.
+func (mc *ModelCatalog) binDirectoryByDigestOrName(dn string) (string, bool) {
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		return "", false // model not found, empty result
+	}
+
+	return mc.modelLst[idx].binDir, true
 }

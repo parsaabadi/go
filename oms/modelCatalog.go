@@ -16,7 +16,7 @@ import (
 type ModelCatalog struct {
 	theLock      sync.Mutex // mutex to lock for model list operations
 	isDirEnabled bool       // if true then use sqlite files from model directory
-	modelDir     string     // model directory
+	modelDir     string     // models bin directory, it is a root dir under which model.sqlite and model.exe expected to be located
 	modelLst     []modelDef // list of model_dic and associated database connections
 }
 
@@ -26,6 +26,7 @@ var theCatalog ModelCatalog
 // modelDef is database connection and model database rows
 type modelDef struct {
 	dbConn        *sql.DB           // database connection
+	binDir        string            // database directory: directory part of models/bin/model.sqlite
 	isMetaFull    bool              // if true then ModelMeta fully loaded else only ModelDicRow
 	meta          *db.ModelMeta     // model metadata, language-neutral part, should not be nil
 	isTxtMetaFull bool              // if true then ModelTxtMeta fully loaded else only []ModelTxtRow

@@ -23,6 +23,9 @@ root directory, default: current directory, must have html subdirectory unless -
 models directory, default: models/bin, if relative then must be relative to root directory.
 It must contain model.sqlite database files and model executables.
 
+  -oms.ModelLogDir models/log
+models log directory, default: models/log, if relative then must be relative to root directory.
+
   -l localhost:4040
   -oms.Listen localhost:4040
 address to listen, default: localhost:4040.
@@ -30,10 +33,6 @@ Use -l :4040 if you need to access oms web-service from other computer (make sur
 
   -oms.LogRequest false
 if true then log HTTP requests on console and/or log file.
-
-  -oms.ModelLogDir ../log
-models log directory, default: if relative then must be relative to models directory.
-Default value will produce model run log files in models/log subdirectory.
 
   -oms.MaxRowCount 100
 default number of rows to return from read parameters or output tables, default: 100.
@@ -85,7 +84,7 @@ import (
 const (
 	rootDirArgKey      = "oms.RootDir"      // root directory, expected subdir: html
 	modelDirArgKey     = "oms.ModelDir"     // models directory, if relative then must be relative to root directory
-	modelLogDirArgKey  = "oms.ModelLogDir"  // models log directory, if relative then must be relative to models directory
+	modelLogDirArgKey  = "oms.ModelLogDir"  // models log directory, if relative then must be relative to root directory
 	listenArgKey       = "oms.Listen"       // address to listen, default: localhost:4040
 	listenShortKey     = "l"                // address to listen (short form)
 	logRequestArgKey   = "oms.LogRequest"   // if true then log http request
@@ -129,7 +128,7 @@ func mainBody(args []string) error {
 	// set command line argument keys and ini-file keys
 	_ = flag.String(rootDirArgKey, "", "root directory, default: current directory")
 	_ = flag.String(modelDirArgKey, "models/bin", "models directory, if relative then must be relative to root directory")
-	_ = flag.String(modelLogDirArgKey, "../log", "models log directory, if relative then must be relative to models directory")
+	_ = flag.String(modelLogDirArgKey, "models/log", "models log directory, if relative then must be relative to root directory")
 	_ = flag.String(listenArgKey, "localhost:4040", "address to listen")
 	_ = flag.String(listenShortKey, "localhost:4040", "address to listen (short form of "+listenArgKey+")")
 	_ = flag.Bool(logRequestArgKey, false, "if true then log HTTP requests")

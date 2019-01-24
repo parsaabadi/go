@@ -5,7 +5,6 @@ package main
 
 import (
 	"container/list"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -16,7 +15,7 @@ import (
 type RunStateCatalog struct {
 	rscLock         sync.Mutex // mutex to lock for model list operations
 	isLogDirEnabled bool       // if true then use model log directory for model run logs
-	modelLogDir     string     // model log directory
+	modelLogDir     string     // model log directory, if relative then must be relative to oms root directory
 	lastTimeStamp   string     // most recent last timestamp
 	runLst          *list.List // list of model runs state
 }
@@ -30,9 +29,16 @@ type RunRequest struct {
 	ModelName   string            // model name to run
 	ModelDigest string            // model digest to run
 	RunStamp    string            // run stamp, if empty then by default timestamp
-	Dir         string            // working directory to run the model
+	Dir         string            // working directory to run the model, if relative then must be relative to oms root directory
 	Opts        map[string]string // model run options
 	Env         map[string]string // environment variables to set
+	IsMpi       bool              // if true then use MPI to run the model
+	Mpi         struct {          // mpi run parameters
+		Np          int    // -np: number of processes to run
+		Host        string // -H: comma-separated host names
+		MachineFile string // -machinefile: path to host file, if relative then must be relative to oms root directory
+	}
+	Use64Suffix bool // if true then use 64-bit model exe suffix: model64.exe or model64_mpi.exe
 }
 
 // RunState is model run state.
@@ -75,7 +81,7 @@ func (rsc *RunStateCatalog) RefreshCatalog(digestLst []string, modelDir string, 
 	// model log directory is optional, if empty or not exists then model log disabled
 	isDir := modelLogDir != "" && modelLogDir != "."
 	if isDir {
-		isDir = isDirExist(filepath.Join(modelDir, modelLogDir)) == nil
+		isDir = isDirExist(modelLogDir) == nil
 	}
 
 	// lock and update run state catalog
