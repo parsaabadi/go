@@ -17,14 +17,18 @@ Following arguments supporetd by oms:
 if true then API only web-service, it is false by default and oms also act as http server for openM++ UI.
 
   -oms.RootDir some/path
-root directory, default: current directory, must have html subdirectory unless -oms.ApiOnly true specified.
+oms root directory, default: current directory, must have html subdirectory unless -oms.ApiOnly true specified.
 
   -oms.ModelDir models/bin
-models directory, default: models/bin, if relative then must be relative to root directory.
+models directory, default: models/bin, if relative then must be relative to oms root directory.
 It must contain model.sqlite database files and model executables.
 
   -oms.ModelLogDir models/log
-models log directory, default: models/log, if relative then must be relative to root directory.
+models log directory, default: models/log, if relative then must be relative to oms root directory.
+
+  -oms.TemplateDir models/template
+model run templates directory, default: models/template, if relative then must be relative to oms root directory.
+Tempalates are Go text/template files which are used to make model run command, specially on MPI cluster.
 
   -l localhost:4040
   -oms.Listen localhost:4040
@@ -82,9 +86,10 @@ import (
 
 // config keys to get values from ini-file or command line arguments.
 const (
-	rootDirArgKey      = "oms.RootDir"      // root directory, expected subdir: html
-	modelDirArgKey     = "oms.ModelDir"     // models directory, if relative then must be relative to root directory
-	modelLogDirArgKey  = "oms.ModelLogDir"  // models log directory, if relative then must be relative to root directory
+	rootDirArgKey      = "oms.RootDir"      // oms root directory, expected subdir: html
+	modelDirArgKey     = "oms.ModelDir"     // models directory, if relative then must be relative to oms root directory
+	modelLogDirArgKey  = "oms.ModelLogDir"  // models log directory, if relative then must be relative to oms root directory
+	templateDirArgKey  = "oms.TemplateDir"  // model run templates directory, if relative then must be relative to oms root directory
 	listenArgKey       = "oms.Listen"       // address to listen, default: localhost:4040
 	listenShortKey     = "l"                // address to listen (short form)
 	logRequestArgKey   = "oms.LogRequest"   // if true then log http request
@@ -129,6 +134,7 @@ func mainBody(args []string) error {
 	_ = flag.String(rootDirArgKey, "", "root directory, default: current directory")
 	_ = flag.String(modelDirArgKey, "models/bin", "models directory, if relative then must be relative to root directory")
 	_ = flag.String(modelLogDirArgKey, "models/log", "models log directory, if relative then must be relative to root directory")
+	_ = flag.String(templateDirArgKey, "models/template", "model run templates directory, if relative then must be relative to root directory")
 	_ = flag.String(listenArgKey, "localhost:4040", "address to listen")
 	_ = flag.String(listenShortKey, "localhost:4040", "address to listen (short form of "+listenArgKey+")")
 	_ = flag.Bool(logRequestArgKey, false, "if true then log HTTP requests")
@@ -191,9 +197,10 @@ func mainBody(args []string) error {
 
 	// refresh run state catalog
 	modelLogDir := runOpts.String(modelLogDirArgKey)
+	templateDir := runOpts.String(templateDirArgKey)
 	digestLst := theCatalog.AllModelDigests()
 
-	if err := theRunStateCatalog.RefreshCatalog(digestLst, modelDir, modelLogDir); err != nil {
+	if err := theRunStateCatalog.RefreshCatalog(digestLst, modelLogDir, templateDir); err != nil {
 		return err
 	}
 

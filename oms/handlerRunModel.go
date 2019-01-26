@@ -32,11 +32,11 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Model not found: "+dn, http.StatusBadRequest)
 		return // empty result: model digest not found
 	}
-	modelDigest := m.Digest
-	modelName := m.Name
+	src.ModelDigest = m.Digest
+	src.ModelName = m.Name
 
 	// start model run
-	prs, e := theRunStateCatalog.runModel(modelDigest, modelName, &src)
+	prs, e := theRunStateCatalog.runModel(&src)
 	if e != nil {
 		omppLog.Log(e)
 		http.Error(w, "Model start failed: "+dn, http.StatusBadRequest)
@@ -44,7 +44,7 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// write new model run key and json response
-	w.Header().Set("Content-Location", "/api/model/"+modelDigest+"/run/"+prs.RunStamp)
+	w.Header().Set("Content-Location", "/api/model/"+src.ModelDigest+"/run/"+prs.RunStamp)
 	jsonResponse(w, r, prs)
 }
 

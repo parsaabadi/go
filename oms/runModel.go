@@ -5,11 +5,12 @@ package main
 
 import (
 	"bufio"
+	"errors"
+	"html/template"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -19,7 +20,7 @@ import (
 )
 
 // runModel starts new model run and return unique timestamped run key
-func (rsc *RunStateCatalog) runModel(modelDigest, modelName string, req *RunRequest) (*RunState, error) {
+func (rsc *RunStateCatalog) runModel(req *RunRequest) (*RunState, error) {
 
 	// make model process run stamp, if not specified then use timestamp by default
 	ts, dtNow := rsc.getNewTimeStamp()
@@ -30,8 +31,8 @@ func (rsc *RunStateCatalog) runModel(modelDigest, modelName string, req *RunRequ
 
 	// new run state
 	rs := &RunState{
-		ModelName:      modelName,
-		ModelDigest:    modelDigest,
+		ModelName:      req.ModelName,
+		ModelDigest:    req.ModelDigest,
 		RunStamp:       rStamp,
 		UpdateDateTime: helper.MakeDateTime(dtNow),
 	}
@@ -46,7 +47,7 @@ func (rsc *RunStateCatalog) runModel(modelDigest, modelName string, req *RunRequ
 		wDir = binRoot
 	}
 
-	binDir, ok := theCatalog.binDirectoryByDigestOrName(modelDigest)
+	binDir, ok := theCatalog.binDirectoryByDigestOrName(req.ModelDigest)
 	if !ok || binDir == "" || binDir == "." || binDir == "./" {
 		binDir = binRoot
 	}
@@ -102,80 +103,17 @@ func (rsc *RunStateCatalog) runModel(modelDigest, modelName string, req *RunRequ
 	}
 
 	// make model exe or use mpi run exe, assume model exe name same as model name
-	mExe := helper.CleanSpecialChars(modelName)
-	if req.Use64Suffix {
-		mExe += "64"
-	}
+	mExe := helper.CleanSpecialChars(req.ModelName)
 	if binDir == "" || binDir == "." || binDir == "./" {
 		mExe = "./" + mExe
 	} else {
 		mExe = filepath.Join(binDir, mExe)
 	}
 
-	var cmd *exec.Cmd
-
-	if !req.IsMpi { // run command line model.exe on local host
-
-		// build model run command and set working directory
-		cmd = exec.Command(mExe, mArgs...)
-		cmd.Dir = wDir
-
-		// append environment variables, if additional environment specified to run the model
-		if len(req.Env) > 0 {
-			env := os.Environ()
-			for key, val := range req.Env {
-				if key != "" && val != "" {
-					env = append(env, key+"="+val)
-				}
-			}
-			cmd.Env = env
-		}
-
-	} else { // use MPI to run multiple model.exe on cluster
-
-		// use mpiexec to run model exe, similar to:
-		// mpiexec -wdir models/bin -n 16 -host omm,om1,om2  -x   key1=val1 model_mpi.exe ...arguments
-		// mpiexec -wdir models/bin -n 16 -host omm,om1,om2  -env key1 val1 model_mpi.exe ...arguments
-		// mpiexec -wdir models/bin -n 16 -machinefile afile -env key1 val1 model_mpi.exe ...arguments
-
-		cArgs := []string{}
-		if wDir != "" && wDir != "." && wDir != "./" {
-			cArgs = append(cArgs, "-wdir", wDir)
-		}
-		if req.Mpi.Np > 0 {
-			cArgs = append(cArgs, "-n", strconv.Itoa(req.Mpi.Np))
-		}
-		if req.Mpi.Host != "" {
-			cArgs = append(cArgs, "-host", req.Mpi.Host)
-		}
-		if req.Mpi.MachineFile != "" {
-			cArgs = append(cArgs, "-machinefile", req.Mpi.MachineFile)
-		}
-
-		// append environment variables, if additional environment specified to run the model
-		if len(req.Env) > 0 {
-			if runtime.GOOS == "windows" { // MS MPI on Windows: mpiexec -env k1 v1 -env k2 v2 model.exe
-				for key, val := range req.Env {
-					if key != "" && val != "" {
-						cArgs = append(cArgs, "-env", key, val)
-					}
-				}
-			} else { // Open MPI on Linux: mpiexec -x k1=v1 -x k2=v2 model.exe
-				for key, val := range req.Env {
-					if key != "" && val != "" {
-						cArgs = append(cArgs, "-x", key+"="+val)
-					}
-				}
-			}
-		}
-
-		// append model name and model run options to mpiexec command line
-		mExe += "_mpi"
-		cArgs = append(cArgs, mExe)
-		cArgs = append(cArgs, mArgs...)
-
-		// build model run command
-		cmd = exec.Command("mpiexec", cArgs...)
+	cmd, err := rsc.makeCommand(binDir, wDir, mArgs, req)
+	if err != nil {
+		omppLog.Log("Error at applying run template to ", req.ModelName, ": ", err.Error())
+		return rs, err
 	}
 
 	// connect console output to log line array
@@ -234,22 +172,156 @@ func (rsc *RunStateCatalog) runModel(modelDigest, modelName string, req *RunRequ
 	rsc.storeProcRunState(rs)
 
 	// start console output listners
-	go doLog(modelDigest, rs.RunStamp, outPipe, outDoneC)
-	go doLog(modelDigest, rs.RunStamp, errPipe, errDoneC)
+	go doLog(req.ModelDigest, rs.RunStamp, outPipe, outDoneC)
+	go doLog(req.ModelDigest, rs.RunStamp, errPipe, errDoneC)
 
 	// start the model
 	omppLog.Log("Starting ", mExe, " in ", wDir)
+	omppLog.Log(strings.Join(cmd.Args, " "))
 
 	err = cmd.Start()
 	if err != nil {
 		omppLog.Log("Model run error: ", err)
-		rsc.updateRunState(modelDigest, rs.RunStamp, true, err.Error())
+		rsc.updateRunState(req.ModelDigest, rs.RunStamp, true, err.Error())
 		rs.IsFinal = true
 		return rs, err // exit with error: model failed to start
 	}
 	// else start model listener
-	go doRunWait(modelDigest, rs.RunStamp, cmd)
+	go doRunWait(req.ModelDigest, rs.RunStamp, cmd)
 	return rs, nil
+}
+
+// makeCommand return command to run the model.
+// If template file name specified then template processing results used to create command line
+// else it is similar to:
+//  ../bin/model -OpenM.LogToFile true ....
+//  mpirun -n 16 -wdir models/bin ../bin/model_mpi -OpenM.LogToFile true ....
+func (rsc *RunStateCatalog) makeCommand(binDir, workDir string, mArgs []string, req *RunRequest) (*exec.Cmd, error) {
+	// check is it MPI or regular process model run
+	// check is template processing required to make model run command
+	isMpi := req.MpiNp > 1
+	isTmpl := req.Template != ""
+
+	if isMpi && !isTmpl && len(req.Env) > 0 {
+		return nil, errors.New("Error: template name required to run MPI model with environment variables")
+	}
+
+	// make path to model exe assuming exe name same as model name
+	mExe := helper.CleanSpecialChars(req.ModelName)
+	if binDir == "" || binDir == "." || binDir == "./" {
+		mExe = "./" + mExe
+	} else {
+		mExe = filepath.Join(binDir, mExe)
+	}
+
+	// if this is regular non-MPI model.exe run and no template
+	// command line: ./model -OpenM.LogToFile true ...etc...
+	var cmd *exec.Cmd
+
+	if !isTmpl && !isMpi {
+		cmd = exec.Command(mExe, mArgs...)
+	}
+
+	// if this is MPI model run and no template
+	// command line: mpiexec -n 16 -wdir ../dir ./modelExe_mpi -OpenM.LogToFile true ...etc...
+	if !isTmpl && isMpi {
+
+		// mpiexec arguments: number of processes and work directory
+		cArgs := []string{"-n", strconv.Itoa(req.MpiNp)}
+
+		if workDir != "" && workDir != "." && workDir != "./" {
+			cArgs = append(cArgs, "-wdir", workDir)
+		}
+
+		// append model name and model run options to mpiexec command line
+		mExe += "_mpi"
+		cArgs = append(cArgs, mExe)
+		cArgs = append(cArgs, mArgs...)
+
+		// make command
+		cmd = exec.Command("mpiexec", cArgs...)
+	}
+
+	// if template specified then process template to get exe name and arguments
+	if isTmpl {
+
+		// parse template
+		tmpl, err := template.ParseFiles(filepath.Join(rsc.templateDir, req.Template))
+		if err != nil {
+			return nil, err
+		}
+
+		// set template parameters
+		d := struct {
+			ModelName string            // model name
+			ExePath   string            // path to model exe as: binDir/modelname
+			Dir       string            // work directory to run the model
+			BinDir    string            // bin directory where model.exe is located
+			MpiNp     int               // number of MPI processes
+			Args      []string          // model command line arguments
+			Env       map[string]string // environment variables to run the model
+		}{
+			ModelName: req.ModelName,
+			ExePath:   mExe,
+			Dir:       workDir,
+			BinDir:    binDir,
+			MpiNp:     req.MpiNp,
+			Args:      mArgs,
+			Env:       req.Env,
+		}
+
+		// execute template and convert results in array of text lines
+		var b strings.Builder
+
+		err = tmpl.Execute(&b, d)
+		if err != nil {
+			return nil, err
+		}
+		tLines := strings.Split(strings.Replace(b.String(), "\r", "\n", -1), "\n")
+
+		// find exe name: first non-empty line
+		// and use all other non-empty lines as command line arguments
+		cExe := ""
+		cArgs := []string{}
+
+		for k := range tLines {
+
+			cl := strings.TrimSpace(tLines[k])
+			if cl == "" {
+				continue
+			}
+
+			if cExe == "" {
+				cExe = cl
+			} else {
+				cArgs = append(cArgs, cl)
+			}
+		}
+		if cExe == "" {
+			return nil, errors.New("Error: empty template processing results, cannot run the model: " + req.ModelName)
+		}
+
+		// make command
+		cmd = exec.Command(cExe, cArgs...)
+	}
+
+	// if this is not MPI then set work directory and append to environment variables
+	if !isMpi {
+
+		cmd.Dir = workDir
+
+		if len(req.Env) > 0 {
+			env := os.Environ()
+			for key, val := range req.Env {
+				if key != "" && val != "" {
+					env = append(env, key+"="+val)
+				}
+			}
+			cmd.Env = env
+		}
+	}
+
+	return cmd, nil
 }
 
 // add new model run state into run history
