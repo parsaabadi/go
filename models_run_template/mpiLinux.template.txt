@@ -1,10 +1,13 @@
 {{/*
-default template to run model_mpi.exe on Linux using OpenMPI
+template to run model_mpi executable on Linux using OpenMPI
+
+rename this file into "mpiModelRun.template.txt"
+to use it by default to run models on MPI cluster.
 
 result of template processing is multiple lines
 first line is executable name: mpirun
 other lines are command line arguments for mpirun
-empty lines ignored in result
+empty lines are skipped form result
 
 example of result combined on single command line:
 mpirun -n 16 -wdir models/bin -x key=value ../bin/model_mpi -OpenM.LogToFile true
@@ -23,9 +26,9 @@ struct {
 mpirun
 -n
 {{ .MpiNp}}
-{{if ne .Dir "."}}
+{{with .Dir}}
 -wdir
-{{.Dir}}
+{{.}}
 {{end}}
 {{range $key, $val := .Env}}
 -x

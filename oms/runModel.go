@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -192,19 +191,16 @@ func (rsc *RunStateCatalog) runModel(req *RunRequest) (*RunState, error) {
 }
 
 // makeCommand return command to run the model.
-// If template file name specified then template processing results used to create command line
-// else it is similar to:
-//  ../bin/model -OpenM.LogToFile true ....
-//  mpirun -n 16 -wdir models/bin ../bin/model_mpi -OpenM.LogToFile true ....
+// If template file name specified then template processing results used to create command line.
+// If this is MPI model run then tempalate is requred and by default "mpiModelRun.template.txt" being used.
 func (rsc *RunStateCatalog) makeCommand(binDir, workDir string, mArgs []string, req *RunRequest) (*exec.Cmd, error) {
-	// check is it MPI or regular process model run
-	// check is template processing required to make model run command
-	isMpi := req.MpiNp > 1
-	isTmpl := req.Template != ""
 
-	if isMpi && !isTmpl && len(req.Env) > 0 {
-		return nil, errors.New("Error: template name required to run MPI model with environment variables")
+	// check is it MPI or regular process model run, to run MPI model template is required
+	isMpi := req.MpiNp > 1
+	if isMpi && req.Template == "" {
+		req.Template = "mpiModelRun.template.txt" // default template to run MPI model
 	}
+	isTmpl := req.Template != ""
 
 	// make path to model exe assuming exe name same as model name
 	mExe := helper.CleanSpecialChars(req.ModelName)
@@ -220,26 +216,6 @@ func (rsc *RunStateCatalog) makeCommand(binDir, workDir string, mArgs []string, 
 
 	if !isTmpl && !isMpi {
 		cmd = exec.Command(mExe, mArgs...)
-	}
-
-	// if this is MPI model run and no template
-	// command line: mpiexec -n 16 -wdir ../dir ./modelExe_mpi -OpenM.LogToFile true ...etc...
-	if !isTmpl && isMpi {
-
-		// mpiexec arguments: number of processes and work directory
-		cArgs := []string{"-n", strconv.Itoa(req.MpiNp)}
-
-		if workDir != "" && workDir != "." && workDir != "./" {
-			cArgs = append(cArgs, "-wdir", workDir)
-		}
-
-		// append model name and model run options to mpiexec command line
-		mExe += "_mpi"
-		cArgs = append(cArgs, mExe)
-		cArgs = append(cArgs, mArgs...)
-
-		// make command
-		cmd = exec.Command("mpiexec", cArgs...)
 	}
 
 	// if template specified then process template to get exe name and arguments
@@ -279,8 +255,9 @@ func (rsc *RunStateCatalog) makeCommand(binDir, workDir string, mArgs []string, 
 		}
 		tLines := strings.Split(strings.Replace(b.String(), "\r", "\n", -1), "\n")
 
-		// find exe name: first non-empty line
-		// and use all other non-empty lines as command line arguments
+		// from template processing results get:
+		//   exe name as first non-empty line
+		//   use all other non-empty lines as command line arguments
 		cExe := ""
 		cArgs := []string{}
 
