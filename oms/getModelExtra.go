@@ -206,33 +206,30 @@ func (mc *ModelCatalog) loadWorksetByName(modelIdx int, wsn string) (*db.Workset
 	return wst, true
 }
 
-// loadCompletedRunByDigestOrName select run_lst db row by digest-or-name and model index in model catalog.
+// loadCompletedRunByDigestOrStampOrName select run_lst db row by digest-or-stamp-or-name and model index in model catalog.
 // Run must be completed, run status one of: s=success, x=exit, e=error.
 // It can be used only inside of lock.
-func (mc *ModelCatalog) loadCompletedRunByDigestOrName(modelIdx int, rdn string) (*db.RunRow, bool) {
+func (mc *ModelCatalog) loadCompletedRunByDigestOrStampOrName(modelIdx int, rdsn string) (*db.RunRow, bool) {
 
-	if rdn == "" {
-		omppLog.Log("Warning: invalid (empty) run name or digest")
+	if rdsn == "" {
+		omppLog.Log("Warning: invalid (empty) run digest or stamp or name")
 		return nil, false
 	}
 
-	// get run_lst db row by digest or run name
-	rst, err := db.GetRunByDigest(mc.modelLst[modelIdx].dbConn, rdn)
-	if err == nil && rst == nil {
-		rst, err = db.GetRunByName(mc.modelLst[modelIdx].dbConn, mc.modelLst[modelIdx].meta.Model.ModelId, rdn)
-	}
+	// get run_lst db row by digest, stamp or run name
+	rst, err := db.GetRunByDigestOrStampOrName(mc.modelLst[modelIdx].dbConn, mc.modelLst[modelIdx].meta.Model.ModelId, rdsn)
 	if err != nil {
-		omppLog.Log("Error at get run status: ", mc.modelLst[modelIdx].meta.Model.Name, ": ", rdn, ": ", err.Error())
+		omppLog.Log("Error at get run status: ", mc.modelLst[modelIdx].meta.Model.Name, ": ", rdsn, ": ", err.Error())
 		return nil, false // return empty result: run select error
 	}
 	if rst == nil {
-		omppLog.Log("Warning: run not found: ", mc.modelLst[modelIdx].meta.Model.Name, ": ", rdn)
+		omppLog.Log("Warning: run not found: ", mc.modelLst[modelIdx].meta.Model.Name, ": ", rdsn)
 		return nil, false // return empty result: run_lst row not found
 	}
 
 	// run must be completed
 	if !db.IsRunCompleted(rst.Status) {
-		omppLog.Log("Warning: run is not completed: ", mc.modelLst[modelIdx].meta.Model.Name, ": ", rdn, ": ", rst.Status)
+		omppLog.Log("Warning: run is not completed: ", mc.modelLst[modelIdx].meta.Model.Name, ": ", rdsn, ": ", rst.Status)
 		return nil, false // return empty result: run_lst row not found
 	}
 

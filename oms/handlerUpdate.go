@@ -432,7 +432,7 @@ func worksetParameterDeleteHandler(w http.ResponseWriter, r *http.Request) {
 
 // worksetParameterRunCopyHandler copy parameter into workset from model run:
 // PUT /api/model/:model/workset/:set/copy/parameter/:name/from-run/:run
-// POST /api/copy-parameter-from-run?model=modelNameOrDigest&set=setName&name=parameterName&run=runNameOrDigest"
+// POST /api/copy-parameter-from-run?model=modelNameOrDigest&set=setName&name=parameterName&run=runDigestOrStampOrName"
 // If multiple models with same name exist then result is undefined.
 // If such parameter already exist in destination workset then return error.
 // Destination workset must be in read-write state.
@@ -443,13 +443,13 @@ func worksetParameterRunCopyHandler(w http.ResponseWriter, r *http.Request) {
 	dn := getRequestParam(r, "model")  // model digest-or-name
 	wsn := getRequestParam(r, "set")   // workset name
 	name := getRequestParam(r, "name") // parameter name
-	rdn := getRequestParam(r, "run")   // source run digest or name
+	rdsn := getRequestParam(r, "run")  // source run digest or stamp or name
 
 	// copy workset parameter from model run
-	err := theCatalog.CopyParameterToWsFromRun(dn, wsn, name, rdn)
+	err := theCatalog.CopyParameterToWsFromRun(dn, wsn, name, rdsn)
 	if err != nil {
 		omppLog.Log(err.Error())
-		http.Error(w, "Workset parameter copy failed "+wsn+": "+name+" from run: "+rdn, http.StatusBadRequest)
+		http.Error(w, "Workset parameter copy failed "+wsn+": "+name+" from run: "+rdsn, http.StatusBadRequest)
 		return
 	}
 	w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+wsn+"/parameter/"+name)
@@ -480,34 +480,34 @@ func worksetParameterCopyFromWsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // runDeleteHandler delete model run including output table values and run input parameters
-// by model digest-or-name and run digest-or-name:
+// by model digest-or-name and run digest-or-stamp-name:
 // DELETE /api/model/:model/run/:run
-// POST   /api/run-delete?model=modelNameOrDigest&run=runNameOrDigest
+// POST   /api/run-delete?model=modelNameOrDigest&run=runDigestOrStampOrName
 // If multiple models with same name exist then result is undefined.
-// If multiple runs with same name exist then result is undefined.
+// If multiple runs with same stamp or name exist then result is undefined.
 // If no such model run exist in database then no error, empty operation.
 func runDeleteHandler(w http.ResponseWriter, r *http.Request) {
 
 	dn := getRequestParam(r, "model")
-	rdn := getRequestParam(r, "run")
+	rdsn := getRequestParam(r, "run")
 
 	// delete model run
-	ok, err := theCatalog.DeleteRun(dn, rdn)
+	ok, err := theCatalog.DeleteRun(dn, rdsn)
 	if err != nil {
-		http.Error(w, "Model run delete failed "+dn+": "+rdn, http.StatusBadRequest)
+		http.Error(w, "Model run delete failed "+dn+": "+rdsn, http.StatusBadRequest)
 		return
 	}
 	if ok {
-		w.Header().Set("Content-Location", "/api/model/"+dn+"/run/"+rdn)
+		w.Header().Set("Content-Location", "/api/model/"+dn+"/run/"+rdsn)
 	}
 }
 
 // runTextMergeHandler merge model run text (description and notes) and run parameter value notes into database.
 // PATCH /api/run/text
 // POST  /api/run/text
-// Model can be identified by digest or name and model run also identified by run digest-or-name.
+// Model can be identified by digest or name and model run also identified by run digest-or-stamp-or-name.
 // If multiple models with same name exist then result is undefined.
-// If multiple runs with same name exist then result is undefined.
+// If multiple runs with same stamp or name exist then result is undefined.
 // If no such model run exist in database then no error, empty operation.
 func runTextMergeHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -518,14 +518,14 @@ func runTextMergeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// update run text in model catalog
-	ok, dn, rdn, err := theCatalog.UpdateRunText(&rp)
+	ok, dn, rdsn, err := theCatalog.UpdateRunText(&rp)
 	if err != nil {
 		omppLog.Log(err.Error())
-		http.Error(w, "Model run update failed "+dn+": "+rdn, http.StatusBadRequest)
+		http.Error(w, "Model run update failed "+dn+": "+rdsn, http.StatusBadRequest)
 		return
 	}
 	if ok {
-		w.Header().Set("Content-Location", "/api/model/"+dn+"/run/"+rdn)
+		w.Header().Set("Content-Location", "/api/model/"+dn+"/run/"+rdsn)
 	}
 }
 

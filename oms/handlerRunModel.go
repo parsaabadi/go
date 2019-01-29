@@ -13,7 +13,7 @@ import (
 // POST /api/run
 // Json RunRequest structre is posted to specify model digest-or-name, run stamp and othe run options.
 // If multiple models with same name exist then result is undefined.
-// Model run log redirected to log file with unique timestamped file name.
+// Model run console output redirected to log file: models/log/modelName.runStamp.console.log
 func runModelHandler(w http.ResponseWriter, r *http.Request) {
 
 	// decode json request body

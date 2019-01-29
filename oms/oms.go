@@ -17,7 +17,12 @@ Following arguments supporetd by oms:
 if true then API only web-service, it is false by default and oms also act as http server for openM++ UI.
 
   -oms.RootDir some/path
-oms root directory, default: current directory, must have html subdirectory unless -oms.ApiOnly true specified.
+oms root directory, default: current directory.
+Expected to have /html subdirectory unless -oms.ApiOnly true specified.
+Expected to have /models/bin subdirectory unless other location specified: -oms.ModelDir /some/models/bin.
+Recommended to have /models/log subdirectory unless other location specified: -oms.ModelLogDir /some/models/log.
+Expected to have /etc subdirectory with templates to run models on MPI cluster.
+Recommended to have /log subdirectory to store oms we-service log files.
 
   -oms.ModelDir models/bin
 models directory, default: models/bin, if relative then must be relative to oms root directory.
@@ -25,10 +30,6 @@ It must contain model.sqlite database files and model executables.
 
   -oms.ModelLogDir models/log
 models log directory, default: models/log, if relative then must be relative to oms root directory.
-
-  -oms.TemplateDir models/template
-model run templates directory, default: models/template, if relative then must be relative to oms root directory.
-Tempalates are Go text/template files which are used to make model run command, specially on MPI cluster.
 
   -l localhost:4040
   -oms.Listen localhost:4040
@@ -89,7 +90,6 @@ const (
 	rootDirArgKey      = "oms.RootDir"      // oms root directory, expected subdir: html
 	modelDirArgKey     = "oms.ModelDir"     // models directory, if relative then must be relative to oms root directory
 	modelLogDirArgKey  = "oms.ModelLogDir"  // models log directory, if relative then must be relative to oms root directory
-	templateDirArgKey  = "oms.TemplateDir"  // model run templates directory, if relative then must be relative to oms root directory
 	listenArgKey       = "oms.Listen"       // address to listen, default: localhost:4040
 	listenShortKey     = "l"                // address to listen (short form)
 	logRequestArgKey   = "oms.LogRequest"   // if true then log http request
@@ -102,6 +102,9 @@ const (
 
 // front-end UI subdirectory with html and javascript
 const htmlSubDir = "html"
+
+// configuration subdirectory with template(s) to run model on MPI cluster
+const etcDir = "etc"
 
 // matcher to find UI supported language corresponding to request
 var uiLangMatcher language.Matcher
@@ -134,7 +137,6 @@ func mainBody(args []string) error {
 	_ = flag.String(rootDirArgKey, "", "root directory, default: current directory")
 	_ = flag.String(modelDirArgKey, "models/bin", "models directory, if relative then must be relative to root directory")
 	_ = flag.String(modelLogDirArgKey, "models/log", "models log directory, if relative then must be relative to root directory")
-	_ = flag.String(templateDirArgKey, "models/template", "model run templates directory, if relative then must be relative to root directory")
 	_ = flag.String(listenArgKey, "localhost:4040", "address to listen")
 	_ = flag.String(listenShortKey, "localhost:4040", "address to listen (short form of "+listenArgKey+")")
 	_ = flag.Bool(logRequestArgKey, false, "if true then log HTTP requests")
@@ -195,12 +197,16 @@ func mainBody(args []string) error {
 		return err
 	}
 
+	// etc subdirectory required to run MPI models
+	if err := isDirExist(etcDir); err != nil {
+		omppLog.Log("Warning: templates directory not found, it is required to run models on MPI cluster: ", filepath.Join(rootDir, etcDir))
+	}
+
 	// refresh run state catalog
 	modelLogDir := runOpts.String(modelLogDirArgKey)
-	templateDir := runOpts.String(templateDirArgKey)
 	digestLst := theCatalog.AllModelDigests()
 
-	if err := theRunStateCatalog.RefreshCatalog(digestLst, modelLogDir, templateDir); err != nil {
+	if err := theRunStateCatalog.RefreshCatalog(digestLst, modelLogDir, etcDir); err != nil {
 		return err
 	}
 
@@ -361,7 +367,7 @@ func apiGetRoutes(router *vestigo.Router) {
 	router.Get("/api/run-list-text", runListTextHandler, logRequest)
 
 	// GET /api/model/:model/run/:run/status
-	// GET /api/run-status?model=modelNameOrDigest&run=runNameOrDigest
+	// GET /api/run-status?model=modelNameOrDigest&run=runDigestOrStampOrName
 	router.Get("/api/model/:model/run/:run/status", runStatusHandler, logRequest)
 	router.Get("/api/run-status", runStatusHandler, logRequest)
 
@@ -382,7 +388,7 @@ func apiGetRoutes(router *vestigo.Router) {
 
 	// GET /api/model/:model/run/:run/text
 	// GET /api/model/:model/run/:run/text/lang/:lang
-	// GET /api/run-text?model=modelNameOrDigest&run=runNameOrDigest&lang=en
+	// GET /api/run-text?model=modelNameOrDigest&run=runDigestOrStampOrName&lang=en
 	router.Get("/api/model/:model/run/:run/text", runTextHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/text/lang/:lang", runTextHandler, logRequest)
 	router.Get("/api/run-text", runTextHandler, logRequest)
@@ -391,7 +397,7 @@ func apiGetRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/text/lang/", http.NotFound)
 
 	// GET /api/model/:model/run/:run/text/all
-	// GET /api/run-text-all?model=modelNameOrDigest&run=runNameOrDigest
+	// GET /api/run-text-all?model=modelNameOrDigest&run=runDigestOrStampOrName
 	router.Get("/api/model/:model/run/:run/text/all", runAllTextHandler, logRequest)
 	router.Get("/api/run-text-all", runAllTextHandler, logRequest)
 
@@ -474,9 +480,9 @@ func apiGetRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/task/:task/runs", taskRunsHandler, logRequest)
 	router.Get("/api/task-runs", taskRunsHandler, logRequest)
 
-	// GET /api/model/:model/task/:task/run-status/run/:run-name
-	// GET /api/task-run-status?model=modelNameOrDigest&task=taskName&run-name=runName
-	router.Get("/api/model/:model/task/:task/run-status/run/:run-name", taskRunStatusHandler, logRequest)
+	// GET /api/model/:model/task/:task/run-status/run/:task-run
+	// GET /api/task-run-status?model=modelNameOrDigest&task=taskName&task-run=taskRunStampOrName
+	router.Get("/api/model/:model/task/:task/run-status/run/:task-run", taskRunStatusHandler, logRequest)
 	router.Get("/api/task-run-status", taskRunStatusHandler, logRequest)
 
 	// GET /api/model/:model/task/:task/run-status/first
@@ -745,7 +751,7 @@ func apiUpdateRoutes(router *vestigo.Router) {
 	router.Post("/api/workset-parameter-delete", worksetParameterDeleteHandler, logRequest)
 
 	// PUT  /api/model/:model/workset/:set/copy/parameter/:name/from-run/:run
-	// POST /api/copy-parameter-from-run?model=modelNameOrDigest&set=setName&name=parameterName&run=runNameOrDigest"
+	// POST /api/copy-parameter-from-run?model=modelNameOrDigest&set=setName&name=parameterName&run=runDigestOrStampOrName"
 	router.Put("/api/model/:model/workset/:set/copy/parameter/:name/from-run/:run", worksetParameterRunCopyHandler, logRequest)
 	router.Post("/api/copy-parameter-from-run", worksetParameterRunCopyHandler, logRequest)
 
@@ -764,7 +770,7 @@ func apiUpdateRoutes(router *vestigo.Router) {
 	router.Post("/api/run/text", runTextMergeHandler, logRequest)
 
 	// DELETE /api/model/:model/run/:run
-	// POST   /api/run/delete?model=modelNameOrDigest&run=runNameOrDigest
+	// POST   /api/run/delete?model=modelNameOrDigest&run=runDigestOrStampOrName
 	router.Delete("/api/model/:model/run/:run", runDeleteHandler, logRequest)
 	router.Post("/api/run-delete", runDeleteHandler, logRequest)
 

@@ -73,6 +73,24 @@ func GetRunByDigest(dbConn *sql.DB, digest string) (*RunRow, error) {
 			" WHERE H.run_digest = "+toQuoted(digest))
 }
 
+// GetRunByStamp return model run row by run stamp: run_lst table row.
+//
+// If there is multiple runs with this stamp then run with min(run_id) returned
+func GetRunByStamp(dbConn *sql.DB, modelId int, stamp string) (*RunRow, error) {
+	return getRunRow(dbConn,
+		"SELECT"+
+			" H.run_id, H.model_id, H.run_name, H.sub_count,"+
+			" H.sub_started, H.sub_completed, H.create_dt, H.status,"+
+			" H.update_dt, H.run_digest, H.run_stamp"+
+			" FROM run_lst H"+
+			" WHERE H.run_id = "+
+			" ("+
+			" SELECT MIN(M.run_id) FROM run_lst M"+
+			" WHERE M.model_id = "+strconv.Itoa(modelId)+
+			" AND M.run_stamp = "+toQuoted(stamp)+
+			")")
+}
+
 // GetRunByName return model run row by run name: run_lst table row.
 //
 // If there is multiple runs with this name then run with min(run_id) returned
@@ -89,6 +107,22 @@ func GetRunByName(dbConn *sql.DB, modelId int, name string) (*RunRow, error) {
 			" WHERE M.model_id = "+strconv.Itoa(modelId)+
 			" AND M.run_name = "+toQuoted(name)+
 			")")
+}
+
+// GetRunByDigestOrStampOrName return model run row by run digest or run stamp or run name: run_lst table row.
+//
+// It does select run row by digest, if not found then by model id and stamp, if not found by model id and run name.
+// If there is multiple runs with this stamp or name then run with min(run_id) returned
+func GetRunByDigestOrStampOrName(dbConn *sql.DB, modelId int, rdsn string) (*RunRow, error) {
+
+	r, err := GetRunByDigest(dbConn, rdsn)
+	if err == nil && r == nil {
+		r, err = GetRunByStamp(dbConn, modelId, rdsn)
+	}
+	if err == nil && r == nil {
+		r, err = GetRunByName(dbConn, modelId, rdsn)
+	}
+	return r, err
 }
 
 // getRunRow return run_lst table row.

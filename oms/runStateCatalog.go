@@ -16,7 +16,7 @@ type RunStateCatalog struct {
 	rscLock         sync.Mutex // mutex to lock for model list operations
 	isLogDirEnabled bool       // if true then use model log directory for model run logs
 	modelLogDir     string     // model log directory, if relative then must be relative to oms root directory
-	templateDir     string     // model run templates directory, if relative then must be relative to oms root directory
+	etcDir          string     // model run templates directory, if relative then must be relative to oms root directory
 	lastTimeStamp   string     // most recent last timestamp
 	runLst          *list.List // list of model runs state
 }
@@ -33,8 +33,10 @@ type RunRequest struct {
 	Dir         string            // working directory to run the model, if relative then must be relative to oms root directory
 	Opts        map[string]string // model run options
 	Env         map[string]string // environment variables to set
-	MpiNp       int               // if >1 then number of MPI processes
-	Template    string            // template file name to make run model command line
+	Mpi         struct {
+		Np int // if non-zero then number of MPI processes
+	}
+	Template string // template file name to make run model command line
 }
 
 // RunState is model run state.
@@ -47,6 +49,7 @@ type RunState struct {
 	UpdateDateTime string // last update date-time
 	RunName        string // run name
 	TaskRunName    string // if not empty then task run name
+	isLog          bool   // if true then redirect console output to log file
 	logPath        string // last run log file name: log/dir/modelName.timestamp.log
 }
 
@@ -71,8 +74,11 @@ const logTickTimeout = 7
 // max number of model run states to keep in run list history
 const runListMaxSize = 200
 
+// file name of model run template by default
+const defaultRunTemplate = "mpiModelRun.template.txt"
+
 // RefreshCatalog reset state of most recent model run for each model.
-func (rsc *RunStateCatalog) RefreshCatalog(digestLst []string, modelLogDir, templateDir string) error {
+func (rsc *RunStateCatalog) RefreshCatalog(digestLst []string, modelLogDir, etcDir string) error {
 
 	// model log directory is optional, if empty or not exists then model log disabled
 	isLog := modelLogDir != "" && modelLogDir != "."
@@ -84,10 +90,10 @@ func (rsc *RunStateCatalog) RefreshCatalog(digestLst []string, modelLogDir, temp
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
-	// update model log directory and template directory
+	// update model log directory and etc template directory
 	rsc.isLogDirEnabled = isLog
 	rsc.modelLogDir = modelLogDir
-	rsc.templateDir = templateDir
+	rsc.etcDir = etcDir
 
 	// copy most recent half of existing models run history
 	rLst := list.New()

@@ -232,8 +232,8 @@ func (mc *ModelCatalog) TaskRuns(dn, tn string) (*db.TaskPub, bool) {
 	return tp, true
 }
 
-// TaskRunStatus return task_run_lst db row by model digest-or-name, task name and task run name.
-func (mc *ModelCatalog) TaskRunStatus(dn, tn, rn string) (*db.TaskRunRow, bool) {
+// TaskRunStatus return task_run_lst db row by model digest-or-name, task name and task run stamp or run name.
+func (mc *ModelCatalog) TaskRunStatus(dn, tn, trsn string) (*db.TaskRunRow, bool) {
 
 	// if model digest-or-name or task name or task run nam is empty then return empty results
 	if dn == "" {
@@ -244,8 +244,8 @@ func (mc *ModelCatalog) TaskRunStatus(dn, tn, rn string) (*db.TaskRunRow, bool) 
 		omppLog.Log("Warning: invalid (empty) task name")
 		return &db.TaskRunRow{}, false
 	}
-	if rn == "" {
-		omppLog.Log("Warning: invalid (empty) task run name")
+	if trsn == "" {
+		omppLog.Log("Warning: invalid (empty) task run stamp or name")
 		return &db.TaskRunRow{}, false
 	}
 
@@ -271,21 +271,21 @@ func (mc *ModelCatalog) TaskRunStatus(dn, tn, rn string) (*db.TaskRunRow, bool) 
 		return &db.TaskRunRow{}, false // return empty result: task_lst row not found
 	}
 
-	// get task run row by name and task id
-	rst, err := db.GetTaskRunByName(mc.modelLst[idx].dbConn, tr.TaskId, rn)
+	// get task run row by run stamp or run name and task id
+	rst, err := db.GetTaskRunByStampOrName(mc.modelLst[idx].dbConn, tr.TaskId, trsn)
 	if err != nil {
-		omppLog.Log("Error at get modeling task run status: ", dn, ": ", tn, ": ", rn, ": ", err.Error())
+		omppLog.Log("Error at get modeling task run status: ", dn, ": ", tn, ": ", trsn, ": ", err.Error())
 		return &db.TaskRunRow{}, false // return empty result: select error
 	}
 	if rst == nil {
-		omppLog.Log("Warning modeling task run not found: ", dn, ": ", tn, ": ", rn)
+		omppLog.Log("Warning modeling task run not found: ", dn, ": ", tn, ": ", trsn)
 		return &db.TaskRunRow{}, false // return empty result: task_lst row not found or not belong to the task
 	}
 
 	return rst, true
 }
 
-// TaskRunStatus return first or last task_run_lst db row by model digest-or-name and task name.
+// FirstOrLastTaskRunStatus return first or last task_run_lst db row by model digest-or-name and task name.
 func (mc *ModelCatalog) FirstOrLastTaskRunStatus(dn, tn string, isFirst, isCompleted bool) (*db.TaskRunRow, bool) {
 
 	// if model digest-or-name or task name is empty then return empty results

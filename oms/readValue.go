@@ -11,7 +11,7 @@ import (
 )
 
 // ReadParameter return "page" of parameter values from workset or model run.
-// Parameter identified by model digest-or-name, run digest-or-name or set name, parameter name.
+// Parameter identified by model digest-or-name, run digest-or-stamp-or-name or set name, parameter name.
 // Page of values is a rows from parameter value table started at zero based offset row
 // and up to max page size rows, if page size <= 0 then all values returned.
 // Parameter values can be read-only (select from run or read-only workset) or read-write (read-write workset).
@@ -50,7 +50,7 @@ func (mc *ModelCatalog) ReadParameter(dn, src string, layout *db.ReadParamLayout
 		}
 	} else {
 
-		if rst, ok := mc.loadCompletedRunByDigestOrName(idx, src); ok {
+		if rst, ok := mc.loadCompletedRunByDigestOrStampOrName(idx, src); ok {
 			layout.FromId = rst.RunId // source run id
 		} else {
 			return nil, nil, false // return empty result: run select error
@@ -68,7 +68,7 @@ func (mc *ModelCatalog) ReadParameter(dn, src string, layout *db.ReadParamLayout
 }
 
 // ReadOutTable return "page" of output table values from model run.
-// Output table identified by model digest-or-name, run digest-or-name and output table name.
+// Output table identified by model digest-or-name, run digest-or-stamp-or-name and output table name.
 // Page of values is a rows from output table expression or accumulator table or all accumulators view.
 // Page started at zero based offset row and up to max page size rows, if page size <= 0 then all values returned.
 // Values can be from expression table, accumulator table or "all accumulators" view.
@@ -97,8 +97,8 @@ func (mc *ModelCatalog) ReadOutTable(dn, src string, layout *db.ReadTableLayout)
 		return nil, nil, false // return empty result: output table not found or error
 	}
 
-	// find model run id by digest-or-name
-	rst, ok := mc.loadCompletedRunByDigestOrName(idx, src)
+	// find model run id by digest-or-stamp-or-name
+	rst, ok := mc.loadCompletedRunByDigestOrStampOrName(idx, src)
 	if !ok {
 		return nil, nil, false // return empty result: run select error
 	}

@@ -216,17 +216,18 @@ func runListTextHandler(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, r, rpl)
 }
 
-// runStatusHandler return run_lst db row by model digest-or-name and run digest-or-name:
+// runStatusHandler return run_lst db row by model digest-or-name and run digest-or-stamp-name:
 // GET /api/model/:model/run/:run/status
-// GET /api/run-status?model=modelNameOrDigest&run=runNameOrDigest
-// If multiple models or runs with same name exist only one is returned.
+// GET /api/run-status?model=modelNameOrDigest&run=runDigestOrStampOrName
+// If multiple models with same name exist then result is undefined.
+// If multiple runs with same stamp or name exist then result is undefined.
 // If no such run exist in database then empty result returned.
 func runStatusHandler(w http.ResponseWriter, r *http.Request) {
 
 	dn := getRequestParam(r, "model")
-	rdn := getRequestParam(r, "run")
+	rdsn := getRequestParam(r, "run")
 
-	rst, _ := theCatalog.RunStatus(dn, rdn)
+	rst, _ := theCatalog.RunStatus(dn, rdsn)
 	jsonResponse(w, r, rst)
 }
 
@@ -271,38 +272,40 @@ func lastCompletedRunStatusHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // runTextHandler return full run metadata: run_lst, run_txt, parameter sub-value counts and text db rows
-// by model digest-or-name and digest-or-name:
+// by model digest-or-name and digest-or-stamp-name:
 // GET /api/model/:model/run/:run/text
 // GET /api/model/:model/run/:run/text/lang/:lang
-// GET /api/run-text?model=modelNameOrDigest&run=runNameOrDigest&lang=en
-// If multiple models with same name exist only one is returned.
+// GET /api/run-text?model=modelNameOrDigest&run=runDigestOrStampOrName&lang=en
+// If multiple models with same name exist then result is undefined.
+// If multiple runs with same stamp or name exist then result is undefined.
 // It does not return non-completed runs (run in progress).
 // Run completed if run status one of: s=success, x=exit, e=error.
 // If optional lang specified then result in that language else in browser language.
 func runTextHandler(w http.ResponseWriter, r *http.Request) {
 
 	dn := getRequestParam(r, "model")
-	rdn := getRequestParam(r, "run")
+	rdsn := getRequestParam(r, "run")
 	rqLangTags := getRequestLang(r, "lang") // get optional language argument and languages accepted by browser
 
-	rp, _ := theCatalog.RunTextFull(dn, rdn, false, rqLangTags)
+	rp, _ := theCatalog.RunTextFull(dn, rdsn, false, rqLangTags)
 	jsonResponse(w, r, rp)
 }
 
 // runAllTextHandler return full run metadata: run_lst, run_txt, parameter sub-value counts and text db rows
-// by model digest-or-name and digest-or-name:
+// by model digest-or-name and digest-or-stamp-name:
 // GET /api/model/:model/run/:run/text/all
-// GET /api/run-text-all?model=modelNameOrDigest&run=runNameOrDigest
-// If multiple models with same name exist only one is returned.
+// GET /api/run-text-all?model=modelNameOrDigest&run=runDigestOrStampOrName
+// If multiple models with same name exist then result is undefined.
+// If multiple runs with same stamp or name exist then result is undefined.
 // It does not return non-completed runs (run in progress).
 // Run completed if run status one of: s=success, x=exit, e=error.
 // Text rows returned in all languages.
 func runAllTextHandler(w http.ResponseWriter, r *http.Request) {
 
 	dn := getRequestParam(r, "model")
-	rdn := getRequestParam(r, "run")
+	rdsn := getRequestParam(r, "run")
 
-	rp, _ := theCatalog.RunTextFull(dn, rdn, true, nil)
+	rp, _ := theCatalog.RunTextFull(dn, rdsn, true, nil)
 	jsonResponse(w, r, rp)
 }
 
@@ -481,18 +484,18 @@ func taskRunsHandler(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, r, tpl)
 }
 
-// taskRunStatusHandler return task_run_lst db row by model digest-or-name, task name and task run name:
-// GET /api/model/:model/task/:task/run-status/run/:run-name
-// GET /api/task-run-status?model=modelNameOrDigest&task=taskName&run-name=runName
+// taskRunStatusHandler return task_run_lst db row by model digest-or-name, task name and task run stamp or run name:
+// GET /api/model/:model/task/:task/run-status/run/:task-run
+// GET /api/task-run-status?model=modelNameOrDigest&task=taskName&task-run=taskRunStampOrName
 // If multiple models or runs with same name exist only one is returned.
 // If no such task or run exist in database then empty result returned.
 func taskRunStatusHandler(w http.ResponseWriter, r *http.Request) {
 
 	dn := getRequestParam(r, "model")
 	tn := getRequestParam(r, "task")
-	rn := getRequestParam(r, "run-name")
+	trsn := getRequestParam(r, "task-run")
 
-	rst, _ := theCatalog.TaskRunStatus(dn, tn, rn)
+	rst, _ := theCatalog.TaskRunStatus(dn, tn, trsn)
 	jsonResponse(w, r, rst)
 }
 

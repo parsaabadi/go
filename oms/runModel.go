@@ -6,19 +6,22 @@ package main
 import (
 	"bufio"
 	"errors"
-	"html/template"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"text/template"
 	"time"
 
 	"go.openmpp.org/ompp/helper"
 	"go.openmpp.org/ompp/omppLog"
 )
 
-// runModel starts new model run and return unique timestamped run key
+// runModel starts new model run and return run stamp.
+// if run stamp not specified as input parameter then use unique timestamp.
+// Model run console output redirected to log file: models/log/modelName.runStamp.console.log
 func (rsc *RunStateCatalog) runModel(req *RunRequest) (*RunState, error) {
 
 	// make model process run stamp, if not specified then use timestamp by default
@@ -36,8 +39,8 @@ func (rsc *RunStateCatalog) runModel(req *RunRequest) (*RunState, error) {
 		UpdateDateTime: helper.MakeDateTime(dtNow),
 	}
 
-	// set directories: work directory, bin model.exe directory, log directory
-	// if any of those is relative then it must be reletive to oms root directory
+	// set directories: work directory and bin model.exe directory
+	// if bin directory is relative then it must be relative to oms root directory
 	// re-base it to model work directory
 	binRoot, _ := theCatalog.getModelDir()
 
@@ -55,11 +58,11 @@ func (rsc *RunStateCatalog) runModel(req *RunRequest) (*RunState, error) {
 		binDir = binRoot
 	}
 
-	logDir, isLog := rsc.getModelLogDir()
-	if isLog && logDir != "" && !filepath.IsAbs(logDir) {
-		if logDir, err = filepath.Rel(wDir, logDir); err != nil {
-			isLog = false
-		}
+	// make file path for model console log output
+	logDir, ok := rsc.getModelLogDir()
+	if ok && logDir != "" {
+		rs.isLog = true
+		rs.logPath = filepath.Join(logDir, rs.ModelName+"."+rStamp+".console.log")
 	}
 
 	// make model run command line arguments, starting from process run stamp and log options
@@ -67,16 +70,10 @@ func (rsc *RunStateCatalog) runModel(req *RunRequest) (*RunState, error) {
 	mArgs = append(mArgs, "-OpenM.RunStamp", rStamp)
 	mArgs = append(mArgs, "-OpenM.LogToConsole", "true")
 
-	if isLog && logDir != "" {
-		rs.logPath = filepath.Join(logDir, rs.ModelName+"."+rStamp+".log")
-		mArgs = append(mArgs, "-OpenM.LogToFile", "true")
-		mArgs = append(mArgs, "-OpenM.LogFilePath", rs.logPath)
-	}
-
-	// append model run options from run request, ignore any model log options
+	// append model run options from run request
 	for krq, val := range req.Opts {
 
-		if len(krq) < 1 || len(val) < 1 { // skip empty run options
+		if len(krq) < 1 { // skip empty run options
 			continue
 		}
 
@@ -86,19 +83,18 @@ func (rsc *RunStateCatalog) runModel(req *RunRequest) (*RunState, error) {
 			key = "-" + krq
 		}
 
-		// skip any model log options
-		if strings.EqualFold(key, "-OpenM.LogToConsole") ||
-			strings.EqualFold(key, "-OpenM.LogToFile") ||
-			strings.EqualFold(key, "-OpenM.LogFilePath") ||
-			strings.EqualFold(key, "-OpenM.LogToStampedFile") ||
-			strings.EqualFold(key, "-OpenM.LogUseTimeStamp") ||
-			strings.EqualFold(key, "-OpenM.LogToConsole") ||
-			strings.EqualFold(key, "-OpenM.LogUsePidStamp") ||
-			strings.EqualFold(key, "-OpenM.LogNoMsgTime") {
-			omppLog.Log("Warning: log options are not accepted: ", key)
-		} else {
-			mArgs = append(mArgs, key, val) // append command line argument key and value
+		// save run name and task run name to return as part of run state
+		if strings.EqualFold(key, "-OpenM.RunName") {
+			rs.RunName = val
 		}
+		if strings.EqualFold(key, "-OpenM.TaskRunName") {
+			rs.TaskRunName = val
+		}
+		if strings.EqualFold(key, "-OpenM.LogToConsole") {
+			continue // skip log to console input run option
+		}
+
+		mArgs = append(mArgs, key, val) // append command line argument key and value
 	}
 
 	// make model exe or use mpi run exe, assume model exe name same as model name
@@ -168,14 +164,14 @@ func (rsc *RunStateCatalog) runModel(req *RunRequest) (*RunState, error) {
 	}
 
 	// run state initialized: save in run state list
-	rsc.storeProcRunState(rs)
+	rsc.createProcRunState(rs)
 
 	// start console output listners
 	go doLog(req.ModelDigest, rs.RunStamp, outPipe, outDoneC)
 	go doLog(req.ModelDigest, rs.RunStamp, errPipe, errDoneC)
 
 	// start the model
-	omppLog.Log("Starting ", mExe, " in ", wDir)
+	omppLog.Log("Run ", mExe, " in ", wDir)
 	omppLog.Log(strings.Join(cmd.Args, " "))
 
 	err = cmd.Start()
@@ -187,6 +183,7 @@ func (rsc *RunStateCatalog) runModel(req *RunRequest) (*RunState, error) {
 	}
 	// else start model listener
 	go doRunWait(req.ModelDigest, rs.RunStamp, cmd)
+
 	return rs, nil
 }
 
@@ -196,9 +193,9 @@ func (rsc *RunStateCatalog) runModel(req *RunRequest) (*RunState, error) {
 func (rsc *RunStateCatalog) makeCommand(binDir, workDir string, mArgs []string, req *RunRequest) (*exec.Cmd, error) {
 
 	// check is it MPI or regular process model run, to run MPI model template is required
-	isMpi := req.MpiNp > 1
+	isMpi := req.Mpi.Np != 0
 	if isMpi && req.Template == "" {
-		req.Template = "mpiModelRun.template.txt" // default template to run MPI model
+		req.Template = defaultRunTemplate // use default template to run MPI model
 	}
 	isTmpl := req.Template != ""
 
@@ -210,8 +207,8 @@ func (rsc *RunStateCatalog) makeCommand(binDir, workDir string, mArgs []string, 
 		mExe = filepath.Join(binDir, mExe)
 	}
 
-	// if this is regular non-MPI model.exe run and no template
-	// command line: ./model -OpenM.LogToFile true ...etc...
+	// if this is regular non-MPI model.exe run and no template:
+	//	 ./modelExe -OpenM.LogToFile true ...etc...
 	var cmd *exec.Cmd
 
 	if !isTmpl && !isMpi {
@@ -222,7 +219,7 @@ func (rsc *RunStateCatalog) makeCommand(binDir, workDir string, mArgs []string, 
 	if isTmpl {
 
 		// parse template
-		tmpl, err := template.ParseFiles(filepath.Join(rsc.templateDir, req.Template))
+		tmpl, err := template.ParseFiles(filepath.Join(rsc.etcDir, req.Template))
 		if err != nil {
 			return nil, err
 		}
@@ -241,7 +238,7 @@ func (rsc *RunStateCatalog) makeCommand(binDir, workDir string, mArgs []string, 
 			ExePath:   mExe,
 			Dir:       workDir,
 			BinDir:    binDir,
-			MpiNp:     req.MpiNp,
+			MpiNp:     req.Mpi.Np,
 			Args:      mArgs,
 			Env:       req.Env,
 		}
@@ -267,7 +264,6 @@ func (rsc *RunStateCatalog) makeCommand(binDir, workDir string, mArgs []string, 
 			if cl == "" {
 				continue
 			}
-
 			if cExe == "" {
 				cExe = cl
 			} else {
@@ -302,7 +298,7 @@ func (rsc *RunStateCatalog) makeCommand(binDir, workDir string, mArgs []string, 
 }
 
 // add new model run state into run history
-func (rsc *RunStateCatalog) storeProcRunState(rs *RunState) {
+func (rsc *RunStateCatalog) createProcRunState(rs *RunState) {
 	if rs == nil {
 		return
 	}
@@ -312,11 +308,19 @@ func (rsc *RunStateCatalog) storeProcRunState(rs *RunState) {
 	rsc.runLst.PushFront(
 		&procRunState{
 			RunState:   *rs,
-			logLineLst: make([]string, 0, 32),
+			logLineLst: make([]string, 0, 128),
 		})
 	if rsc.runLst.Len() > runListMaxSize {
-		rsc.runLst.Remove(rsc.runLst.Back())
+		rsc.runLst.Remove(rsc.runLst.Back()) // remove old run state from history
 	}
+
+	// create log file or truncate existing
+	f, err := os.Create(rs.logPath)
+	if err != nil {
+		rs.isLog = false
+		return
+	}
+	defer f.Close()
 }
 
 // updateRunState does model run state update and append to model log lines array
@@ -331,24 +335,52 @@ func (rsc *RunStateCatalog) updateRunState(digest, runStamp string, isFinal bool
 
 	// find model run state by digest and run stamp
 	// update model run state and append log message
+	var rs *procRunState
+	var ok bool
 	for re := rsc.runLst.Front(); re != nil; re = re.Next() {
 
-		rs, ok := re.Value.(*procRunState)
+		rs, ok = re.Value.(*procRunState)
 		if !ok || rs == nil {
 			continue
 		}
-		if rs.ModelDigest != digest || rs.RunStamp != runStamp {
-			continue
+		ok = rs.ModelDigest == digest && rs.RunStamp == runStamp
+		if ok {
+			break
 		}
-		// run state found
+	}
+	if !ok || rs == nil {
+		return // model run state not found
+	}
+	// run state found
 
-		// update run state and append new log line if not empty
-		rs.IsFinal = isFinal
-		rs.UpdateDateTime = helper.MakeDateTime(dtNow)
-		if msg != "" {
-			rs.logLineLst = append(rs.logLineLst, msg)
+	// update run state and append new log line if not empty
+	rs.IsFinal = isFinal
+	rs.UpdateDateTime = helper.MakeDateTime(dtNow)
+	if msg != "" {
+		rs.logLineLst = append(rs.logLineLst, msg)
+	}
+
+	// write into model console log file
+	if rs.isLog {
+
+		f, err := os.OpenFile(rs.logPath, os.O_APPEND|os.O_WRONLY, 0666)
+		if err != nil {
+			rs.isLog = false
+			return
 		}
-		break
+		defer f.Close()
+
+		_, err = f.WriteString(msg)
+		if err == nil {
+			if runtime.GOOS == "windows" { // adjust newline for windows
+				_, err = f.WriteString("\r\n")
+			} else {
+				_, err = f.WriteString("\n")
+			}
+		}
+		if err != nil {
+			rs.isLog = false
+		}
 	}
 }
 
@@ -367,40 +399,47 @@ func (rsc *RunStateCatalog) readModelLastRunLog(digest, runStamp string, start i
 
 	// find model run state by digest and run stamp
 	// return model run state and page from model log
+	var rs *procRunState
+	var ok bool
 	for re := rsc.runLst.Front(); re != nil; re = re.Next() {
 
-		rs, ok := re.Value.(*procRunState)
+		rs, ok = re.Value.(*procRunState)
 		if !ok || rs == nil {
 			continue
 		}
-		if rs.ModelDigest != digest || rs.RunStamp != runStamp {
-			continue
-		}
-		// run state found
-
-		// return model run state and page from model log
-		lrp.RunState = rs.RunState
-		if len(rs.logLineLst) <= 0 { // log is empty
+		ok = rs.ModelDigest == digest && rs.RunStamp == runStamp
+		if ok {
 			break
 		}
-
-		// copy log lines
-		lrp.TotalSize = len(rs.logLineLst)
-		lrp.Offset = start
-		if lrp.Offset < 0 {
-			lrp.Offset = 0
-		}
-		if lrp.Offset >= lrp.TotalSize {
-			break
-		}
-		lrp.Size = count
-		if lrp.Size <= 0 || lrp.Offset+lrp.Size > lrp.TotalSize {
-			lrp.Size = lrp.TotalSize - lrp.Offset
-		}
-
-		lrp.Lines = make([]string, lrp.Size)
-		copy(lrp.Lines, rs.logLineLst[lrp.Offset:lrp.Offset+lrp.Size])
-		break
 	}
+	if !ok || rs == nil {
+		return lrp, nil // not found: return empty result
+	}
+	// run state found
+
+	// return model run state and page from model log
+	lrp.RunState = rs.RunState
+	if len(rs.logLineLst) <= 0 {
+		return lrp, nil // log is empty, return only run state
+	}
+
+	// copy log lines
+	lrp.TotalSize = len(rs.logLineLst)
+	lrp.Offset = start
+	if lrp.Offset < 0 {
+		lrp.Offset = 0
+	}
+	if lrp.Offset >= lrp.TotalSize {
+		return lrp, nil // log offset (first line to read) past last log line
+	}
+	lrp.Size = count
+	if lrp.Size <= 0 || lrp.Offset+lrp.Size > lrp.TotalSize {
+		lrp.Size = lrp.TotalSize - lrp.Offset
+	}
+
+	// copy log lines into result
+	lrp.Lines = make([]string, lrp.Size)
+	copy(lrp.Lines, rs.logLineLst[lrp.Offset:lrp.Offset+lrp.Size])
+
 	return lrp, nil
 }

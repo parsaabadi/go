@@ -10,15 +10,15 @@ import (
 )
 
 // RunStatusByDigestOrName return run_lst db row by model digest-or-name and run digest-or-name.
-func (mc *ModelCatalog) RunStatus(dn, rdn string) (*db.RunPub, bool) {
+func (mc *ModelCatalog) RunStatus(dn, rdsn string) (*db.RunPub, bool) {
 
 	// if model digest-or-name or run digest-or-name is empty then return empty results
 	if dn == "" {
 		omppLog.Log("Warning: invalid (empty) model digest and name")
 		return &db.RunPub{}, false
 	}
-	if rdn == "" {
-		omppLog.Log("Warning: invalid (empty) run digest and name")
+	if rdsn == "" {
+		omppLog.Log("Warning: invalid (empty) run digest or stamp or name")
 		return &db.RunPub{}, false
 	}
 
@@ -32,31 +32,28 @@ func (mc *ModelCatalog) RunStatus(dn, rdn string) (*db.RunPub, bool) {
 		return &db.RunPub{}, false // return empty result: model not found or error
 	}
 
-	// get run_lst db row by digest or run name
-	r, err := db.GetRunByDigest(mc.modelLst[idx].dbConn, rdn)
-	if err == nil && r == nil {
-		r, err = db.GetRunByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, rdn)
-	}
+	// get run_lst db row by digest, stamp or run name
+	r, err := db.GetRunByDigestOrStampOrName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, rdsn)
 	if err != nil {
-		omppLog.Log("Error at get run status: ", dn, ": ", rdn, ": ", err.Error())
+		omppLog.Log("Error at get run status: ", dn, ": ", rdsn, ": ", err.Error())
 		return &db.RunPub{}, false // return empty result: run select error
 	}
 	if r == nil {
-		omppLog.Log("Warning run status not found: ", dn, ": ", rdn)
+		omppLog.Log("Warning run status not found: ", dn, ": ", rdsn)
 		return &db.RunPub{}, false // return empty result: run_lst row not found
 	}
 
 	// get run sub-values progress for that run id
 	rpRs, err := db.GetRunProgress(mc.modelLst[idx].dbConn, r.RunId)
 	if err != nil {
-		omppLog.Log("Error at get run progress: ", dn, ": ", rdn, ": ", err.Error())
+		omppLog.Log("Error at get run progress: ", dn, ": ", rdsn, ": ", err.Error())
 		return &db.RunPub{}, false // return empty result: run progress select error
 	}
 
 	// convert to "public" format
 	rp, err := (&db.RunMeta{Run: *r, Progress: rpRs}).ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
 	if err != nil {
-		omppLog.Log("Error at run status conversion: ", dn, ": ", rdn, ": ", err.Error())
+		omppLog.Log("Error at run status conversion: ", dn, ": ", rdsn, ": ", err.Error())
 		return &db.RunPub{}, false // return empty result
 	}
 
@@ -296,12 +293,12 @@ func (mc *ModelCatalog) RunListText(dn string, preferedLang []language.Tag) ([]d
 	return rpl, true
 }
 
-// RunTextFull return full run metadata by model digest-or-name and run digest-or-name.
+// RunTextFull return full run metadata by model digest-or-name and run digest-or-stamp-name.
 // It does not return non-completed runs (run in progress).
 // Run completed if run status one of: s=success, x=exit, e=error.
 // Text (description and notes) can be in prefered language or all languages.
 // If prefered language requested and it is not found in db then return empty text results.
-func (mc *ModelCatalog) RunTextFull(dn, rdn string, isAllLang bool, preferedLang []language.Tag) (*db.RunPub, bool) {
+func (mc *ModelCatalog) RunTextFull(dn, rdsn string, isAllLang bool, preferedLang []language.Tag) (*db.RunPub, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
@@ -320,21 +317,18 @@ func (mc *ModelCatalog) RunTextFull(dn, rdn string, isAllLang bool, preferedLang
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	// get run_lst db row by digest or run name
-	r, err := db.GetRunByDigest(mc.modelLst[idx].dbConn, rdn)
-	if err == nil && r == nil {
-		r, err = db.GetRunByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, rdn)
-	}
+	// get run_lst db row by digest, stamp or run name
+	r, err := db.GetRunByDigestOrStampOrName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, rdsn)
 	if err != nil {
-		omppLog.Log("Error at get run status: ", dn, ": ", rdn, ": ", err.Error())
+		omppLog.Log("Error at get run status: ", dn, ": ", rdsn, ": ", err.Error())
 		return &db.RunPub{}, false // return empty result: run select error
 	}
 	if r == nil {
-		omppLog.Log("Warning run status not found: ", dn, ": ", rdn)
+		omppLog.Log("Warning run status not found: ", dn, ": ", rdsn)
 		return &db.RunPub{}, false // return empty result: run_lst row not found
 	}
 	if !db.IsRunCompleted(r.Status) {
-		omppLog.Log("Warning run is not completed: ", dn, ": ", rdn, ": ", r.Status)
+		omppLog.Log("Warning run is not completed: ", dn, ": ", rdsn, ": ", r.Status)
 		return &db.RunPub{}, false // return empty result: run not completed
 	}
 

@@ -369,7 +369,7 @@ func (mc *ModelCatalog) UpdateWorksetParameterPage(dn, wsn, name string, cellLst
 // If parameter already exist in destination workset then error returned.
 // Destination workset must be in read-write state.
 // Source model run must be completed, run status one of: s=success, x=exit, e=error.
-func (mc *ModelCatalog) CopyParameterToWsFromRun(dn, wsn, name, rdn string) error {
+func (mc *ModelCatalog) CopyParameterToWsFromRun(dn, wsn, name, rdsn string) error {
 
 	// validate parameters
 	if dn == "" {
@@ -381,8 +381,8 @@ func (mc *ModelCatalog) CopyParameterToWsFromRun(dn, wsn, name, rdn string) erro
 	if name == "" {
 		return errors.New("Parameter copy failed: invalid (empty) parameter name")
 	}
-	if rdn == "" {
-		return errors.New("Parameter copy failed: invalid (empty) model run name")
+	if rdsn == "" {
+		return errors.New("Parameter copy failed: invalid (empty) model run digest or stamp or name")
 	}
 
 	// if model metadata not loaded then read it from database
@@ -423,10 +423,10 @@ func (mc *ModelCatalog) CopyParameterToWsFromRun(dn, wsn, name, rdn string) erro
 		}
 	}
 
-	// find run by digest or name: it must be completed
-	rst, ok := mc.loadCompletedRunByDigestOrName(idx, rdn)
+	// find run by digest or stamp or name: it must be completed
+	rst, ok := mc.loadCompletedRunByDigestOrStampOrName(idx, rdsn)
 	if !ok || rst == nil {
-		return errors.New("Model not found or not completed: " + dn + ": " + rdn)
+		return errors.New("Model not found or not completed: " + dn + ": " + rdsn)
 	}
 
 	// copy parameter into workset from model run
