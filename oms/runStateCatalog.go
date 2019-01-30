@@ -25,11 +25,12 @@ type RunStateCatalog struct {
 var theRunStateCatalog RunStateCatalog
 
 // RunRequest is request to run the model with specified model options.
-// Any log options (LogToConsole, LogToFile, LogFilePath, etc.) are ignored.
+// Log to console always enabled.
+// Model run console output redirected to log file: modelName.YYYY_MM_DD_hh_mm_ss_SSS.console.log
 type RunRequest struct {
 	ModelName   string            // model name to run
 	ModelDigest string            // model digest to run
-	RunStamp    string            // run stamp, if empty then by default timestamp
+	RunStamp    string            // run stamp, if empty then auto-generated as timestamp
 	Dir         string            // working directory to run the model, if relative then must be relative to oms root directory
 	Opts        map[string]string // model run options
 	Env         map[string]string // environment variables to set
@@ -40,17 +41,17 @@ type RunRequest struct {
 }
 
 // RunState is model run state.
-// Last run log file name is time-stamped: modelName.YYYY_MM_DD_hh_mm_ss_SSS.log
+// Model run console output redirected to log file: modelName.YYYY_MM_DD_hh_mm_ss_SSS.console.log
 type RunState struct {
-	ModelName      string // model name to run
-	ModelDigest    string // model digest to run
-	RunStamp       string // run stamp, if empty then by default timestamp
+	ModelName      string // model name
+	ModelDigest    string // model digest
+	RunStamp       string // model run stamp, may be auto-generated as timestamp
 	IsFinal        bool   // final state, model completed
 	UpdateDateTime string // last update date-time
-	RunName        string // run name
+	RunName        string // if not empty then run name
 	TaskRunName    string // if not empty then task run name
 	isLog          bool   // if true then redirect console output to log file
-	logPath        string // last run log file name: log/dir/modelName.timestamp.log
+	logPath        string // console output log file name: log/dir/modelName.timestamp.console.log
 }
 
 // procRunState is model run state.
@@ -70,9 +71,6 @@ type RunStateLogPage struct {
 
 // timeout in msec, wait on stdout and stderr polling.
 const logTickTimeout = 7
-
-// max number of model run states to keep in run list history
-const runListMaxSize = 200
 
 // file name of model run template by default
 const defaultRunTemplate = "mpiModelRun.template.txt"
@@ -117,7 +115,7 @@ func (rsc *RunStateCatalog) RefreshCatalog(digestLst []string, modelLogDir, etcD
 			}
 
 			// copy only half of most recent model run history
-			if n > runListMaxSize/2 {
+			if n > runHistoryMaxSize/2 {
 				break
 			}
 		}

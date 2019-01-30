@@ -376,7 +376,7 @@ func doUpdateParameterPageHandler(w http.ResponseWriter, r *http.Request, isCode
 		}
 
 		// convert from enum code cells to id cells
-		cvt, ok := theCatalog.ParameterCellConverter(true, dn, wsn, name)
+		cvt, ok := theCatalog.ParameterCellConverter(true, dn, name)
 		if !ok {
 			http.Error(w, "Workset parameter update failed "+wsn+": "+name, http.StatusBadRequest)
 			return

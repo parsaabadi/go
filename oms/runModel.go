@@ -310,7 +310,7 @@ func (rsc *RunStateCatalog) createProcRunState(rs *RunState) {
 			RunState:   *rs,
 			logLineLst: make([]string, 0, 128),
 		})
-	if rsc.runLst.Len() > runListMaxSize {
+	if rsc.runLst.Len() > runHistoryMaxSize {
 		rsc.runLst.Remove(rsc.runLst.Back()) // remove old run state from history
 	}
 
@@ -385,7 +385,7 @@ func (rsc *RunStateCatalog) updateRunState(digest, runStamp string, isFinal bool
 }
 
 // get current run status and page of log lines
-func (rsc *RunStateCatalog) readModelLastRunLog(digest, runStamp string, start int, count int) (*RunStateLogPage, error) {
+func (rsc *RunStateCatalog) readModelRunLog(digest, runStamp string, start int, count int) (*RunStateLogPage, error) {
 
 	lrp := &RunStateLogPage{
 		Lines: []string{},

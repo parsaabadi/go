@@ -52,7 +52,7 @@ func worksetParameterIdCsvBomGetHandler(w http.ResponseWriter, r *http.Request) 
 
 // runParameterCsvGetHandler read a parameter values from model run results and write it as csv response.
 // GET /api/model/:model/run/:run/parameter/:name/csv
-// GET /api/run-parameter-csv?model=modelNameOrDigest&run=runNameOrDigest&name=parameterName&bom=true
+// GET /api/run-parameter-csv?model=modelNameOrDigest&run=runDigestOrStampOrName&name=parameterName&bom=true
 // Dimension(s) and enum-based parameters returned as enum codes.
 func runParameterCsvGetHandler(w http.ResponseWriter, r *http.Request) {
 	isBom, _ := getBoolRequestParam(r, "bom") // is utf-8 bom required
@@ -69,7 +69,7 @@ func runParameterCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
 
 // runParameterIdCsvGetHandler read a parameter values from model run results and write it as csv response.
 // GET /api/model/:model/run/:run/parameter/:name/csv-id
-// GET /api/run-parameter-csv-id?model=modelNameOrDigest&run=runNameOrDigest&name=parameterName&bom=true
+// GET /api/run-parameter-csv-id?model=modelNameOrDigest&run=runDigestOrStampOrName&name=parameterName&bom=true
 // Dimension(s) and enum-based parameters returned as enum id's.
 func runParameterIdCsvGetHandler(w http.ResponseWriter, r *http.Request) {
 	isBom, _ := getBoolRequestParam(r, "bom") // is utf-8 bom required
@@ -91,7 +91,7 @@ func doParameterGetCsvHandler(w http.ResponseWriter, r *http.Request, srcArg str
 
 	// url or query parameters
 	dn := getRequestParam(r, "model")  // model digest-or-name
-	src := getRequestParam(r, srcArg)  // workset name or run digest-or-name
+	src := getRequestParam(r, srcArg)  // workset name or run digest-or-stamp-or-name
 	name := getRequestParam(r, "name") // parameter name
 
 	// read parameter values, page size =0: read all values
@@ -118,7 +118,7 @@ func doParameterGetCsvHandler(w http.ResponseWriter, r *http.Request, srcArg str
 
 // runTableExprCsvGetHandler read table expression(s) values from model run results and write it as csv response.
 // GET /api/model/:model/run/:run/table/:name/expr/csv
-// GET /api/run-table-expr-csv?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&bom=true
+// GET /api/run-table-expr-csv?model=modelNameOrDigest&run=runDigestOrStampOrName&name=tableName&bom=true
 // Dimension(s) returned as enum codes.
 func runTableExprCsvGetHandler(w http.ResponseWriter, r *http.Request) {
 	isBom, _ := getBoolRequestParam(r, "bom") // is utf-8 bom required
@@ -135,7 +135,7 @@ func runTableExprCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
 
 // runTableExprIdCsvGetHandler read table expression(s) values from model run results and write it as csv response.
 // GET /api/model/:model/run/:run/table/:name/expr/csv-id
-// GET /api/run-table-expr-csv-id?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&bom=true
+// GET /api/run-table-expr-csv-id?model=modelNameOrDigest&run=runDigestOrStampOrName&name=tableName&bom=true
 // Dimension(s) returned as enum id's.
 func runTableExprIdCsvGetHandler(w http.ResponseWriter, r *http.Request) {
 	isBom, _ := getBoolRequestParam(r, "bom") // is utf-8 bom required
@@ -152,7 +152,7 @@ func runTableExprIdCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
 
 // runTableAccCsvGetHandler read table accumultor(s) values from model run results and write it as csv response.
 // GET /api/model/:model/run/:run/table/:name/acc/csv
-// GET /api/run-table-acc-csv?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&bom=true
+// GET /api/run-table-acc-csv?model=modelNameOrDigest&run=runDigestOrStampOrName&name=tableName&bom=true
 // Dimension(s) returned as enum codes.
 func runTableAccCsvGetHandler(w http.ResponseWriter, r *http.Request) {
 	isBom, _ := getBoolRequestParam(r, "bom") // is utf-8 bom required
@@ -169,7 +169,7 @@ func runTableAccCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
 
 // runTableAccIdCsvGetHandler read table accumultor(s) values from model run results and write it as csv response.
 // GET /api/model/:model/run/:run/table/:name/acc/csv-id
-// GET /api/run-table-acc-csv-id?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&bom=true
+// GET /api/run-table-acc-csv-id?model=modelNameOrDigest&run=runDigestOrStampOrName&name=tableName&bom=true
 // Dimension(s) returned as enum id's.
 func runTableAccIdCsvGetHandler(w http.ResponseWriter, r *http.Request) {
 	isBom, _ := getBoolRequestParam(r, "bom") // is utf-8 bom required
@@ -187,7 +187,7 @@ func runTableAccIdCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
 // runTableAllAccCsvGetHandler read table "all-accumulators" values
 // from model run results and write it as csv response.
 // GET /api/model/:model/run/:run/table/:name/all-acc/csv
-// GET /api/run-table-all-acc-csv?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&bom=true
+// GET /api/run-table-all-acc-csv?model=modelNameOrDigest&run=runDigestOrStampOrName&name=tableName&bom=true
 // Dimension(s) returned as enum codes.
 func runTableAllAccCsvGetHandler(w http.ResponseWriter, r *http.Request) {
 	isBom, _ := getBoolRequestParam(r, "bom") // is utf-8 bom required
@@ -206,7 +206,7 @@ func runTableAllAccCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
 // runTableAllAccIdCsvGetHandler read table "all-accumulators" values
 // from model run results and write it as csv response.
 // GET /api/model/:model/run/:run/table/:name/all-acc/csv-id
-// GET /api/run-table-all-acc-csv-id?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&bom=true
+// GET /api/run-table-all-acc-csv-id?model=modelNameOrDigest&run=runDigestOrStampOrName&name=tableName&bom=true
 // Dimension(s) returned as enum id's.
 func runTableAllAccIdCsvGetHandler(w http.ResponseWriter, r *http.Request) {
 	isBom, _ := getBoolRequestParam(r, "bom") // is utf-8 bom required
@@ -230,7 +230,7 @@ func doTableGetCsvHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllAc
 
 	// url or query parameters
 	dn := getRequestParam(r, "model")  // model digest-or-name
-	rdn := getRequestParam(r, "run")   //  run digest-or-name
+	rdsn := getRequestParam(r, "run")  //  run digest-or-stamp-or-name
 	name := getRequestParam(r, "name") // parameter name
 
 	// read output table values, page size =0: read all values
@@ -240,9 +240,9 @@ func doTableGetCsvHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllAc
 		IsAllAccum: isAllAcc,
 	}
 
-	cLst, _, ok := theCatalog.ReadOutTable(dn, rdn, &layout)
+	cLst, _, ok := theCatalog.ReadOutTable(dn, rdsn, &layout)
 	if !ok {
-		http.Error(w, "Error at run output table read "+rdn+": "+name, http.StatusBadRequest)
+		http.Error(w, "Error at run output table read "+rdsn+": "+name, http.StatusBadRequest)
 		return
 	}
 
@@ -254,7 +254,7 @@ func doTableGetCsvHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllAc
 	}
 
 	// convert to csv and write into http response
-	writeCsvResponse(w, name, rdn, isBom, hdr, cLst, cvt)
+	writeCsvResponse(w, name, rdsn, isBom, hdr, cLst, cvt)
 }
 
 // writeCsvResponse convert csv parameter or output table values and write it into http response

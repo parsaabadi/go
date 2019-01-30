@@ -485,15 +485,15 @@ func taskRunsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // taskRunStatusHandler return task_run_lst db row by model digest-or-name, task name and task run stamp or run name:
-// GET /api/model/:model/task/:task/run-status/run/:task-run
-// GET /api/task-run-status?model=modelNameOrDigest&task=taskName&task-run=taskRunStampOrName
+// GET /api/model/:model/task/:task/run-status/run/:run
+// GET /api/task-run-status?model=modelNameOrDigest&task=taskName&run=taskRunStampOrName
 // If multiple models or runs with same name exist only one is returned.
 // If no such task or run exist in database then empty result returned.
 func taskRunStatusHandler(w http.ResponseWriter, r *http.Request) {
 
 	dn := getRequestParam(r, "model")
 	tn := getRequestParam(r, "task")
-	trsn := getRequestParam(r, "task-run")
+	trsn := getRequestParam(r, "run")
 
 	rst, _ := theCatalog.TaskRunStatus(dn, tn, trsn)
 	jsonResponse(w, r, rst)

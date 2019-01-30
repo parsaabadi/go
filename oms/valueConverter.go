@@ -11,7 +11,7 @@ import (
 // ParameterCellConverter return parameter value converter between code cell and id's cell.
 // If isToId true then from code to id cell else other way around
 func (mc *ModelCatalog) ParameterCellConverter(
-	isToId bool, dn, src string, name string,
+	isToId bool, dn string, name string,
 ) (
 	func(interface{}) (interface{}, error), bool,
 ) {

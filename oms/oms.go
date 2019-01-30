@@ -56,6 +56,9 @@ By default float and double values converted into text with "%.15g" format.
 "code page" to convert source file into utf-8, for example: windows-1252.
 It is used only for compatibility with old Windows files.
 
+  -oms.MaxRunHistory 100
+max number of model runs to keep in run list history, default: 100.
+
 Also oms support OpenM++ standard log settings (described in wiki at http://www.openmpp.org/wiki/):
   -OpenM.LogToConsole:     if true then log to standard output, default: true
   -OpenM.LogToFile:        if true then log to file
@@ -87,17 +90,18 @@ import (
 
 // config keys to get values from ini-file or command line arguments.
 const (
-	rootDirArgKey      = "oms.RootDir"      // oms root directory, expected subdir: html
-	modelDirArgKey     = "oms.ModelDir"     // models directory, if relative then must be relative to oms root directory
-	modelLogDirArgKey  = "oms.ModelLogDir"  // models log directory, if relative then must be relative to oms root directory
-	listenArgKey       = "oms.Listen"       // address to listen, default: localhost:4040
-	listenShortKey     = "l"                // address to listen (short form)
-	logRequestArgKey   = "oms.LogRequest"   // if true then log http request
-	apiOnlyArgKey      = "oms.ApiOnly"      // if true then API only web-service, no UI
-	uiLangsArgKey      = "oms.Languages"    // list of supported languages
-	encodingArgKey     = "oms.CodePage"     // code page for converting source files, e.g. windows-1252
-	pageSizeAgrKey     = "oms.MaxRowCount"  // max number of rows to return from read parameters or output tables
-	doubleFormatArgKey = "oms.DoubleFormat" // format to convert float or double value to string, e.g. %.15g
+	rootDirArgKey        = "oms.RootDir"       // oms root directory, expected subdir: html
+	modelDirArgKey       = "oms.ModelDir"      // models directory, if relative then must be relative to oms root directory
+	modelLogDirArgKey    = "oms.ModelLogDir"   // models log directory, if relative then must be relative to oms root directory
+	listenArgKey         = "oms.Listen"        // address to listen, default: localhost:4040
+	listenShortKey       = "l"                 // address to listen (short form)
+	logRequestArgKey     = "oms.LogRequest"    // if true then log http request
+	apiOnlyArgKey        = "oms.ApiOnly"       // if true then API only web-service, no UI
+	uiLangsArgKey        = "oms.Languages"     // list of supported languages
+	encodingArgKey       = "oms.CodePage"      // code page for converting source files, e.g. windows-1252
+	pageSizeAgrKey       = "oms.MaxRowCount"   // max number of rows to return from read parameters or output tables
+	runHistorySizeAgrKey = "oms.MaxRunHistory" // max number of model runs to keep in run list history
+	doubleFormatArgKey   = "oms.DoubleFormat"  // format to convert float or double value to string, e.g. %.15g
 )
 
 // front-end UI subdirectory with html and javascript
@@ -117,6 +121,9 @@ var pageMaxSize int64 = 100
 
 // format to convert float or double value to string
 var doubleFmt string = "%.15g"
+
+// max number of model run states to keep in run list history
+var runHistoryMaxSize int = 100
 
 // main entry point: wrapper to handle errors
 func main() {
@@ -144,6 +151,7 @@ func mainBody(args []string) error {
 	_ = flag.String(uiLangsArgKey, "en", "comma-separated list of supported languages")
 	_ = flag.String(encodingArgKey, "", "code page to convert source file into utf-8, e.g.: windows-1252")
 	_ = flag.Int64(pageSizeAgrKey, pageMaxSize, "max number of rows to return from read parameters or output tables")
+	_ = flag.Int(runHistorySizeAgrKey, runHistoryMaxSize, "max number of model runs to keep in run list history")
 	_ = flag.String(doubleFormatArgKey, doubleFmt, "format to convert float or double value to string")
 
 	// pairs of full and short argument names to map short name to full name
@@ -161,8 +169,13 @@ func mainBody(args []string) error {
 	}
 	isLogRequest = runOpts.Bool(logRequestArgKey)
 	isApiOnly := runOpts.Bool(apiOnlyArgKey)
+
 	pageMaxSize = runOpts.Int64(pageSizeAgrKey, pageMaxSize)
 	doubleFmt = runOpts.String(doubleFormatArgKey)
+	runHistoryMaxSize = runOpts.Int(runHistorySizeAgrKey, runHistoryMaxSize)
+	if runHistoryMaxSize <= 0 {
+		runHistoryMaxSize = 4
+	}
 
 	rootDir := runOpts.String(rootDirArgKey) // server root directory
 
@@ -480,9 +493,9 @@ func apiGetRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/task/:task/runs", taskRunsHandler, logRequest)
 	router.Get("/api/task-runs", taskRunsHandler, logRequest)
 
-	// GET /api/model/:model/task/:task/run-status/run/:task-run
-	// GET /api/task-run-status?model=modelNameOrDigest&task=taskName&task-run=taskRunStampOrName
-	router.Get("/api/model/:model/task/:task/run-status/run/:task-run", taskRunStatusHandler, logRequest)
+	// GET /api/model/:model/task/:task/run-status/run/:run
+	// GET /api/task-run-status?model=modelNameOrDigest&task=taskName&run=taskRunStampOrName
+	router.Get("/api/model/:model/task/:task/run-status/run/:run", taskRunStatusHandler, logRequest)
 	router.Get("/api/task-run-status", taskRunStatusHandler, logRequest)
 
 	// GET /api/model/:model/task/:task/run-status/first
@@ -553,7 +566,7 @@ func apiReadRoutes(router *vestigo.Router) {
 	// GET /api/model/:model/run/:run/parameter/:name/value
 	// GET /api/model/:model/run/:run/parameter/:name/value/start/:start
 	// GET /api/model/:model/run/:run/parameter/:name/value/start/:start/count/:count
-	// GET /api/run-parameter-value?model=modelNameOrDigest&run=runNameOrDigest&name=parameterName&start=0&count=100
+	// GET /api/run-parameter-value?model=modelNameOrDigest&run=runDigestOrStampOrName&name=parameterName&start=0&count=100
 	router.Get("/api/model/:model/run/:run/parameter/:name/value", runParameterPageGetHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/parameter/:name/value/start/:start", runParameterPageGetHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/parameter/:name/value/start/:start/count/:count", runParameterPageGetHandler, logRequest)
@@ -566,7 +579,7 @@ func apiReadRoutes(router *vestigo.Router) {
 	// GET /api/model/:model/run/:run/table/:name/expr
 	// GET /api/model/:model/run/:run/table/:name/expr/start/:start
 	// GET /api/model/:model/run/:run/table/:name/expr/start/:start/count/:count
-	// GET /api/run-table-expr?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0&count=100
+	// GET /api/run-table-expr?model=modelNameOrDigest&run=runDigestOrStampOrName&name=tableName&start=0&count=100
 	router.Get("/api/model/:model/run/:run/table/:name/expr", runTableExprPageGetHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/table/:name/expr/start/:start", runTableExprPageGetHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/table/:name/expr/start/:start/count/:count", runTableExprPageGetHandler, logRequest)
@@ -578,7 +591,7 @@ func apiReadRoutes(router *vestigo.Router) {
 
 	// GET /api/model/:model/run/:run/table/:name/acc/start/:start
 	// GET /api/model/:model/run/:run/table/:name/acc/start/:start/count/:count
-	// GET /api/run-table-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0&count=100
+	// GET /api/run-table-acc?model=modelNameOrDigest&run=runDigestOrStampOrName&name=tableName&start=0&count=100
 	router.Get("/api/model/:model/run/:run/table/:name/acc", runTableAccPageGetHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/table/:name/acc/start/:start", runTableAccPageGetHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/table/:name/acc/start/:start/count/:count", runTableAccPageGetHandler, logRequest)
@@ -591,7 +604,7 @@ func apiReadRoutes(router *vestigo.Router) {
 	// GET /api/model/:model/run/:run/table/:name/all-acc
 	// GET /api/model/:model/run/:run/table/:name/all-acc/start/:start
 	// GET /api/model/:model/run/:run/table/:name/all-acc/start/:start/count/:count
-	// GET /api/run-table-all-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0&count=100
+	// GET /api/run-table-all-acc?model=modelNameOrDigest&run=runDigestOrStampOrName&name=tableName&start=0&count=100
 	router.Get("/api/model/:model/run/:run/table/:name/all-acc", runTableAllAccPageGetHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/table/:name/all-acc/start/:start", runTableAllAccPageGetHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/table/:name/all-acc/start/:start/count/:count", runTableAllAccPageGetHandler, logRequest)
@@ -622,7 +635,7 @@ func apiReadCsvRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/workset/:set/parameter/:name/csv-id-bom", worksetParameterIdCsvBomGetHandler, logRequest)
 
 	// GET /api/model/:model/run/:run/parameter/:name/csv
-	// GET /api/run-parameter-csv?model=modelNameOrDigest&run=runNameOrDigest&name=parameterName&bom=true
+	// GET /api/run-parameter-csv?model=modelNameOrDigest&run=runDigestOrStampOrName&name=parameterName&bom=true
 	router.Get("/api/model/:model/run/:run/parameter/:name/csv", runParameterCsvGetHandler, logRequest)
 	router.Get("/api/run-parameter-csv", runParameterCsvGetHandler, logRequest)
 
@@ -630,7 +643,7 @@ func apiReadCsvRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/parameter/:name/csv-bom", runParameterCsvBomGetHandler, logRequest)
 
 	// GET /api/model/:model/run/:run/parameter/:name/csv-id
-	// GET /api/run-parameter-csv-id?model=modelNameOrDigest&run=runNameOrDigest&name=parameterName&bom=true
+	// GET /api/run-parameter-csv-id?model=modelNameOrDigest&run=runDigestOrStampOrName&name=parameterName&bom=true
 	router.Get("/api/model/:model/run/:run/parameter/:name/csv-id", runParameterIdCsvGetHandler, logRequest)
 	router.Get("/api/run-parameter-csv-id", runParameterIdCsvGetHandler, logRequest)
 
@@ -638,7 +651,7 @@ func apiReadCsvRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/parameter/:name/csv-id-bom", runParameterIdCsvBomGetHandler, logRequest)
 
 	// GET /api/model/:model/run/:run/table/:name/expr/csv
-	// GET /api/run-table-expr-csv?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&bom=true
+	// GET /api/run-table-expr-csv?model=modelNameOrDigest&run=runDigestOrStampOrName&name=tableName&bom=true
 	router.Get("/api/model/:model/run/:run/table/:name/expr/csv", runTableExprCsvGetHandler, logRequest)
 	router.Get("/api/run-table-expr-csv", runTableExprCsvGetHandler, logRequest)
 
@@ -646,7 +659,7 @@ func apiReadCsvRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/table/:name/expr/csv-bom", runTableExprCsvBomGetHandler, logRequest)
 
 	// GET /api/model/:model/run/:run/table/:name/expr/csv-id
-	// GET /api/run-table-expr-csv-id?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&bom=true
+	// GET /api/run-table-expr-csv-id?model=modelNameOrDigest&run=runDigestOrStampOrName&name=tableName&bom=true
 	router.Get("/api/model/:model/run/:run/table/:name/expr/csv-id", runTableExprIdCsvGetHandler, logRequest)
 	router.Get("/api/run-table-expr-csv-id", runTableExprIdCsvGetHandler, logRequest)
 
@@ -654,7 +667,7 @@ func apiReadCsvRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/table/:name/expr/csv-id-bom", runTableExprIdCsvBomGetHandler, logRequest)
 
 	// GET /api/model/:model/run/:run/table/:name/acc/csv
-	// GET /api/run-table-acc-csv?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&bom=true
+	// GET /api/run-table-acc-csv?model=modelNameOrDigest&run=runDigestOrStampOrName&name=tableName&bom=true
 	router.Get("/api/model/:model/run/:run/table/:name/acc/csv", runTableAccCsvGetHandler, logRequest)
 	router.Get("/api/run-table-acc-csv", runTableAccCsvGetHandler, logRequest)
 
@@ -662,7 +675,7 @@ func apiReadCsvRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/table/:name/acc/csv-bom", runTableAccCsvBomGetHandler, logRequest)
 
 	// GET /api/model/:model/run/:run/table/:name/acc/csv-id
-	// GET /api/run-table-acc-csv-id?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&bom=true
+	// GET /api/run-table-acc-csv-id?model=modelNameOrDigest&run=runDigestOrStampOrName&name=tableName&bom=true
 	router.Get("/api/model/:model/run/:run/table/:name/acc/csv-id", runTableAccIdCsvGetHandler, logRequest)
 	router.Get("/api/run-table-acc-csv-id", runTableAccIdCsvGetHandler, logRequest)
 
@@ -670,7 +683,7 @@ func apiReadCsvRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/table/:name/acc/csv-id-bom", runTableAccIdCsvBomGetHandler, logRequest)
 
 	// GET /api/model/:model/run/:run/table/:name/all-acc/csv
-	// GET /api/run-table-all-acc-csv?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&bom=true
+	// GET /api/run-table-all-acc-csv?model=modelNameOrDigest&run=runDigestOrStampOrName&name=tableName&bom=true
 	router.Get("/api/model/:model/run/:run/table/:name/all-acc/csv", runTableAllAccCsvGetHandler, logRequest)
 	router.Get("/api/run-table-all-acc-csv", runTableAllAccCsvGetHandler, logRequest)
 
@@ -678,7 +691,7 @@ func apiReadCsvRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/table/:name/all-acc/csv-bom", runTableAllAccCsvBomGetHandler, logRequest)
 
 	// GET /api/model/:model/run/:run/table/:name/all-acc/csv-id
-	// GET /api/run-table-all-acc-csv-id?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&bom=true
+	// GET /api/run-table-all-acc-csv-id?model=modelNameOrDigest&run=runDigestOrStampOrName&name=tableName&bom=true
 	router.Get("/api/model/:model/run/:run/table/:name/all-acc/csv-id", runTableAllAccIdCsvGetHandler, logRequest)
 	router.Get("/api/run-table-all-acc-csv-id", runTableAllAccIdCsvGetHandler, logRequest)
 

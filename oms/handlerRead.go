@@ -67,7 +67,7 @@ func doReadParameterPageHandler(w http.ResponseWriter, r *http.Request, srcArg s
 	// get converter from id's cell into code cell
 	var cvt func(interface{}) (interface{}, error)
 	if isCode {
-		cvt, ok = theCatalog.ParameterCellConverter(false, dn, src, layout.Name)
+		cvt, ok = theCatalog.ParameterCellConverter(false, dn, layout.Name)
 		if !ok {
 			http.Error(w, "Error at parameter read "+src+": "+layout.Name, http.StatusBadRequest)
 			return
@@ -171,7 +171,7 @@ func worksetParameterPageGetHandler(w http.ResponseWriter, r *http.Request) {
 // GET /api/model/:model/run/:run/parameter/:name/value
 // GET /api/model/:model/run/:run/parameter/:name/value/start/:start
 // GET /api/model/:model/run/:run/parameter/:name/value/start/:start/count/:count
-// GET /api/run-parameter-value?model=modelNameOrDigest&run=runNameOrDigest&name=parameterName&start=0&count=100
+// GET /api/run-parameter-value?model=modelNameOrDigest&run=runDigestOrStampOrName&name=parameterName&start=0&count=100
 // Dimension(s) and enum-based parameters returned as enum codes.
 func runParameterPageGetHandler(w http.ResponseWriter, r *http.Request) {
 	doParameterGetPageHandler(w, r, "run", false, true)
@@ -185,7 +185,7 @@ func doParameterGetPageHandler(w http.ResponseWriter, r *http.Request, srcArg st
 
 	// url or query parameters
 	dn := getRequestParam(r, "model")  // model digest-or-name
-	src := getRequestParam(r, srcArg)  // workset name or run digest-or-name
+	src := getRequestParam(r, srcArg)  // workset name or run digest-or-stamp-or-name
 	name := getRequestParam(r, "name") // parameter name
 
 	// url or query parameters: page offset and page size
@@ -220,7 +220,7 @@ func doParameterGetPageHandler(w http.ResponseWriter, r *http.Request, srcArg st
 	var cvt func(interface{}) (interface{}, error)
 
 	if isCode {
-		cvt, ok = theCatalog.ParameterCellConverter(false, dn, src, name)
+		cvt, ok = theCatalog.ParameterCellConverter(false, dn, name)
 		if !ok {
 			http.Error(w, "Failed to create parameter cell id's to code converter: "+name, http.StatusBadRequest)
 			return
@@ -235,7 +235,7 @@ func doParameterGetPageHandler(w http.ResponseWriter, r *http.Request, srcArg st
 // GET /api/model/:model/run/:run/table/:name/expr
 // GET /api/model/:model/run/:run/table/:name/expr/start/:start
 // GET /api/model/:model/run/:run/table/:name/expr/start/:start/count/:count
-// GET /api/run-table-expr?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0&count=100
+// GET /api/run-table-expr?model=modelNameOrDigest&run=runDigestOrStampOrName&name=tableName&start=0&count=100
 // Enum-based dimension items returned as enum codes.
 func runTableExprPageGetHandler(w http.ResponseWriter, r *http.Request) {
 	doTableGetPageHandler(w, r, false, false, true)
@@ -244,7 +244,7 @@ func runTableExprPageGetHandler(w http.ResponseWriter, r *http.Request) {
 // runTableAccPageGetHandler read a "page" of output table accumulator(s) values from model run results.
 // GET /api/model/:model/run/:run/table/:name/acc/start/:start
 // GET /api/model/:model/run/:run/table/:name/acc/start/:start/count/:count
-// GET /api/run-table-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0&count=100
+// GET /api/run-table-acc?model=modelNameOrDigest&run=runDigestOrStampOrName&name=tableName&start=0&count=100
 // Enum-based dimension items returned as enum codes.
 func runTableAccPageGetHandler(w http.ResponseWriter, r *http.Request) {
 	doTableGetPageHandler(w, r, true, false, true)
@@ -255,7 +255,7 @@ func runTableAccPageGetHandler(w http.ResponseWriter, r *http.Request) {
 // GET /api/model/:model/run/:run/table/:name/all-acc
 // GET /api/model/:model/run/:run/table/:name/all-acc/start/:start
 // GET /api/model/:model/run/:run/table/:name/all-acc/start/:start/count/:count
-// GET /api/run-table-all-acc?model=modelNameOrDigest&run=runNameOrDigest&name=tableName&start=0&count=100
+// GET /api/run-table-all-acc?model=modelNameOrDigest&run=runDigestOrStampOrName&name=tableName&start=0&count=100
 // Enum-based dimension items returned as enum codes.
 func runTableAllAccPageGetHandler(w http.ResponseWriter, r *http.Request) {
 	doTableGetPageHandler(w, r, true, true, true)
@@ -270,7 +270,7 @@ func doTableGetPageHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllA
 
 	// url or query parameters
 	dn := getRequestParam(r, "model")  // model digest-or-name
-	rdn := getRequestParam(r, "run")   // run digest-or-name
+	rdsn := getRequestParam(r, "run")  // run digest-or-stamp-or-name
 	name := getRequestParam(r, "name") // output table name
 
 	// url or query parameters: page offset and page size
@@ -295,9 +295,9 @@ func doTableGetPageHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllA
 	}
 
 	// read output table page and respond with json
-	cLst, _, ok := theCatalog.ReadOutTable(dn, rdn, &layout)
+	cLst, _, ok := theCatalog.ReadOutTable(dn, rdsn, &layout)
 	if !ok {
-		http.Error(w, "Error at run output table read "+rdn+": "+layout.Name, http.StatusBadRequest)
+		http.Error(w, "Error at run output table read "+rdsn+": "+layout.Name, http.StatusBadRequest)
 		return
 	}
 
