@@ -100,7 +100,7 @@ func doUpdateGroupAll(trx *sql.Tx, modelId int, langDef *LangMeta, modelGroup *G
 				smId+", "+
 				strconv.Itoa(modelGroup.GroupLst[idx].GroupId)+", "+
 				toBoolSqlConst(modelGroup.GroupLst[idx].IsParam)+", "+
-				toQuoted(modelGroup.GroupLst[idx].Name)+", "+
+				toQuotedMax(modelGroup.GroupLst[idx].Name, nameDbMax)+", "+
 				toBoolSqlConst(modelGroup.GroupLst[idx].IsHidden)+")")
 		if err != nil {
 			return err
@@ -150,8 +150,8 @@ func doUpdateGroupAll(trx *sql.Tx, modelId int, langDef *LangMeta, modelGroup *G
 					smId+", "+
 					strconv.Itoa(modelGroup.GroupTxt[idx].GroupId)+", "+
 					strconv.Itoa(lId)+", "+
-					toQuoted(modelGroup.GroupTxt[idx].Descr)+", "+
-					toQuotedOrNull(modelGroup.GroupTxt[idx].Note)+")")
+					toQuotedMax(modelGroup.GroupTxt[idx].Descr, descrDbMax)+", "+
+					toQuotedOrNullMax(modelGroup.GroupTxt[idx].Note, noteDbMax)+")")
 			if err != nil {
 				return err
 			}
@@ -192,8 +192,8 @@ func doUpdateGroupText(trx *sql.Tx, modelId int, langDef *LangMeta, groupTxt []G
 					smId+", "+
 					strconv.Itoa(groupTxt[idx].GroupId)+", "+
 					strconv.Itoa(lId)+", "+
-					toQuoted(groupTxt[idx].Descr)+", "+
-					toQuotedOrNull(groupTxt[idx].Note)+")")
+					toQuotedMax(groupTxt[idx].Descr, descrDbMax)+", "+
+					toQuotedOrNullMax(groupTxt[idx].Note, noteDbMax)+")")
 			if err != nil {
 				return err
 			}

@@ -108,11 +108,11 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 			" (model_id, model_name, model_digest, model_type, model_ver, create_dt, default_lang_id)"+
 			" VALUES ("+
 			smId+", "+
-			toQuoted(modelDef.Model.Name)+", "+
-			toQuoted(modelDef.Model.Digest)+", "+
+			toQuotedMax(modelDef.Model.Name, nameDbMax)+", "+
+			toQuotedMax(modelDef.Model.Digest, codeDbMax)+", "+
 			strconv.Itoa(modelDef.Model.Type)+", "+
-			toQuoted(modelDef.Model.Version)+", "+
-			toQuoted(modelDef.Model.CreateDateTime)+", "+
+			toQuotedMax(modelDef.Model.Version, codeDbMax)+", "+
+			toQuotedMax(modelDef.Model.CreateDateTime, codeDbMax)+", "+
 			strconv.Itoa(dlId)+")")
 	if err != nil {
 		return err
@@ -181,8 +181,8 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 				"INSERT INTO type_dic (type_hid, type_name, type_digest, dic_id, total_enum_id)"+
 					" VALUES ("+
 					strconv.Itoa(modelDef.Type[idx].TypeHid)+", "+
-					toQuoted(modelDef.Type[idx].Name)+", "+
-					toQuoted(modelDef.Type[idx].Digest)+", "+
+					toQuotedMax(modelDef.Type[idx].Name, nameDbMax)+", "+
+					toQuotedMax(modelDef.Type[idx].Digest, codeDbMax)+", "+
 					strconv.Itoa(modelDef.Type[idx].DicId)+", "+
 					strconv.Itoa(modelDef.Type[idx].TotalEnumId)+")")
 			if err != nil {
@@ -198,7 +198,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 					"INSERT INTO type_enum_lst (type_hid, enum_id, enum_name) VALUES ("+
 						strconv.Itoa(modelDef.Type[idx].TypeHid)+", "+
 						strconv.Itoa(modelDef.Type[idx].Enum[j].EnumId)+", "+
-						toQuoted(modelDef.Type[idx].Enum[j].Name)+")")
+						toQuotedMax(modelDef.Type[idx].Enum[j].Name, nameDbMax)+")")
 				if err != nil {
 					return err
 				}
@@ -315,8 +315,8 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 					" num_cumulated)"+
 					" VALUES ("+
 					strconv.Itoa(modelDef.Param[idx].ParamHid)+", "+
-					toQuoted(modelDef.Param[idx].Name)+", "+
-					toQuoted(modelDef.Param[idx].Digest)+", "+
+					toQuotedMax(modelDef.Param[idx].Name, nameDbMax)+", "+
+					toQuotedMax(modelDef.Param[idx].Digest, codeDbMax)+", "+
 					toQuoted(modelDef.Param[idx].DbRunTable)+", "+
 					toQuoted(modelDef.Param[idx].DbSetTable)+", "+
 					strconv.Itoa(modelDef.Param[idx].Rank)+", "+
@@ -469,8 +469,8 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 					" is_sparse, db_expr_table, db_acc_table, db_acc_all_view)"+
 					" VALUES ("+
 					strconv.Itoa(modelDef.Table[idx].TableHid)+", "+
-					toQuoted(modelDef.Table[idx].Name)+", "+
-					toQuoted(modelDef.Table[idx].Digest)+", "+
+					toQuotedMax(modelDef.Table[idx].Name, nameDbMax)+", "+
+					toQuotedMax(modelDef.Table[idx].Digest, codeDbMax)+", "+
 					strconv.Itoa(modelDef.Table[idx].Rank)+", "+
 					toBoolSqlConst(modelDef.Table[idx].IsSparse)+", "+
 					toQuoted(modelDef.Table[idx].DbExprTable)+", "+

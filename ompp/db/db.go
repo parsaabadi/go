@@ -168,31 +168,6 @@ func prepareSqlite(dbConnStr string) (string, string, error) {
 	return s3Conn, Sqlite3DbDriver, nil
 }
 
-// make sql quoted string, ie: 'O''Brien'
-func toQuoted(src string) string {
-	var sb strings.Builder
-	sb.WriteRune('\'')
-	sb.WriteString(strings.Replace(src, "'", "''", -1))
-	sb.WriteRune('\'')
-	return sb.String()
-}
-
-// return "NULL" if string '' empty or return sql quoted string, ie: 'O''Brien'
-func toQuotedOrNull(src string) string {
-	if src == "" {
-		return "NULL"
-	}
-	return toQuoted(src)
-}
-
-// convert boolean to sql value: true=1, false=0
-func toBoolSqlConst(isValue bool) string {
-	if isValue {
-		return "1"
-	}
-	return "0"
-}
-
 // SelectFirst select first db row and pass it to cvt() for row.Scan()
 func SelectFirst(dbConn *sql.DB, query string, cvt func(row *sql.Row) error) error {
 	if dbConn == nil {
@@ -394,103 +369,61 @@ func TrxUpdateStatement(dbTrx *sql.Tx, query string, put func() (bool, []interfa
 	return nil
 }
 
-// detectFacet obtains db facet by quiering sql server.
-// It may not be always reliable and even not true facet.
-// It is better to use driver information to determine db facet.
-func detectFacet(dbConn *sql.DB) Facet {
-
-	facet := DefaultFacet
-
-	// check is it PostgreSQL
-	// check is it MySQL (not reliable) or MariaDB
-	// odbc driver bug (?): PostgreSQL 9.2 + odbc 9.5.400 fails forever after first query failed
-	// that means PostgreSQL facet detection must be first
-	_ = SelectRows(dbConn,
-		"SELECT LOWER(VERSION())",
-		func(rows *sql.Rows) error {
-			var s sql.NullString
-			if err := rows.Scan(&s); err != nil {
-				return err
-			}
-			if s.Valid {
-				v := s.String
-				if strings.Contains(v, "postgresql") {
-					facet = PgSqlFacet
-				}
-				if facet == DefaultFacet &&
-					(strings.Contains(v, "mysql") || strings.Contains(v, "mariadb") || strings.HasPrefix(v, "5.")) {
-					facet = MySqlFacet
-				}
-			}
-			return nil
-		})
-	if facet != DefaultFacet {
-		return facet
+// convert boolean to sql value: true=1, false=0
+func toBoolSqlConst(isValue bool) string {
+	if isValue {
+		return "1"
 	}
+	return "0"
+}
 
-	// check is it SQLite
-	_ = SelectRows(dbConn,
-		"SELECT COUNT(*) FROM sqlite_master",
-		func(rows *sql.Rows) error {
-			var n sql.NullInt64
-			if err := rows.Scan(&n); err != nil {
-				return err
-			}
-			if n.Valid {
-				facet = SqliteFacet
-			}
-			return nil
-		})
-	if facet != DefaultFacet {
-		return facet
+// make sql quoted string, ie: 'O''Brien'.
+// TODO: it is not clear for MSSQL + ODBC + utf-8:
+// MSSQL silently replace following utf-16 chars with 'single' quote
+/*
+   &#x2b9;    697  Modifier Letter Prime
+   &#x2bc;    700  Modifier Letter Apostrophe
+   &#x2c8;    712  Modifier Letter Vertical Line
+   &#x2032;  8242  Prime
+   &#xff07; 65287  Fullwidth Apostrophe
+*/
+func toQuoted(src string) string {
+	var sb strings.Builder
+	sb.WriteRune('\'')
+	sb.WriteString(strings.Replace(src, "'", "''", -1))
+	sb.WriteRune('\'')
+	return sb.String()
+}
+
+// return "NULL" if string '' empty or return sql quoted string, ie: 'O''Brien'
+func toQuotedOrNull(src string) string {
+	if src == "" {
+		return "NULL"
 	}
+	return toQuoted(src)
+}
 
-	// check is it MS SQL
-	_ = SelectRows(dbConn,
-		"SELECT LOWER(@@VERSION)",
-		func(rows *sql.Rows) error {
-			var s sql.NullString
-			if err := rows.Scan(&s); err != nil {
-				return err
-			}
-			if s.Valid {
-				facet = MsSqlFacet
-			}
-			return nil
-		})
-	if facet != DefaultFacet {
-		return facet
+// make sql quoted string, ie: 'O''Brien'.
+// Trim spaces and return up to maxLen bytes from src string.
+func toQuotedMax(src string, maxLen int) string {
+	return toQuoted(leftMax(src, maxLen))
+}
+
+// return "NULL" if string '' empty or return sql quoted string, ie: 'O''Brien'
+// Trim spaces and return up to maxLen bytes from src string.
+func toQuotedOrNullMax(src string, maxLen int) string {
+	return toQuotedOrNull(leftMax(src, maxLen))
+}
+
+// Trim spaces and return up to maxLen bytes from src string.
+// It is return bytes (not runes) and last utf-8 rune may be incorrect in result.
+func leftMax(src string, maxLen int) string {
+	if maxLen < 0 {
+		return ""
 	}
-
-	// check is it Oracle
-	_ = SelectRows(dbConn,
-		"SELECT LOWER(product) FROM product_component_version",
-		func(rows *sql.Rows) error {
-			var s sql.NullString
-			if err := rows.Scan(&s); err != nil {
-				return err
-			}
-			if s.Valid {
-				facet = OracleFacet
-			}
-			return nil
-		})
-	if facet != DefaultFacet {
-		return facet
+	s := strings.TrimSpace(src)
+	if len(s) > maxLen {
+		return s[:maxLen-1]
 	}
-
-	// check is it IBM DB2
-	_ = SelectRows(dbConn,
-		"SELECT COUNT(*) FROM SYSIBMADM.ENV_PROD_INFO",
-		func(rows *sql.Rows) error {
-			var n sql.NullInt64
-			if err := rows.Scan(&n); err != nil {
-				return err
-			}
-			if n.Valid {
-				facet = Db2Facet
-			}
-			return nil
-		})
-	return facet
+	return s
 }

@@ -165,12 +165,12 @@ func doInsertTaskBody(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta, langDef 
 				" VALUES ("+
 				strconv.Itoa(id)+", "+
 				stId+", "+
-				toQuoted(meta.TaskRun[k].Name)+", "+
+				toQuotedMax(meta.TaskRun[k].Name, nameDbMax)+", "+
 				strconv.Itoa(meta.TaskRun[k].SubCount)+", "+
 				toQuoted(meta.TaskRun[k].CreateDateTime)+", "+
 				toQuoted(meta.TaskRun[k].Status)+", "+
 				toQuoted(meta.TaskRun[k].UpdateDateTime)+", "+
-				toQuoted(meta.TaskRun[k].RunStamp)+")")
+				toQuotedMax(meta.TaskRun[k].RunStamp, codeDbMax)+")")
 		if err != nil {
 			return err
 		}
@@ -291,7 +291,7 @@ func doReplaceTask(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta, langDef *La
 	if !isNew {
 		// UPDATE task_lst SET task_name = 'my task' WHERE task_id = 88
 		err = TrxUpdate(trx,
-			"UPDATE task_lst SET task_name = "+toQuoted(meta.Task.Name)+" WHERE task_id = "+strconv.Itoa(meta.Task.TaskId))
+			"UPDATE task_lst SET task_name = "+toQuotedMax(meta.Task.Name, nameDbMax)+" WHERE task_id = "+strconv.Itoa(meta.Task.TaskId))
 		if err != nil {
 			return err
 		}
@@ -320,7 +320,7 @@ func doMergeTask(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta, langDef *Lang
 	if !isNew {
 		// UPDATE task_lst SET task_name = 'my task' WHERE task_id = 88
 		err = TrxUpdate(trx,
-			"UPDATE task_lst SET task_name = "+toQuoted(meta.Task.Name)+" WHERE task_id = "+strconv.Itoa(meta.Task.TaskId))
+			"UPDATE task_lst SET task_name = "+toQuotedMax(meta.Task.Name, nameDbMax)+" WHERE task_id = "+strconv.Itoa(meta.Task.TaskId))
 		if err != nil {
 			return err
 		}
@@ -397,7 +397,7 @@ func doCreateTaskRow(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta) (bool, er
 			"INSERT INTO task_lst (task_id, model_id, task_name) VALUES ("+
 				strconv.Itoa(taskId)+", "+
 				smId+", "+
-				toQuoted(meta.Task.Name)+")")
+				toQuotedMax(meta.Task.Name, nameDbMax)+")")
 		if err != nil {
 			return false, err
 		}
@@ -448,8 +448,8 @@ func doReplaceTaskDef(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta, langDef 
 				"INSERT INTO task_txt (task_id, lang_id, descr, note) VALUES ("+
 					stId+", "+
 					strconv.Itoa(lId)+", "+
-					toQuoted(meta.Txt[j].Descr)+", "+
-					toQuotedOrNull(meta.Txt[j].Note)+")")
+					toQuotedMax(meta.Txt[j].Descr, descrDbMax)+", "+
+					toQuotedOrNullMax(meta.Txt[j].Note, noteDbMax)+")")
 			if err != nil {
 				return err
 			}
@@ -493,8 +493,8 @@ func doMergeTaskDef(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta, langDef *L
 				"INSERT INTO task_txt (task_id, lang_id, descr, note) VALUES ("+
 					stId+", "+
 					strconv.Itoa(lId)+", "+
-					toQuoted(meta.Txt[j].Descr)+", "+
-					toQuotedOrNull(meta.Txt[j].Note)+")")
+					toQuotedMax(meta.Txt[j].Descr, descrDbMax)+", "+
+					toQuotedOrNullMax(meta.Txt[j].Note, noteDbMax)+")")
 			if err != nil {
 				return err
 			}

@@ -226,7 +226,7 @@ func doUpdateWorksetParameterMeta(
 			err = TrxUpdate(trx,
 				"INSERT INTO workset_parameter_txt (set_id, parameter_hid, lang_id, note)"+
 					" SELECT "+
-					sId+", "+" parameter_hid, "+slId+", "+toQuotedOrNull(param.Txt[j].Note)+
+					sId+", "+" parameter_hid, "+slId+", "+toQuotedOrNullMax(param.Txt[j].Note, noteDbMax)+
 					" FROM workset_parameter"+
 					" WHERE set_id = "+sId+
 					" AND parameter_hid = "+spHid)

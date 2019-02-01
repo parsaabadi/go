@@ -9,6 +9,13 @@ const maxBuiltInTypeId = 100
 // TotalEnumCode is predefined enum code for "total" enum
 const TotalEnumCode = "all"
 
+const codeDbMax = 32     // max database length for codes: language code, digests, date-time string
+const nameDbMax = 255    // max database length for names: parameter name, table name, etc.
+const descrDbMax = 255   // max database length for description: parameter description, table description, etc.
+const wordDbMax = 255    // max database length for word: word_code, word_value
+const optionDbMax = 2048 // max database length for option value: profile_option, run_option
+const noteDbMax = 32000  // max database string length: notes varchar (clob, text)
+
 // ModelMeta is model metadata db rows, language-neutral portion of it.
 //
 // Types, parameters and output tables can be shared between different models and even between different databases.

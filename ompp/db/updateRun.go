@@ -319,7 +319,7 @@ func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, meta *RunMeta, langDef *LangM
 			" VALUES ("+
 			srId+", "+
 			strconv.Itoa(modelDef.Model.ModelId)+", "+
-			toQuoted(meta.Run.Name)+", "+
+			toQuotedMax(meta.Run.Name, nameDbMax)+", "+
 			strconv.Itoa(meta.Run.SubCount)+", "+
 			strconv.Itoa(meta.Run.SubStarted)+", "+
 			strconv.Itoa(meta.Run.SubCompleted)+", "+
@@ -328,7 +328,7 @@ func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, meta *RunMeta, langDef *LangM
 			toQuoted(meta.Run.Status)+", "+
 			toQuoted(meta.Run.UpdateDateTime)+", "+
 			toQuoted(sd)+", "+
-			toQuoted(meta.Run.RunStamp)+")")
+			toQuotedMax(meta.Run.RunStamp, codeDbMax)+")")
 	if err != nil {
 		return err
 	}
@@ -345,8 +345,8 @@ func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, meta *RunMeta, langDef *LangM
 				"INSERT INTO run_txt (run_id, lang_id, descr, note) VALUES ("+
 					srId+", "+
 					strconv.Itoa(lId)+", "+
-					toQuoted(meta.Txt[j].Descr)+", "+
-					toQuotedOrNull(meta.Txt[j].Note)+")")
+					toQuotedMax(meta.Txt[j].Descr, descrDbMax)+", "+
+					toQuotedOrNullMax(meta.Txt[j].Note, noteDbMax)+")")
 			if err != nil {
 				return err
 			}
@@ -360,8 +360,8 @@ func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, meta *RunMeta, langDef *LangM
 		err = TrxUpdate(trx,
 			"INSERT INTO run_option (run_id, option_key, option_value) VALUES ("+
 				srId+", "+
-				toQuoted(key)+", "+
-				toQuoted(val)+")")
+				toQuotedMax(key, nameDbMax)+", "+
+				toQuotedMax(val, optionDbMax)+")")
 		if err != nil {
 			return err
 		}
@@ -381,7 +381,7 @@ func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, meta *RunMeta, langDef *LangM
 						srId+", "+
 						strconv.Itoa(meta.Param[k].ParamHid)+", "+
 						strconv.Itoa(lId)+", "+
-						toQuotedOrNull(meta.Param[k].Txt[j].Note)+")")
+						toQuotedOrNullMax(meta.Param[k].Txt[j].Note, noteDbMax)+")")
 				if err != nil {
 					return err
 				}
@@ -501,8 +501,8 @@ func doMergeRunText(trx *sql.Tx, runId int, meta *RunMeta, langDef *LangMeta) er
 				"INSERT INTO run_txt (run_id, lang_id, descr, note) VALUES ("+
 					srId+", "+
 					strconv.Itoa(lId)+", "+
-					toQuoted(meta.Txt[k].Descr)+", "+
-					toQuotedOrNull(meta.Txt[k].Note)+")")
+					toQuotedMax(meta.Txt[k].Descr, descrDbMax)+", "+
+					toQuotedOrNullMax(meta.Txt[k].Note, noteDbMax)+")")
 			if err != nil {
 				return err
 			}
@@ -531,7 +531,7 @@ func doMergeRunText(trx *sql.Tx, runId int, meta *RunMeta, langDef *LangMeta) er
 						srId+", "+
 						strconv.Itoa(meta.Param[k].Txt[j].ParamHid)+", "+
 						strconv.Itoa(lId)+", "+
-						toQuotedOrNull(meta.Param[k].Txt[j].Note)+")")
+						toQuotedOrNullMax(meta.Param[k].Txt[j].Note, noteDbMax)+")")
 				if err != nil {
 					return err
 				}

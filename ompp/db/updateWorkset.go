@@ -257,7 +257,7 @@ func doInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, langDe
 			strconv.Itoa(meta.Set.SetId)+", "+
 			sbId+", "+
 			strconv.Itoa(modelDef.Model.ModelId)+", "+
-			toQuoted(meta.Set.Name)+", "+
+			toQuotedMax(meta.Set.Name, nameDbMax)+", "+
 			toBoolSqlConst(meta.Set.IsReadonly)+", "+
 			toQuoted(meta.Set.UpdateDateTime)+")")
 	if err != nil {
@@ -339,8 +339,8 @@ func doInsertWorksetBody(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, la
 				"INSERT INTO workset_txt (set_id, lang_id, descr, note) VALUES ("+
 					sId+", "+
 					strconv.Itoa(lId)+", "+
-					toQuoted(meta.Txt[j].Descr)+", "+
-					toQuotedOrNull(meta.Txt[j].Note)+")")
+					toQuotedMax(meta.Txt[j].Descr, descrDbMax)+", "+
+					toQuotedOrNullMax(meta.Txt[j].Note, noteDbMax)+")")
 			if err != nil {
 				return err
 			}
@@ -363,7 +363,7 @@ func doInsertWorksetBody(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, la
 						sId+", "+
 						strconv.Itoa(meta.Param[k].ParamHid)+", "+
 						strconv.Itoa(lId)+", "+
-						toQuotedOrNull(meta.Param[k].Txt[j].Note)+")")
+						toQuotedOrNullMax(meta.Param[k].Txt[j].Note, noteDbMax)+")")
 				if err != nil {
 					return err
 				}
@@ -419,8 +419,8 @@ func doMergeWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, langDef
 				"INSERT INTO workset_txt (set_id, lang_id, descr, note) VALUES ("+
 					sId+", "+
 					slId+", "+
-					toQuoted(meta.Txt[j].Descr)+", "+
-					toQuotedOrNull(meta.Txt[j].Note)+")")
+					toQuotedMax(meta.Txt[j].Descr, descrDbMax)+", "+
+					toQuotedOrNullMax(meta.Txt[j].Note, noteDbMax)+")")
 			if err != nil {
 				return err
 			}
@@ -449,7 +449,7 @@ func doMergeWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, langDef
 				err = TrxUpdate(trx,
 					"INSERT INTO workset_parameter_txt (set_id, parameter_hid, lang_id, note)"+
 						" SELECT "+
-						sId+", "+" parameter_hid, "+slId+", "+toQuotedOrNull(meta.Param[k].Txt[j].Note)+
+						sId+", "+" parameter_hid, "+slId+", "+toQuotedOrNullMax(meta.Param[k].Txt[j].Note, noteDbMax)+
 						" FROM workset_parameter"+
 						" WHERE set_id = "+sId+
 						" AND parameter_hid = "+spHid)

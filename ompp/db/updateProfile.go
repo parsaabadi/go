@@ -79,7 +79,7 @@ func doInsertProfile(trx *sql.Tx, profile *ProfileMeta) error {
 	}
 
 	// insert profile name
-	qn := toQuoted(profile.Name)
+	qn := toQuotedMax(profile.Name, nameDbMax)
 
 	err := TrxUpdate(trx, "INSERT INTO profile_lst (profile_name) VALUES ("+qn+")")
 	if err != nil {
@@ -90,7 +90,7 @@ func doInsertProfile(trx *sql.Tx, profile *ProfileMeta) error {
 	for key, val := range profile.Opts {
 
 		err = TrxUpdate(trx, "INSERT INTO profile_option (profile_name, option_key, option_value)"+
-			" VALUES ("+qn+", "+toQuoted(key)+", "+toQuoted(val)+")")
+			" VALUES ("+qn+", "+toQuotedMax(key, nameDbMax)+", "+toQuotedMax(val, optionDbMax)+")")
 		if err != nil {
 			return err
 		}
@@ -144,7 +144,7 @@ func DeleteProfileOption(dbConn *sql.DB, name, key string) error {
 func doUpdateProfileOption(trx *sql.Tx, name, key, val string) error {
 
 	// insert profile name if not already exist
-	qn := toQuoted(name)
+	qn := toQuotedMax(name, nameDbMax)
 
 	err := TrxUpdate(trx,
 		"INSERT INTO profile_lst (profile_name)"+
@@ -163,7 +163,7 @@ func doUpdateProfileOption(trx *sql.Tx, name, key, val string) error {
 		return err
 	}
 	err = TrxUpdate(trx, "INSERT INTO profile_option (profile_name, option_key, option_value)"+
-		" VALUES ("+qn+", "+toQuoted(key)+", "+toQuoted(val)+")")
+		" VALUES ("+qn+", "+toQuotedMax(key, nameDbMax)+", "+toQuotedMax(val, optionDbMax)+")")
 	if err != nil {
 		return err
 	}

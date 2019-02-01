@@ -97,7 +97,7 @@ func doUpdateLanguage(trx *sql.Tx, langDef *LangMeta) error {
 			// UPDATE lang_lst SET lang_name = 'English' WHERE lang_id = 0
 			err = TrxUpdate(trx,
 				"UPDATE lang_lst"+
-					" SET lang_name = "+toQuoted(langDef.Lang[idx].Name)+
+					" SET lang_name = "+toQuotedMax(langDef.Lang[idx].Name, nameDbMax)+
 					" WHERE lang_id = "+strconv.Itoa(langDef.Lang[idx].langId))
 			if err != nil {
 				return err
@@ -127,8 +127,8 @@ func doUpdateLanguage(trx *sql.Tx, langDef *LangMeta) error {
 				"INSERT INTO lang_lst (lang_id, lang_code, lang_name)"+
 					" VALUES ("+
 					strconv.Itoa(langDef.Lang[idx].langId)+", "+
-					toQuoted(langDef.Lang[idx].LangCode)+", "+
-					toQuoted(langDef.Lang[idx].Name)+")")
+					toQuotedMax(langDef.Lang[idx].LangCode, codeDbMax)+", "+
+					toQuotedMax(langDef.Lang[idx].Name, nameDbMax)+")")
 			if err != nil {
 				return err
 			}
@@ -181,7 +181,7 @@ func doUpdateWord(trx *sql.Tx, langId int, wordRs map[string]string) error {
 			// UPDATE lang_word SET word_value = 'Max' WHERE lang_id = 0 AND word_code = 'max'
 			err = TrxUpdate(trx,
 				"UPDATE lang_word"+
-					" SET word_value = "+toQuoted(val)+
+					" SET word_value = "+toQuotedMax(val, wordDbMax)+
 					" WHERE lang_id = "+strconv.Itoa(langId)+
 					" AND word_code = "+toQuoted(code))
 			if err != nil {
@@ -195,8 +195,8 @@ func doUpdateWord(trx *sql.Tx, langId int, wordRs map[string]string) error {
 				"INSERT INTO lang_word (lang_id, word_code, word_value)"+
 					" VALUES ("+
 					strconv.Itoa(langId)+", "+
-					toQuoted(code)+", "+
-					toQuoted(val)+")")
+					toQuotedMax(code, wordDbMax)+", "+
+					toQuotedMax(val, wordDbMax)+")")
 			if err != nil {
 				return err
 			}
@@ -231,8 +231,8 @@ func doUpdateModelWord(trx *sql.Tx, modelId int, langDef *LangMeta, mwDef *Model
 					"INSERT INTO model_word (model_id, lang_id, word_code, word_value) VALUES ("+
 						smId+", "+
 						strconv.Itoa(lId)+", "+
-						toQuoted(code)+", "+
-						toQuotedOrNull(val)+")")
+						toQuotedMax(code, wordDbMax)+", "+
+						toQuotedOrNullMax(val, wordDbMax)+")")
 				if err != nil {
 					return err
 				}

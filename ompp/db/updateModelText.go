@@ -65,8 +65,8 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 				"INSERT INTO model_dic_txt (model_id, lang_id, descr, note) VALUES ("+
 					smId+", "+
 					strconv.Itoa(lId)+", "+
-					toQuoted(modelTxt.ModelTxt[idx].Descr)+", "+
-					toQuotedOrNull(modelTxt.ModelTxt[idx].Note)+")")
+					toQuotedMax(modelTxt.ModelTxt[idx].Descr, descrDbMax)+", "+
+					toQuotedOrNullMax(modelTxt.ModelTxt[idx].Note, noteDbMax)+")")
 			if err != nil {
 				return err
 			}
@@ -100,8 +100,8 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 				"INSERT INTO type_dic_txt (type_hid, lang_id, descr, note) VALUES ("+
 					strconv.Itoa(hId)+", "+
 					strconv.Itoa(lId)+", "+
-					toQuoted(modelTxt.TypeTxt[idx].Descr)+", "+
-					toQuotedOrNull(modelTxt.TypeTxt[idx].Note)+")")
+					toQuotedMax(modelTxt.TypeTxt[idx].Descr, descrDbMax)+", "+
+					toQuotedOrNullMax(modelTxt.TypeTxt[idx].Note, noteDbMax)+")")
 			if err != nil {
 				return err
 			}
@@ -137,8 +137,8 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 					strconv.Itoa(hId)+", "+
 					strconv.Itoa(modelTxt.TypeEnumTxt[idx].EnumId)+", "+
 					strconv.Itoa(lId)+", "+
-					toQuoted(modelTxt.TypeEnumTxt[idx].Descr)+", "+
-					toQuotedOrNull(modelTxt.TypeEnumTxt[idx].Note)+")")
+					toQuotedMax(modelTxt.TypeEnumTxt[idx].Descr, descrDbMax)+", "+
+					toQuotedOrNullMax(modelTxt.TypeEnumTxt[idx].Note, noteDbMax)+")")
 			if err != nil {
 				return err
 			}
@@ -171,8 +171,8 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 				"INSERT INTO parameter_dic_txt (parameter_hid, lang_id, descr, note) VALUES ("+
 					strconv.Itoa(hId)+", "+
 					strconv.Itoa(lId)+", "+
-					toQuoted(modelTxt.ParamTxt[idx].Descr)+", "+
-					toQuotedOrNull(modelTxt.ParamTxt[idx].Note)+")")
+					toQuotedMax(modelTxt.ParamTxt[idx].Descr, descrDbMax)+", "+
+					toQuotedOrNullMax(modelTxt.ParamTxt[idx].Note, noteDbMax)+")")
 			if err != nil {
 				return err
 			}
@@ -207,8 +207,8 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 					strconv.Itoa(hId)+", "+
 					strconv.Itoa(modelTxt.ParamDimsTxt[idx].DimId)+", "+
 					strconv.Itoa(lId)+", "+
-					toQuoted(modelTxt.ParamDimsTxt[idx].Descr)+", "+
-					toQuotedOrNull(modelTxt.ParamDimsTxt[idx].Note)+")")
+					toQuotedMax(modelTxt.ParamDimsTxt[idx].Descr, descrDbMax)+", "+
+					toQuotedOrNullMax(modelTxt.ParamDimsTxt[idx].Note, noteDbMax)+")")
 			if err != nil {
 				return err
 			}
@@ -241,10 +241,10 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 				"INSERT INTO table_dic_txt (table_hid, lang_id, descr, note, expr_descr, expr_note) VALUES ("+
 					strconv.Itoa(hId)+", "+
 					strconv.Itoa(lId)+", "+
-					toQuoted(modelTxt.TableTxt[idx].Descr)+", "+
-					toQuotedOrNull(modelTxt.TableTxt[idx].Note)+", "+
-					toQuoted(modelTxt.TableTxt[idx].ExprDescr)+", "+
-					toQuotedOrNull(modelTxt.TableTxt[idx].ExprNote)+")")
+					toQuotedMax(modelTxt.TableTxt[idx].Descr, descrDbMax)+", "+
+					toQuotedOrNullMax(modelTxt.TableTxt[idx].Note, noteDbMax)+", "+
+					toQuotedMax(modelTxt.TableTxt[idx].ExprDescr, descrDbMax)+", "+
+					toQuotedOrNullMax(modelTxt.TableTxt[idx].ExprNote, noteDbMax)+")")
 			if err != nil {
 				return err
 			}
@@ -279,8 +279,8 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 					strconv.Itoa(hId)+", "+
 					strconv.Itoa(modelTxt.TableDimsTxt[idx].DimId)+", "+
 					strconv.Itoa(lId)+", "+
-					toQuoted(modelTxt.TableDimsTxt[idx].Descr)+", "+
-					toQuotedOrNull(modelTxt.TableDimsTxt[idx].Note)+")")
+					toQuotedMax(modelTxt.TableDimsTxt[idx].Descr, descrDbMax)+", "+
+					toQuotedOrNullMax(modelTxt.TableDimsTxt[idx].Note, noteDbMax)+")")
 			if err != nil {
 				return err
 			}
@@ -315,8 +315,8 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 					strconv.Itoa(hId)+", "+
 					strconv.Itoa(modelTxt.TableAccTxt[idx].AccId)+", "+
 					strconv.Itoa(lId)+", "+
-					toQuoted(modelTxt.TableAccTxt[idx].Descr)+", "+
-					toQuotedOrNull(modelTxt.TableAccTxt[idx].Note)+")")
+					toQuotedMax(modelTxt.TableAccTxt[idx].Descr, descrDbMax)+", "+
+					toQuotedOrNullMax(modelTxt.TableAccTxt[idx].Note, noteDbMax)+")")
 			if err != nil {
 				return err
 			}
@@ -351,8 +351,8 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 					strconv.Itoa(hId)+", "+
 					strconv.Itoa(modelTxt.TableExprTxt[idx].ExprId)+", "+
 					strconv.Itoa(lId)+", "+
-					toQuoted(modelTxt.TableExprTxt[idx].Descr)+", "+
-					toQuotedOrNull(modelTxt.TableExprTxt[idx].Note)+")")
+					toQuotedMax(modelTxt.TableExprTxt[idx].Descr, descrDbMax)+", "+
+					toQuotedOrNullMax(modelTxt.TableExprTxt[idx].Note, noteDbMax)+")")
 			if err != nil {
 				return err
 			}
