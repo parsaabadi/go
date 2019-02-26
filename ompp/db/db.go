@@ -57,8 +57,18 @@ func Open(dbConnStr, dbDriver string, isFacetRequired bool) (*sql.DB, Facet, err
 			return nil, DefaultFacet, err
 		}
 	}
-	if dbDriver == Sqlite3DbDriver { // at this SQLite pseudo name replaced by "sqlite3" db-driver name
+	if dbDriver == Sqlite3DbDriver { // at this point SQLite pseudo name replaced by "sqlite3" db-driver name
 		facet = SqliteFacet
+	}
+
+	// check if ODBC compiled in, use go install -tags odbc to do this
+	if !IsOdbcSupported && dbDriver == OdbcDbDriver {
+		return nil, DefaultFacet, errors.New("ODBC database connection not supported (executable build without ODBC library)")
+	}
+
+	// empty connection string likely produce error message "invalid openM++ database", explain it to the user source of the problem
+	if dbConnStr == "" {
+		omppLog.Log("database connection string is empty, it may be an inavlid parameters")
 	}
 
 	// open database connection
