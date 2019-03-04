@@ -6,8 +6,8 @@ package main
 import (
 	"errors"
 
-	"go.openmpp.org/ompp/db"
-	"go.openmpp.org/ompp/omppLog"
+	"github.com/openmpp/go/ompp/db"
+	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // UpdateTaskDef replace or merge task definition: task text (description and notes) and task input worksets into database.

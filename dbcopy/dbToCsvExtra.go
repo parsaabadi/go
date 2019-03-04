@@ -8,7 +8,7 @@ import (
 	"errors"
 	"strconv"
 
-	"go.openmpp.org/ompp/db"
+	"github.com/openmpp/go/ompp/db"
 )
 
 // toLanguageCsv writes list of languages into csv files.

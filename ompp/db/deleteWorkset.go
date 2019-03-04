@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"go.openmpp.org/ompp/helper"
+	"github.com/openmpp/go/ompp/helper"
 )
 
 // DeleteWorkset delete workset metadata and workset parameter values from database.

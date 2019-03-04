@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"go.openmpp.org/ompp/helper"
+	"github.com/openmpp/go/ompp/helper"
 )
 
 // CopyParameterFromRun copy parameter metadata and parameter values into workset from model run.

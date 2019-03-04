@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"go.openmpp.org/ompp/db"
+	"github.com/openmpp/go/ompp/db"
 )
 
 // worksetParameterPageReadHandler read a "page" of parameter values from workset.

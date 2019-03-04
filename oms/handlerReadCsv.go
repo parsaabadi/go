@@ -10,10 +10,10 @@ import (
 	"net/url"
 	"strconv"
 
-	"go.openmpp.org/ompp/omppLog"
+	"github.com/openmpp/go/ompp/omppLog"
 
-	"go.openmpp.org/ompp/db"
-	"go.openmpp.org/ompp/helper"
+	"github.com/openmpp/go/ompp/db"
+	"github.com/openmpp/go/ompp/helper"
 )
 
 // worksetParameterCsvGetHandler read a parameter values from workset and write it as csv response.

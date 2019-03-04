@@ -8,7 +8,7 @@ import (
 	"errors"
 	"strconv"
 
-	"go.openmpp.org/ompp/db"
+	"github.com/openmpp/go/ompp/db"
 )
 
 // toModelTextCsv writes model text metadata (description and notes) into csv files.

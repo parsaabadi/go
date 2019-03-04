@@ -6,7 +6,7 @@ package main
 import (
 	"net/http"
 
-	"go.openmpp.org/ompp/omppLog"
+	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // runModelHandler run the model identified by model digest-or-name with specified run options.

@@ -26,8 +26,8 @@ import (
 	"sync"
 	"time"
 
-	"go.openmpp.org/ompp/config"
-	"go.openmpp.org/ompp/helper"
+	"github.com/openmpp/go/ompp/config"
+	"github.com/openmpp/go/ompp/helper"
 )
 
 var (

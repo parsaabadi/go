@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"time"
 
-	"go.openmpp.org/ompp/helper"
+	"github.com/openmpp/go/ompp/helper"
 )
 
 // WriteOutputTable insert output table values (accumulators or expressions) into model run.

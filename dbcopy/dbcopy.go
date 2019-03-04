@@ -155,9 +155,9 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"go.openmpp.org/ompp/config"
-	"go.openmpp.org/ompp/db"
-	"go.openmpp.org/ompp/omppLog"
+	"github.com/openmpp/go/ompp/config"
+	"github.com/openmpp/go/ompp/db"
+	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // dbcopy config keys to get values from ini-file or command line arguments.

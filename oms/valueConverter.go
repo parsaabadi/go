@@ -4,8 +4,8 @@
 package main
 
 import (
-	"go.openmpp.org/ompp/db"
-	"go.openmpp.org/ompp/omppLog"
+	"github.com/openmpp/go/ompp/db"
+	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // ParameterCellConverter return parameter value converter between code cell and id's cell.

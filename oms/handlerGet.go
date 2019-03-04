@@ -6,7 +6,7 @@ package main
 import (
 	"net/http"
 
-	"go.openmpp.org/ompp/db"
+	"github.com/openmpp/go/ompp/db"
 )
 
 // homeHandler is static pages handler for front-end UI served on web / root.

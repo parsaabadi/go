@@ -8,9 +8,9 @@ import (
 	"errors"
 	"strconv"
 
-	"go.openmpp.org/ompp/config"
-	"go.openmpp.org/ompp/db"
-	"go.openmpp.org/ompp/omppLog"
+	"github.com/openmpp/go/ompp/config"
+	"github.com/openmpp/go/ompp/db"
+	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // copy modeling task metadata and run history from source database to destination database

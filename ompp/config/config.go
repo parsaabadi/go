@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"time"
 
-	"go.openmpp.org/ompp/helper"
+	"github.com/openmpp/go/ompp/helper"
 )
 
 // Standard config keys to get values from ini-file or command line arguments

@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"go.openmpp.org/ompp/helper"
+	"github.com/openmpp/go/ompp/helper"
 )
 
 // UpdateTaskFull delete existing and insert new modeling task and task run history in database.

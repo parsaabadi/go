@@ -18,7 +18,7 @@ import (
 	"github.com/husobee/vestigo"
 	"golang.org/x/text/language"
 
-	"go.openmpp.org/ompp/omppLog"
+	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // logRequest is a middelware to log http request

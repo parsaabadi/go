@@ -26,8 +26,8 @@ import (
 	"strconv"
 	"strings"
 
-	"go.openmpp.org/ompp/helper"
-	"go.openmpp.org/ompp/omppLog"
+	"github.com/openmpp/go/ompp/helper"
+	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // Database connection values

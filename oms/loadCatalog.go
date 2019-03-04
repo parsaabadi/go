@@ -11,8 +11,8 @@ import (
 
 	"golang.org/x/text/language"
 
-	"go.openmpp.org/ompp/db"
-	"go.openmpp.org/ompp/omppLog"
+	"github.com/openmpp/go/ompp/db"
+	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // RefreshSqlite open db-connection to model.sqlite files in model directory and read model_dic row for each model.

@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"go.openmpp.org/ompp/helper"
+	"github.com/openmpp/go/ompp/helper"
 )
 
 // Clone return deep copy of source model metadata

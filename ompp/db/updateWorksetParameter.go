@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"time"
 
-	"go.openmpp.org/ompp/helper"
+	"github.com/openmpp/go/ompp/helper"
 )
 
 // UpdateWorksetParameter add new or replace existing workset parameter.

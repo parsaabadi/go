@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"go.openmpp.org/ompp/helper"
+	"github.com/openmpp/go/ompp/helper"
 )
 
 // RunStateCatalog is a most recent state of model run for each model.

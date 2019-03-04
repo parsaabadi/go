@@ -6,9 +6,9 @@ package main
 import (
 	"golang.org/x/text/language"
 
-	"go.openmpp.org/ompp/db"
-	"go.openmpp.org/ompp/helper"
-	"go.openmpp.org/ompp/omppLog"
+	"github.com/openmpp/go/ompp/db"
+	"github.com/openmpp/go/ompp/helper"
+	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // loadModelText partially init model text metadata by reading model_dic_txt db rows.

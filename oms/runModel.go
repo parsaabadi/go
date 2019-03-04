@@ -15,8 +15,8 @@ import (
 	"text/template"
 	"time"
 
-	"go.openmpp.org/ompp/helper"
-	"go.openmpp.org/ompp/omppLog"
+	"github.com/openmpp/go/ompp/helper"
+	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // runModel starts new model run and return run stamp.

@@ -7,8 +7,8 @@ import (
 	"database/sql"
 	"errors"
 
-	"go.openmpp.org/ompp/config"
-	"go.openmpp.org/ompp/db"
+	"github.com/openmpp/go/ompp/config"
+	"github.com/openmpp/go/ompp/db"
 )
 
 // copy model from source database to destination database

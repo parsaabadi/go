@@ -6,8 +6,8 @@ package main
 import (
 	"errors"
 
-	"go.openmpp.org/ompp/db"
-	"go.openmpp.org/ompp/omppLog"
+	"github.com/openmpp/go/ompp/db"
+	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // DeleteRun do delete  model run including output table values and run input parameters.

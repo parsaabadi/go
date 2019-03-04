@@ -11,10 +11,10 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"go.openmpp.org/ompp/config"
-	"go.openmpp.org/ompp/db"
-	"go.openmpp.org/ompp/helper"
-	"go.openmpp.org/ompp/omppLog"
+	"github.com/openmpp/go/ompp/config"
+	"github.com/openmpp/go/ompp/db"
+	"github.com/openmpp/go/ompp/helper"
+	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // lineCsvConverter return csv file row []string or isEof = true

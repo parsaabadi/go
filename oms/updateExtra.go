@@ -6,8 +6,8 @@ package main
 import (
 	"errors"
 
-	"go.openmpp.org/ompp/db"
-	"go.openmpp.org/ompp/omppLog"
+	"github.com/openmpp/go/ompp/db"
+	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // ReplaceProfile replace existing or insert new profile and all profile options.

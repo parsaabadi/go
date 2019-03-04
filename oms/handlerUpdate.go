@@ -11,8 +11,8 @@ import (
 	"path"
 	"strings"
 
-	"go.openmpp.org/ompp/db"
-	"go.openmpp.org/ompp/omppLog"
+	"github.com/openmpp/go/ompp/db"
+	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // profileReplaceHandler replace existing or insert new profile and all profile options.

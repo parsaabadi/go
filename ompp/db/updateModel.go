@@ -10,7 +10,7 @@ import (
 	"hash/crc32"
 	"strconv"
 
-	"go.openmpp.org/ompp/helper"
+	"github.com/openmpp/go/ompp/helper"
 )
 
 // UpdateModel insert new model metadata in database.

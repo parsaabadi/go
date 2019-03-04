@@ -6,8 +6,8 @@ package main
 import (
 	"container/list"
 
-	"go.openmpp.org/ompp/db"
-	"go.openmpp.org/ompp/omppLog"
+	"github.com/openmpp/go/ompp/db"
+	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // ReadParameter return "page" of parameter values from workset or model run.

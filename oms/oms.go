@@ -83,8 +83,8 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/text/language"
 
-	"go.openmpp.org/ompp/config"
-	"go.openmpp.org/ompp/omppLog"
+	"github.com/openmpp/go/ompp/config"
+	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // config keys to get values from ini-file or command line arguments.

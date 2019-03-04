@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"go.openmpp.org/ompp/helper"
+	"github.com/openmpp/go/ompp/helper"
 )
 
 /*

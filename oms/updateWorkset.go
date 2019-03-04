@@ -9,8 +9,8 @@ import (
 	"errors"
 	"io"
 
-	"go.openmpp.org/ompp/db"
-	"go.openmpp.org/ompp/omppLog"
+	"github.com/openmpp/go/ompp/db"
+	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // UpdateWorksetReadonly update workset read-only status by model digest-or-name and workset name.

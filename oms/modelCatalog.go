@@ -7,7 +7,7 @@ import (
 	"database/sql"
 	"sync"
 
-	"go.openmpp.org/ompp/db"
+	"github.com/openmpp/go/ompp/db"
 	"golang.org/x/text/language"
 )
 

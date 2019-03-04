@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"time"
 
-	"go.openmpp.org/ompp/helper"
+	"github.com/openmpp/go/ompp/helper"
 )
 
 // WriteParameter insert or update parameter values in workset or insert parameter values into model run.

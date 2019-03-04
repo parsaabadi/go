@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"time"
 
-	"go.openmpp.org/ompp/helper"
+	"github.com/openmpp/go/ompp/helper"
 )
 
 // UpdateRun insert new or return existing model run metadata in database.
