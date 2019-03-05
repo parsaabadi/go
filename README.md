@@ -14,10 +14,10 @@ go install github.com/openmpp/go/oms
 ```
 
 By default only SQLite database supported. 
-If you want to use other database vendors (Microsoft SQL, MySQL, PostgreSQL, IBM DB2, Oracle) then comile dbcopy with ODBC support:
+If you want to use other database vendors (Microsoft SQL, MySQL, PostgreSQL, IBM DB2, Oracle) then compile dbcopy with ODBC support:
 
 ```
 go install -tags odbc github.com/openmpp/go/dbcopy
 ```
 
-Please visit our [wiki](http://www.openmpp.org/wiki/) for more inforamition.
+Please visit our [wiki](http://www.openmpp.org/wiki/) for more information.
