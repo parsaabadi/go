@@ -1,4 +1,4 @@
-# [OpenM++](http://www.openmpp.org/) project: oms web-service, dbcopy utility and Go libraries
+# [OpenM++](http://www.openmpp.org/) Go tools
 
 This repository is a part of [OpenM++](http://www.openmpp.org/) open source microsimulation platform.
 It contains oms web-service, dbcopy utility and openM++ Go libraries.
