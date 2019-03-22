@@ -5,11 +5,15 @@ It contains oms web-service, dbcopy utility and openM++ Go libraries.
 
 ## Build
 
+Build from GitHub master (use this for initial build):
 ```
 go get github.com/openmpp/go/dbcopy
-go install github.com/openmpp/go/dbcopy
-
 go get github.com/openmpp/go/oms
+```
+
+Build from your local sources (use this if made some changes):
+```
+go install github.com/openmpp/go/dbcopy
 go install github.com/openmpp/go/oms
 ```
 
