@@ -250,6 +250,7 @@ func mainBody(args []string) error {
 	apiReadCsvRoutes(router)  // web-service /api routes to read values into csv stream
 	apiUpdateRoutes(router)   // web-service /api routes to update metadata
 	apiRunModelRoutes(router) // web-service /api routes to run the model
+	apiAdminRoutes(router)    // web-service /api routes for administrative tasks
 
 	// set web root handler: UI web pages or "not found" if this is web-service mode
 	if !isApiOnly {
@@ -823,4 +824,14 @@ func apiRunModelRoutes(router *vestigo.Router) {
 	router.Get("/api/run/log/model/:model/stamp/", http.NotFound)
 	router.Get("/api/run/log/model/:model/stamp/:stamp/start/", http.NotFound)
 	router.Get("/api/run/log/model/:model/stamp/:stamp/start/:start/count/", http.NotFound)
+}
+
+// add web-service /api routes for administrative tasks
+func apiAdminRoutes(router *vestigo.Router) {
+
+	// POST /api/admin/all-models/refresh
+	router.Post("/api/admin/all-models/refresh", allModelsRefreshHandler, logRequest)
+
+	// POST /api/admin/all-models/close
+	router.Post("/api/admin/all-models/close", allModelsCloseHandler, logRequest)
 }

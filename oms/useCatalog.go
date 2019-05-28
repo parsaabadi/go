@@ -139,6 +139,29 @@ func (mc *ModelCatalog) RefreshSqlite(modelDir string) error {
 	return nil
 }
 
+// Close all db-connection to model.sqlite files and clear model list.
+func (mc *ModelCatalog) Close() error {
+
+	// lock and update model catalog
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	// close existing db connections
+	var firstErr error
+	for k := range mc.modelLst {
+		if err := mc.modelLst[k].dbConn.Close(); err != nil {
+			omppLog.Log("Error: close db connection error: " + err.Error())
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+
+	// clear model list
+	mc.modelLst = []modelDef{}
+	return firstErr
+}
+
 // getModelDir return model directory
 func (mc *ModelCatalog) getModelDir() (string, bool) {
 	mc.theLock.Lock()
