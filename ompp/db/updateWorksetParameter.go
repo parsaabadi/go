@@ -89,7 +89,7 @@ func (meta *WorksetMeta) UpdateWorksetParameter(
 // It does update as part of transaction.
 //
 // If parameter already exist in workset then parameter metadata either merged or replaced.
-// If parameter not exist in workset then parameter values must be supplied, it cannobe empty.
+// If parameter not exist in workset then parameter values must be supplied, it cannot be empty.
 // If parameter not exist in workset then new parameter metadata and values inserted.
 // If list of new parameter values supplied then parameter values completely replaced.
 //
@@ -100,11 +100,11 @@ func doUpdateWorksetParameterMeta(
 ) (int, error) {
 
 	// find model parameter hId by name
-	i, ok := modelDef.ParamByName(param.Name)
+	idx, ok := modelDef.ParamByName(param.Name)
 	if !ok {
 		return 0, errors.New("model: " + modelDef.Model.Name + " parameter " + param.Name + " not found")
 	}
-	paramHid := modelDef.Param[i].ParamHid
+	paramHid := modelDef.Param[idx].ParamHid
 	spHid := strconv.Itoa(paramHid)
 
 	// "lock" workset to prevent update or use by the model

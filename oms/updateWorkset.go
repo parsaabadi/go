@@ -175,8 +175,75 @@ func (mc *ModelCatalog) DeleteWorkset(dn, wsn string) (bool, error) {
 	return true, nil
 }
 
-// UpdateWorksetParameter replace or merge parameter metadata into workset and replace parameter values from csv reader.
+// UpdateWorksetParameter replace or merge parameter metadata into workset and replace parameter values.
 func (mc *ModelCatalog) UpdateWorksetParameter(
+	isReplace bool, wp *db.WorksetPub, param *db.ParamRunSetPub, cArr []db.CellCodeParam,
+) (
+	bool, error) {
+
+	// if model digest-or-name or workset name is empty then return empty results
+	dn := wp.ModelDigest
+	if dn == "" {
+		dn = wp.ModelName
+	}
+	if dn == "" {
+		omppLog.Log("Warning: invalid (empty) model digest and name")
+		return false, nil
+	}
+	if wp.Name == "" {
+		omppLog.Log("Warning: invalid (empty) workset name")
+		return false, nil
+	}
+
+	// if model metadata not loaded then read it from database
+	idx, ok := mc.loadModelMeta(dn)
+	if !ok {
+		omppLog.Log("Error: model digest or name not found: ", dn)
+		return false, errors.New("Error: model digest or name not found: " + dn)
+	}
+
+	// lock catalog and update workset
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	// convert workset from "public" into db rows
+	wm, err := wp.FromPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
+	if err != nil {
+		omppLog.Log("Error at workset json conversion: ", dn, ": ", wp.Name, ": ", err.Error())
+		return false, err
+	}
+
+	// convert cell from emun codes to enum id's
+	var cell db.CellCodeParam
+	cvt, e := cell.CodeToIdCell(mc.modelLst[idx].meta, param.Name)
+	if e != nil {
+		return false, errors.New("Failed to create parameter cell value converter: " + param.Name + " : " + e.Error())
+	}
+
+	cLst := list.New()
+	for j := range cArr {
+		c, e := cvt(cArr[j])
+		if e != nil {
+			return false, errors.New("Failed to convert value of parameter: " + param.Name + " : " + e.Error())
+		}
+		cLst.PushBack(c)
+	}
+	if cLst.Len() <= 0 {
+		return false, errors.New("workset: " + wp.Name + " parameter empty: " + param.Name)
+	}
+
+	// update workset parameter metadata and parameter values
+	hId, err := wm.UpdateWorksetParameter(
+		mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, isReplace, param, cLst, mc.modelLst[idx].langMeta)
+	if err != nil {
+		omppLog.Log("Error at update workset: ", dn, ": ", wp.Name, ": ", err.Error())
+		return false, err
+	}
+	return hId > 0, nil // return success and true if parameter was found
+}
+
+// UpdateWorksetParameterCsv replace or merge parameter metadata into workset and replace parameter values from csv reader.
+func (mc *ModelCatalog) UpdateWorksetParameterCsv(
 	isReplace bool, wp *db.WorksetPub, param *db.ParamRunSetPub, csvRd *csv.Reader,
 ) (
 	bool, error) {
@@ -264,43 +331,6 @@ func (mc *ModelCatalog) UpdateWorksetParameter(
 	return hId > 0, nil // return success and true if parameter was found
 }
 
-// DeleteWorksetParameter do delete workset parameter metadata and values from database.
-func (mc *ModelCatalog) DeleteWorksetParameter(dn, wsn, name string) (bool, error) {
-
-	// if model digest-or-name or workset name is empty then return empty results
-	if dn == "" {
-		omppLog.Log("Warning: invalid (empty) model digest and name")
-		return false, nil
-	}
-	if wsn == "" {
-		omppLog.Log("Warning: invalid (empty) workset name")
-		return false, nil
-	}
-	if name == "" {
-		omppLog.Log("Warning: invalid (empty) workset parameter name")
-		return false, nil
-	}
-
-	// if model metadata not loaded then read it from database
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return false, nil // return empty result: model not found or error
-	}
-
-	// lock catalog and update workset
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	// delete workset from database
-	hId, err := db.DeleteWorksetParameter(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, wsn, name)
-	if err != nil {
-		omppLog.Log("Error at update workset: ", dn, ": ", wsn, ": ", err.Error())
-		return false, err
-	}
-	return hId > 0, nil // return success and true if parameter was found
-}
-
 // UpdateWorksetParameterPage merge "page" of parameter values into workset.
 // Parameter must be already in workset and identified by model digest-or-name, set name, parameter name.
 func (mc *ModelCatalog) UpdateWorksetParameterPage(dn, wsn, name string, cellLst *list.List) error {
@@ -363,6 +393,43 @@ func (mc *ModelCatalog) UpdateWorksetParameterPage(dn, wsn, name string, cellLst
 
 	// write parameter values
 	return db.WriteParameter(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, &layout, cellLst)
+}
+
+// DeleteWorksetParameter do delete workset parameter metadata and values from database.
+func (mc *ModelCatalog) DeleteWorksetParameter(dn, wsn, name string) (bool, error) {
+
+	// if model digest-or-name or workset name is empty then return empty results
+	if dn == "" {
+		omppLog.Log("Warning: invalid (empty) model digest and name")
+		return false, nil
+	}
+	if wsn == "" {
+		omppLog.Log("Warning: invalid (empty) workset name")
+		return false, nil
+	}
+	if name == "" {
+		omppLog.Log("Warning: invalid (empty) workset parameter name")
+		return false, nil
+	}
+
+	// if model metadata not loaded then read it from database
+	idx, ok := mc.loadModelMeta(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return false, nil // return empty result: model not found or error
+	}
+
+	// lock catalog and update workset
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	// delete workset from database
+	hId, err := db.DeleteWorksetParameter(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, wsn, name)
+	if err != nil {
+		omppLog.Log("Error at update workset: ", dn, ": ", wsn, ": ", err.Error())
+		return false, err
+	}
+	return hId > 0, nil // return success and true if parameter was found
 }
 
 // CopyParameterToWsFromRun copy parameter metadata and values into workset from model run.

@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/openmpp/go/ompp/db"
+	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // homeHandler is static pages handler for front-end UI served on web / root.
@@ -378,8 +379,12 @@ func worksetStatusHandler(w http.ResponseWriter, r *http.Request) {
 	dn := getRequestParam(r, "model")
 	wsn := getRequestParam(r, "set")
 
-	wst, _ := theCatalog.WorksetStatus(dn, wsn)
-	jsonResponse(w, r, wst)
+	wst, ok, notFound := theCatalog.WorksetStatus(dn, wsn)
+	if !ok && notFound {
+		omppLog.Log("Warning workset status not found: ", dn, ": ", wsn)
+	}
+
+	jsonResponse(w, r, wst) // return non-empty workset_lst row if no errors and workset exist
 }
 
 // worksetDefaultStatusHandler return workset_lst db row of default workset by model digest-or-name:

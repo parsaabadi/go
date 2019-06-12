@@ -55,6 +55,12 @@ type ParamRunSetPub struct {
 	Txt      []LangNote // parameter value notes by language
 }
 
+// ParamValuePub is "public" run or workset parameter metadata and values for json import-export.
+type ParamValuePub struct {
+	ParamRunSetPub                 // parameter metadata
+	Value          []CellCodeParam // parameter value(s)
+}
+
 // RunRow is model run row: run_lst table row.
 //
 // Run status: i=init p=progress s=success x=exit e=error(failed).
@@ -139,16 +145,27 @@ type WorksetMeta struct {
 	Param []worksetParam  // workset parameter: parameter_hid, sub-value count and workset_parameter_txt rows
 }
 
-// WorksetPub is "public" workset metadata for json import-export
+// WorksetHdrPub is "public" workset metadata for json import-export
+type WorksetHdrPub struct {
+	ModelName      string      // model name for that workset
+	ModelDigest    string      // model digest for that workset
+	Name           string      // workset name: set_name VARCHAR(255) NOT NULL
+	BaseRunDigest  string      // if not empty then digest of the base run
+	IsReadonly     bool        // readonly flag
+	UpdateDateTime string      // last update date-time
+	Txt            []DescrNote // workset text: description and notes by language
+}
+
+// WorksetPub is "public" workset metadata and parameter metadata for json import-export
 type WorksetPub struct {
-	ModelName      string           // model name for that workset
-	ModelDigest    string           // model digest for that workset
-	Name           string           // workset name: set_name VARCHAR(255) NOT NULL
-	BaseRunDigest  string           // if not empty then digest of the base run
-	IsReadonly     bool             // readonly flag
-	UpdateDateTime string           // last update date-time
-	Txt            []DescrNote      // workset text: description and notes by language
-	Param          []ParamRunSetPub // workset parameters: name and text (value notes by language)
+	WorksetHdrPub
+	Param []ParamRunSetPub // workset parameters: name and text (value notes by language)
+}
+
+// WorksetValuePub is "public" workset metadata, parameter metadata and values for json import-export
+type WorksetValuePub struct {
+	WorksetHdrPub
+	Param []ParamValuePub // workset parameters: name, text (value notes by language) and value
 }
 
 // WorksetRow is workset_lst table row.

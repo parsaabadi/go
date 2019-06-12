@@ -130,6 +130,83 @@ func worksetReadonlyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, r, ws)
 }
 
+// worksetCreateHandler creates new workset and append parameter(s) from json request:
+// PUT  /api/workset-create
+// POST /api/workset-create
+// Json keys: model digest or name and workset name.
+// If multiple models with same name exist then result is undefined, it is recommended to use model digest.
+// If workset with same name already exist for that model then return error.
+// Json content: workset "public" metadata and optioanl parameters list.
+// Workset and parameters "public" metadata expected to be same as return of GET /api/model/:model/workset/:set/text/all
+// Each parameter (if present) must contain "public" metadata and parameter values.
+// Parameter values json must include all values
+// and expected to be identical to output of read parameter "page": POST /api/model/:model/workset/:set/parameter/value
+// Dimension(s) and enum-based parameters expected to be enum codes, not enum id's.
+func worksetCreateHandler(w http.ResponseWriter, r *http.Request) {
+
+	// decode json workset "public" metadata
+	var wp db.WorksetValuePub
+	if !jsonRequestDecode(w, r, &wp) {
+		return // error at json decode, response done with http error
+	}
+	dn := wp.ModelDigest
+	if dn == "" {
+		dn = wp.ModelName
+	}
+	wsn := wp.Name
+
+	// return error if workset already exist or unable to get workset status
+	_, ok, notFound := theCatalog.WorksetStatus(dn, wsn)
+	if ok {
+		omppLog.Log("Error: workset already exist: " + wsn + " model: " + dn)
+		http.Error(w, "Error: workset already exist: "+wsn+" model: "+dn, http.StatusBadRequest)
+		return
+	}
+	if !notFound {
+		omppLog.Log("Failed to create workset: " + dn + " : " + wsn)
+		http.Error(w, "Failed to create workset: "+dn+" : "+wsn, http.StatusBadRequest)
+		return
+	}
+
+	// insert workset metadata with empty list of parameters and read-write status
+	newWp := db.WorksetPub{
+		WorksetHdrPub: db.WorksetHdrPub{
+			ModelName:      wp.ModelName,
+			ModelDigest:    wp.ModelDigest,
+			Name:           wp.Name,
+			BaseRunDigest:  wp.BaseRunDigest,
+			IsReadonly:     false,
+			UpdateDateTime: wp.UpdateDateTime,
+			Txt:            wp.Txt,
+		},
+		Param: []db.ParamRunSetPub{},
+	}
+
+	ok, _, err := theCatalog.UpdateWorkset(true, &newWp)
+	if err != nil {
+		http.Error(w, "Failed create workset metadata "+dn+" : "+wsn+" : "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if !ok {
+		http.Error(w, "Failed create workset metadata "+dn+" : "+wsn, http.StatusBadRequest)
+		return
+	}
+
+	// append parameters metadata and values, each parameter will be inserted in separate transaction
+	for k := range wp.Param {
+		if _, e := theCatalog.UpdateWorksetParameter(true, &newWp, &wp.Param[k].ParamRunSetPub, wp.Param[k].Value); e != nil {
+			http.Error(w, "Failed update workset parameter "+wsn+" : "+wp.Param[k].Name+" : "+e.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
+	// if required make workset read-only
+	if wp.IsReadonly {
+		theCatalog.UpdateWorksetReadonly(dn, wsn, wp.IsReadonly)
+	}
+	w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+wsn) // respond with workset location
+}
+
 // worksetReplaceHandler replace workset and all parameters from multipart-form:
 // PUT /api/workset-new
 // POST /api/workset-new
@@ -275,7 +352,7 @@ func worksetUpdateHandler(isReplace bool, w http.ResponseWriter, r *http.Request
 		rd := csv.NewReader(part)
 		rd.TrimLeadingSpace = true
 
-		_, err = theCatalog.UpdateWorksetParameter(isReplace, &newWp, &newParamLst[np], rd)
+		_, err = theCatalog.UpdateWorksetParameterCsv(isReplace, &newWp, &newParamLst[np], rd)
 		part.Close() // done with csv parameter data
 		if err != nil {
 			http.Error(w, "Failed update workset parameter "+wsn+" : "+name+" : "+err.Error(), http.StatusBadRequest)
@@ -292,7 +369,7 @@ func worksetUpdateHandler(isReplace bool, w http.ResponseWriter, r *http.Request
 		}
 
 		// update only parameter metadata
-		_, err = theCatalog.UpdateWorksetParameter(isReplace, &newWp, &newParamLst[k], nil)
+		_, err = theCatalog.UpdateWorksetParameterCsv(isReplace, &newWp, &newParamLst[k], nil)
 		if err != nil {
 			http.Error(w, "Failed update workset parameter "+wsn+" : "+newParamLst[k].Name+" : "+err.Error(), http.StatusBadRequest)
 			return

@@ -733,6 +733,11 @@ func apiUpdateRoutes(router *vestigo.Router) {
 	router.Post("/api/model/:model/workset/:set/readonly/:readonly", worksetReadonlyUpdateHandler, logRequest)
 	router.Post("/api/workset-readonly", worksetReadonlyUpdateHandler, logRequest)
 
+	// PUT  /api/workset-create
+	// POST /api/workset-create
+	router.Put("/api/workset-create", worksetCreateHandler, logRequest)
+	router.Post("/api/workset-create", worksetCreateHandler, logRequest)
+
 	// PUT  /api/workset-new
 	// POST /api/workset-new
 	router.Put("/api/workset-new", worksetReplaceHandler, logRequest)

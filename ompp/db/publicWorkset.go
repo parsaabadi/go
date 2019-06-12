@@ -19,13 +19,14 @@ func (meta *WorksetMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*Workset
 
 	// workset header
 	pub := WorksetPub{
-		ModelName:      modelDef.Model.Name,
-		ModelDigest:    modelDef.Model.Digest,
-		Name:           meta.Set.Name,
-		IsReadonly:     meta.Set.IsReadonly,
-		UpdateDateTime: meta.Set.UpdateDateTime,
-		Txt:            make([]DescrNote, len(meta.Txt)),
-		Param:          make([]ParamRunSetPub, len(meta.Param)),
+		WorksetHdrPub: WorksetHdrPub{
+			ModelName:      modelDef.Model.Name,
+			ModelDigest:    modelDef.Model.Digest,
+			Name:           meta.Set.Name,
+			IsReadonly:     meta.Set.IsReadonly,
+			UpdateDateTime: meta.Set.UpdateDateTime,
+			Txt:            make([]DescrNote, len(meta.Txt))},
+		Param: make([]ParamRunSetPub, len(meta.Param)),
 	}
 
 	// find base run digest by id, if workset based on run then base run id must be positive
