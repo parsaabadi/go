@@ -29,6 +29,7 @@ func allModelsRefreshHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Location", "/api/admin/all-models/refresh/"+modelDir)
+	w.Header().Set("Content-Type", "text/plain")
 }
 
 // allModelsCloseHandler clean models catalog: close all model.sqlite connections and clean models catalog
@@ -44,4 +45,5 @@ func allModelsCloseHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Location", "/api/admin/all-models/close/"+modelDir)
+	w.Header().Set("Content-Type", "text/plain")
 }

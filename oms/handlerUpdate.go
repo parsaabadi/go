@@ -38,6 +38,7 @@ func profileReplaceHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if ok {
 		w.Header().Set("Content-Location", "/api/model/"+dn+"/profile/"+pm.Name) // respond with model and profile location
+		w.Header().Set("Content-Type", "text/plain")
 	}
 }
 
@@ -58,6 +59,7 @@ func profileDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if ok {
 		w.Header().Set("Content-Location", "/api/model/"+dn+"/profile/"+profile)
+		w.Header().Set("Content-Type", "text/plain")
 	}
 }
 
@@ -79,6 +81,7 @@ func profileOptionReplaceHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if ok {
 		w.Header().Set("Content-Location", "/api/model/"+dn+"/profile/"+profile+"/key/"+key)
+		w.Header().Set("Content-Type", "text/plain")
 	}
 }
 
@@ -100,6 +103,7 @@ func profileOptionDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if ok {
 		w.Header().Set("Content-Location", "/api/model/"+dn+"/profile/"+profile+"/key/"+key)
+		w.Header().Set("Content-Type", "text/plain")
 	}
 }
 
@@ -205,6 +209,7 @@ func worksetCreateHandler(w http.ResponseWriter, r *http.Request) {
 		theCatalog.UpdateWorksetReadonly(dn, wsn, wp.IsReadonly)
 	}
 	w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+wsn) // respond with workset location
+	w.Header().Set("Content-Type", "text/plain")
 }
 
 // worksetReplaceHandler replace workset and all parameters from multipart-form:
@@ -382,6 +387,7 @@ func worksetUpdateHandler(isReplace bool, w http.ResponseWriter, r *http.Request
 	}
 
 	w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+wsn) // respond with workset location
+	w.Header().Set("Content-Type", "text/plain")
 }
 
 // worksetDeleteHandler delete workset and workset parameters:
@@ -402,6 +408,7 @@ func worksetDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if ok {
 		w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+wsn)
+		w.Header().Set("Content-Type", "text/plain")
 	}
 }
 
@@ -483,6 +490,7 @@ func doUpdateParameterPageHandler(w http.ResponseWriter, r *http.Request, isCode
 	}
 
 	w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+wsn+"/parameter/"+name) // respond with workset parameter location
+	w.Header().Set("Content-Type", "text/plain")
 }
 
 // worksetParameterDeleteHandler delete workset parameter:
@@ -504,6 +512,7 @@ func worksetParameterDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if ok {
 		w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+wsn+"/parameter/"+name)
+		w.Header().Set("Content-Type", "text/plain")
 	}
 }
 
@@ -530,6 +539,7 @@ func worksetParameterRunCopyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+wsn+"/parameter/"+name)
+	w.Header().Set("Content-Type", "text/plain")
 }
 
 // worksetParameterCopyFromWsHandler copy parameter from one workset to another:
@@ -554,6 +564,7 @@ func worksetParameterCopyFromWsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+dstWsName+"/parameter/"+name)
+	w.Header().Set("Content-Type", "text/plain")
 }
 
 // runDeleteHandler delete model run including output table values and run input parameters
@@ -576,6 +587,7 @@ func runDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if ok {
 		w.Header().Set("Content-Location", "/api/model/"+dn+"/run/"+rdsn)
+		w.Header().Set("Content-Type", "text/plain")
 	}
 }
 
@@ -603,6 +615,7 @@ func runTextMergeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if ok {
 		w.Header().Set("Content-Location", "/api/model/"+dn+"/run/"+rdsn)
+		w.Header().Set("Content-Type", "text/plain")
 	}
 }
 
@@ -627,6 +640,7 @@ func taskDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if ok {
 		w.Header().Set("Content-Location", "/api/model/"+dn+"/task/"+tn)
+		w.Header().Set("Content-Type", "text/plain")
 	}
 }
 
@@ -674,5 +688,6 @@ func taskDefUpdateHandler(w http.ResponseWriter, r *http.Request, isReplace bool
 	}
 	if ok {
 		w.Header().Set("Content-Location", "/api/model/"+dn+"/task/"+tn)
+		w.Header().Set("Content-Type", "text/plain")
 	}
 }
