@@ -24,4 +24,4 @@ If you want to use other database vendors (Microsoft SQL, MySQL, PostgreSQL, IBM
 go install -tags odbc github.com/openmpp/go/dbcopy
 ```
 
-Please visit our [wiki](http://www.openmpp.org/wiki/) for more information.
+Please visit our [wiki](http://www.openmpp.org/wiki/) for more information or e-mail to: openmpp dot org at gmail dot com.
