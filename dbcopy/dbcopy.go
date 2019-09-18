@@ -214,7 +214,7 @@ func mainBody(args []string) error {
 
 	// set dbcopy command line argument keys and ini-file keys
 	_ = flag.String(copyToArgKey, "text", "copy to: `text`=db-to-text, db=text-to-db, db2db=db-to-db, csv=db-to-csv, csv-1=db-to-csv-in-one")
-	_ = flag.Bool(deleteArgKey, false, "delete from database: model or workset (set of model input parameters) or model run")
+	_ = flag.Bool(deleteArgKey, false, "delete from database: model, workset (set of model input parameters), model run or modeling task")
 	_ = flag.String(modelNameArgKey, "", "model name")
 	_ = flag.String(modelNameShortKey, "", "model name (short of "+modelNameArgKey+")")
 	_ = flag.String(modelDigestArgKey, "", "model hash digest")
@@ -226,9 +226,9 @@ func mainBody(args []string) error {
 	_ = flag.String(taskNameArgKey, "", "modeling task name, if specified then copy only this modeling task data")
 	_ = flag.Int(taskIdArgKey, 0, "modeling task id, if specified then copy only this run modeling task data")
 	_ = flag.String(dbConnStrArgKey, "", "input database connection string")
-	_ = flag.String(dbDriverArgKey, db.SQLiteDbDriver, "input database driver name")
+	_ = flag.String(dbDriverArgKey, db.SQLiteDbDriver, "input database driver name: SQLite, odbc, sqlite3")
 	_ = flag.String(toDbConnStrArgKey, "", "output database connection string")
-	_ = flag.String(toDbDriverArgKey, db.SQLiteDbDriver, "output database driver name")
+	_ = flag.String(toDbDriverArgKey, db.SQLiteDbDriver, "output database driver name: SQLite, odbc, sqlite3")
 	_ = flag.String(inputDirArgKey, "", "input directory to read model .json and .csv files")
 	_ = flag.String(outputDirArgKey, "", "output directory for model .json and .csv files")
 	_ = flag.String(paramDirArgKey, "", "path to parameters directory (workset directory)")

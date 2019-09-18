@@ -71,6 +71,12 @@ func dbDeleteWorkset(trx *sql.Tx, setId int) error {
 		}
 	}
 
+	// delete workset from modeling tasks
+	err = TrxUpdate(trx, "DELETE FROM task_set WHERE set_id = "+sId)
+	if err != nil {
+		return err
+	}
+
 	// delete model workset metadata
 	err = TrxUpdate(trx, "DELETE FROM workset_parameter_txt WHERE set_id = "+sId)
 	if err != nil {

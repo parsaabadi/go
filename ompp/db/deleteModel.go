@@ -294,6 +294,13 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 	// delete model runs:
 	// delete run metadata
 	err = TrxUpdate(trx,
+		"DELETE FROM run_progress WHERE EXISTS"+
+			" (SELECT run_id FROM run_lst M WHERE M.run_id = run_progress.run_id AND M.model_id = "+smId+")")
+	if err != nil {
+		return err
+	}
+
+	err = TrxUpdate(trx,
 		"DELETE FROM run_table WHERE EXISTS"+
 			" (SELECT run_id FROM run_lst M WHERE M.run_id = run_table.run_id AND M.model_id = "+smId+")")
 	if err != nil {
