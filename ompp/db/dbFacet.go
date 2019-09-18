@@ -12,6 +12,10 @@ import (
 // Facet is type to define database provider and driver facets, ie: name of bigint type
 type Facet uint8
 
+// maxTableNameSize return max length of db table or view name.
+// Current max name sizes: PostgreSQL=63 MySQL=64 MSSQL=128 DB2=128 Oracle=128 (Oracle antiques not supported)
+const maxTableNameSize int = 63
+
 const (
 	DefaultFacet Facet = iota // common default db facet
 	SqliteFacet               // SQLite db facet
@@ -72,19 +76,6 @@ func (facet Facet) textType(len int) string {
 		}
 	}
 	return "VARCHAR(" + strconv.Itoa(len) + ")"
-}
-
-// maxTableNameSize return max length of db table or view name.
-func (facet Facet) maxTableNameSize() int {
-	switch facet {
-	case PgSqlFacet:
-		return 63
-	case OracleFacet:
-		return 30
-	}
-	// MySQL=64, MSSQL=128, DB2=128
-	// limit to 64 to create similar names for all db providers, except Oracle
-	return 64
 }
 
 // createTableIfNotExist return sql statement to create table if not exists

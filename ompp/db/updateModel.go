@@ -294,11 +294,11 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 
 			// update parameter values db table names, if empty or too long for current database
 			if modelDef.Param[idx].DbRunTable == "" ||
-				len(modelDef.Param[idx].DbRunTable) > dbFacet.maxTableNameSize() ||
+				len(modelDef.Param[idx].DbRunTable) > maxTableNameSize ||
 				modelDef.Param[idx].DbSetTable == "" ||
-				len(modelDef.Param[idx].DbSetTable) > dbFacet.maxTableNameSize() {
+				len(modelDef.Param[idx].DbSetTable) > maxTableNameSize {
 
-				p, s := makeDbTablePrefixSuffix(dbFacet, modelDef.Param[idx].Name, modelDef.Param[idx].Digest)
+				p, s := makeDbTablePrefixSuffix(modelDef.Param[idx].Name, modelDef.Param[idx].Digest)
 				modelDef.Param[idx].DbRunTable = p + "_p" + s
 				modelDef.Param[idx].DbSetTable = p + "_w" + s
 			}
@@ -448,11 +448,11 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 
 			// update output table values db table names, if empty or too long for current database
 			if modelDef.Table[idx].DbExprTable == "" ||
-				len(modelDef.Table[idx].DbExprTable) > dbFacet.maxTableNameSize() ||
+				len(modelDef.Table[idx].DbExprTable) > maxTableNameSize ||
 				modelDef.Table[idx].DbAccTable == "" ||
-				len(modelDef.Table[idx].DbAccTable) > dbFacet.maxTableNameSize() {
+				len(modelDef.Table[idx].DbAccTable) > maxTableNameSize {
 
-				p, s := makeDbTablePrefixSuffix(dbFacet, modelDef.Table[idx].Name, modelDef.Table[idx].Digest)
+				p, s := makeDbTablePrefixSuffix(modelDef.Table[idx].Name, modelDef.Table[idx].Digest)
 				modelDef.Table[idx].DbExprTable = p + "_v" + s
 				modelDef.Table[idx].DbAccTable = p + "_a" + s
 				modelDef.Table[idx].DbAccAllView = p + "_d" + s
@@ -766,19 +766,19 @@ func outTableCreateAccAllView(dbFacet Facet, meta *TableMeta) (string, error) {
 // db table name is: paramNameAsPrefix + _p + md5Suffix, for example: ageSex_p12345678abcdef
 // prefix based on parameter name or output table name
 // suffix is 32 chars of md5 or 8 chars of crc32
-// there is extra 2 chars: _p, _w, _v, _a in table name between prefix and suffix
-func makeDbTablePrefixSuffix(dbFacet Facet, name string, digest string) (string, string) {
+// there is extra 2 chars: _p, _w, _v, _a in table name between prefix and suffix.
+func makeDbTablePrefixSuffix(name string, digest string) (string, string) {
 
 	// if max size of db table name is too short then use crc32(md5) digest
-	// isCrc32Name := dbFacet.maxTableNameSize() < 50
-	isCrc32Name := true // always use short crc32 name suffix
+	// isCrc32Name := maxTableNameSize() < 50
+	isCrc32Name := true // 2016-08-17: always use short crc32 name suffix
 
 	dbSuffixSize := 32
 	if isCrc32Name {
 		dbSuffixSize = 8
 	}
 
-	dbPrefixSize := dbFacet.maxTableNameSize() - (2 + dbSuffixSize)
+	dbPrefixSize := maxTableNameSize - (2 + dbSuffixSize)
 	if dbPrefixSize < 2 {
 		dbPrefixSize = 2
 	}
