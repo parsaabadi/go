@@ -284,8 +284,8 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 				&r.DbExprTable, &r.DbAccTable, &r.DbAccAllView, &r.ExprPos); err != nil {
 				return err
 			}
-			r.IsSparse = nSparse != 0 // oracle: smallint is float64 (thank you, oracle)
-			r.IsUser = nUser != 0     // oracle: smallint is float64 (for my job is security)
+			r.IsSparse = nSparse != 0 // oracle: smallint is float64
+			r.IsUser = nUser != 0     // oracle: smallint is float64
 
 			meta.Table = append(meta.Table, TableMeta{TableDicRow: r})
 			return nil

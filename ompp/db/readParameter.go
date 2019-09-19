@@ -186,10 +186,9 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayout)
 	var nSub int
 	d := make([]int, param.Rank)
 	var v interface{}
-	var vb bool
 	var vs string
 	var vf sql.NullFloat64
-	var fc func(c *CellParam)
+	var fc func(c *CellParam) error
 	var scanBuf []interface{}
 
 	scanBuf = append(scanBuf, &nSub)
@@ -199,16 +198,62 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayout)
 
 	switch {
 	case param.typeOf.IsBool():
-		scanBuf = append(scanBuf, &vb)
-		fc = func(c *CellParam) { c.SubId = nSub; copy(c.DimIds, d); c.IsNull = false; c.Value = vb }
+		scanBuf = append(scanBuf, &v)
+		fc = func(c *CellParam) error {
+			c.SubId = nSub
+			copy(c.DimIds, d)
+			c.IsNull = false // logical parameter expected to be NOT NULL
+			is := false
+			switch vn := v.(type) {
+			case nil: // 2018: unexpected today, may be in the future
+				is = false
+				c.IsNull = true
+			case bool:
+				is = vn
+			case int64:
+				is = vn != 0
+			case uint64:
+				is = vn != 0
+			case int32:
+				is = vn != 0
+			case uint32:
+				is = vn != 0
+			case int16:
+				is = vn != 0
+			case uint16:
+				is = vn != 0
+			case int8:
+				is = vn != 0
+			case uint8:
+				is = vn != 0
+			case uint:
+				is = vn != 0
+			case float32: // oracle (very unlikely)
+				is = vn != 0.0
+			case float64: // oracle (often)
+				is = vn != 0.0
+			case int:
+				is = vn != 0
+			default:
+				return errors.New("invalid parameter value type, expected: integer")
+			}
+			c.Value = is
+			return nil
+		}
 
 	case param.typeOf.IsString():
 		scanBuf = append(scanBuf, &vs)
-		fc = func(c *CellParam) { c.SubId = nSub; copy(c.DimIds, d); c.IsNull = false; c.Value = vs }
+		fc = func(c *CellParam) error {
+			c.SubId = nSub
+			copy(c.DimIds, d)
+			c.IsNull = false
+			c.Value = vs
+			return nil
+		}
 
 	case param.typeOf.IsFloat():
 		scanBuf = append(scanBuf, &vf)
-		fc = func(c *CellParam) {
+		fc = func(c *CellParam) error {
 			c.SubId = nSub
 			copy(c.DimIds, d)
 			c.IsNull = !vf.Valid
@@ -216,11 +261,12 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayout)
 			if !c.IsNull {
 				c.Value = vf.Float64
 			}
+			return nil
 		}
 
 	default:
 		scanBuf = append(scanBuf, &v)
-		fc = func(c *CellParam) { c.SubId = nSub; copy(c.DimIds, d); c.IsNull = false; c.Value = v }
+		fc = func(c *CellParam) error { c.SubId = nSub; copy(c.DimIds, d); c.IsNull = false; c.Value = v; return nil }
 	}
 
 	// select parameter cells: (sub id, dimension(s) enum ids, parameter value)
@@ -231,7 +277,9 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayout)
 			}
 			// make new cell from conversion buffer
 			var c = CellParam{cellValue: cellValue{DimIds: make([]int, param.Rank)}}
-			fc(&c)
+			if e := fc(&c); e != nil {
+				return nil, e
+			}
 			return c, nil
 		})
 	if err != nil {
