@@ -52,6 +52,7 @@ type RunPub struct {
 type ParamRunSetPub struct {
 	Name     string     // parameter name
 	SubCount int        // number of parameter sub-values
+	DefaultSubId int    // default sub-value id for that parameter workset
 	Txt      []LangNote // parameter value notes by language
 }
 
@@ -180,9 +181,10 @@ type WorksetRow struct {
 
 // WorksetParam is a holder for workset parameter Hid, sub-value count and workset_parameter_txt rows
 type worksetParam struct {
-	ParamHid int                  // parameter_hid INT NOT NULL
-	SubCount int                  // number of parameter sub-values
-	Txt      []WorksetParamTxtRow // workset_parameter_txt table rows
+	ParamHid     int                  // parameter_hid INT NOT NULL
+	SubCount     int                  // number of parameter sub-values
+	DefaultSubId int                  // default sub-value id for that parameter workset
+	Txt          []WorksetParamTxtRow // workset_parameter_txt table rows
 }
 
 // WorksetTxtRow is db row of workset_txt

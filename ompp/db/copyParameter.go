@@ -179,10 +179,10 @@ func dbCopyParameterFromRun(trx *sql.Tx, wst *WorksetRow, pm *ParamMeta, rst *Ru
 		return errors.New("failed to copy, model run not found or invalid base run id: " + rst.Name + ": " + pm.Name)
 	}
 
-	// add parameter to the list of workset parameters
+	// add parameter to the list of workset parameters, run parameters default_sub_id always =0
 	err = TrxUpdate(trx,
-		"INSERT INTO workset_parameter (set_id, parameter_hid, sub_count)"+
-			" SELECT "+sDstId+", parameter_hid, sub_count"+
+		"INSERT INTO workset_parameter (set_id, parameter_hid, sub_count, default_sub_id)"+
+			" SELECT "+sDstId+", parameter_hid, sub_count, 0"+
 			" FROM run_parameter"+
 			" WHERE run_id = "+srId+" AND parameter_hid = "+sHid)
 	if err != nil {
@@ -346,15 +346,16 @@ func dbCopyParameterFromWorkset(trx *sql.Tx, srcWs *WorksetRow, pm *ParamMeta, d
 	}
 
 	// add parameter to the list of destination workset parameters
+	// for run parameters default_sub_id is always =0
 	q := ""
 	if isFromRun {
-		q = "INSERT INTO workset_parameter (set_id, parameter_hid, sub_count)" +
-			" SELECT " + sDstId + ", parameter_hid, sub_count" +
+		q = "INSERT INTO workset_parameter (set_id, parameter_hid, sub_count, default_sub_id)" +
+			" SELECT " + sDstId + ", parameter_hid, sub_count, 0" +
 			" FROM run_parameter" +
 			" WHERE run_id = " + sBaseId + " AND parameter_hid = " + sHid
 	} else {
-		q = "INSERT INTO workset_parameter (set_id, parameter_hid, sub_count)" +
-			" SELECT " + sDstId + ", parameter_hid, sub_count" +
+		q = "INSERT INTO workset_parameter (set_id, parameter_hid, sub_count, default_sub_id)" +
+			" SELECT " + sDstId + ", parameter_hid, sub_count, default_sub_id" +
 			" FROM workset_parameter" +
 			" WHERE set_id = " + sSrcId + " AND parameter_hid = " + sHid
 	}

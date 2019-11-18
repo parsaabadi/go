@@ -442,7 +442,7 @@ func apiGetRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/workset-list/text/lang/:lang", worksetListTextHandler, logRequest)
 	router.Get("/api/workset-list-text", worksetListTextHandler, logRequest)
 
-	// GET /api/model/:model/workset/:set
+	// GET /api/model/:model/workset/:set/status
 	// GET /api/workset-status?model=modelNameOrDigest&set=setName
 	router.Get("/api/model/:model/workset/:set/status", worksetStatusHandler, logRequest)
 	router.Get("/api/workset-status", worksetStatusHandler, logRequest)

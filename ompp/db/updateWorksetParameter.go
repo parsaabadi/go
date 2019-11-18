@@ -144,7 +144,8 @@ func doUpdateWorksetParameterMeta(
 
 	if isData {
 		err = TrxUpdate(trx, "UPDATE workset_parameter"+
-			" SET sub_count = "+strconv.Itoa(param.SubCount)+
+			" SET sub_count = "+strconv.Itoa(param.SubCount)+","+
+			" default_sub_id = "+strconv.Itoa(param.DefaultSubId)+
 			" WHERE set_id = "+sId+" AND parameter_hid = "+spHid)
 	} else {
 		err = TrxUpdate(trx, "UPDATE workset_parameter"+
@@ -181,8 +182,8 @@ func doUpdateWorksetParameterMeta(
 		// parameter not exist in workset: do insert
 		if !isParamExist {
 			err = TrxUpdate(trx,
-				"INSERT INTO workset_parameter (set_id, parameter_hid, sub_count) VALUES ("+
-					sId+", "+spHid+", "+strconv.Itoa(param.SubCount)+")")
+				"INSERT INTO workset_parameter (set_id, parameter_hid, sub_count, default_sub_id) VALUES ("+
+					sId+", "+spHid+", "+strconv.Itoa(param.SubCount)+", "+strconv.Itoa(param.DefaultSubId)+")")
 			if err != nil {
 				return 0, err
 			}
@@ -199,8 +200,8 @@ func doUpdateWorksetParameterMeta(
 			return 0, err
 		}
 		err = TrxUpdate(trx,
-			"INSERT INTO workset_parameter (set_id, parameter_hid, sub_count) VALUES ("+
-				sId+", "+spHid+", "+strconv.Itoa(param.SubCount)+")")
+			"INSERT INTO workset_parameter (set_id, parameter_hid, sub_count, default_sub_id) VALUES ("+
+				sId+", "+spHid+", "+strconv.Itoa(param.SubCount)+", "+strconv.Itoa(param.DefaultSubId)+")")
 		if err != nil {
 			return 0, err
 		}

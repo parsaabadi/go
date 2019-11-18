@@ -58,9 +58,10 @@ func (meta *WorksetMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*Workset
 		}
 
 		pub.Param[k] = ParamRunSetPub{
-			Name:     modelDef.Param[idx].Name,
-			SubCount: meta.Param[k].SubCount,
-			Txt:      make([]LangNote, len(meta.Param[k].Txt)),
+			Name:         modelDef.Param[idx].Name,
+			SubCount:     meta.Param[k].SubCount,
+			DefaultSubId: meta.Param[k].DefaultSubId,
+			Txt:          make([]LangNote, len(meta.Param[k].Txt)),
 		}
 		for j := range meta.Param[k].Txt {
 			pub.Param[k].Txt[j] = LangNote{
@@ -136,6 +137,7 @@ func (pub *WorksetPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*Workset
 		}
 		ws.Param[k].ParamHid = modelDef.Param[idx].ParamHid
 		ws.Param[k].SubCount = pub.Param[k].SubCount
+		ws.Param[k].DefaultSubId = pub.Param[k].DefaultSubId
 
 		// workset parameter value notes, use set id default zero
 		if len(pub.Param[k].Txt) > 0 {

@@ -123,7 +123,7 @@ func toWorksetListCsv(
 	}
 
 	// write workset parameter rows into csv
-	row = make([]string, 3)
+	row = make([]string, 4)
 
 	idx = 0
 	j = 0
@@ -131,7 +131,7 @@ func toWorksetListCsv(
 		outDir,
 		"workset_parameter.csv",
 		isWriteUtf8bom,
-		[]string{"set_id", "parameter_hid", "sub_count"},
+		[]string{"set_id", "parameter_hid", "sub_count", "default_sub_id"},
 		func() (bool, []string, error) {
 
 			if idx < 0 || idx >= len(wl) { // end of workset rows
@@ -156,6 +156,7 @@ func toWorksetListCsv(
 			row[0] = strconv.Itoa(wl[idx].Set.SetId)
 			row[1] = strconv.Itoa(wl[idx].Param[j].ParamHid)
 			row[2] = strconv.Itoa(wl[idx].Param[j].SubCount)
+			row[3] = strconv.Itoa(wl[idx].Param[j].DefaultSubId)
 			j++
 			return false, row, nil
 		})

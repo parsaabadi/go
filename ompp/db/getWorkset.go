@@ -248,10 +248,11 @@ func GetWorksetRunIds(dbConn *sql.DB, setId int) ([]int, error) {
 	return idRs, nil
 }
 
-// GetWorksetParamList return Hid and sub-values count of all parameters included in that workset (parameter_hid, sub_count).
+// GetWorksetParamList return Hid and sub-values count for all parameters included in that workset:
+// SELECT parameter_hid, sub_count, default_sub_id FROM workset_parameter
 func GetWorksetParamList(dbConn *sql.DB, setId int) ([]int, []int, error) {
 
-	var hRs, nRs []int
+	var hidRs, countRs []int
 
 	err := SelectRows(dbConn,
 		"SELECT parameter_hid, sub_count FROM workset_parameter WHERE set_id = "+strconv.Itoa(setId)+" ORDER BY 1",
@@ -260,14 +261,14 @@ func GetWorksetParamList(dbConn *sql.DB, setId int) ([]int, []int, error) {
 			if err := rows.Scan(&h, &n); err != nil {
 				return err
 			}
-			hRs = append(hRs, h)
-			nRs = append(nRs, n)
+			hidRs = append(hidRs, h)
+			countRs = append(countRs, n)
 			return nil
 		})
 	if err != nil && err != sql.ErrNoRows {
 		return nil, nil, err
 	}
-	return hRs, nRs, nil
+	return hidRs, countRs, nil
 }
 
 // GetWorksetParamText return parameter value notes: workset_parameter_txt table rows.
@@ -368,7 +369,7 @@ func GetWorksetFull(dbConn *sql.DB, setRow *WorksetRow, langCode string) (*Works
 	ws.Txt = setTxtRs
 
 	// workset_parameter: select list of parameters Hid
-	q = "SELECT M.parameter_hid, sub_count" +
+	q = "SELECT M.parameter_hid, sub_count, default_sub_id" +
 		" FROM workset_parameter M" +
 		" INNER JOIN workset_lst H ON (H.set_id = M.set_id)" +
 		" WHERE H.set_id = " + strconv.Itoa(setRow.SetId) +
@@ -378,12 +379,12 @@ func GetWorksetFull(dbConn *sql.DB, setRow *WorksetRow, langCode string) (*Works
 	err = SelectRows(dbConn, q,
 		func(rows *sql.Rows) error {
 
-			var hId, nSub int
-			err := rows.Scan(&hId, &nSub)
+			var hId, nSub, defId int
+			err := rows.Scan(&hId, &nSub, &defId)
 			if err != nil {
 				return err
 			}
-			r := worksetParam{ParamHid: hId, SubCount: nSub}
+			r := worksetParam{ParamHid: hId, SubCount: nSub, DefaultSubId: defId}
 
 			hi[hId] = len(ws.Param) // index of parameter Hid in parameter list
 			ws.Param = append(ws.Param, r)
@@ -464,22 +465,22 @@ func GetWorksetFullList(dbConn *sql.DB, modelId int, isReadonly bool, langCode s
 	}
 
 	// workset_parameter: select using Hid
-	q = "SELECT H.set_id, M.parameter_hid, M.sub_count" +
+	q = "SELECT H.set_id, M.parameter_hid, M.sub_count, M.default_sub_id" +
 		" FROM workset_parameter M" +
 		" INNER JOIN workset_lst H ON (H.set_id = M.set_id)" +
 		" WHERE H.model_id = " + smId +
 		roFilter +
 		" ORDER BY 1, 2"
 
-	var ps [][3]int // pair of (set id, parameter hId, sub-value count)
+	var ps [][4]int // array of (set id, parameter hId, sub-value count, default_sub_id)
 
 	err = SelectRows(dbConn, q,
 		func(rows *sql.Rows) error {
-			var setId, hId, nSub int
-			if err := rows.Scan(&setId, &hId, &nSub); err != nil {
+			var setId, hId, nSub, defId int
+			if err := rows.Scan(&setId, &hId, &nSub, &defId); err != nil {
 				return err
 			}
-			ps = append(ps, [3]int{setId, hId, nSub})
+			ps = append(ps, [4]int{setId, hId, nSub, defId})
 			return nil
 		})
 	if err != nil {
@@ -522,7 +523,9 @@ func GetWorksetFullList(dbConn *sql.DB, modelId int, isReadonly bool, langCode s
 	// workset parameters: append parameters to coresponding workset
 	for k := range ps {
 		if i, ok := m[ps[k][0]]; ok {
-			wl[i].Param = append(wl[i].Param, worksetParam{ParamHid: ps[k][1], SubCount: ps[k][2]})
+			wl[i].Param = append(
+				wl[i].Param,
+				worksetParam{ParamHid: ps[k][1], SubCount: ps[k][2], DefaultSubId: ps[k][3]})
 		}
 	}
 
