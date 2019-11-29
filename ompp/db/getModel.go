@@ -141,7 +141,13 @@ func GetModelById(dbConn *sql.DB, modelId int) (*ModelMeta, error) {
 func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 
 	// select db rows from type_dic join to model_type_dic
-	meta := &ModelMeta{Model: *modelRow}
+	meta := &ModelMeta{
+		Model: *modelRow,
+		Type:  []TypeMeta{},
+		Param: []ParamMeta{},
+		Table: []TableMeta{},
+		Group: []GroupMeta{},
+	}
 	smId := strconv.Itoa(meta.Model.ModelId)
 
 	err := SelectRows(dbConn,
@@ -386,6 +392,77 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 		})
 	if err != nil {
 		return nil, err
+	}
+
+	// select db rows from group_lst
+	err = SelectRows(dbConn,
+		"SELECT"+
+			" model_id, group_id, is_parameter, group_name, is_hidden"+
+			" FROM group_lst"+
+			" WHERE model_id = "+smId+
+			" ORDER BY 1, 2",
+		func(rows *sql.Rows) error {
+			var r GroupLstRow
+			nParam := 0
+			nHidden := 0
+			if err := rows.Scan(
+				&r.ModelId, &r.GroupId, &nParam, &r.Name, &nHidden); err != nil {
+				return err
+			}
+			r.IsParam = nParam != 0   // oracle: smallint is float64
+			r.IsHidden = nHidden != 0 // oracle: smallint is float64
+			meta.Group = append(meta.Group,
+				GroupMeta{GroupLstRow: r, GroupPc: []GroupPcRow{}})
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	// select db rows from group_pc and append it as a child of group_lst row
+	if grpCount := len(meta.Group); grpCount > 0 {
+		nGrp := 0
+		err = SelectRows(dbConn,
+			"SELECT"+
+				" model_id, group_id, child_pos, child_group_id, leaf_id"+
+				" FROM group_pc"+
+				" WHERE model_id = "+smId+
+				" ORDER BY 1, 2, 3",
+			func(rows *sql.Rows) error {
+				var r GroupPcRow
+				var cgId, leafId sql.NullInt64
+				if err := rows.Scan(
+					&r.ModelId, &r.GroupId, &r.ChildPos, &cgId, &leafId); err != nil {
+					return err
+				}
+				if cgId.Valid {
+					r.ChildGroupId = int(cgId.Int64)
+				} else {
+					r.ChildGroupId = -1
+				}
+				if leafId.Valid {
+					r.ChildLeafId = int(leafId.Int64)
+				} else {
+					r.ChildLeafId = -1
+				}
+
+				// if parent group id not the same then find next parent gropu index
+				if nGrp < grpCount && r.GroupId != meta.Group[nGrp].GroupId {
+					for ; nGrp < grpCount; nGrp++ {
+						if r.GroupId == meta.Group[nGrp].GroupId {
+							break
+						}
+					}
+				}
+				// append to parent group, if exist
+				if nGrp < grpCount {
+					meta.Group[nGrp].GroupPc = append(meta.Group[nGrp].GroupPc, r)
+				}
+				return nil
+			})
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// update internal members used to link arrays to each other and simplify search:

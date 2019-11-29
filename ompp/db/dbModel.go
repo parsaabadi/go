@@ -39,6 +39,23 @@ type ModelMeta struct {
 	Type  []TypeMeta  // types metadata: type name and enums
 	Param []ParamMeta // parameters metadata: parameter name, type, dimensions
 	Table []TableMeta // output tables metadata: table name, dimensions, accumulators, expressions
+	Group []GroupMeta // groups of parameters or output tables
+}
+
+// ModelTxtMeta is language-specific portion of model metadata db rows.
+type ModelTxtMeta struct {
+	ModelName    string            // model name for text metadata
+	ModelDigest  string            // model digest for text metadata
+	ModelTxt     []ModelTxtRow     // model text rows: model_dic_txt
+	TypeTxt      []TypeTxtRow      // model type text rows: type_dic_txt join to model_type_dic
+	TypeEnumTxt  []TypeEnumTxtRow  // type enum text rows: type_enum_txt join to model_type_dic
+	ParamTxt     []ParamTxtRow     // model parameter text rows: parameter_dic_txt join to model_parameter_dic
+	ParamDimsTxt []ParamDimsTxtRow // parameter dimension text rows: parameter_dims_txt join to model_parameter_dic
+	TableTxt     []TableTxtRow     // model output table text rows: table_dic_txt join to model_table_dic
+	TableDimsTxt []TableDimsTxtRow // output table dimension text rows: table_dims_txt join to model_table_dic
+	TableAccTxt  []TableAccTxtRow  // output table accumulator text rows: table_acc_txt join to model_table_dic
+	TableExprTxt []TableExprTxtRow // output table expression text rows: table_expr_txt join to model_table_dic
+	GroupTxt     []GroupTxtRow     // group text rows: group_txt
 }
 
 // TypeMeta is type metadata: type name and enums
@@ -62,21 +79,6 @@ type TableMeta struct {
 	Acc         []TableAccRow  // output table accumulator rows: table_acc join to model_table_dic
 	Expr        []TableExprRow // output table expression rows: table_expr join to model_table_dic
 	sizeOf      int            // db row count calculated as dimension(s) size product
-}
-
-// ModelTxtMeta is language-specific portion of model metadata db rows.
-type ModelTxtMeta struct {
-	ModelName    string            // model name for text metadata
-	ModelDigest  string            // model digest for text metadata
-	ModelTxt     []ModelTxtRow     // model text rows: model_dic_txt
-	TypeTxt      []TypeTxtRow      // model type text rows: type_dic_txt join to model_type_dic
-	TypeEnumTxt  []TypeEnumTxtRow  // type enum text rows: type_enum_txt join to model_type_dic
-	ParamTxt     []ParamTxtRow     // model parameter text rows: parameter_dic_txt join to model_parameter_dic
-	ParamDimsTxt []ParamDimsTxtRow // parameter dimension text rows: parameter_dims_txt join to model_parameter_dic
-	TableTxt     []TableTxtRow     // model output table text rows: table_dic_txt join to model_table_dic
-	TableDimsTxt []TableDimsTxtRow // output table dimension text rows: table_dims_txt join to model_table_dic
-	TableAccTxt  []TableAccTxtRow  // output table accumulator text rows: table_acc_txt join to model_table_dic
-	TableExprTxt []TableExprTxtRow // output table expression text rows: table_expr_txt join to model_table_dic
 }
 
 // ModelWordMeta is language-specific model_word db rows.
@@ -342,30 +344,11 @@ type TableExprTxtRow struct {
 	Note     string // note           VARCHAR(32000)
 }
 
-// GroupMeta is db rows to describe parent-child groups of model parameters and output tables.
+// GroupMeta is db rows to describe parent-child group of parameters or output tables,
+// it is join of group_lst to group_pc
 type GroupMeta struct {
-	ModelName   string        // model name for group metadata
-	ModelDigest string        // model digest for group metadata
-	GroupLst    []GroupLstRow // parameters or output tables group rows: group_lst
-	GroupPc     []GroupPcRow  // group parent-child relationship rows: group_pc
-	GroupTxt    []GroupTxtRow // group text rows: group_txt
-}
-
-// GroupLstPub is "public" model groups metadata for json import-export
-type GroupLstPub struct {
-	ModelName   string       // model name for that run
-	ModelDigest string       // model digest for that run
-	Group       []GroupPub   // group and group text: group_lst row and and group_txt rows
-	Pc          []GroupPcPub // groups parent-child hierarchy
-}
-
-// GroupPub is "public" model groups metadata for json import-export
-type GroupPub struct {
-	GroupId  int         // group_id     INT          NOT NULL
-	IsParam  bool        // is_parameter SMALLINT     NOT NULL, -- if <> 0 then parameter group else output table group
-	Name     string      // group_name   VARCHAR(255) NOT NULL
-	IsHidden bool        // is_hidden    SMALLINT     NOT NULL
-	Txt      []DescrNote // group text: description and notes by language
+	GroupLstRow              // parameters or output tables group rows: group_lst
+	GroupPc     []GroupPcRow // group parent-child relationship rows: group_pc
 }
 
 // GroupLstRow is db row of group_lst table
@@ -379,12 +362,7 @@ type GroupLstRow struct {
 
 // GroupPcRow is db row of group_pc table
 type GroupPcRow struct {
-	ModelId    int // model_id       INT NOT NULL
-	GroupPcPub     // "public" part of group_pc db row
-}
-
-// GroupPcPub is "public" part of group_pc db row
-type GroupPcPub struct {
+	ModelId      int // model_id       INT NOT NULL
 	GroupId      int // group_id       INT NOT NULL
 	ChildPos     int // child_pos      INT NOT NULL
 	ChildGroupId int // child_group_id INT NULL, -- if not NULL then id of child group

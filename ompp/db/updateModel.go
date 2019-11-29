@@ -13,48 +13,48 @@ import (
 	"github.com/openmpp/go/ompp/helper"
 )
 
-// UpdateModel insert new model metadata in database.
+// UpdateModel insert new model metadata in database, return true if model inserted or false if already exist.
 //
-// If model with same digest already exist then call simply existing model metadata (no changes made in database).
+// If model with same digest already exist then call simply return existing model metadata (no changes made in database).
 // Parameters and output tables Hid's and db table names updated with actual database values
 // If new model inserted then modelDef updated with actual id's (model id, parameter Hid...)
 // If parameter (output table) not exist then create db tables for parameter values (output table values)
 // If db table names is "" empty then make db table names for parameter values (output table values)
-func UpdateModel(dbConn *sql.DB, dbFacet Facet, modelDef *ModelMeta) error {
+func UpdateModel(dbConn *sql.DB, dbFacet Facet, modelDef *ModelMeta) (bool, error) {
 
 	// validate parameters
 	if modelDef == nil {
-		return errors.New("invalid (empty) model metadata")
+		return false, errors.New("invalid (empty) model metadata")
 	}
 	if modelDef.Model.Name == "" || modelDef.Model.Digest == "" {
-		return errors.New("invalid (empty) model name or model digest")
+		return false, errors.New("invalid (empty) model name or model digest")
 	}
 
 	// check if model already exist
 	isExist, mId, err := GetModelId(dbConn, "", modelDef.Model.Digest)
 	if err != nil {
-		return err
+		return isExist, err
 	}
 	if isExist {
 		md, err := GetModelById(dbConn, mId) // read existing model definition
 		if err != nil {
-			return err
+			return isExist, err
 		}
 		*modelDef = *md
-		return err
+		return isExist, err
 	}
 	// else
 	// model not exist: do insert and update in transaction scope
 	trx, err := dbConn.Begin()
 	if err != nil {
-		return err
+		return isExist, err
 	}
 	if err = doInsertModel(trx, dbFacet, modelDef); err != nil {
 		trx.Rollback()
-		return err
+		return isExist, err
 	}
 	trx.Commit()
-	return nil
+	return isExist, nil
 }
 
 // doInsertModel insert new existing model metadata in database.
@@ -597,6 +597,83 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 				" )")
 		if err != nil {
 			return err
+		}
+	}
+
+	// for all groups of parameters or output tables check constarints: group id is unique and group name is unique
+	grpIdCounts := make(map[int]int)
+	grpNameCounts := make(map[string]int)
+	for idx := range modelDef.Group {
+		if _, isExist := grpNameCounts[modelDef.Group[idx].Name]; !isExist {
+			grpNameCounts[modelDef.Group[idx].Name] = 1
+		} else {
+			return errors.New("invalid (duplicate) group name: " + modelDef.Group[idx].Name)
+		}
+		if _, isExist := grpIdCounts[modelDef.Group[idx].GroupId]; !isExist {
+			grpIdCounts[modelDef.Group[idx].GroupId] = 1
+		} else {
+			return errors.New("invalid (duplicate) group id: " + strconv.Itoa(modelDef.Group[idx].GroupId))
+		}
+	}
+
+	// for each group of parameters or output tables:
+	// insert into group_lst table and child rows into group_pc table
+	// update model_id with actual db value
+	// update group_id of group_pc row with parent group_id value (overwrite group_pc.group_id)
+	for idx := range modelDef.Group {
+
+		modelDef.Group[idx].ModelId = modelDef.Model.ModelId // update model id with db value
+		sGrpId := strconv.Itoa(modelDef.Group[idx].GroupId)
+
+		// INSERT INTO group_lst
+		//   (model_id, group_id, is_parameter, group_name, is_hidden)
+		// VALUES
+		//   (1234, 4, 1, 'Geo_group', 0)
+		err = TrxUpdate(trx,
+			"INSERT INTO group_lst"+
+				" (model_id, group_id, is_parameter, group_name, is_hidden)"+
+				" VALUES ("+
+				smId+", "+
+				sGrpId+", "+
+				toBoolSqlConst(modelDef.Group[idx].IsParam)+", "+
+				toQuotedMax(modelDef.Group[idx].Name, nameDbMax)+", "+
+				toBoolSqlConst(modelDef.Group[idx].IsHidden)+")")
+		if err != nil {
+			return err
+		}
+
+		// convert id to string or return "NULL" if id is negative
+		idOrNullIfNegative := func(id int) string {
+			if id < 0 {
+				return "NULL"
+			}
+			return strconv.Itoa(id)
+		}
+
+		// insert child rows into group_pc table
+		for pcIdx := range modelDef.Group[idx].GroupPc {
+
+			modelDef.Group[idx].GroupPc[pcIdx].GroupId = modelDef.Group[idx].GroupId // update group id with parent group id value
+
+			// insert group members rows into group_pc
+			// if child group id < 0 or leaf id < then treat it as NULL value
+			//
+			// INSERT INTO group_pc
+			//   (model_id, group_id, is_parameter, group_name, is_hidden)
+			// VALUES
+			//   (1234, 4, 1, 'Geo_group', 0)
+			err = TrxUpdate(trx,
+				"INSERT INTO group_pc"+
+					" (model_id, group_id, child_pos, child_group_id, leaf_id)"+
+					" VALUES ("+
+					smId+", "+
+					sGrpId+", "+
+					strconv.Itoa(modelDef.Group[idx].GroupPc[pcIdx].ChildPos)+", "+
+					idOrNullIfNegative(modelDef.Group[idx].GroupPc[pcIdx].ChildGroupId)+", "+
+					idOrNullIfNegative(modelDef.Group[idx].GroupPc[pcIdx].ChildLeafId)+")")
+			if err != nil {
+				return err
+			}
 		}
 	}
 

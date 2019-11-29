@@ -53,7 +53,17 @@ func GetModelTextById(dbConn *sql.DB, modelId int, langCode string) ([]ModelTxtR
 func GetModelText(dbConn *sql.DB, modelId int, langCode string) (*ModelTxtMeta, error) {
 
 	// select model name and digest by id
-	meta := &ModelTxtMeta{}
+	meta := &ModelTxtMeta{
+		ModelTxt:     []ModelTxtRow{},
+		TypeTxt:      []TypeTxtRow{},
+		TypeEnumTxt:  []TypeEnumTxtRow{},
+		ParamTxt:     []ParamTxtRow{},
+		ParamDimsTxt: []ParamDimsTxtRow{},
+		TableTxt:     []TableTxtRow{},
+		TableDimsTxt: []TableDimsTxtRow{},
+		TableAccTxt:  []TableAccTxtRow{},
+		TableExprTxt: []TableExprTxtRow{},
+		GroupTxt:     []GroupTxtRow{}}
 
 	err := SelectFirst(dbConn,
 		"SELECT model_name, model_digest FROM model_dic WHERE model_id = "+strconv.Itoa(modelId),
@@ -313,6 +323,32 @@ func GetModelText(dbConn *sql.DB, modelId int, langCode string) (*ModelTxtMeta, 
 				r.Note = note.String
 			}
 			meta.TableExprTxt = append(meta.TableExprTxt, r)
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	// select db rows from group_txt
+	err = SelectRows(dbConn,
+		"SELECT"+
+			" M.model_id, M.group_id, M.lang_id, L.lang_code, M.descr, M.note"+
+			" FROM group_txt M"+
+			" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)"+
+			where+
+			" ORDER BY 1, 2, 3",
+		func(rows *sql.Rows) error {
+			var r GroupTxtRow
+			var lId int
+			var note sql.NullString
+			if err := rows.Scan(
+				&r.ModelId, &r.GroupId, &lId, &r.LangCode, &r.Descr, &note); err != nil {
+				return err
+			}
+			if note.Valid {
+				r.Note = note.String
+			}
+			meta.GroupTxt = append(meta.GroupTxt, r)
 			return nil
 		})
 	if err != nil {

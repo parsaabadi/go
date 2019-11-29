@@ -92,12 +92,6 @@ func copyDbToDb(
 		return err
 	}
 
-	// source: get model parameter and output table groups and group text (description and notes) in all languages
-	modelGroup, err := db.GetModelGroup(srcDb, srcModel.Model.ModelId, "")
-	if err != nil {
-		return err
-	}
-
 	// source: get model profile: default model profile is profile where name = model name
 	modelProfile, err := db.GetProfile(srcDb, modelName)
 	if err != nil {
@@ -118,7 +112,7 @@ func copyDbToDb(
 	}
 
 	// destination: insert model metadata into destination database if not exists
-	if err = db.UpdateModel(dstDb, dbFacet, dstModel); err != nil {
+	if _, err = db.UpdateModel(dstDb, dbFacet, dstModel); err != nil {
 		return err
 	}
 
@@ -145,11 +139,6 @@ func copyDbToDb(
 
 	// destination: insert or update model language-specific strings
 	if err = db.UpdateModelWord(dstDb, dstModel, dstLang, mwDef); err != nil {
-		return err
-	}
-
-	// destination: insert or update model groups and groups text (description, notes)
-	if err = db.UpdateModelGroup(dstDb, dstModel, dstLang, modelGroup); err != nil {
 		return err
 	}
 

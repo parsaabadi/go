@@ -109,12 +109,6 @@ func toModelJson(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 		return err
 	}
 
-	// get model parameter and output table groups and group text (description and notes) in all languages
-	modelGroup, err := db.GetModelGroup(dbConn, modelDef.Model.ModelId, "")
-	if err != nil {
-		return err
-	}
-
 	// get model profile: default model profile is profile where name = model name
 	modelName := modelDef.Model.Name
 	modelProfile, err := db.GetProfile(dbConn, modelName)
@@ -133,9 +127,6 @@ func toModelJson(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 		return err
 	}
 	if err := helper.ToJsonFile(filepath.Join(outDir, modelName+".word.json"), &mwDef); err != nil {
-		return err
-	}
-	if err := helper.ToJsonFile(filepath.Join(outDir, modelName+".group.json"), &modelGroup); err != nil {
 		return err
 	}
 	if err := helper.ToJsonFile(filepath.Join(outDir, modelName+".profile.json"), &modelProfile); err != nil {

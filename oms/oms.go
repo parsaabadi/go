@@ -326,7 +326,7 @@ func apiGetRoutes(router *vestigo.Router) {
 	router.Get("/api/model-text-all", modelAllTextHandler, logRequest)
 
 	//
-	// GET model extra: languages, groups, profile(s)
+	// GET model extra: languages, profile(s)
 	//
 
 	// GET /api/model/:model/lang-list
@@ -340,23 +340,6 @@ func apiGetRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/word-list", wordListHandler, logRequest)
 	router.Get("/api/model/:model/word-list/lang/:lang", wordListHandler, logRequest)
 	router.Get("/api/word-list", wordListHandler, logRequest)
-
-	// GET /api/model/:model/group
-	// GET /api/model-group?model=modelNameOrDigest
-	router.Get("/api/model/:model/group", modelGroupHandler, logRequest)
-	router.Get("/api/model-group", modelGroupHandler, logRequest)
-
-	// GET /api/model/:model/group/text
-	// GET /api/model/:model/group/text/lang/:lang
-	// GET /api/model-group-text?model=modelNameOrDigest&lang=en
-	router.Get("/api/model/:model/group/text", modelGroupTextHandler, logRequest)
-	router.Get("/api/model/:model/group/text/lang/:lang", modelGroupTextHandler, logRequest)
-	router.Get("/api/model-group-text", modelGroupTextHandler, logRequest)
-
-	// GET /api/model/:model/group/text/all
-	// GET /api/model-group-text-all?model=modelNameOrDigest
-	router.Get("/api/model/:model/group/text/all", modelGroupAllTextHandler, logRequest)
-	router.Get("/api/model-group-text-all", modelGroupAllTextHandler, logRequest)
 
 	// GET /api/model/:model/profile/:profile
 	// GET /api/model-profile?model=modelNameOrDigest&profile=profileName

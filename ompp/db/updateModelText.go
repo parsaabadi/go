@@ -50,8 +50,7 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 	smId := strconv.Itoa(modelDef.Model.ModelId)
 	for idx := range modelTxt.ModelTxt {
 
-		// update model id
-		modelTxt.ModelTxt[idx].ModelId = modelDef.Model.ModelId
+		modelTxt.ModelTxt[idx].ModelId = modelDef.Model.ModelId // update model id
 
 		// if language code valid then delete and insert into model_dic_txt
 		if lId, ok := langDef.IdByCode(modelTxt.ModelTxt[idx].LangCode); ok {
@@ -76,8 +75,7 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 	// update type_dic_txt and ids
 	for idx := range modelTxt.TypeTxt {
 
-		// update model id
-		modelTxt.TypeTxt[idx].ModelId = modelDef.Model.ModelId
+		modelTxt.TypeTxt[idx].ModelId = modelDef.Model.ModelId // update model id
 
 		// find type Hid
 		k, ok := modelDef.TypeByKey(modelTxt.TypeTxt[idx].TypeId)
@@ -111,8 +109,7 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 	// update type_enum_txt and ids
 	for idx := range modelTxt.TypeEnumTxt {
 
-		// update model id
-		modelTxt.TypeEnumTxt[idx].ModelId = modelDef.Model.ModelId
+		modelTxt.TypeEnumTxt[idx].ModelId = modelDef.Model.ModelId // update model id
 
 		// find type Hid
 		k, ok := modelDef.TypeByKey(modelTxt.TypeEnumTxt[idx].TypeId)
@@ -148,8 +145,7 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 	// update parameter_dic_txt and ids
 	for idx := range modelTxt.ParamTxt {
 
-		// update model id
-		modelTxt.ParamTxt[idx].ModelId = modelDef.Model.ModelId
+		modelTxt.ParamTxt[idx].ModelId = modelDef.Model.ModelId // update model id
 
 		// find parameter Hid
 		hId := modelDef.ParamHidById(modelTxt.ParamTxt[idx].ParamId)
@@ -182,8 +178,7 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 	// update parameter_dims_txt and ids
 	for idx := range modelTxt.ParamDimsTxt {
 
-		// update model id
-		modelTxt.ParamDimsTxt[idx].ModelId = modelDef.Model.ModelId
+		modelTxt.ParamDimsTxt[idx].ModelId = modelDef.Model.ModelId // update model id
 
 		// find parameter Hid
 		hId := modelDef.ParamHidById(modelTxt.ParamDimsTxt[idx].ParamId)
@@ -218,8 +213,7 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 	// update table_dic_txt and ids
 	for idx := range modelTxt.TableTxt {
 
-		// update model id
-		modelTxt.TableTxt[idx].ModelId = modelDef.Model.ModelId
+		modelTxt.TableTxt[idx].ModelId = modelDef.Model.ModelId // update model id
 
 		// find output table Hid
 		hId := modelDef.OutTableHidById(modelTxt.TableTxt[idx].TableId)
@@ -254,8 +248,7 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 	// update table_dims_txt and ids
 	for idx := range modelTxt.TableDimsTxt {
 
-		// update model id
-		modelTxt.TableDimsTxt[idx].ModelId = modelDef.Model.ModelId
+		modelTxt.TableDimsTxt[idx].ModelId = modelDef.Model.ModelId // update model id
 
 		// find output table Hid
 		hId := modelDef.OutTableHidById(modelTxt.TableDimsTxt[idx].TableId)
@@ -290,8 +283,7 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 	// update table_acc_txt and ids
 	for idx := range modelTxt.TableAccTxt {
 
-		// update model id
-		modelTxt.TableAccTxt[idx].ModelId = modelDef.Model.ModelId
+		modelTxt.TableAccTxt[idx].ModelId = modelDef.Model.ModelId // update model id
 
 		// find output table Hid
 		hId := modelDef.OutTableHidById(modelTxt.TableAccTxt[idx].TableId)
@@ -326,8 +318,7 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 	// update table_expr_txt and ids
 	for idx := range modelTxt.TableExprTxt {
 
-		// update model id
-		modelTxt.TableExprTxt[idx].ModelId = modelDef.Model.ModelId
+		modelTxt.TableExprTxt[idx].ModelId = modelDef.Model.ModelId // update model id
 
 		// find output table Hid
 		hId := modelDef.OutTableHidById(modelTxt.TableExprTxt[idx].TableId)
@@ -353,6 +344,34 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 					strconv.Itoa(lId)+", "+
 					toQuotedMax(modelTxt.TableExprTxt[idx].Descr, descrDbMax)+", "+
 					toQuotedOrNullMax(modelTxt.TableExprTxt[idx].Note, noteDbMax)+")")
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// update group_txt and ids
+	for idx := range modelTxt.GroupTxt {
+
+		modelTxt.GroupTxt[idx].ModelId = modelDef.Model.ModelId // update model id
+		sGrpId := strconv.Itoa(modelTxt.GroupTxt[idx].GroupId)
+
+		// if language code valid then delete and insert into group_txt
+		if lId, ok := langDef.IdByCode(modelTxt.GroupTxt[idx].LangCode); ok {
+
+			err := TrxUpdate(trx,
+				"DELETE FROM group_txt WHERE model_id = "+smId+" AND group_id = "+sGrpId+" AND lang_id = "+strconv.Itoa(lId))
+			if err != nil {
+				return err
+			}
+			err = TrxUpdate(trx,
+				"INSERT INTO group_txt (model_id, group_id, lang_id, descr, note)"+
+					" VALUES ("+
+					smId+", "+
+					sGrpId+", "+
+					strconv.Itoa(lId)+", "+
+					toQuotedMax(modelTxt.GroupTxt[idx].Descr, descrDbMax)+", "+
+					toQuotedOrNullMax(modelTxt.GroupTxt[idx].Note, noteDbMax)+")")
 			if err != nil {
 				return err
 			}

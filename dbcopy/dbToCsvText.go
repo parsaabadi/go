@@ -311,5 +311,36 @@ func toModelTextCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom b
 		return errors.New("failed to write output table expressions text into csv " + err.Error())
 	}
 
+	// write group text rows into csv
+	row = make([]string, 5)
+	row[0] = strconv.Itoa(modelId)
+
+	idx = 0
+	err = toCsvFile(
+		outDir,
+		"group_txt.csv",
+		isWriteUtf8bom,
+		[]string{"model_id", "group_id", "lang_code", "descr", "note"},
+		func() (bool, []string, error) {
+
+			if 0 <= idx && idx < len(modelTxt.GroupTxt) {
+				row[1] = strconv.Itoa(modelTxt.GroupTxt[idx].GroupId)
+				row[2] = modelTxt.GroupTxt[idx].LangCode
+				row[3] = modelTxt.GroupTxt[idx].Descr
+
+				if modelTxt.GroupTxt[idx].Note == "" { // empty "" string is NULL
+					row[4] = "NULL"
+				} else {
+					row[4] = modelTxt.GroupTxt[idx].Note
+				}
+				idx++
+				return false, row, nil
+			}
+			return true, row, nil // end of group text rows
+		})
+	if err != nil {
+		return errors.New("failed to write group text into csv " + err.Error())
+	}
+
 	return nil
 }

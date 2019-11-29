@@ -137,46 +137,6 @@ func wordListHandler(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, r, wl)
 }
 
-// modelGroupHandler return parameter and output table groups (language-neutral part):
-// GET /api/model/:model/group
-// GET /api/model-group?model=modelNameOrDigest
-// If multiple models with same name exist only one is returned.
-func modelGroupHandler(w http.ResponseWriter, r *http.Request) {
-
-	dn := getRequestParam(r, "model")
-
-	mt, _ := theCatalog.GroupsByDigestOrName(dn)
-	jsonResponse(w, r, mt)
-}
-
-// modelGroupTextHandler return parameter and output table groups with text (description and notes):
-// GET /api/model/:model/group/text
-// GET /api/model/:model/group/text/lang/:lang
-// GET /api/model-group-text?model=modelNameOrDigest&lang=en
-// Model digest-or-name must specified, if multiple models with same name exist only one is returned.
-// If optional lang specified then result in that language else in browser language or model default.
-func modelGroupTextHandler(w http.ResponseWriter, r *http.Request) {
-
-	dn := getRequestParam(r, "model")
-	rqLangTags := getRequestLang(r, "lang") // get optional language argument and languages accepted by browser
-
-	mt, _ := theCatalog.GroupsTextByDigestOrName(dn, rqLangTags)
-	jsonResponse(w, r, mt)
-}
-
-// modelGroupAllTextHandler return parameter and output table groups with text (description and notes):
-// GET /api/model/:model/group/text/all
-// GET /api/model-group-text-all?model=modelNameOrDigest
-// Model digest-or-name must specified, if multiple models with same name exist only one is returned.
-// Text rows returned in all languages.
-func modelGroupAllTextHandler(w http.ResponseWriter, r *http.Request) {
-
-	dn := getRequestParam(r, "model")
-
-	mt, _ := theCatalog.GroupsAllTextByDigestOrName(dn)
-	jsonResponse(w, r, mt)
-}
-
 // modelProfileHandler return profile db rows by model digest-or-name and profile name:
 // GET /api/model/:model/profile/:profile
 // GET /api/model-profile?model=modelNameOrDigest&profile=profileName

@@ -117,7 +117,7 @@ func fromModelJsonToDb(dbConn *sql.DB, dbFacet db.Facet, inpDir string, modelNam
 	}
 
 	// insert model metadata into destination database if not exists
-	if err = db.UpdateModel(dbConn, dbFacet, modelDef); err != nil {
+	if _, err = db.UpdateModel(dbConn, dbFacet, modelDef); err != nil {
 		return nil, err
 	}
 
@@ -136,7 +136,7 @@ func fromModelJsonToDb(dbConn *sql.DB, dbFacet db.Facet, inpDir string, modelNam
 	return modelDef, nil
 }
 
-// fromLangTextJsonToDb reads languages, model text and model groups from json file and insert it into database.
+// fromLangTextJsonToDb reads languages and model text from json file and insert it into database.
 func fromLangTextJsonToDb(dbConn *sql.DB, modelDef *db.ModelMeta, inpDir string) (*db.LangMeta, error) {
 
 	// restore language list from json and if exist then update db tables
@@ -182,18 +182,6 @@ func fromLangTextJsonToDb(dbConn *sql.DB, modelDef *db.ModelMeta, inpDir string)
 	}
 	if isExist {
 		if err = db.UpdateModelWord(dbConn, modelDef, langDef, &mwDef); err != nil {
-			return nil, err
-		}
-	}
-
-	// restore model groups and groups text (description, notes) from json and if exist then update db tables
-	var modelGroup db.GroupMeta
-	isExist, err = helper.FromJsonFile(filepath.Join(inpDir, modelDef.Model.Name+".group.json"), &modelGroup)
-	if err != nil {
-		return nil, err
-	}
-	if isExist {
-		if err = db.UpdateModelGroup(dbConn, modelDef, langDef, &modelGroup); err != nil {
 			return nil, err
 		}
 	}

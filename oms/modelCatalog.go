@@ -33,7 +33,6 @@ type modelDef struct {
 	txtMeta       *db.ModelTxtMeta  // if not nil then language-specific model metadata
 	langCodes     []string          // language codes, first is default language
 	matcher       language.Matcher  // matcher to search text by language
-	groupLst      *db.GroupLstPub   // if not nil then parameters and table groups
 	langMeta      *db.LangMeta      // list of languages: one list per db connection, order of languages NOT the same as language codes
 	modelWord     *db.ModelWordMeta // if not nil then list of model words, order of languages NOT the same as language codes
 }
@@ -53,6 +52,7 @@ type ModelMetaDescrNote struct {
 	TypeTxt           []TypeDescrNote  // model type text rows: type_dic_txt join to model_type_dic
 	ParamTxt          []ParamDescrNote // model parameter text rows: parameter_dic_txt join to model_parameter_dic
 	TableTxt          []TableDescrNote // model output table text rows: table_dic_txt join to model_table_dic
+	GroupTxt          []GroupDescrNote // model group text rows: group_txt join to group_lst
 }
 
 // ModelDicDescrNote is join of model_dic db row and model_dic_txt row
@@ -116,23 +116,6 @@ type TableAccDescrNote struct {
 type TableExprDescrNote struct {
 	Expr      db.TableExprRow // output table expression row: table_expr join to model_table_dic
 	DescrNote db.DescrNote    // from table_expr_txt
-}
-
-/*
-// GroupMeta is db rows to describe parent-child groups of model parameters and output tables.
-// It is language-neutral groups metadata.
-type GroupMeta struct {
-	Group   []db.GroupLstRow // parameters or output tables group rows: group_lst
-	GroupPc []db.GroupPcRow  // group parent-child relationship rows: group_pc
-}
-*/
-
-// GroupMetaDescrNote is language-specific db rows to describe parent-child groups of model parameters and output tables.
-// It is sliced by one single language, but it can be different single language for each row.
-// It is either user prefered language, model default language, first of the row or empty "" language.
-type GroupMetaDescrNote struct {
-	GroupLst []GroupDescrNote // parameters or output tables group rows: group_lst and group_txt
-	GroupPc  []db.GroupPcRow  // group parent-child relationship rows: group_pc
 }
 
 // GroupDescrNote is join of group_lst and group_txt

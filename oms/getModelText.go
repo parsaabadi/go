@@ -157,7 +157,7 @@ func (mc *ModelCatalog) loadModelMetaText(dn string) (int, bool) {
 	}
 
 	// read metadata from database
-	m, err := db.GetModelText(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, "")
+	mt, err := db.GetModelText(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, "")
 	if err != nil {
 		omppLog.Log("Error at get model text metadata: ", dn, ": ", err.Error())
 		return 0, false
@@ -165,7 +165,7 @@ func (mc *ModelCatalog) loadModelMetaText(dn string) (int, bool) {
 
 	// store model text metadata
 	mc.modelLst[idx].isTxtMetaFull = true
-	mc.modelLst[idx].txtMeta = m
+	mc.modelLst[idx].txtMeta = mt
 
 	return idx, true
 }
@@ -207,7 +207,8 @@ func (mc *ModelCatalog) ModelMetaTextByDigestOrName(dn string, preferedLang []la
 		ModelDicDescrNote: ModelDicDescrNote{Model: mc.modelLst[idx].meta.Model},
 		TypeTxt:           make([]TypeDescrNote, len(mc.modelLst[idx].meta.Type)),
 		ParamTxt:          make([]ParamDescrNote, len(mc.modelLst[idx].meta.Param)),
-		TableTxt:          make([]TableDescrNote, len(mc.modelLst[idx].meta.Table))}
+		TableTxt:          make([]TableDescrNote, len(mc.modelLst[idx].meta.Table)),
+		GroupTxt:          make([]GroupDescrNote, len(mc.modelLst[idx].meta.Group))}
 
 	// model types
 	for k := range mt.TypeTxt {
@@ -249,7 +250,14 @@ func (mc *ModelCatalog) ModelMetaTextByDigestOrName(dn string, preferedLang []la
 		}
 	}
 
+	// model groups
+	for k := range mt.GroupTxt {
+		mt.GroupTxt[k].Group = mc.modelLst[idx].meta.Group[k].GroupLstRow
+	}
+
+	//
 	// set language-specific rows by matched language or by default language or by zero index language
+	//
 
 	// set model description and notes
 	if len(mc.modelLst[idx].txtMeta.ModelTxt) > 0 {
@@ -1022,6 +1030,90 @@ func (mc *ModelCatalog) ModelMetaTextByDigestOrName(dn string, preferedLang []la
 					LangCode: mc.modelLst[idx].txtMeta.TableExprTxt[ni].LangCode,
 					Descr:    mc.modelLst[idx].txtMeta.TableExprTxt[ni].Descr,
 					Note:     mc.modelLst[idx].txtMeta.TableExprTxt[ni].Note}
+			}
+		}
+	}
+
+	// set group description and notes
+	if len(mt.GroupTxt) > 0 && len(mc.modelLst[idx].txtMeta.GroupTxt) > 0 {
+
+		var isKey, isFound, isMatch bool
+		var nf, ni, si, di int
+
+		for ; si < len(mc.modelLst[idx].txtMeta.GroupTxt); si++ {
+
+			// destination rows must be defined by [di] index
+			if di >= len(mt.GroupTxt) {
+				break // done with all destination text
+			}
+
+			// check if source and destination keys equal
+			mId := mt.GroupTxt[di].Group.ModelId
+			gId := mt.GroupTxt[di].Group.GroupId
+
+			isKey = mc.modelLst[idx].txtMeta.GroupTxt[si].ModelId == mId &&
+				mc.modelLst[idx].txtMeta.GroupTxt[si].GroupId == gId
+
+			// start of next key: set value
+			if !isKey && isFound {
+
+				if !isMatch { // if no match then use default
+					ni = nf
+				}
+				mt.GroupTxt[di].DescrNote = db.DescrNote{
+					LangCode: mc.modelLst[idx].txtMeta.GroupTxt[ni].LangCode,
+					Descr:    mc.modelLst[idx].txtMeta.GroupTxt[ni].Descr,
+					Note:     mc.modelLst[idx].txtMeta.GroupTxt[ni].Note}
+
+				// reset to start next search
+				isFound = false
+				isMatch = false
+				di++ // move to next group
+				si-- // repeat current source row
+				continue
+			}
+
+			// inside of key
+			if isKey {
+
+				if !isFound {
+					isFound = true // first key found
+					nf = si
+				}
+				// match the language
+				isMatch = mc.modelLst[idx].txtMeta.GroupTxt[si].LangCode == lc
+				if isMatch {
+					ni = si // perefred language match
+				}
+				if mc.modelLst[idx].txtMeta.GroupTxt[si].LangCode == lcd {
+					nf = si // index of default language
+				}
+			}
+
+			// if keys not equal and destination key behind source
+			// then move to next destination row and repeat current source row
+			if !isKey &&
+				(mc.modelLst[idx].txtMeta.GroupTxt[si].ModelId > mId ||
+					mc.modelLst[idx].txtMeta.GroupTxt[si].ModelId == mId &&
+						mc.modelLst[idx].txtMeta.GroupTxt[si].GroupId > gId) {
+
+				di++ // move to next group
+				si-- // repeat current source row
+				continue
+			}
+		} // for
+
+		// last row
+		if isFound && di < len(mt.GroupTxt) {
+
+			if !isMatch { // if no match then use default
+				ni = nf
+			}
+			if ni < len(mc.modelLst[idx].txtMeta.GroupTxt) {
+				mt.GroupTxt[di].DescrNote = db.DescrNote{
+					LangCode: mc.modelLst[idx].txtMeta.GroupTxt[ni].LangCode,
+					Descr:    mc.modelLst[idx].txtMeta.GroupTxt[ni].Descr,
+					Note:     mc.modelLst[idx].txtMeta.GroupTxt[ni].Note}
 			}
 		}
 	}
