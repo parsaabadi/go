@@ -46,12 +46,12 @@ func (meta *ModelMeta) updateInternals() error {
 
 		// digest type header
 		hMd5.Reset()
-		_, err := hMd5.Write([]byte("type_name,dic_id\n"))
+		_, err := hMd5.Write([]byte("type_name,dic_id,total_enum_id\n"))
 		if err != nil {
 			return err
 		}
 		_, err = hMd5.Write([]byte(
-			meta.Type[idx].Name + "," + strconv.Itoa(meta.Type[idx].DicId) + "\n"))
+			meta.Type[idx].Name + "," + strconv.Itoa(meta.Type[idx].DicId) + "," + strconv.Itoa(meta.Type[idx].TotalEnumId) + "\n"))
 		if err != nil {
 			return err
 		}
@@ -178,13 +178,16 @@ func (meta *ModelMeta) updateInternals() error {
 			}
 
 			// digest output table dimensions: id, name, dimension type digest
-			_, err = hMd5.Write([]byte("dim_id,dim_name,type_digest\n"))
+			_, err = hMd5.Write([]byte("dim_id,dim_name,dim_size,type_digest\n"))
 			if err != nil {
 				return err
 			}
 			for k := range meta.Table[idx].Dim {
 				_, err := hMd5.Write([]byte(
-					strconv.Itoa(meta.Table[idx].Dim[k].DimId) + "," + meta.Table[idx].Dim[k].Name + "," + meta.Table[idx].Dim[k].typeOf.Digest + "\n"))
+					strconv.Itoa(meta.Table[idx].Dim[k].DimId) + "," +
+						meta.Table[idx].Dim[k].Name + "," +
+						strconv.Itoa(meta.Table[idx].Dim[k].DimSize) + "," +
+						meta.Table[idx].Dim[k].typeOf.Digest + "\n"))
 				if err != nil {
 					return err
 				}

@@ -267,6 +267,7 @@ type TableDicRow struct {
 	DbAccTable   string // db_acc_table    VARCHAR(64)  NOT NULL
 	DbAccAllView string // db_acc_all_view VARCHAR(64)  NOT NULL
 	ExprPos      int    // expr_dim_pos    INT          NOT NULL
+	IsHidden     bool   // is_hidden       SMALLINT     NOT NULL
 }
 
 // TableTxtRow is db row of table_dic_txt join to model_table_dic table

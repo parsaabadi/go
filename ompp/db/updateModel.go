@@ -572,7 +572,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 
 		// append type into model output table list, if not in the list
 		//
-		// INSERT INTO model_table_dic (model_id, model_table_id, table_hid, is_user, expr_dim_pos)
+		// INSERT INTO model_table_dic (model_id, model_table_id, table_hid, is_user, expr_dim_pos, is_hidden)
 		// SELECT 1234, 0, D.table_hid, 0, 1
 		// FROM table_dic D
 		// WHERE D.table_digest = '0887a6494df'
@@ -581,13 +581,14 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 		//   SELECT * FROM model_table_dic E WHERE E.model_id = 1234 AND E.model_table_id = 0
 		// )
 		err = TrxUpdate(trx,
-			"INSERT INTO model_table_dic (model_id, model_table_id, table_hid, is_user, expr_dim_pos)"+
+			"INSERT INTO model_table_dic (model_id, model_table_id, table_hid, is_user, expr_dim_pos, is_hidden)"+
 				" SELECT "+
 				smId+", "+
 				strconv.Itoa(modelDef.Table[idx].TableId)+", "+
 				" D.table_hid, "+
 				toBoolSqlConst(modelDef.Table[idx].IsUser)+", "+
-				strconv.Itoa(modelDef.Table[idx].ExprPos)+
+				strconv.Itoa(modelDef.Table[idx].ExprPos)+", "+
+				toBoolSqlConst(modelDef.Table[idx].IsHidden)+
 				" FROM table_dic D"+
 				" WHERE D.table_digest = "+toQuoted(modelDef.Table[idx].Digest)+
 				" AND NOT EXISTS"+

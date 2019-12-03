@@ -275,7 +275,8 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 		"SELECT"+
 			" M.model_id, M.model_table_id, D.table_hid, D.table_name,"+
 			" D.table_digest, D.table_rank, D.is_sparse, M.is_user,"+
-			" D.db_expr_table, D.db_acc_table, D.db_acc_all_view, M.expr_dim_pos"+
+			" D.db_expr_table, D.db_acc_table, D.db_acc_all_view, M.expr_dim_pos,"+
+			" M.is_hidden"+
 			" FROM table_dic D"+
 			" INNER JOIN model_table_dic M ON (M.table_hid = D.table_hid)"+
 			" WHERE M.model_id = "+smId+
@@ -284,14 +285,17 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 			var r TableDicRow
 			nSparse := 0
 			nUser := 0
+			nHide := 0
 			if err := rows.Scan(
 				&r.ModelId, &r.TableId, &r.TableHid, &r.Name,
 				&r.Digest, &r.Rank, &nSparse, &nUser,
-				&r.DbExprTable, &r.DbAccTable, &r.DbAccAllView, &r.ExprPos); err != nil {
+				&r.DbExprTable, &r.DbAccTable, &r.DbAccAllView, &r.ExprPos,
+				&nHide); err != nil {
 				return err
 			}
 			r.IsSparse = nSparse != 0 // oracle: smallint is float64
 			r.IsUser = nUser != 0     // oracle: smallint is float64
+			r.IsHidden = nHide != 0   // oracle: smallint is float64
 
 			meta.Table = append(meta.Table, TableMeta{TableDicRow: r})
 			return nil

@@ -296,7 +296,7 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, isWriteUt
 	}
 
 	// write output table rows into csv
-	row = make([]string, 12)
+	row = make([]string, 13)
 	row[0] = strconv.Itoa(modelDef.Model.ModelId)
 
 	idx = 0
@@ -307,7 +307,8 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, isWriteUt
 		[]string{
 			"model_id", "model_table_id", "table_hid", "table_name",
 			"table_digest", "is_user", "table_rank", "is_sparse",
-			"db_expr_table", "db_acc_table", "db_acc_table", "expr_dim_pos"},
+			"db_expr_table", "db_acc_table", "db_acc_table", "expr_dim_pos",
+			"is_hidden"},
 		func() (bool, []string, error) {
 			if 0 <= idx && idx < len(modelDef.Table) {
 				row[1] = strconv.Itoa(modelDef.Table[idx].TableId)
@@ -321,6 +322,7 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, isWriteUt
 				row[9] = modelDef.Table[idx].DbAccTable
 				row[10] = modelDef.Table[idx].DbAccAllView
 				row[11] = strconv.Itoa(modelDef.Table[idx].ExprPos)
+				row[12] = strconv.FormatBool(modelDef.Table[idx].IsHidden)
 				idx++
 				return false, row, nil
 			}
