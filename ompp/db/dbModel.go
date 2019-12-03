@@ -66,10 +66,11 @@ type TypeMeta struct {
 
 // ParamMeta is parameter metadata: parameter name, type, dimensions
 type ParamMeta struct {
-	ParamDicRow                // model parameter row: parameter_dic join to model_parameter_dic table
-	Dim         []ParamDimsRow // parameter dimension rows: parameter_dims join to model_parameter_dic table
-	typeOf      *TypeMeta      // type of parameter
-	sizeOf      int            // size of parameter: db row count calculated as dimension(s) size product
+	ParamDicRow                  // model parameter row: parameter_dic join to model_parameter_dic table
+	Dim         []ParamDimsRow   // parameter dimension rows: parameter_dims join to model_parameter_dic table
+	Import      []ParamImportRow // parameter import from upstream model
+	typeOf      *TypeMeta        // type of parameter
+	sizeOf      int              // size of parameter: db row count calculated as dimension(s) size product
 }
 
 // TableMeta is output table metadata: table name, dimensions, accumulators, expressions
@@ -218,6 +219,16 @@ type ParamDicRow struct {
 	NumCumulated int    // num_cumulated      INT          NOT NULL
 	DbRunTable   string // db_run_table       VARCHAR(64)  NOT NULL
 	DbSetTable   string // db_set_table       VARCHAR(64)  NOT NULL
+}
+
+// ParamImportRow is db row of model_parameter_import table
+type ParamImportRow struct {
+	ModelId     int    // model_id           INT          NOT NULL
+	ParamId     int    // model_parameter_id INT          NOT NULL
+	IsFromParam bool   // is_from_parameter  SMALLINT     NOT NULL
+	FromName    string // from_name          VARCHAR(255) NOT NULL
+	FromModel   string // from_model_name    VARCHAR(255) NOT NULL
+	IsSampleDim bool   // is_sample_dim      SMALLINT     NOT NULL
 }
 
 // ParamTxtRow is db row of parameter_dic_txt join to model_parameter_dic table

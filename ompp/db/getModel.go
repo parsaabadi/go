@@ -229,7 +229,36 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 				return errors.New("type " + strconv.Itoa(r.TypeId) + " not found for " + r.Name)
 			}
 
-			meta.Param = append(meta.Param, ParamMeta{ParamDicRow: r, typeOf: &meta.Type[k]})
+			meta.Param = append(meta.Param, ParamMeta{
+				ParamDicRow: r, Dim: []ParamDimsRow{}, Import: []ParamImportRow{}, typeOf: &meta.Type[k]})
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	// select db rows from model_parameter_import
+	err = SelectRows(dbConn,
+		"SELECT"+
+			" I.model_id, I.model_parameter_id, I.is_from_parameter, I.from_name, I.from_model_name, I.is_sample_dim"+
+			" FROM model_parameter_import I"+
+			" WHERE I.model_id = "+smId+
+			" ORDER BY 1, 2, 3, 4, 5",
+		func(rows *sql.Rows) error {
+			var r ParamImportRow
+			nSample := 0
+			if err := rows.Scan(
+				&r.ModelId, &r.ParamId, &r.IsFromParam, &r.FromName, &r.FromModel, &nSample); err != nil {
+				return err
+			}
+			r.IsSampleDim = nSample != 0 // oracle: smallint is float64
+
+			idx, ok := meta.ParamByKey(r.ParamId) // find parameter row for that dimension
+			if !ok {
+				return errors.New("parameter " + strconv.Itoa(r.ParamId) + " not found")
+			}
+
+			meta.Param[idx].Import = append(meta.Param[idx].Import, r)
 			return nil
 		})
 	if err != nil {

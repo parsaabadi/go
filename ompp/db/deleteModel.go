@@ -639,6 +639,11 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 		return err
 	}
 
+	err = TrxUpdate(trx, "DELETE FROM model_parameter_import WHERE model_id = "+smId)
+	if err != nil {
+		return err
+	}
+
 	// delete model parameters:
 	// delete model parameter master rows
 	err = TrxUpdate(trx, "DELETE FROM model_parameter_dic WHERE model_id = "+smId)

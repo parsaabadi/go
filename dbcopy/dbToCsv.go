@@ -252,6 +252,50 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, isWriteUt
 		return errors.New("failed to write parameters into csv " + err.Error())
 	}
 
+	// write parameter import rows into csv
+	row = make([]string, 6)
+	row[0] = strconv.Itoa(modelDef.Model.ModelId)
+
+	idx = 0
+	j = 0
+	err = toCsvFile(
+		outDir,
+		"parameter_import.csv",
+		isWriteUtf8bom,
+		[]string{"model_id", "model_parameter_id", "is_from_parameter", "from_name", "from_model_name", "is_sample_dim"},
+		func() (bool, []string, error) {
+
+			if idx < 0 || idx >= len(modelDef.Param) { // end of parameter rows
+				return true, row, nil
+			}
+
+			// if end of current parameter imports then find next parameter with import list
+			if j < 0 || j >= len(modelDef.Param[idx].Import) {
+				j = 0
+				for {
+					idx++
+					if idx < 0 || idx >= len(modelDef.Param) { // end of parameter rows
+						return true, row, nil
+					}
+					if len(modelDef.Param[idx].Import) > 0 {
+						break
+					}
+				}
+			}
+
+			// make parameter import []string row
+			row[1] = strconv.Itoa(modelDef.Param[idx].Import[j].ParamId)
+			row[2] = strconv.FormatBool(modelDef.Param[idx].Import[j].IsFromParam)
+			row[3] = modelDef.Param[idx].Import[j].FromName
+			row[4] = modelDef.Param[idx].Import[j].FromModel
+			row[5] = strconv.FormatBool(modelDef.Param[idx].Import[j].IsSampleDim)
+			j++
+			return false, row, nil
+		})
+	if err != nil {
+		return errors.New("failed to write parameter import into csv " + err.Error())
+	}
+
 	// write parameter dimension rows into csv
 	row = make([]string, 5)
 	row[0] = strconv.Itoa(modelDef.Model.ModelId)

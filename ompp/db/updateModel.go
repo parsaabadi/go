@@ -385,6 +385,28 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 		if err != nil {
 			return err
 		}
+
+		// INSERT INTO model_parameter_import
+		//   (model_id, model_parameter_id, is_from_parameter, from_name, from_model_name, is_sample_dim)
+		// VALUES
+		//   (1234, 0, 1, 'ageSex', 'modelOne', 0)
+		for j := range modelDef.Param[idx].Import {
+
+			modelDef.Param[idx].Import[j].ModelId = modelDef.Model.ModelId // update model id with db value
+
+			err = TrxUpdate(trx,
+				"INSERT INTO model_parameter_import (model_id, model_parameter_id, is_from_parameter, from_name, from_model_name, is_sample_dim)"+
+					" VALUES ("+
+					smId+", "+
+					strconv.Itoa(modelDef.Param[idx].ParamId)+", "+
+					toBoolSqlConst(modelDef.Param[idx].Import[j].IsFromParam)+", "+
+					toQuoted(modelDef.Param[idx].Import[j].FromName)+", "+
+					toQuoted(modelDef.Param[idx].Import[j].FromModel)+", "+
+					toBoolSqlConst(modelDef.Param[idx].Import[j].IsSampleDim)+")")
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	// for each output table:
