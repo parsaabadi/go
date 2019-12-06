@@ -132,11 +132,10 @@ func setContentType(next http.Handler) http.Handler {
 
 		// if Content-Type not set and it is one of "forced" extensions
 		// then set content type
-		if _, isSet := w.Header()["Content-Type"]; !isSet {
-			if ext := filepath.Ext(r.URL.Path); ext != "" {
-				if ct := ctDef[strings.ToLower(ext)]; ct != "" {
-					w.Header().Set("Content-Type", ct)
-				}
+		// if _, isSet := w.Header()["Content-Type"]; !isSet {
+		if ext := filepath.Ext(r.URL.Path); ext != "" {
+			if ct := ctDef[strings.ToLower(ext)]; ct != "" {
+				w.Header().Set("Content-Type", ct)
 			}
 		}
 
