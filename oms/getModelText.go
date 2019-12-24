@@ -252,7 +252,13 @@ func (mc *ModelCatalog) ModelMetaTextByDigestOrName(dn string, preferedLang []la
 
 	// model groups
 	for k := range mt.GroupTxt {
-		mt.GroupTxt[k].Group = mc.modelLst[idx].meta.Group[k].GroupLstRow
+		mt.GroupTxt[k].Group = db.GroupMeta{
+			GroupLstRow: mc.modelLst[idx].meta.Group[k].GroupLstRow,
+			GroupPc:     make([]db.GroupPcRow, len(mc.modelLst[idx].meta.Group[k].GroupPc))}
+
+		for j := range mt.GroupTxt[k].Group.GroupPc {
+			mt.GroupTxt[k].Group.GroupPc[j] = mc.modelLst[idx].meta.Group[k].GroupPc[j]
+		}
 	}
 
 	//

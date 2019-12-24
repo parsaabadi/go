@@ -118,10 +118,10 @@ type TableExprDescrNote struct {
 	DescrNote db.DescrNote    // from table_expr_txt
 }
 
-// GroupDescrNote is join of group_lst and group_txt
+// GroupDescrNote is join of group_lst, group_pc and group_txt
 type GroupDescrNote struct {
-	Group     db.GroupLstRow // parameters or output tables group rows: group_lst
-	DescrNote db.DescrNote   // from group_txt
+	Group     db.GroupMeta // parameters or output tables group rows: group_lst join to group_pc
+	DescrNote db.DescrNote // from group_txt
 }
 
 // ModelLangWord is (code, label) rows from lang_word and model_word language-specific db tables.
