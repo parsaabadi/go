@@ -263,7 +263,7 @@ func mainBody(args []string) error {
 	omppLog.Log("Listen at " + addr)
 	if !isApiOnly {
 		if !strings.HasPrefix(addr, ":") {
-			omppLog.Log("To start open in your browser: " + addr)
+			omppLog.Log("To start open in your browser: ", addr)
 		} else {
 			omppLog.Log("To start open in your browser: ", "localhost", addr)
 		}
