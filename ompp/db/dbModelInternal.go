@@ -29,6 +29,8 @@ func (meta *LangMeta) updateInternals() {
 func (meta *ModelMeta) updateInternals() error {
 
 	hMd5 := md5.New()
+	hMd5Import := md5.New()
+	isDigestUpdated := false
 
 	// update type digest, if it is empty
 	for idx := range meta.Type {
@@ -70,11 +72,12 @@ func (meta *ModelMeta) updateInternals() error {
 		}
 
 		meta.Type[idx].Digest = fmt.Sprintf("%x", hMd5.Sum(nil)) // set type digest string
+		isDigestUpdated = true
 	}
 
 	// update parameter type and size (row count for all dimensions)
 	// update parameter dimensions: type and size (count of all enums)
-	// update parameter digest, if it is empty
+	// update parameter digest and import digest, if digest is empty
 	for idx := range meta.Param {
 
 		// update parameter type
@@ -105,7 +108,7 @@ func (meta *ModelMeta) updateInternals() error {
 			}
 		}
 
-		// update parameter digest, if it is empty
+		// update parameter digest and import digest, if digest is empty
 		if meta.Param[idx].Digest == "" {
 
 			// digest parameter header: name, rank, value type digest
@@ -114,32 +117,58 @@ func (meta *ModelMeta) updateInternals() error {
 			if err != nil {
 				return err
 			}
-			_, err = hMd5.Write([]byte(
-				meta.Param[idx].Name + "," + strconv.Itoa(meta.Param[idx].Rank) + "," + meta.Param[idx].typeOf.Digest + "\n"))
+			_, err = hMd5.Write([]byte(meta.Param[idx].Name + "," + strconv.Itoa(meta.Param[idx].Rank) + "," + meta.Param[idx].typeOf.Digest + "\n"))
 			if err != nil {
 				return err
 			}
 
-			// digest parameter dimensions: id, name, dimension type digest
-			_, err = hMd5.Write([]byte("dim_id,dim_name,type_digest\n"))
+			// import digest same as full parameter digest but does not include parameter name
+			hMd5Import.Reset()
+			_, err = hMd5Import.Write([]byte("parameter_rank,type_digest\n"))
 			if err != nil {
 				return err
 			}
+			_, err = hMd5Import.Write([]byte(strconv.Itoa(meta.Param[idx].Rank) + "," + meta.Param[idx].typeOf.Digest + "\n"))
+			if err != nil {
+				return err
+			}
+
+			// digest parameter dimensions: id, name, size and dimension type digest
+			_, err = hMd5.Write([]byte("dim_id,dim_name,dim_size,type_digest\n"))
+			if err != nil {
+				return err
+			}
+			_, err = hMd5Import.Write([]byte("dim_id,dim_name,dim_size,type_digest\n"))
+			if err != nil {
+				return err
+			}
+
 			for k := range meta.Param[idx].Dim {
-				_, err := hMd5.Write([]byte(
-					strconv.Itoa(meta.Param[idx].Dim[k].DimId) + "," + meta.Param[idx].Dim[k].Name + "," + meta.Param[idx].Dim[k].typeOf.Digest + "\n"))
+				bt := []byte(
+					strconv.Itoa(meta.Param[idx].Dim[k].DimId) + "," +
+						meta.Param[idx].Dim[k].Name + "," +
+						strconv.Itoa(meta.Param[idx].Dim[k].sizeOf) + "," +
+						meta.Param[idx].Dim[k].typeOf.Digest + "\n")
+
+				_, err = hMd5.Write(bt)
+				if err != nil {
+					return err
+				}
+				_, err = hMd5Import.Write(bt)
 				if err != nil {
 					return err
 				}
 			}
 
-			meta.Param[idx].Digest = fmt.Sprintf("%x", hMd5.Sum(nil)) // set parameter digest string
+			meta.Param[idx].Digest = fmt.Sprintf("%x", hMd5.Sum(nil))
+			meta.Param[idx].ImportDigest = fmt.Sprintf("%x", hMd5Import.Sum(nil))
+			isDigestUpdated = true
 		}
 	}
 
 	// update output table size (row count for all dimensions)
 	// update output table dimensions: type and size (count of all enums)
-	// update output table digest, if it is empty
+	// update output table digest and import digest, if digest is empty
 	for idx := range meta.Table {
 
 		if meta.Table[idx].Rank != len(meta.Table[idx].Dim) {
@@ -162,7 +191,7 @@ func (meta *ModelMeta) updateInternals() error {
 			}
 		}
 
-		// update output table digest, if it is empty
+		// update output table digest and import digest, if digest is empty
 		if meta.Table[idx].Digest == "" {
 
 			// digest output table header: name, rank
@@ -171,27 +200,49 @@ func (meta *ModelMeta) updateInternals() error {
 			if err != nil {
 				return err
 			}
-			_, err = hMd5.Write([]byte(
-				meta.Table[idx].Name + "," + strconv.Itoa(meta.Table[idx].Rank) + "\n"))
+			_, err = hMd5.Write([]byte(meta.Table[idx].Name + "," + strconv.Itoa(meta.Table[idx].Rank) + "\n"))
 			if err != nil {
 				return err
 			}
 
-			// digest output table dimensions: id, name, dimension type digest
+			// table import digest same as parameter import digest
+			hMd5Import.Reset()
+			_, err = hMd5Import.Write([]byte("parameter_rank,type_digest\n"))
+			if err != nil {
+				return err
+			}
+			_, err = hMd5Import.Write([]byte(strconv.Itoa(meta.Table[idx].Rank) + ",_double_\n"))
+			if err != nil {
+				return err
+			}
+
+			// digest output table dimensions: id, name, size and dimension type digest
 			_, err = hMd5.Write([]byte("dim_id,dim_name,dim_size,type_digest\n"))
 			if err != nil {
 				return err
 			}
+			_, err = hMd5Import.Write([]byte("dim_id,dim_name,dim_size,type_digest\n"))
+			if err != nil {
+				return err
+			}
+
 			for k := range meta.Table[idx].Dim {
-				_, err := hMd5.Write([]byte(
+				bt := []byte(
 					strconv.Itoa(meta.Table[idx].Dim[k].DimId) + "," +
 						meta.Table[idx].Dim[k].Name + "," +
 						strconv.Itoa(meta.Table[idx].Dim[k].DimSize) + "," +
-						meta.Table[idx].Dim[k].typeOf.Digest + "\n"))
+						meta.Table[idx].Dim[k].typeOf.Digest + "\n")
+
+				_, err = hMd5.Write(bt)
+				if err != nil {
+					return err
+				}
+				_, err = hMd5Import.Write(bt)
 				if err != nil {
 					return err
 				}
 			}
+			meta.Table[idx].ImportDigest = fmt.Sprintf("%x", hMd5Import.Sum(nil)) // done with import digest
 
 			// digest output table accumulators: id, name, expression
 			_, err = hMd5.Write([]byte("acc_id,acc_name,acc_src\n"))
@@ -219,12 +270,13 @@ func (meta *ModelMeta) updateInternals() error {
 				}
 			}
 
-			meta.Table[idx].Digest = fmt.Sprintf("%x", hMd5.Sum(nil)) // set output table digest string
+			meta.Table[idx].Digest = fmt.Sprintf("%x", hMd5.Sum(nil)) // set ouput table digest string
+			isDigestUpdated = true
 		}
 	}
 
 	// update model digest if it is "" empty
-	if meta.Model.Digest == "" {
+	if isDigestUpdated || meta.Model.Digest == "" {
 
 		// digest model header: name and model type
 		hMd5.Reset()

@@ -205,7 +205,7 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 		"SELECT"+
 			" M.model_id, M.model_parameter_id, D.parameter_hid, D.parameter_name, D.parameter_digest,"+
 			" D.parameter_rank, T.model_type_id, D.is_extendable, M.is_hidden, D.num_cumulated,"+
-			" D.db_run_table, D.db_set_table"+
+			" D.db_run_table, D.db_set_table, D.import_digest"+
 			" FROM parameter_dic D"+
 			" INNER JOIN model_parameter_dic M ON (M.parameter_hid = D.parameter_hid)"+
 			" INNER JOIN model_type_dic T ON (T.type_hid = D.type_hid AND T.model_id = M.model_id)"+
@@ -218,7 +218,7 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 			if err := rows.Scan(
 				&r.ModelId, &r.ParamId, &r.ParamHid, &r.Name, &r.Digest,
 				&r.Rank, &r.TypeId, &nExt, &nHidden, &r.NumCumulated,
-				&r.DbRunTable, &r.DbSetTable); err != nil {
+				&r.DbRunTable, &r.DbSetTable, &r.ImportDigest); err != nil {
 				return err
 			}
 			r.IsExtendable = nExt != 0 // oracle: smallint is float64
@@ -240,15 +240,15 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 	// select db rows from model_parameter_import
 	err = SelectRows(dbConn,
 		"SELECT"+
-			" I.model_id, I.model_parameter_id, I.is_from_parameter, I.from_name, I.from_model_name, I.is_sample_dim"+
+			" I.model_id, I.model_parameter_id, I.from_name, I.from_model_name, I.is_sample_dim"+
 			" FROM model_parameter_import I"+
 			" WHERE I.model_id = "+smId+
-			" ORDER BY 1, 2, 3, 4, 5",
+			" ORDER BY 1, 2",
 		func(rows *sql.Rows) error {
 			var r ParamImportRow
 			nSample := 0
 			if err := rows.Scan(
-				&r.ModelId, &r.ParamId, &r.IsFromParam, &r.FromName, &r.FromModel, &nSample); err != nil {
+				&r.ModelId, &r.ParamId, &r.FromName, &r.FromModel, &nSample); err != nil {
 				return err
 			}
 			r.IsSampleDim = nSample != 0 // oracle: smallint is float64
@@ -305,7 +305,7 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 			" M.model_id, M.model_table_id, D.table_hid, D.table_name,"+
 			" D.table_digest, D.table_rank, D.is_sparse, M.is_user,"+
 			" D.db_expr_table, D.db_acc_table, D.db_acc_all_view, M.expr_dim_pos,"+
-			" M.is_hidden"+
+			" M.is_hidden, D.import_digest"+
 			" FROM table_dic D"+
 			" INNER JOIN model_table_dic M ON (M.table_hid = D.table_hid)"+
 			" WHERE M.model_id = "+smId+
@@ -319,7 +319,7 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 				&r.ModelId, &r.TableId, &r.TableHid, &r.Name,
 				&r.Digest, &r.Rank, &nSparse, &nUser,
 				&r.DbExprTable, &r.DbAccTable, &r.DbAccAllView, &r.ExprPos,
-				&nHide); err != nil {
+				&nHide, &r.ImportDigest); err != nil {
 				return err
 			}
 			r.IsSparse = nSparse != 0 // oracle: smallint is float64

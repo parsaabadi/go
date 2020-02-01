@@ -219,7 +219,7 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, isWriteUt
 	}
 
 	// write parameter rows into csv
-	row = make([]string, 11)
+	row = make([]string, 12)
 	row[0] = strconv.Itoa(modelDef.Model.ModelId)
 
 	idx = 0
@@ -230,7 +230,7 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, isWriteUt
 		[]string{
 			"model_id", "model_parameter_id", "parameter_hid", "parameter_name",
 			"parameter_digest", "db_run_table", "db_set_table", "parameter_rank",
-			"model_type_id", "is_hidden", "num_cumulated"},
+			"model_type_id", "is_hidden", "num_cumulated", "import_digest"},
 		func() (bool, []string, error) {
 			if 0 <= idx && idx < len(modelDef.Param) {
 				row[1] = strconv.Itoa(modelDef.Param[idx].ParamId)
@@ -243,6 +243,7 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, isWriteUt
 				row[8] = strconv.Itoa(modelDef.Param[idx].TypeId)
 				row[9] = strconv.FormatBool(modelDef.Param[idx].IsHidden)
 				row[10] = strconv.Itoa(modelDef.Param[idx].NumCumulated)
+				row[11] = modelDef.Param[idx].ImportDigest
 				idx++
 				return false, row, nil
 			}
@@ -253,7 +254,7 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, isWriteUt
 	}
 
 	// write parameter import rows into csv
-	row = make([]string, 6)
+	row = make([]string, 5)
 	row[0] = strconv.Itoa(modelDef.Model.ModelId)
 
 	idx = 0
@@ -262,7 +263,7 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, isWriteUt
 		outDir,
 		"parameter_import.csv",
 		isWriteUtf8bom,
-		[]string{"model_id", "model_parameter_id", "is_from_parameter", "from_name", "from_model_name", "is_sample_dim"},
+		[]string{"model_id", "model_parameter_id", "from_name", "from_model_name", "is_sample_dim"},
 		func() (bool, []string, error) {
 
 			if idx < 0 || idx >= len(modelDef.Param) { // end of parameter rows
@@ -285,10 +286,9 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, isWriteUt
 
 			// make parameter import []string row
 			row[1] = strconv.Itoa(modelDef.Param[idx].Import[j].ParamId)
-			row[2] = strconv.FormatBool(modelDef.Param[idx].Import[j].IsFromParam)
-			row[3] = modelDef.Param[idx].Import[j].FromName
-			row[4] = modelDef.Param[idx].Import[j].FromModel
-			row[5] = strconv.FormatBool(modelDef.Param[idx].Import[j].IsSampleDim)
+			row[2] = modelDef.Param[idx].Import[j].FromName
+			row[3] = modelDef.Param[idx].Import[j].FromModel
+			row[4] = strconv.FormatBool(modelDef.Param[idx].Import[j].IsSampleDim)
 			j++
 			return false, row, nil
 		})
@@ -340,7 +340,7 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, isWriteUt
 	}
 
 	// write output table rows into csv
-	row = make([]string, 13)
+	row = make([]string, 14)
 	row[0] = strconv.Itoa(modelDef.Model.ModelId)
 
 	idx = 0
@@ -352,7 +352,7 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, isWriteUt
 			"model_id", "model_table_id", "table_hid", "table_name",
 			"table_digest", "is_user", "table_rank", "is_sparse",
 			"db_expr_table", "db_acc_table", "db_acc_table", "expr_dim_pos",
-			"is_hidden"},
+			"is_hidden", "import_digest"},
 		func() (bool, []string, error) {
 			if 0 <= idx && idx < len(modelDef.Table) {
 				row[1] = strconv.Itoa(modelDef.Table[idx].TableId)
@@ -367,6 +367,7 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, isWriteUt
 				row[10] = modelDef.Table[idx].DbAccAllView
 				row[11] = strconv.Itoa(modelDef.Table[idx].ExprPos)
 				row[12] = strconv.FormatBool(modelDef.Table[idx].IsHidden)
+				row[13] = modelDef.Table[idx].ImportDigest
 				idx++
 				return false, row, nil
 			}

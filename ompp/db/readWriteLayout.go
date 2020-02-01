@@ -33,14 +33,6 @@ type WriteTableLayout struct {
 	DoubleFmt   string // used for float model types digest calculation
 }
 
-// ReadPageLayout describes first row offset and size of data page to read input parameter or output table values.
-// If IsLastPage true then return non-empty last page and actual first row offset and size.
-type ReadPageLayout struct {
-	Offset     int64 // first row to return from select, zero-based ofsset
-	Size       int64 // max row count to select, if <= 0 then all rows
-	IsLastPage bool  // if true then return non-empty last page
-}
-
 // ReadLayout describes source and size of data page to read input parameter or output table values.
 //
 // If IsLastPage true then return non-empty last page and actual first row offset and size.
@@ -92,6 +84,14 @@ type ReadTableLayout struct {
 	ValueName  string // if not empty then expression or accumulator name to select
 	IsAccum    bool   // if true then select output table accumulator else expression
 	IsAllAccum bool   // if true then select from all accumulators view else from accumulators table
+}
+
+// ReadPageLayout describes first row offset and size of data page to read input parameter or output table values.
+// If IsLastPage true then return non-empty last page and actual first row offset and size.
+type ReadPageLayout struct {
+	Offset     int64 // first row to return from select, zero-based ofsset
+	Size       int64 // max row count to select, if <= 0 then all rows
+	IsLastPage bool  // if true then return non-empty last page
 }
 
 // FilterOp is enum type for filter operators in select where conditions

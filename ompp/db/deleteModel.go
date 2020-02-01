@@ -308,6 +308,13 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 	}
 
 	err = TrxUpdate(trx,
+		"DELETE FROM run_parameter_import WHERE EXISTS"+
+			" (SELECT run_id FROM run_lst M WHERE M.run_id = run_parameter_import.run_id AND M.model_id = "+smId+")")
+	if err != nil {
+		return err
+	}
+
+	err = TrxUpdate(trx,
 		"DELETE FROM run_parameter_txt WHERE EXISTS"+
 			" (SELECT run_id FROM run_lst M WHERE M.run_id = run_parameter_txt.run_id AND M.model_id = "+smId+")")
 	if err != nil {

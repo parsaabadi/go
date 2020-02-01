@@ -219,13 +219,13 @@ type ParamDicRow struct {
 	NumCumulated int    // num_cumulated      INT          NOT NULL
 	DbRunTable   string // db_run_table       VARCHAR(64)  NOT NULL
 	DbSetTable   string // db_set_table       VARCHAR(64)  NOT NULL
+	ImportDigest string // import_digest      VARCHAR(32)  NOT NULL
 }
 
 // ParamImportRow is db row of model_parameter_import table
 type ParamImportRow struct {
 	ModelId     int    // model_id           INT          NOT NULL
 	ParamId     int    // model_parameter_id INT          NOT NULL
-	IsFromParam bool   // is_from_parameter  SMALLINT     NOT NULL
 	FromName    string // from_name          VARCHAR(255) NOT NULL
 	FromModel   string // from_model_name    VARCHAR(255) NOT NULL
 	IsSampleDim bool   // is_sample_dim      SMALLINT     NOT NULL
@@ -279,6 +279,7 @@ type TableDicRow struct {
 	DbAccAllView string // db_acc_all_view VARCHAR(64)  NOT NULL
 	ExprPos      int    // expr_dim_pos    INT          NOT NULL
 	IsHidden     bool   // is_hidden       SMALLINT     NOT NULL
+	ImportDigest string // import_digest   VARCHAR(32)  NOT NULL
 }
 
 // TableTxtRow is db row of table_dic_txt join to model_table_dic table

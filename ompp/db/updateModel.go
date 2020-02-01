@@ -312,7 +312,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 				"INSERT INTO parameter_dic"+
 					" (parameter_hid, parameter_name, parameter_digest, db_run_table,"+
 					" db_set_table, parameter_rank, type_hid, is_extendable,"+
-					" num_cumulated)"+
+					" num_cumulated, import_digest)"+
 					" VALUES ("+
 					strconv.Itoa(modelDef.Param[idx].ParamHid)+", "+
 					toQuotedMax(modelDef.Param[idx].Name, nameDbMax)+", "+
@@ -322,7 +322,9 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 					strconv.Itoa(modelDef.Param[idx].Rank)+", "+
 					strconv.Itoa(modelDef.Param[idx].typeOf.TypeHid)+", "+
 					toBoolSqlConst(modelDef.Param[idx].IsExtendable)+", "+
-					strconv.Itoa(modelDef.Param[idx].NumCumulated)+")")
+					strconv.Itoa(modelDef.Param[idx].NumCumulated)+", "+
+					toQuotedMax(modelDef.Param[idx].ImportDigest, codeDbMax)+
+					")")
 			if err != nil {
 				return err
 			}
@@ -387,19 +389,18 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 		}
 
 		// INSERT INTO model_parameter_import
-		//   (model_id, model_parameter_id, is_from_parameter, from_name, from_model_name, is_sample_dim)
+		//   (model_id, model_parameter_id, from_name, from_model_name, is_sample_dim)
 		// VALUES
-		//   (1234, 0, 1, 'ageSex', 'modelOne', 0)
+		//   (1234, 101, 'ageSex', 'modelOne', 0)
 		for j := range modelDef.Param[idx].Import {
 
 			modelDef.Param[idx].Import[j].ModelId = modelDef.Model.ModelId // update model id with db value
 
 			err = TrxUpdate(trx,
-				"INSERT INTO model_parameter_import (model_id, model_parameter_id, is_from_parameter, from_name, from_model_name, is_sample_dim)"+
+				"INSERT INTO model_parameter_import (model_id, model_parameter_id, from_name, from_model_name, is_sample_dim)"+
 					" VALUES ("+
 					smId+", "+
 					strconv.Itoa(modelDef.Param[idx].ParamId)+", "+
-					toBoolSqlConst(modelDef.Param[idx].Import[j].IsFromParam)+", "+
 					toQuoted(modelDef.Param[idx].Import[j].FromName)+", "+
 					toQuoted(modelDef.Param[idx].Import[j].FromModel)+", "+
 					toBoolSqlConst(modelDef.Param[idx].Import[j].IsSampleDim)+")")
@@ -482,13 +483,15 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 
 			// INSERT INTO table_dic
 			//   (table_hid, table_name, table_digest, table_rank,
-			//   is_sparse, db_expr_table, db_acc_table, db_acc_all_view)
+			//   is_sparse, db_expr_table, db_acc_table, db_acc_all_view,
+			//   import_digest)
 			// VALUES
 			//   (2, 'salarySex', '0887a6494df', 'salarySex', '2012820', 2, 1)
 			err = TrxUpdate(trx,
 				"INSERT INTO table_dic"+
 					" (table_hid, table_name, table_digest, table_rank,"+
-					" is_sparse, db_expr_table, db_acc_table, db_acc_all_view)"+
+					" is_sparse, db_expr_table, db_acc_table, db_acc_all_view,"+
+					" import_digest)"+
 					" VALUES ("+
 					strconv.Itoa(modelDef.Table[idx].TableHid)+", "+
 					toQuotedMax(modelDef.Table[idx].Name, nameDbMax)+", "+
@@ -497,7 +500,8 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 					toBoolSqlConst(modelDef.Table[idx].IsSparse)+", "+
 					toQuoted(modelDef.Table[idx].DbExprTable)+", "+
 					toQuoted(modelDef.Table[idx].DbAccTable)+", "+
-					toQuoted(modelDef.Table[idx].DbAccAllView)+
+					toQuoted(modelDef.Table[idx].DbAccAllView)+", "+
+					toQuotedMax(modelDef.Table[idx].ImportDigest, codeDbMax)+
 					")")
 			if err != nil {
 				return err

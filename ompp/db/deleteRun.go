@@ -214,6 +214,11 @@ func doDeleteRun(trx *sql.Tx, runId int) error {
 		return err
 	}
 
+	err = TrxUpdate(trx, "DELETE FROM run_parameter_import WHERE run_id = "+sId)
+	if err != nil {
+		return err
+	}
+
 	err = TrxUpdate(trx, "DELETE FROM run_parameter_txt WHERE run_id = "+sId)
 	if err != nil {
 		return err
