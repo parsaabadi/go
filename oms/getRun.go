@@ -9,7 +9,7 @@ import (
 	"golang.org/x/text/language"
 )
 
-// RunStatusByDigestOrName return run_lst db row by model digest-or-name and run digest-or-name.
+// RunStatus return run_lst db row and run_progress db rows by model digest-or-name and run digest-or-stamp-or-name.
 func (mc *ModelCatalog) RunStatus(dn, rdsn string) (*db.RunPub, bool) {
 
 	// if model digest-or-name or run digest-or-name is empty then return empty results
@@ -58,6 +58,62 @@ func (mc *ModelCatalog) RunStatus(dn, rdsn string) (*db.RunPub, bool) {
 	}
 
 	return rp, true
+}
+
+// RunStatusList return list of run_lst rows joined to run_progress by model digest-or-name and run digest-or-stamp-or-name.
+func (mc *ModelCatalog) RunStatusList(dn, rdsn string) ([]db.RunPub, bool) {
+
+	// if model digest-or-name or run digest-or-name is empty then return empty results
+	if dn == "" {
+		omppLog.Log("Warning: invalid (empty) model digest and name")
+		return []db.RunPub{}, false
+	}
+	if rdsn == "" {
+		omppLog.Log("Warning: invalid (empty) run digest or stamp or name")
+		return []db.RunPub{}, false
+	}
+
+	// lock catalog and find model index by digest or name
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return []db.RunPub{}, false // return empty result: model not found or error
+	}
+
+	// get run_lst db row by digest, stamp or run name
+	rLst, err := db.GetRunListByDigestOrStampOrName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, rdsn)
+	if err != nil {
+		omppLog.Log("Error at get run status: ", dn, ": ", rdsn, ": ", err.Error())
+		return []db.RunPub{}, false // return empty result: run select error
+	}
+	if len(rLst) <= 0 {
+		omppLog.Log("Warning run status not found: ", dn, ": ", rdsn)
+		return []db.RunPub{}, false // return empty result: run_lst row not found
+	}
+
+	// for each run_lst row join run_progress rows
+	rpLst := []db.RunPub{}
+
+	for n := range rLst {
+		// get run sub-values progress for that run id
+		rpRs, err := db.GetRunProgress(mc.modelLst[idx].dbConn, rLst[n].RunId)
+		if err != nil {
+			omppLog.Log("Error at get run progress: ", dn, ": ", rdsn, ": ", err.Error())
+			return []db.RunPub{}, false // return empty result: run progress select error
+		}
+
+		// convert to "public" format
+		rp, err := (&db.RunMeta{Run: rLst[n], Progress: rpRs}).ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
+		if err != nil {
+			omppLog.Log("Error at run status conversion: ", dn, ": ", rdsn, ": ", err.Error())
+			return []db.RunPub{}, false // return empty result
+		}
+		rpLst = append(rpLst, *rp)
+	}
+	return rpLst, true
 }
 
 // FirstOrLastRunStatus return first or last or last completed run_lst db row and run_progress db rows by model digest-or-name.
@@ -293,7 +349,7 @@ func (mc *ModelCatalog) RunListText(dn string, preferedLang []language.Tag) ([]d
 	return rpl, true
 }
 
-// RunTextFull return full run metadata by model digest-or-name and run digest-or-stamp-name.
+// RunTextFull return full run metadata by model digest-or-name and run digest-or-stamp-or-name.
 // It does not return non-completed runs (run in progress).
 // Run completed if run status one of: s=success, x=exit, e=error.
 // Text (description and notes) can be in prefered language or all languages.

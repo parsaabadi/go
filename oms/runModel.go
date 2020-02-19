@@ -69,6 +69,7 @@ func (rsc *RunStateCatalog) runModel(req *RunRequest) (*RunState, error) {
 	mArgs := []string{}
 	mArgs = append(mArgs, "-OpenM.RunStamp", rStamp)
 	mArgs = append(mArgs, "-OpenM.LogToConsole", "true")
+	mArgs = append(mArgs, "-OpenM.Version", "true")
 
 	// append model run options from run request
 	for krq, val := range req.Opts {
@@ -134,8 +135,26 @@ func (rsc *RunStateCatalog) runModel(req *RunRequest) (*RunState, error) {
 		close(done)
 	}
 
-	// wait until model run completed
-	doRunWait := func(digest, runStamp string, cmd *exec.Cmd) {
+	// run state initialized: save in run state list
+	rsc.createProcRunState(rs)
+
+	// start console output listners
+	go doLog(req.ModelDigest, rs.RunStamp, outPipe, outDoneC)
+	go doLog(req.ModelDigest, rs.RunStamp, errPipe, errDoneC)
+
+	// start the model
+	omppLog.Log("Run model: ", mExe, ", directory: ", wDir)
+	omppLog.Log(strings.Join(cmd.Args, " "))
+
+	err = cmd.Start()
+	if err != nil {
+		omppLog.Log("Model run error: ", err)
+		rsc.updateRunState(req.ModelDigest, rs.RunStamp, true, err.Error())
+		rs.IsFinal = true
+		return rs, err // exit with error: model failed to start
+	}
+	// else model started: wait until run completed
+	go func(digest, runStamp string, cmd *exec.Cmd) {
 
 		// wait until stdout and stderr closed
 		for outDoneC != nil || errDoneC != nil {
@@ -161,28 +180,7 @@ func (rsc *RunStateCatalog) runModel(req *RunRequest) (*RunState, error) {
 		}
 		// else: completed OK
 		rsc.updateRunState(digest, runStamp, true, "")
-	}
-
-	// run state initialized: save in run state list
-	rsc.createProcRunState(rs)
-
-	// start console output listners
-	go doLog(req.ModelDigest, rs.RunStamp, outPipe, outDoneC)
-	go doLog(req.ModelDigest, rs.RunStamp, errPipe, errDoneC)
-
-	// start the model
-	omppLog.Log("Run ", mExe, " in ", wDir)
-	omppLog.Log(strings.Join(cmd.Args, " "))
-
-	err = cmd.Start()
-	if err != nil {
-		omppLog.Log("Model run error: ", err)
-		rsc.updateRunState(req.ModelDigest, rs.RunStamp, true, err.Error())
-		rs.IsFinal = true
-		return rs, err // exit with error: model failed to start
-	}
-	// else start model listener
-	go doRunWait(req.ModelDigest, rs.RunStamp, cmd)
+	}(req.ModelDigest, rs.RunStamp, cmd)
 
 	return rs, nil
 }

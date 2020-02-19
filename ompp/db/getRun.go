@@ -125,6 +125,37 @@ func GetRunByDigestOrStampOrName(dbConn *sql.DB, modelId int, rdsn string) (*Run
 	return r, err
 }
 
+// GetRunListByDigestOrStampOrName return list of model run rows by run digest or run stamp or run name: run_lst table rows.
+//
+// It does select run row by digest, if not found then by model id and stamp, if not found by model id and run name.
+// If there is multiple runs with this stamp or name then multiple rows returned
+func GetRunListByDigestOrStampOrName(dbConn *sql.DB, modelId int, rdsn string) ([]RunRow, error) {
+
+	sql := "SELECT" +
+		" H.run_id, H.model_id, H.run_name, H.sub_count," +
+		" H.sub_started, H.sub_completed, H.create_dt, H.status," +
+		" H.update_dt, H.run_digest, H.run_stamp" +
+		" FROM run_lst H"
+
+	rLst, err := getRunLst(dbConn,
+		sql+" WHERE H.model_id = "+strconv.Itoa(modelId)+
+			" AND H.run_digest = "+toQuoted(rdsn))
+
+	if err == nil && len(rLst) <= 0 {
+		rLst, err = getRunLst(dbConn,
+			sql+" WHERE H.model_id = "+strconv.Itoa(modelId)+
+				" AND H.run_stamp = "+toQuoted(rdsn)+
+				" ORDER BY 1")
+	}
+	if err == nil && len(rLst) <= 0 {
+		rLst, err = getRunLst(dbConn,
+			sql+" WHERE H.model_id = "+strconv.Itoa(modelId)+
+				" AND H.run_name = "+toQuoted(rdsn)+
+				" ORDER BY 1")
+	}
+	return rLst, err
+}
+
 // getRunRow return run_lst table row.
 func getRunRow(dbConn *sql.DB, query string) (*RunRow, error) {
 

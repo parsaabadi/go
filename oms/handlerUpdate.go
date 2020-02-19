@@ -568,7 +568,7 @@ func worksetParameterCopyFromWsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // runDeleteHandler delete model run including output table values and run input parameters
-// by model digest-or-name and run digest-or-stamp-name:
+// by model digest-or-name and run digest-or-stamp-or-name:
 // DELETE /api/model/:model/run/:run
 // POST   /api/run-delete?model=modelNameOrDigest&run=runDigestOrStampOrName
 // If multiple models with same name exist then result is undefined.

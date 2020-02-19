@@ -401,7 +401,7 @@ func GetTaskRunByName(dbConn *sql.DB, taskId int, name string) (*TaskRunRow, err
 // GetTaskRunByStampOrName return modeling task run status by task id and task run stamp or task run name: task_run_lst table row.
 //
 // It does select task run row by task id and stamp, if not found by task id and run name.
-// If there is multiple task runs with this stamp or name then run with min(task_run_id) returned
+// If there is multiple task runs with this stamp or name then run with min(task_run_id) returned.
 func GetTaskRunByStampOrName(dbConn *sql.DB, taskId int, trsn string) (*TaskRunRow, error) {
 
 	tr, err := GetTaskRunByStamp(dbConn, taskId, trsn)
@@ -409,6 +409,30 @@ func GetTaskRunByStampOrName(dbConn *sql.DB, taskId int, trsn string) (*TaskRunR
 		tr, err = GetTaskRunByName(dbConn, taskId, trsn)
 	}
 	return tr, err
+}
+
+// GetTaskRunListByStampOrName return modeling task run rows from task_run_lst table by task id and task run stamp or task run name.
+//
+// It does select task run row by task id and stamp, if not found by task id and run name.
+// If there is multiple task runs with this stamp or name then multiple rows returned.
+func GetTaskRunListByStampOrName(dbConn *sql.DB, taskId int, trsn string) ([]TaskRunRow, error) {
+
+	runRs, err := getTaskRunLst(dbConn,
+		"SELECT R.task_run_id, R.task_id, R.run_name, R.sub_count, R.create_dt, R.status, R.update_dt, R.run_stamp"+
+			" FROM task_run_lst R"+
+			" WHERE R.task_id = "+strconv.Itoa(taskId)+
+			" AND R.run_stamp = "+toQuoted(trsn)+
+			" ORDER BY 1")
+
+	if err == nil && len(runRs) <= 0 {
+		runRs, err = getTaskRunLst(dbConn,
+			"SELECT R.task_run_id, R.task_id, R.run_name, R.sub_count, R.create_dt, R.status, R.update_dt, R.run_stamp"+
+				" FROM task_run_lst R"+
+				" WHERE R.task_id = "+strconv.Itoa(taskId)+
+				" AND R.run_name = "+toQuoted(trsn)+
+				" ORDER BY 1")
+	}
+	return runRs, err
 }
 
 // GetTaskFirstRun return first run of the modeling task: task_run_lst table row.

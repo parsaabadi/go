@@ -93,12 +93,12 @@ func (rsc *RunStateCatalog) RefreshCatalog(digestLst []string, modelLogDir, etcD
 	rsc.modelLogDir = modelLogDir
 	rsc.etcDir = etcDir
 
-	// copy most recent half of existing models run history
+	// copy existing models run history
 	rLst := list.New()
 
 	if rsc.runLst != nil {
 		n := 0
-		for re := rsc.runLst.Front(); re != nil; re = re.Next() {
+		for re := rsc.runLst.Front(); n < runHistoryMaxSize && re != nil; re = re.Next() {
 
 			rs, ok := re.Value.(*procRunState) // model run state expected
 			if !ok || rs == nil {
@@ -110,13 +110,8 @@ func (rsc *RunStateCatalog) RefreshCatalog(digestLst []string, modelLogDir, etcD
 				if rs.ModelDigest == digestLst[k] {
 					rLst.PushBack(rs)
 					n++
-					break
+					break // model digest found, append run state to run list history
 				}
-			}
-
-			// copy only half of most recent model run history
-			if n > runHistoryMaxSize/2 {
-				break
 			}
 		}
 	}

@@ -122,7 +122,9 @@ var pageMaxSize int64 = 100
 var doubleFmt string = "%.15g"
 
 // max number of model run states to keep in run list history
-var runHistoryMaxSize int = 100
+const runHistoryDefaultSize int = 100
+
+var runHistoryMaxSize int = runHistoryDefaultSize
 
 // main entry point: wrapper to handle errors
 func main() {
@@ -150,7 +152,7 @@ func mainBody(args []string) error {
 	_ = flag.String(uiLangsArgKey, "en", "comma-separated list of supported languages")
 	_ = flag.String(encodingArgKey, "", "code page to convert source file into utf-8, e.g.: windows-1252")
 	_ = flag.Int64(pageSizeAgrKey, pageMaxSize, "max number of rows to return from read parameters or output tables")
-	_ = flag.Int(runHistorySizeAgrKey, runHistoryMaxSize, "max number of model runs to keep in run list history")
+	_ = flag.Int(runHistorySizeAgrKey, runHistoryDefaultSize, "max number of model runs to keep in run list history")
 	_ = flag.String(doubleFormatArgKey, doubleFmt, "format to convert float or double value to string")
 
 	// pairs of full and short argument names to map short name to full name
@@ -171,9 +173,9 @@ func mainBody(args []string) error {
 
 	pageMaxSize = runOpts.Int64(pageSizeAgrKey, pageMaxSize)
 	doubleFmt = runOpts.String(doubleFormatArgKey)
-	runHistoryMaxSize = runOpts.Int(runHistorySizeAgrKey, runHistoryMaxSize)
+	runHistoryMaxSize = runOpts.Int(runHistorySizeAgrKey, runHistoryDefaultSize)
 	if runHistoryMaxSize <= 0 {
-		runHistoryMaxSize = 4
+		runHistoryMaxSize = runHistoryDefaultSize
 	}
 
 	rootDir := runOpts.String(rootDirArgKey) // server root directory
@@ -367,6 +369,11 @@ func apiGetRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/status", runStatusHandler, logRequest)
 	router.Get("/api/run-status", runStatusHandler, logRequest)
 
+	// GET /api/model/:model/run/:run/status/list
+	// GET /api/run-status-list?model=modelNameOrDigest&run=runDigestOrStampOrName
+	router.Get("/api/model/:model/run/:run/status/list", runStatusListHandler, logRequest)
+	router.Get("/api/run-status-list", runStatusListHandler, logRequest)
+
 	// GET /api/model/:model/run/status/first
 	// GET /api/run-first-status?model=modelNameOrDigest
 	router.Get("/api/model/:model/run/status/first", firstRunStatusHandler, logRequest)
@@ -480,6 +487,11 @@ func apiGetRoutes(router *vestigo.Router) {
 	// GET /api/task-run-status?model=modelNameOrDigest&task=taskName&run=taskRunStampOrName
 	router.Get("/api/model/:model/task/:task/run-status/run/:run", taskRunStatusHandler, logRequest)
 	router.Get("/api/task-run-status", taskRunStatusHandler, logRequest)
+
+	// GET /api/model/:model/task/:task/run-status/list/:run
+	// GET /api/task-run-status-list?model=modelNameOrDigest&task=taskName&run=taskRunStampOrName
+	router.Get("/api/model/:model/task/:task/run-status/list/:run", taskRunStatusListHandler, logRequest)
+	router.Get("/api/task-run-status-list", taskRunStatusListHandler, logRequest)
 
 	// GET /api/model/:model/task/:task/run-status/first
 	// GET /api/task-first-run-status?model=modelNameOrDigest&task=taskName

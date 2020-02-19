@@ -285,6 +285,59 @@ func (mc *ModelCatalog) TaskRunStatus(dn, tn, trsn string) (*db.TaskRunRow, bool
 	return rst, true
 }
 
+// TaskRunStatusList return list of task_run_lst db rows by model digest-or-name, task name and task run stamp or run name.
+func (mc *ModelCatalog) TaskRunStatusList(dn, tn, trsn string) ([]db.TaskRunRow, bool) {
+
+	// if model digest-or-name or task name or task run nam is empty then return empty results
+	if dn == "" {
+		omppLog.Log("Warning: invalid (empty) model digest and name")
+		return []db.TaskRunRow{}, false
+	}
+	if tn == "" {
+		omppLog.Log("Warning: invalid (empty) task name")
+		return []db.TaskRunRow{}, false
+	}
+	if trsn == "" {
+		omppLog.Log("Warning: invalid (empty) task run stamp or name")
+		return []db.TaskRunRow{}, false
+	}
+
+	// load model metadata in order to convert to "public"
+	idx, ok := mc.loadModelMeta(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return []db.TaskRunRow{}, false // return empty result: model not found or error
+	}
+
+	// lock catalog and find model index by digest or name
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	// find modeling task: get task_lst db row by task name
+	tr, err := db.GetTaskByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, tn)
+	if err != nil {
+		omppLog.Log("Error at get modeling task: ", dn, ": ", tn, ": ", err.Error())
+		return []db.TaskRunRow{}, false // return empty result: task select error
+	}
+	if tr == nil {
+		omppLog.Log("Warning modeling task not found: ", dn, ": ", tn)
+		return []db.TaskRunRow{}, false // return empty result: task_lst row not found
+	}
+
+	// get task run row by run stamp or run name and task id
+	rLst, err := db.GetTaskRunListByStampOrName(mc.modelLst[idx].dbConn, tr.TaskId, trsn)
+	if err != nil {
+		omppLog.Log("Error at get modeling task run status: ", dn, ": ", tn, ": ", trsn, ": ", err.Error())
+		return []db.TaskRunRow{}, false // return empty result: select error
+	}
+	if len(rLst) <= 0 {
+		omppLog.Log("Warning modeling task run not found: ", dn, ": ", tn, ": ", trsn)
+		return []db.TaskRunRow{}, false // return empty result: task_lst row not found or not belong to the task
+	}
+
+	return rLst, true
+}
+
 // FirstOrLastTaskRunStatus return first or last task_run_lst db row by model digest-or-name and task name.
 func (mc *ModelCatalog) FirstOrLastTaskRunStatus(dn, tn string, isFirst, isCompleted bool) (*db.TaskRunRow, bool) {
 
