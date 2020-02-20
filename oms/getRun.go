@@ -39,7 +39,7 @@ func (mc *ModelCatalog) RunStatus(dn, rdsn string) (*db.RunPub, bool) {
 		return &db.RunPub{}, false // return empty result: run select error
 	}
 	if r == nil {
-		omppLog.Log("Warning run status not found: ", dn, ": ", rdsn)
+		// omppLog.Log("Warning run status not found: ", dn, ": ", rdsn)
 		return &db.RunPub{}, false // return empty result: run_lst row not found
 	}
 
@@ -90,7 +90,7 @@ func (mc *ModelCatalog) RunStatusList(dn, rdsn string) ([]db.RunPub, bool) {
 		return []db.RunPub{}, false // return empty result: run select error
 	}
 	if len(rLst) <= 0 {
-		omppLog.Log("Warning run status not found: ", dn, ": ", rdsn)
+		// omppLog.Log("Warning run status not found: ", dn, ": ", rdsn)
 		return []db.RunPub{}, false // return empty result: run_lst row not found
 	}
 

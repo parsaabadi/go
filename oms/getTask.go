@@ -278,7 +278,7 @@ func (mc *ModelCatalog) TaskRunStatus(dn, tn, trsn string) (*db.TaskRunRow, bool
 		return &db.TaskRunRow{}, false // return empty result: select error
 	}
 	if rst == nil {
-		omppLog.Log("Warning modeling task run not found: ", dn, ": ", tn, ": ", trsn)
+		// omppLog.Log("Warning modeling task run not found: ", dn, ": ", tn, ": ", trsn)
 		return &db.TaskRunRow{}, false // return empty result: task_lst row not found or not belong to the task
 	}
 
@@ -331,7 +331,7 @@ func (mc *ModelCatalog) TaskRunStatusList(dn, tn, trsn string) ([]db.TaskRunRow,
 		return []db.TaskRunRow{}, false // return empty result: select error
 	}
 	if len(rLst) <= 0 {
-		omppLog.Log("Warning modeling task run not found: ", dn, ": ", tn, ": ", trsn)
+		// omppLog.Log("Warning modeling task run not found: ", dn, ": ", tn, ": ", trsn)
 		return []db.TaskRunRow{}, false // return empty result: task_lst row not found or not belong to the task
 	}
 
@@ -389,7 +389,7 @@ func (mc *ModelCatalog) FirstOrLastTaskRunStatus(dn, tn string, isFirst, isCompl
 		return &db.TaskRunRow{}, false // return empty result: select error
 	}
 	if rst == nil {
-		omppLog.Log("Warning modeling task run not found: ", dn, ": ", tn)
+		// omppLog.Log("Warning modeling task run not found: ", dn, ": ", tn)
 		return &db.TaskRunRow{}, false // return empty result: task_lst row not found or not belong to the task
 	}
 
