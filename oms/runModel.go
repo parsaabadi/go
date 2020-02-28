@@ -69,7 +69,7 @@ func (rsc *RunStateCatalog) runModel(req *RunRequest) (*RunState, error) {
 	mArgs := []string{}
 	mArgs = append(mArgs, "-OpenM.RunStamp", rStamp)
 	mArgs = append(mArgs, "-OpenM.LogToConsole", "true")
-	mArgs = append(mArgs, "-OpenM.Version", "true")
+	// mArgs = append(mArgs, "-OpenM.Version", "true")
 
 	// append model run options from run request
 	for krq, val := range req.Opts {
