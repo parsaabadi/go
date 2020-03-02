@@ -73,7 +73,7 @@ type RunStateLogPage struct {
 const logTickTimeout = 7
 
 // file name of model run template by default
-const defaultRunTemplate = "mpiModelRun.template.txt"
+const defaultRunTemplate = "mpi.ModelRun.template.txt"
 
 // RefreshCatalog reset state of most recent model run for each model.
 func (rsc *RunStateCatalog) RefreshCatalog(digestLst []string, modelLogDir, etcDir string) error {

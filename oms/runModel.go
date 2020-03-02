@@ -187,7 +187,7 @@ func (rsc *RunStateCatalog) runModel(req *RunRequest) (*RunState, error) {
 
 // makeCommand return command to run the model.
 // If template file name specified then template processing results used to create command line.
-// If this is MPI model run then tempalate is requred and by default "mpiModelRun.template.txt" being used.
+// If this is MPI model run then tempalate is requred and by default "mpi.ModelRun.template.txt" being used.
 func (rsc *RunStateCatalog) makeCommand(binDir, workDir string, mArgs []string, req *RunRequest) (*exec.Cmd, error) {
 
 	// check is it MPI or regular process model run, to run MPI model template is required
