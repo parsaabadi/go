@@ -280,12 +280,12 @@ func (meta *ModelMeta) updateInternals() error {
 
 		// digest model header: name and model type
 		hMd5.Reset()
-		_, err := hMd5.Write([]byte("model_name,model_type\n"))
+		_, err := hMd5.Write([]byte("model_name,model_type,model_ver\n"))
 		if err != nil {
 			return err
 		}
 		_, err = hMd5.Write([]byte(
-			meta.Model.Name + "," + strconv.Itoa(meta.Model.Type) + "\n"))
+			meta.Model.Name + "," + strconv.Itoa(meta.Model.Type) + "," + meta.Model.Version + "\n"))
 		if err != nil {
 			return err
 		}
