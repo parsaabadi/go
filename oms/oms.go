@@ -810,6 +810,9 @@ func apiUpdateRoutes(router *vestigo.Router) {
 // add web-service /api routes to run the model and monitor progress
 func apiRunModelRoutes(router *vestigo.Router) {
 
+	// GET /api/run/catalog/state
+	router.Get("/api/run/catalog/state", runCatalogStateHandler, logRequest)
+
 	// POST /api/run
 	router.Post("/api/run", runModelHandler, logRequest)
 
@@ -820,6 +823,8 @@ func apiRunModelRoutes(router *vestigo.Router) {
 	router.Get("/api/run/log/model/:model/stamp/:stamp/start/:start", runModelLogPageHandler, logRequest)
 	router.Get("/api/run/log/model/:model/stamp/:stamp/start/:start/count/:count", runModelLogPageHandler, logRequest)
 	router.Get("/api/run-log", runModelLogPageHandler, logRequest)
+
+	// reject run log if request ill-formed
 	router.Get("/api/run/log/model/", http.NotFound)
 	router.Get("/api/run/log/model/:model/stamp/", http.NotFound)
 	router.Get("/api/run/log/model/:model/stamp/:stamp/start/", http.NotFound)

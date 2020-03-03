@@ -93,3 +93,11 @@ func runModelLogPageHandler(w http.ResponseWriter, r *http.Request) {
 	// write new model run key and json response
 	jsonResponse(w, r, lrp)
 }
+
+// runCatalogStateHandler return model run catalog state and configuration.
+// GET /api/run/catalog/state
+func runCatalogStateHandler(w http.ResponseWriter, r *http.Request) {
+
+	cfg := theRunStateCatalog.toPublic()
+	jsonResponse(w, r, cfg)
+}

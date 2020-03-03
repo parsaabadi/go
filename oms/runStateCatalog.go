@@ -5,6 +5,7 @@ package main
 
 import (
 	"container/list"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -17,12 +18,21 @@ type RunStateCatalog struct {
 	isLogDirEnabled bool       // if true then use model log directory for model run logs
 	modelLogDir     string     // model log directory, if relative then must be relative to oms root directory
 	etcDir          string     // model run templates directory, if relative then must be relative to oms root directory
-	lastTimeStamp   string     // most recent last timestamp
+	mpiTemplates    []string   // list of model run templates
+	lastTimeStamp   string     // most recent timestamp
 	runLst          *list.List // list of model runs state
 }
 
 // list of most recent state of model run for each model.
 var theRunStateCatalog RunStateCatalog
+
+// RunCatalogPub is "public" state of model run catalog for json import-export
+type RunCatalogPub struct {
+	IsLogDirEnabled bool     // if true then use model log directory for model run logs
+	LastTimeStamp   string   // most recent timestamp
+	RunCount        int      // count of model runs state
+	MpiTemplates    []string // list of model run templates
+}
 
 // RunRequest is request to run the model with specified model options.
 // Log to console always enabled.
@@ -84,6 +94,19 @@ func (rsc *RunStateCatalog) RefreshCatalog(digestLst []string, modelLogDir, etcD
 		isLog = isDirExist(modelLogDir) == nil
 	}
 
+	// get list of mpi template files
+	tl := []string{}
+	if isDirExist(etcDir) == nil {
+		if fl, err := filepath.Glob(etcDir + "/" + "mpi.*.template.txt"); err == nil {
+			for k := range fl {
+				f := filepath.Base(fl[k])
+				if f != "." && f != ".." && f != "/" && f != "\\" {
+					tl = append(tl, f)
+				}
+			}
+		}
+	}
+
 	// lock and update run state catalog
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
@@ -92,6 +115,7 @@ func (rsc *RunStateCatalog) RefreshCatalog(digestLst []string, modelLogDir, etcD
 	rsc.isLogDirEnabled = isLog
 	rsc.modelLogDir = modelLogDir
 	rsc.etcDir = etcDir
+	rsc.mpiTemplates = tl
 
 	// copy existing models run history
 	rLst := list.New()
@@ -127,6 +151,13 @@ func (rsc *RunStateCatalog) getModelLogDir() (string, bool) {
 	return rsc.modelLogDir, rsc.isLogDirEnabled
 }
 
+// getEtcLogDir return server etc directory
+func (rsc *RunStateCatalog) getEtcDir() string {
+	rsc.rscLock.Lock()
+	defer rsc.rscLock.Unlock()
+	return rsc.etcDir
+}
+
 // getNewTimeStamp return new unique timestamp and source time of it.
 func (rsc *RunStateCatalog) getNewTimeStamp() (string, time.Time) {
 	rsc.rscLock.Lock()
@@ -141,4 +172,22 @@ func (rsc *RunStateCatalog) getNewTimeStamp() (string, time.Time) {
 	}
 	rsc.lastTimeStamp = ts
 	return ts, dtNow
+}
+
+// get "public" state of model run catalog
+func (rsc *RunStateCatalog) toPublic() *RunCatalogPub {
+
+	// lock run state catalog and return results
+	rsc.rscLock.Lock()
+	defer rsc.rscLock.Unlock()
+
+	rcp := RunCatalogPub{
+		IsLogDirEnabled: rsc.isLogDirEnabled,
+		LastTimeStamp:   rsc.lastTimeStamp,
+		RunCount:        rsc.runLst.Len(),
+		MpiTemplates:   make([]string, len(rsc.mpiTemplates)),
+	}
+	copy(rcp.MpiTemplates, rsc.mpiTemplates)
+
+	return &rcp
 }
