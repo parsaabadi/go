@@ -6,6 +6,7 @@ dbcopy is command line tool for import-export OpenM++ model metadata, input para
 
 Arguments for dbcopy can be specified on command line or through .ini file:
   dbcopy -ini my.ini
+  dbcopy -OpenM.IniFile my-dbcopy.ini
 Command line arguments take precedence over ini-file options.
 
 Only model argument does not have default value and must be specified explicitly:

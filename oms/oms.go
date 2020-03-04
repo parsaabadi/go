@@ -9,6 +9,7 @@ Web-server allow to serve static html (css, images, javascipt) content from html
 
 Arguments for oms can be specified on command line or through .ini file:
   oms -ini my.ini
+  oms -OpenM.IniFile my-oms.ini
 Command line arguments take precedence over ini-file options.
 
 Following arguments supporetd by oms:
