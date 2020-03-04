@@ -138,6 +138,7 @@ ODBC dbcopy tested with MySQL (MariaDB), PostgreSQL, Microsoft SQL, Oracle and D
 
 Also dbcopy support OpenM++ standard log settings (described in wiki at http://www.openmpp.org/wiki/):
   -OpenM.LogToConsole: if true then log to standard output, default: true
+  -v:                  short form of: -OpenM.LogToConsole
   -OpenM.LogToFile:    if true then log to file
   -OpenM.LogFilePath:  path to log file, default = current/dir/exeName.log
   -OpenM.LogUseTs:     if true then use time-stamp in log file name

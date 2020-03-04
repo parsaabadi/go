@@ -61,6 +61,7 @@ max number of model runs to keep in run list history, default: 100.
 
 Also oms support OpenM++ standard log settings (described in wiki at http://www.openmpp.org/wiki/):
   -OpenM.LogToConsole:     if true then log to standard output, default: true
+  -v:                      short form of: -OpenM.LogToConsole
   -OpenM.LogToFile:        if true then log to file
   -OpenM.LogFilePath:      path to log file, default = current/dir/exeName.log
   -OpenM.LogUseDailyStamp: if true then use dayily stamp in log file name (rotate log files dayily)
