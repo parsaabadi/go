@@ -17,6 +17,10 @@ Following arguments supporetd by oms:
   -oms.ApiOnly false
 if true then API only web-service, it is false by default and oms also act as http server for openM++ UI.
 
+  -oms.loginUrl  /public/login.html
+  -oms.logoutUrl /public/logout.html
+login / logout URL which UI can use for users authentication
+
   -oms.RootDir some/path
 oms root directory, default: current directory.
 Expected to have /html subdirectory unless -oms.ApiOnly true specified.
@@ -98,6 +102,8 @@ const (
 	listenShortKey       = "l"                 // address to listen (short form)
 	logRequestArgKey     = "oms.LogRequest"    // if true then log http request
 	apiOnlyArgKey        = "oms.ApiOnly"       // if true then API only web-service, no UI
+	loginUrlKey          = "oms.loginUrl"      // user login URL for UI
+	logoutUrlKey         = "oms.logoutUrl"     // user logout URL for UI
 	uiLangsArgKey        = "oms.Languages"     // list of supported languages
 	encodingArgKey       = "oms.CodePage"      // code page for converting source files, e.g. windows-1252
 	pageSizeAgrKey       = "oms.MaxRowCount"   // max number of rows to return from read parameters or output tables
@@ -111,22 +117,28 @@ const htmlSubDir = "html"
 // configuration subdirectory with template(s) to run model on MPI cluster
 const etcDir = "etc"
 
-// matcher to find UI supported language corresponding to request
-var uiLangMatcher language.Matcher
+// max number of model run states to keep in run list history
+const runHistoryDefaultSize int = 100
+
+// server run configuration
+var theCfg = struct {
+	rootDir           string // server root directory
+	pageMaxSize       int64  // default "page" size: row count to read parameters or output tables
+	doubleFmt         string // format to convert float or double value to string
+	runHistoryMaxSize int    // max number of model run states to keep in run list history
+	loginUrl          string // user login URL for UI
+	logoutUrl         string // user logout URL for UI
+}{
+	pageMaxSize:       100,
+	doubleFmt:         "%.15g",
+	runHistoryMaxSize: runHistoryDefaultSize,
+}
 
 // if true then log http requests
 var isLogRequest bool
 
-// default "page" size: row count to read parameters or output tables
-var pageMaxSize int64 = 100
-
-// format to convert float or double value to string
-var doubleFmt string = "%.15g"
-
-// max number of model run states to keep in run list history
-const runHistoryDefaultSize int = 100
-
-var runHistoryMaxSize int = runHistoryDefaultSize
+// matcher to find UI supported language corresponding to request
+var uiLangMatcher language.Matcher
 
 // main entry point: wrapper to handle errors
 func main() {
@@ -151,14 +163,16 @@ func mainBody(args []string) error {
 	_ = flag.String(listenShortKey, "localhost:4040", "address to listen (short form of "+listenArgKey+")")
 	_ = flag.Bool(logRequestArgKey, false, "if true then log HTTP requests")
 	_ = flag.Bool(apiOnlyArgKey, false, "if true then API only web-service, no UI")
+	_ = flag.String(loginUrlKey, "", "user login URL for authentication in UI")
+	_ = flag.String(logoutUrlKey, "", "user logout URL for UI")
 	_ = flag.String(uiLangsArgKey, "en", "comma-separated list of supported languages")
 	_ = flag.String(encodingArgKey, "", "code page to convert source file into utf-8, e.g.: windows-1252")
-	_ = flag.Int64(pageSizeAgrKey, pageMaxSize, "max number of rows to return from read parameters or output tables")
+	_ = flag.Int64(pageSizeAgrKey, theCfg.pageMaxSize, "max number of rows to return from read parameters or output tables")
 	_ = flag.Int(runHistorySizeAgrKey, runHistoryDefaultSize, "max number of model runs to keep in run list history")
-	_ = flag.String(doubleFormatArgKey, doubleFmt, "format to convert float or double value to string")
+	_ = flag.String(doubleFormatArgKey, theCfg.doubleFmt, "format to convert float or double value to string")
 
 	// pairs of full and short argument names to map short name to full name
-	var optFs = []config.FullShort{
+	optFs := []config.FullShort{
 		config.FullShort{Full: listenArgKey, Short: listenShortKey},
 	}
 
@@ -172,34 +186,37 @@ func mainBody(args []string) error {
 	}
 	isLogRequest = runOpts.Bool(logRequestArgKey)
 	isApiOnly := runOpts.Bool(apiOnlyArgKey)
+	theCfg.loginUrl = runOpts.String(loginUrlKey)
+	theCfg.logoutUrl = runOpts.String(logoutUrlKey)
 
-	pageMaxSize = runOpts.Int64(pageSizeAgrKey, pageMaxSize)
-	doubleFmt = runOpts.String(doubleFormatArgKey)
-	runHistoryMaxSize = runOpts.Int(runHistorySizeAgrKey, runHistoryDefaultSize)
-	if runHistoryMaxSize <= 0 {
-		runHistoryMaxSize = runHistoryDefaultSize
+	theCfg.pageMaxSize = runOpts.Int64(pageSizeAgrKey, theCfg.pageMaxSize)
+	theCfg.doubleFmt = runOpts.String(doubleFormatArgKey)
+
+	theCfg.runHistoryMaxSize = runOpts.Int(runHistorySizeAgrKey, runHistoryDefaultSize)
+	if theCfg.runHistoryMaxSize <= 0 {
+		theCfg.runHistoryMaxSize = runHistoryDefaultSize
 	}
 
-	rootDir := runOpts.String(rootDirArgKey) // server root directory
+	theCfg.rootDir = runOpts.String(rootDirArgKey) // server root directory
 
 	// if UI required then server root directory must have html subdir
 	if !isApiOnly {
-		htmlDir := filepath.Join(rootDir, htmlSubDir)
+		htmlDir := filepath.Join(theCfg.rootDir, htmlSubDir)
 		if err := isDirExist(htmlDir); err != nil {
 			return err
 		}
 	}
 
 	// change to root directory
-	if rootDir != "" && rootDir != "." {
-		if err := os.Chdir(rootDir); err != nil {
+	if theCfg.rootDir != "" && theCfg.rootDir != "." {
+		if err := os.Chdir(theCfg.rootDir); err != nil {
 			return errors.New("Error: unable to change directory: " + err.Error())
 		}
 	}
 	omppLog.New(logOpts) // adjust log options, log path can be relative to root directory
 
-	if rootDir != "" && rootDir != "." {
-		omppLog.Log("Changing directory to: ", rootDir)
+	if theCfg.rootDir != "" && theCfg.rootDir != "." {
+		omppLog.Log("Changing directory to: ", theCfg.rootDir)
 	}
 
 	// model directory required to build initial list of model sqlite files
@@ -215,7 +232,7 @@ func mainBody(args []string) error {
 
 	// etc subdirectory required to run MPI models
 	if err := isDirExist(etcDir); err != nil {
-		omppLog.Log("Warning: templates directory not found, it is required to run models on MPI cluster: ", filepath.Join(rootDir, etcDir))
+		omppLog.Log("Warning: templates directory not found, it is required to run models on MPI cluster: ", filepath.Join(theCfg.rootDir, etcDir))
 	}
 
 	// refresh run state catalog
@@ -812,9 +829,6 @@ func apiUpdateRoutes(router *vestigo.Router) {
 // add web-service /api routes to run the model and monitor progress
 func apiRunModelRoutes(router *vestigo.Router) {
 
-	// GET /api/run/catalog/state
-	router.Get("/api/run/catalog/state", runCatalogStateHandler, logRequest)
-
 	// POST /api/run
 	router.Post("/api/run", runModelHandler, logRequest)
 
@@ -835,6 +849,9 @@ func apiRunModelRoutes(router *vestigo.Router) {
 
 // add web-service /api routes for administrative tasks
 func apiAdminRoutes(router *vestigo.Router) {
+
+	// GET /api/service/state
+	router.Get("/api/service/state", serviceStateHandler, logRequest)
 
 	// POST /api/admin/all-models/refresh
 	router.Post("/api/admin/all-models/refresh", allModelsRefreshHandler, logRequest)

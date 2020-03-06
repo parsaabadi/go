@@ -151,9 +151,9 @@ func (mc *ModelCatalog) ParameterToCsvConverter(
 	var cvt func(interface{}, []string) error
 
 	if isCode {
-		cvt, err = cell.CsvToRow(mc.modelLst[idx].meta, name, doubleFmt, "")
+		cvt, err = cell.CsvToRow(mc.modelLst[idx].meta, name, theCfg.doubleFmt, "")
 	} else {
-		cvt, err = cell.CsvToIdRow(mc.modelLst[idx].meta, name, doubleFmt, "")
+		cvt, err = cell.CsvToIdRow(mc.modelLst[idx].meta, name, theCfg.doubleFmt, "")
 	}
 	if err != nil {
 		omppLog.Log("Failed to create parameter converter to csv: ", dn, ": ", name, ": ", err.Error())
@@ -218,9 +218,9 @@ func (mc *ModelCatalog) TableToCsvConverter(
 	var cvt func(interface{}, []string) error
 
 	if isCode {
-		cvt, err = cell.CsvToRow(mc.modelLst[idx].meta, name, doubleFmt, "")
+		cvt, err = cell.CsvToRow(mc.modelLst[idx].meta, name, theCfg.doubleFmt, "")
 	} else {
-		cvt, err = cell.CsvToIdRow(mc.modelLst[idx].meta, name, doubleFmt, "")
+		cvt, err = cell.CsvToIdRow(mc.modelLst[idx].meta, name, theCfg.doubleFmt, "")
 	}
 	if err != nil {
 		omppLog.Log("Failed to create output table converter to csv: ", dn, ": ", name, ": ", err.Error())

@@ -194,7 +194,7 @@ func doParameterGetPageHandler(w http.ResponseWriter, r *http.Request, srcArg st
 		http.Error(w, "Invalid value of start row number to read "+name, http.StatusBadRequest)
 		return
 	}
-	count, ok := getInt64RequestParam(r, "count", pageMaxSize)
+	count, ok := getInt64RequestParam(r, "count", theCfg.pageMaxSize)
 	if !ok {
 		http.Error(w, "Invalid value of max row count to read "+name, http.StatusBadRequest)
 		return
@@ -279,7 +279,7 @@ func doTableGetPageHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllA
 		http.Error(w, "Invalid value of start row number to read "+name, http.StatusBadRequest)
 		return
 	}
-	count, ok := getInt64RequestParam(r, "count", pageMaxSize)
+	count, ok := getInt64RequestParam(r, "count", theCfg.pageMaxSize)
 	if !ok {
 		http.Error(w, "Invalid value of max row count to read "+name, http.StatusBadRequest)
 		return

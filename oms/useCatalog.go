@@ -15,6 +15,20 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
+// get "public" state of model catalog
+func (mc *ModelCatalog) toPublic() *ModelCatalogPub {
+
+	// lock run state catalog and return results
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	mp := ModelCatalogPub{
+		ModelDir:   mc.modelDir,
+		ModelCount: len(mc.modelLst),
+	}
+	return &mp
+}
+
 // RefreshSqlite open db-connection to model.sqlite files in model directory and read model_dic row for each model.
 // If multiple version of the same model (equal by digest) exist in different files then only one is used.
 // All previously opened db connections are closed.

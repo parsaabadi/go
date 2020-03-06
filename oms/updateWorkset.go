@@ -372,7 +372,7 @@ func (mc *ModelCatalog) UpdateWorksetParameterPage(dn, wsn, name string, cellLst
 		WriteLayout: db.WriteLayout{Name: name, ToId: wst.SetId},
 		IsToRun:     false,
 		IsPage:      true,
-		DoubleFmt:   doubleFmt,
+		DoubleFmt:   theCfg.doubleFmt,
 	}
 
 	// parameter must be in workset already

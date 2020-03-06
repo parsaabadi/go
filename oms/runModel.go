@@ -69,7 +69,6 @@ func (rsc *RunStateCatalog) runModel(req *RunRequest) (*RunState, error) {
 	mArgs := []string{}
 	mArgs = append(mArgs, "-OpenM.RunStamp", rStamp)
 	mArgs = append(mArgs, "-OpenM.LogToConsole", "true")
-	// mArgs = append(mArgs, "-OpenM.Version", "true")
 
 	// append model run options from run request
 	for krq, val := range req.Opts {
@@ -193,7 +192,7 @@ func (rsc *RunStateCatalog) makeCommand(binDir, workDir string, mArgs []string, 
 	// check is it MPI or regular process model run, to run MPI model template is required
 	isMpi := req.Mpi.Np != 0
 	if isMpi && req.Template == "" {
-		req.Template = defaultRunTemplate // use default template to run MPI model
+		req.Template = defaultMpiTemplate // use default template to run MPI model
 	}
 	isTmpl := req.Template != ""
 
@@ -308,7 +307,7 @@ func (rsc *RunStateCatalog) createProcRunState(rs *RunState) {
 			RunState:   *rs,
 			logLineLst: make([]string, 0, 128),
 		})
-	if rsc.runLst.Len() > runHistoryMaxSize {
+	if rsc.runLst.Len() > theCfg.runHistoryMaxSize {
 		rsc.runLst.Remove(rsc.runLst.Back()) // remove old run state from history
 	}
 

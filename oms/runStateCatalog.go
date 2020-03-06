@@ -28,10 +28,12 @@ var theRunStateCatalog RunStateCatalog
 
 // RunCatalogPub is "public" state of model run catalog for json import-export
 type RunCatalogPub struct {
-	IsLogDirEnabled bool     // if true then use model log directory for model run logs
-	LastTimeStamp   string   // most recent timestamp
-	RunCount        int      // count of model runs state
-	MpiTemplates    []string // list of model run templates
+	ModelLogDir        string   // model log directory, if relative then must be relative to oms root directory
+	IsModelLogEnabled  bool     // if true then use model log directory for model run logs
+	LastTimeStamp      string   // most recent timestamp
+	RunCount           int      // count of model runs state
+	DefaultMpiTemplate string   // default template to run MPI models
+	MpiTemplates       []string // list of model run templates
 }
 
 // RunRequest is request to run the model with specified model options.
@@ -82,8 +84,8 @@ type RunStateLogPage struct {
 // timeout in msec, wait on stdout and stderr polling.
 const logTickTimeout = 7
 
-// file name of model run template by default
-const defaultRunTemplate = "mpi.ModelRun.template.txt"
+// file name of MPI model run template by default
+const defaultMpiTemplate = "mpi.ModelRun.template.txt"
 
 // RefreshCatalog reset state of most recent model run for each model.
 func (rsc *RunStateCatalog) RefreshCatalog(digestLst []string, modelLogDir, etcDir string) error {
@@ -122,7 +124,7 @@ func (rsc *RunStateCatalog) RefreshCatalog(digestLst []string, modelLogDir, etcD
 
 	if rsc.runLst != nil {
 		n := 0
-		for re := rsc.runLst.Front(); n < runHistoryMaxSize && re != nil; re = re.Next() {
+		for re := rsc.runLst.Front(); n < theCfg.runHistoryMaxSize && re != nil; re = re.Next() {
 
 			rs, ok := re.Value.(*procRunState) // model run state expected
 			if !ok || rs == nil {
@@ -151,13 +153,6 @@ func (rsc *RunStateCatalog) getModelLogDir() (string, bool) {
 	return rsc.modelLogDir, rsc.isLogDirEnabled
 }
 
-// getEtcLogDir return server etc directory
-func (rsc *RunStateCatalog) getEtcDir() string {
-	rsc.rscLock.Lock()
-	defer rsc.rscLock.Unlock()
-	return rsc.etcDir
-}
-
 // getNewTimeStamp return new unique timestamp and source time of it.
 func (rsc *RunStateCatalog) getNewTimeStamp() (string, time.Time) {
 	rsc.rscLock.Lock()
@@ -182,10 +177,12 @@ func (rsc *RunStateCatalog) toPublic() *RunCatalogPub {
 	defer rsc.rscLock.Unlock()
 
 	rcp := RunCatalogPub{
-		IsLogDirEnabled: rsc.isLogDirEnabled,
-		LastTimeStamp:   rsc.lastTimeStamp,
-		RunCount:        rsc.runLst.Len(),
-		MpiTemplates:   make([]string, len(rsc.mpiTemplates)),
+		ModelLogDir:        rsc.modelLogDir,
+		IsModelLogEnabled:  rsc.isLogDirEnabled,
+		LastTimeStamp:      rsc.lastTimeStamp,
+		RunCount:           rsc.runLst.Len(),
+		DefaultMpiTemplate: defaultMpiTemplate,
+		MpiTemplates:       make([]string, len(rsc.mpiTemplates)),
 	}
 	copy(rcp.MpiTemplates, rsc.mpiTemplates)
 

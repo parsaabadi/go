@@ -23,6 +23,12 @@ type ModelCatalog struct {
 // list of models and database connections
 var theCatalog ModelCatalog
 
+// ModelCatalogPub is "public" state of model catalog for json import-export
+type ModelCatalogPub struct {
+	ModelDir   string // model directory
+	ModelCount int    // model count
+}
+
 // modelDef is database connection and model database rows
 type modelDef struct {
 	dbConn        *sql.DB           // database connection
