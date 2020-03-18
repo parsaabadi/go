@@ -14,9 +14,6 @@ import (
 	"strings"
 	"text/template"
 	"time"
-	"unicode"
-
-	"github.com/openmpp/go/ompp/db"
 
 	"github.com/openmpp/go/ompp/helper"
 	"github.com/openmpp/go/ompp/omppLog"
@@ -25,7 +22,7 @@ import (
 // runModel starts new model run and return run stamp.
 // if run stamp not specified as input parameter then use unique timestamp.
 // Model run console output redirected to log file: models/log/modelName.runStamp.console.log
-func (rsc *RunStateCatalog) runModel(req *RunRequest) (*RunState, error) {
+func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 
 	// make model process run stamp, if not specified then use timestamp by default
 	ts, dtNow := rsc.getNewTimeStamp()
@@ -207,7 +204,7 @@ func (rsc *RunStateCatalog) runModel(req *RunRequest) (*RunState, error) {
 // makeCommand return command to run the model.
 // If template file name specified then template processing results used to create command line.
 // If this is MPI model run then tempalate is requred and by default "mpi.ModelRun.template.txt" being used.
-func (rsc *RunStateCatalog) makeCommand(binDir, workDir string, mArgs []string, req *RunRequest) (*exec.Cmd, error) {
+func (rsc *RunCatalog) makeCommand(binDir, workDir string, mArgs []string, req *RunRequest) (*exec.Cmd, error) {
 
 	// check is it MPI or regular process model run, to run MPI model template is required
 	isMpi := req.Mpi.Np != 0
@@ -315,7 +312,7 @@ func (rsc *RunStateCatalog) makeCommand(binDir, workDir string, mArgs []string, 
 }
 
 // add new model run state into run history
-func (rsc *RunStateCatalog) createProcRunState(rs *RunState) {
+func (rsc *RunCatalog) createProcRunState(rs *RunState) {
 	if rs == nil {
 		return
 	}
@@ -323,7 +320,7 @@ func (rsc *RunStateCatalog) createProcRunState(rs *RunState) {
 	defer rsc.rscLock.Unlock()
 
 	rsc.runLst.PushFront(
-		&procRunState{
+		&runStateLog{
 			RunState:   *rs,
 			logLineLst: make([]string, 0, 128),
 		})
@@ -343,7 +340,7 @@ func (rsc *RunStateCatalog) createProcRunState(rs *RunState) {
 }
 
 // updateRunState does model run state update and append to model log lines array
-func (rsc *RunStateCatalog) updateRunState(digest, runStamp string, isFinal bool, msg string) {
+func (rsc *RunCatalog) updateRunState(digest, runStamp string, isFinal bool, msg string) {
 	if digest == "" || runStamp == "" {
 		return // model run undefined
 	}
@@ -354,11 +351,11 @@ func (rsc *RunStateCatalog) updateRunState(digest, runStamp string, isFinal bool
 
 	// find model run state by digest and run stamp
 	// update model run state and append log message
-	var rs *procRunState
+	var rs *runStateLog
 	var ok bool
 	for re := rsc.runLst.Front(); re != nil; re = re.Next() {
 
-		rs, ok = re.Value.(*procRunState)
+		rs, ok = re.Value.(*runStateLog)
 		if !ok || rs == nil {
 			continue
 		}
@@ -401,210 +398,4 @@ func (rsc *RunStateCatalog) updateRunState(digest, runStamp string, isFinal bool
 			rs.IsLog = false
 		}
 	}
-}
-
-// get current run status and page of log file lines
-func (rsc *RunStateCatalog) readModelRunLog(digest, runStamp string, start, count int) (*RunStateLogPage, error) {
-
-	// search for run status and log text by model digest and run stamp
-	lrp, isFound, isNewLog := rsc.getRunStateLogPage(digest, runStamp, start, count)
-	if !isFound {
-		return lrp, nil // model run not found in catalog
-	}
-	if !lrp.isHistory {
-		return lrp, nil // found model run
-	}
-	// else found model run in run history
-
-	// check run status: if not completed then read most recent status from database
-	isUpdated := false
-
-	rl, isOk := theCatalog.RunRowList(digest, runStamp)
-	if isOk && len(rl) > 0 {
-		r := rl[len(rl)-1] // most recent run with that run stamp
-
-		isUpdated = lrp.RunState.UpdateDateTime != r.UpdateDateTime || lrp.RunState.IsFinal != db.IsRunCompleted(r.Status)
-		if isUpdated {
-			lrp.RunState.UpdateDateTime = r.UpdateDateTime
-			lrp.RunState.IsFinal = db.IsRunCompleted(r.Status)
-		}
-	}
-
-	// if run updated or if run found in history
-	if isNewLog || isUpdated {
-
-		// read log file and select log page to return
-		lines := []string{}
-		if lrp.RunState.IsLog {
-
-			if lines, isOk = rsc.readLogFile(lrp.logPath); isOk && len(lines) > 0 {
-				lrp.Offset, lrp.Size, lrp.Lines = getLinesPage(start, count, lines) // make log page to retrun
-				lrp.TotalSize = len(lines)
-			}
-		}
-		// update model run catalog
-		rsc.postRunStateLog(digest, lrp.RunState, lines)
-	}
-	return lrp, nil
-}
-
-// update model run catalog with new run state and log file lines.
-func (rsc *RunStateCatalog) postRunStateLog(digest string, runState RunState, logLines []string) {
-
-	if digest == "" || runState.RunStamp == "" {
-		return // model run undefined
-	}
-
-	rsc.rscLock.Lock()
-	defer rsc.rscLock.Unlock()
-
-	// find model run state by digest and run stamp
-	// update model run state and append log message
-	var rs *procRunState
-	var ok bool
-	for re := rsc.runLst.Back(); re != nil; re = re.Prev() {
-
-		rs, ok = re.Value.(*procRunState)
-		if !ok || rs == nil {
-			continue
-		}
-		ok = rs.ModelDigest == digest && rs.RunStamp == runState.RunStamp
-		if ok {
-			break
-		}
-	}
-
-	// update existing run status or append new element to run list
-	if ok && rs != nil {
-		rs.RunState = runState
-		if len(logLines) > len(rs.logLineLst) {
-			rs.logLineLst = logLines
-		}
-	} else {
-		rsc.runLst.PushBack(
-			&procRunState{
-				RunState:   runState,
-				logLineLst: logLines,
-			})
-	}
-}
-
-// get current run status and page of log lines and return true if run status found in catalog.
-// if run found in log history it is neccessary to check run status and may be read log file content.
-// return run state and two flags: first is true if model run found, second is true if model run found in log history.
-func (rsc *RunStateCatalog) getRunStateLogPage(digest, runStamp string, start, count int) (*RunStateLogPage, bool, bool) {
-
-	lrp := &RunStateLogPage{
-		Lines: []string{},
-	}
-	if digest == "" || runStamp == "" {
-		return lrp, false, false // empty model digest: exit
-	}
-
-	rsc.rscLock.Lock()
-	defer rsc.rscLock.Unlock()
-
-	// find model run state by digest and run stamp
-	// return model run state and page from model log
-	var rs *procRunState
-	isFound := false
-	for re := rsc.runLst.Front(); !isFound && re != nil; re = re.Next() {
-
-		rs, isFound = re.Value.(*procRunState)
-		if !isFound || rs == nil {
-			continue
-		}
-		isFound = rs.ModelDigest == digest && rs.RunStamp == runStamp
-	}
-	// if not found then try to search log history
-	isNewLog := false
-	if !isFound {
-
-		if rsLst, ok := rsc.modelLogs[digest]; ok {
-
-			for k := 0; !isFound && k < len(rsLst); k++ {
-				isFound = rsLst[k].RunStamp == runStamp
-				if isFound {
-					rs = &procRunState{RunState: rsLst[k], logLineLst: []string{}}
-				}
-			}
-			isNewLog = isFound
-		}
-	}
-	if !isFound {
-		return lrp, false, false // not found: return empty result
-	}
-	// run state found
-	lrp.RunState = rs.RunState
-
-	// if run log lines are empty then it is necceassry to read log file outside of lock
-	if isNewLog || len(rs.logLineLst) <= 0 {
-		return lrp, true, isNewLog
-	}
-
-	// copy log lines
-	lrp.TotalSize = len(rs.logLineLst)
-	lrp.Offset, lrp.Size, lrp.Lines = getLinesPage(start, count, rs.logLineLst)
-
-	return lrp, true, isNewLog
-}
-
-// read all non-empty text lines from log file.
-func (rsc *RunStateCatalog) readLogFile(logPath string) ([]string, bool) {
-
-	if logPath == "" {
-		return []string{}, false // empty log file path: exit
-	}
-
-	f, err := os.Open(logPath)
-	if err != nil {
-		return []string{}, false // cannot open log file for reading
-	}
-	defer f.Close()
-	rd := bufio.NewReader(f)
-
-	// read log file, trim lines and skip empty lines
-	lines := []string{}
-
-	for {
-		ln, e := rd.ReadString('\n')
-		if e != nil {
-			if e != io.EOF {
-				omppLog.Log("Error at reading log file: ", logPath)
-			}
-			break
-		}
-		ln = strings.TrimRightFunc(ln, func(r rune) bool { return unicode.IsSpace(r) || !unicode.IsPrint(r) })
-		if ln != "" {
-			lines = append(lines, ln)
-		}
-	}
-
-	return lines, true
-}
-
-// getLinesPage return count pages from logLines starting at offset.
-// if count <= 0 then return all lines starting at offset
-func getLinesPage(offset, count int, logLines []string) (int, int, []string) {
-
-	nTotal := len(logLines)
-	if nTotal <= 0 {
-		return 0, 0, []string{}
-	}
-
-	if offset < 0 {
-		offset = 0
-	}
-	if offset >= nTotal {
-		return offset, 0, []string{} // log offset (first line to read) past last log line
-	}
-	if count <= 0 || offset+count > nTotal {
-		count = nTotal - offset
-	}
-
-	// copy log lines into result
-	lines := make([]string, count)
-	copy(lines, logLines[offset:offset+count])
-
-	return offset, count, lines
 }

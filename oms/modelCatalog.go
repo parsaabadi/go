@@ -25,8 +25,8 @@ type ModelCatalog struct {
 // list of models and database connections
 var theCatalog ModelCatalog
 
-// ModelCatalogPub is "public" state of model catalog for json import-export
-type ModelCatalogPub struct {
+// ModelCatalogConfig is "public" state of model catalog for json import-export
+type ModelCatalogConfig struct {
 	ModelDir        string // model bin directory
 	ModelLogDir     string // default model log directory
 	IsLogDirEnabled bool   // if true then default log directory exist

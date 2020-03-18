@@ -16,18 +16,18 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
-// RunStateCatalog is a most recent state of model run for each model.
-type RunStateCatalog struct {
-	rscLock       sync.Mutex               // mutex to lock for model list operations
-	models        map[string]modelRunBasic // model digest map to model basic info
-	etcDir        string                   // model run templates directory, if relative then must be relative to oms root directory
-	mpiTemplates  []string                 // list of model run templates
-	lastTimeStamp string                   // most recent timestamp
-	runLst        *list.List               // list of model runs state (procRunState) submitted through the service
-	modelLogs     map[string][]RunState    // model runs state (RunState) including log file path
+// RunCatalog is a most recent state of model run for each model.
+type RunCatalog struct {
+	rscLock       sync.Mutex                     // mutex to lock for model list operations
+	models        map[string]modelRunBasic       // model digest map to model basic info
+	etcDir        string                         // model run templates directory, if relative then must be relative to oms root directory
+	mpiTemplates  []string                       // list of model run templates
+	lastTimeStamp string                         // most recent timestamp
+	runLst        *list.List                     // list of model runs state (runStateLog) submitted through the service
+	modelLogs     map[string]map[string]RunState // model runs state: map model digest to run stamp to run state
 }
 
-var theRunStateCatalog RunStateCatalog // list of most recent state of model run for each model.
+var theRunCatalog RunCatalog // list of most recent state of model run for each model.
 
 // modelRunBasic is basic model info to run model and obtain model logs
 type modelRunBasic struct {
@@ -38,8 +38,8 @@ type modelRunBasic struct {
 	lastRunId int    // most recent model run id
 }
 
-// RunCatalogPub is "public" state of model run catalog for json import-export
-type RunCatalogPub struct {
+// RunCatalogConfig is "public" state of model run catalog for json import-export
+type RunCatalogConfig struct {
 	LastTimeStamp      string   // most recent timestamp
 	DefaultMpiTemplate string   // default template to run MPI models
 	MpiTemplates       []string // list of model run templates
@@ -77,8 +77,8 @@ type RunState struct {
 	isHistory      bool   // if true then it is model run history or run doen by outside of oms service
 }
 
-// procRunState is model run state.
-type procRunState struct {
+// runStateLog is model run state and log file lines.
+type runStateLog struct {
 	RunState            // model run state
 	logLineLst []string // model run log lines
 }
@@ -99,10 +99,10 @@ const logTickTimeout = 7
 const defaultMpiTemplate = "mpi.ModelRun.template.txt"
 
 // timeout in msec, sleep interval between scanning log directory
-const scanSleepTimeout = 2000
+const scanSleepTimeout = 4021
 
 // RefreshCatalog reset state of most recent model run for each model.
-func (rsc *RunStateCatalog) RefreshCatalog(etcDir string) error {
+func (rsc *RunCatalog) RefreshCatalog(etcDir string) error {
 
 	// get list of mpi template files
 	tl := []string{}
@@ -145,7 +145,7 @@ func (rsc *RunStateCatalog) RefreshCatalog(etcDir string) error {
 		n := 0
 		for re := rsc.runLst.Front(); n < theCfg.runHistoryMaxSize && re != nil; re = re.Next() {
 
-			rs, ok := re.Value.(*procRunState) // model run state expected
+			rs, ok := re.Value.(*runStateLog) // model run state expected
 			if !ok || rs == nil {
 				continue
 			}
@@ -159,7 +159,7 @@ func (rsc *RunStateCatalog) RefreshCatalog(etcDir string) error {
 
 	// model log history: add new models and delete existing models
 	if rsc.modelLogs == nil {
-		rsc.modelLogs = map[string][]RunState{}
+		rsc.modelLogs = map[string]map[string]RunState{}
 	}
 	// if model deleted then delete model logs history
 	for d := range rsc.modelLogs {
@@ -170,7 +170,7 @@ func (rsc *RunStateCatalog) RefreshCatalog(etcDir string) error {
 	// if new model added then add new empty logs history
 	for d := range rbs {
 		if _, ok := rsc.modelLogs[d]; !ok {
-			rsc.modelLogs[d] = []RunState{}
+			rsc.modelLogs[d] = map[string]RunState{}
 		}
 	}
 	rsc.models = rbs
@@ -179,7 +179,7 @@ func (rsc *RunStateCatalog) RefreshCatalog(etcDir string) error {
 }
 
 // getNewTimeStamp return new unique timestamp and source time of it.
-func (rsc *RunStateCatalog) getNewTimeStamp() (string, time.Time) {
+func (rsc *RunCatalog) getNewTimeStamp() (string, time.Time) {
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
@@ -194,14 +194,14 @@ func (rsc *RunStateCatalog) getNewTimeStamp() (string, time.Time) {
 	return ts, dtNow
 }
 
-// get "public" state of model run catalog
-func (rsc *RunStateCatalog) toPublic() *RunCatalogPub {
+// get "public" configuration of model run catalog
+func (rsc *RunCatalog) toPublicConfig() *RunCatalogConfig {
 
-	// lock run state catalog and return results
+	// lock run catalog and return results
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
-	rcp := RunCatalogPub{
+	rcp := RunCatalogConfig{
 		LastTimeStamp:      rsc.lastTimeStamp,
 		DefaultMpiTemplate: defaultMpiTemplate,
 		MpiTemplates:       make([]string, len(rsc.mpiTemplates)),
@@ -212,7 +212,7 @@ func (rsc *RunStateCatalog) toPublic() *RunCatalogPub {
 }
 
 // allModels return basic info about all models.
-func (rsc *RunStateCatalog) allModels() map[string]modelRunBasic {
+func (rsc *RunCatalog) allModels() map[string]modelRunBasic {
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
@@ -225,31 +225,22 @@ func (rsc *RunStateCatalog) allModels() map[string]modelRunBasic {
 
 // add new log file names to model log list and update most recent run id
 // if run stamp already exist in model run history then replace run state with more recent data
-func (rsc *RunStateCatalog) addModelLogs(digest string, lastRunId int, runStateLst []RunState) {
+func (rsc *RunCatalog) addModelLogs(digest string, lastRunId int, runStateLst []RunState) {
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
+	// 2020-03-17: it seems performance is not impacted if we updating all runs
+	//
 	// update most recent run id for the model
-	rb := rsc.models[digest]
-	rb.lastRunId = lastRunId
-	rsc.models[digest] = rb
+	// rb := rsc.models[digest]
+	// rb.lastRunId = lastRunId
+	// rsc.models[digest] = rb
 
 	// add new runs to model run history
-	// it can be multiple runs with the same run stamp, append only last else update existing
 	for _, r := range runStateLst {
 
-		isFound := false
-		rsLst := rsc.modelLogs[digest]
-
-		for k := 0; !isFound && k < len(rsLst); k++ {
-			isFound = rsLst[k].RunStamp == r.RunStamp
-			if isFound {
-				rsLst[k] = r // run stamp found in model run history, update run status with more recent data
-			}
-		}
-		// if run stamp not found in model run history then append run
-		if !isFound {
-			rsc.modelLogs[digest] = append(rsc.modelLogs[digest], r)
+		if ml, ok := rsc.modelLogs[digest]; ok { // skip model if not exist
+			ml[r.RunStamp] = r
 		}
 	}
 }
@@ -268,7 +259,7 @@ func scanModelLogDirs(doneC <-chan bool) {
 	}
 
 	for {
-		rbs := theRunStateCatalog.allModels() // get current models
+		rbs := theRunCatalog.allModels() // get current models
 
 		// find new model runs since last scan
 		for d, it := range rbs {
@@ -351,7 +342,7 @@ func scanModelLogDirs(doneC <-chan bool) {
 			}
 
 			// add new log file names to model log list and update most recent run id for that model
-			theRunStateCatalog.addModelLogs(d, it.lastRunId, rsLst)
+			theRunCatalog.addModelLogs(d, it.lastRunId, rsLst)
 		}
 
 		// wait for doneC or or sleep

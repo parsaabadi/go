@@ -174,14 +174,14 @@ func (mc *ModelCatalog) Close() error {
 	return firstErr
 }
 
-// get "public" state of model catalog
-func (mc *ModelCatalog) toPublic() *ModelCatalogPub {
+// get "public" configuration of model catalog
+func (mc *ModelCatalog) toPublicConfig() *ModelCatalogConfig {
 
-	// lock run state catalog and return results
+	// lock run catalog and return results
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	mp := ModelCatalogPub{
+	mp := ModelCatalogConfig{
 		ModelDir:        mc.modelDir,
 		ModelLogDir:     mc.modelLogDir,
 		IsLogDirEnabled: mc.isLogDirEnabled,

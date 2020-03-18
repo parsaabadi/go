@@ -237,7 +237,7 @@ func mainBody(args []string) error {
 	}
 
 	// refresh run state catalog and start scanning model log files
-	if err := theRunStateCatalog.RefreshCatalog(etcDir); err != nil {
+	if err := theRunCatalog.RefreshCatalog(etcDir); err != nil {
 		return err
 	}
 
@@ -857,8 +857,11 @@ func apiRunModelRoutes(router *vestigo.Router) {
 // add web-service /api routes for administrative tasks
 func apiAdminRoutes(router *vestigo.Router) {
 
+	// GET /api/service/config
+	router.Get("/api/service/config", serviceConfigHandler, logRequest)
+
 	// GET /api/service/state
-	router.Get("/api/service/state", serviceStateHandler, logRequest)
+	router.Get("/api/service/state", http.NotFound)
 
 	// POST /api/admin/all-models/refresh
 	router.Post("/api/admin/all-models/refresh", allModelsRefreshHandler, logRequest)

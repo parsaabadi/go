@@ -36,7 +36,7 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 	src.ModelName = m.Name
 
 	// start model run
-	prs, e := theRunStateCatalog.runModel(&src)
+	prs, e := theRunCatalog.runModel(&src)
 	if e != nil {
 		omppLog.Log(e)
 		http.Error(w, "Model start failed: "+dn, http.StatusBadRequest)
@@ -83,7 +83,7 @@ func runModelLogPageHandler(w http.ResponseWriter, r *http.Request) {
 	modelName := m.Name
 
 	// get current run status and page of log lines
-	lrp, e := theRunStateCatalog.readModelRunLog(modelDigest, runStamp, start, count)
+	lrp, e := theRunCatalog.readModelRunLog(modelDigest, runStamp, start, count)
 	if e != nil {
 		omppLog.Log(e)
 		http.Error(w, "Model run status read failed: "+modelName+": "+dn, http.StatusBadRequest)
