@@ -38,7 +38,6 @@ const (
 	LogUseTs          = "OpenM.LogUseTimeStamp"  // if true then use time-stamp in log file name
 	LogUsePid         = "OpenM.LogUsePidStamp"   // if true then use pid-stamp in log file name
 	LogUseDaily       = "OpenM.LogUseDailyStamp" // if true then use daily-stamp in log file name
-	LogNoMsgTime      = "OpenM.LogNoMsgTime"     // if true then do not prefix log messages with date-time
 	LogSql            = "OpenM.LogSql"           // if true then log sql statements into log file
 )
 
@@ -55,7 +54,6 @@ type LogOptions struct {
 	LogPath     string // path to log file
 	IsConsole   bool   // if true then log to standard output, default: true
 	IsFile      bool   // if true then log to file
-	IsNoMsgTime bool   // if true then do not prefix log messages with date-time
 	IsLogSql    bool   // if true then log sql statements
 	TimeStamp   string // log timestamp string, ie: 2012_08_17_16_04_59_148
 	IsDaily     bool   // if true then use daily log file names, ie: exeName.20120817.log
@@ -275,7 +273,6 @@ func addStandardFlags(runOpts *RunOptions, logOpts *LogOptions) {
 	_ = flag.Bool(LogUseTs, false, "if true then use time-stamp in log file name")
 	_ = flag.Bool(LogUsePid, false, "if true then use pid-stamp in log file name")
 	_ = flag.Bool(LogUseDaily, false, "if true then use daily-stamp in log file name")
-	flag.BoolVar(&logOpts.IsNoMsgTime, LogNoMsgTime, false, "if true then do not prefix log messages with date-time")
 	flag.BoolVar(&logOpts.IsLogSql, LogSql, false, "if true then log sql statements into log file")
 }
 
@@ -309,7 +306,6 @@ func adjustLogOptions(runOpts *RunOptions, logOpts *LogOptions) {
 
 	// update log settings from merged command line arguments and ini-file
 	logOpts.IsConsole = !runOpts.IsExist(LogToConsole) || runOpts.Bool(LogToConsole)
-	logOpts.IsNoMsgTime = runOpts.Bool(LogNoMsgTime)
 	logOpts.IsLogSql = runOpts.Bool(LogSql)
 
 	// update file name with time stamp and pid stamp, if required:

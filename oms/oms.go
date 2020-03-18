@@ -72,7 +72,6 @@ Also oms support OpenM++ standard log settings (described in wiki at http://www.
   -OpenM.LogUseDailyStamp: if true then use dayily stamp in log file name (rotate log files dayily)
   -OpenM.LogUseTs:         if true then use time-stamp in log file name
   -OpenM.LogUsePid:        if true then use pid-stamp in log file name
-  -OpenM.LogNoMsgTime:     if true then do not prefix log messages with date-time
   -OpenM.LogSql:           if true then log sql statements into log file
 */
 package main
@@ -124,14 +123,14 @@ const runHistoryDefaultSize int = 100
 var theCfg = struct {
 	rootDir           string // server root directory
 	pageMaxSize       int64  // default "page" size: row count to read parameters or output tables
-	doubleFmt         string // format to convert float or double value to string
 	runHistoryMaxSize int    // max number of model run states to keep in run list history
+	doubleFmt         string // format to convert float or double value to string
 	loginUrl          string // user login URL for UI
 	logoutUrl         string // user logout URL for UI
 }{
 	pageMaxSize:       100,
-	doubleFmt:         "%.15g",
 	runHistoryMaxSize: runHistoryDefaultSize,
+	doubleFmt:         "%.15g",
 }
 
 // if true then log http requests
@@ -203,7 +202,8 @@ func mainBody(args []string) error {
 	if !isApiOnly {
 		htmlDir := filepath.Join(theCfg.rootDir, htmlSubDir)
 		if err := isDirExist(htmlDir); err != nil {
-			return err
+			isApiOnly = true
+			omppLog.Log("Warning: serving API only because UI directory not found: ", htmlDir)
 		}
 	}
 
@@ -220,13 +220,14 @@ func mainBody(args []string) error {
 	}
 
 	// model directory required to build initial list of model sqlite files
+	modelLogDir := runOpts.String(modelLogDirArgKey)
 	modelDir := runOpts.String(modelDirArgKey)
 	if modelDir == "" {
 		return errors.New("Error: model directory argument cannot be empty")
 	}
 	omppLog.Log("Model directory: ", modelDir)
 
-	if err := theCatalog.RefreshSqlite(modelDir); err != nil {
+	if err := theCatalog.RefreshSqlite(modelDir, modelLogDir); err != nil {
 		return err
 	}
 
@@ -235,13 +236,13 @@ func mainBody(args []string) error {
 		omppLog.Log("Warning: templates directory not found, it is required to run models on MPI cluster: ", filepath.Join(theCfg.rootDir, etcDir))
 	}
 
-	// refresh run state catalog
-	modelLogDir := runOpts.String(modelLogDirArgKey)
-	digestLst := theCatalog.AllModelDigests()
-
-	if err := theRunStateCatalog.RefreshCatalog(digestLst, modelLogDir, etcDir); err != nil {
+	// refresh run state catalog and start scanning model log files
+	if err := theRunStateCatalog.RefreshCatalog(etcDir); err != nil {
 		return err
 	}
+
+	doneScanC := make(chan bool)
+	go scanModelLogDirs(doneScanC)
 
 	// set UI languages to find model text in browser language
 	ll := strings.Split(runOpts.String(uiLangsArgKey), ",")
@@ -281,7 +282,7 @@ func mainBody(args []string) error {
 	}
 
 	addr := runOpts.String(listenArgKey)
-	omppLog.Log("Listen at " + addr)
+	omppLog.Log("Listen at ", addr)
 	if !isApiOnly {
 		if !strings.HasPrefix(addr, ":") {
 			omppLog.Log("To start open in your browser: ", addr)
@@ -292,6 +293,8 @@ func mainBody(args []string) error {
 	omppLog.Log("To finish press Ctrl+C")
 
 	err = http.ListenAndServe(addr, router)
+
+	doneScanC <- true
 	return err
 }
 
@@ -310,6 +313,12 @@ func exitOnPanic() {
 		omppLog.Log("FAILED")
 	}
 	os.Exit(2) // final exit
+}
+
+// homeHandler is static pages handler for front-end UI served on web / root.
+// Only GET requests expected.
+func homeHandler(w http.ResponseWriter, r *http.Request) {
+	setContentType(http.FileServer(http.Dir(htmlSubDir))).ServeHTTP(w, r)
 }
 
 // add http GET web-service /api routes to get metadata
@@ -367,73 +376,71 @@ func apiGetRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/profile/:profile", modelProfileHandler, logRequest)
 	router.Get("/api/model-profile", modelProfileHandler, logRequest)
 
+	// GET /api/model/:model/profile-list
+	// GET /api/model-profile-list?model=modelNameOrDigest
+	router.Get("/api/model/:model/profile-list", modelProfileListHandler, logRequest)
+	router.Get("/api/model-profile-list", modelProfileListHandler, logRequest)
+
 	//
 	// GET model run results
 	//
 
 	// GET /api/model/:model/run-list
-	// GET /api/run-list?model=modelNameOrDigest
+	// GET /api/model-run-list?model=modelNameOrDigest
 	router.Get("/api/model/:model/run-list", runListHandler, logRequest)
-	router.Get("/api/run-list", runListHandler, logRequest)
+	router.Get("/api/model-run-list", runListHandler, logRequest)
 
 	// GET /api/model/:model/run-list/text
 	// GET /api/model/:model/run-list/text/lang/:lang
-	// GET /api/run-list-text?model=modelNameOrDigest&lang=en
+	// GET /api/model-run-list-text?model=modelNameOrDigest&lang=en
 	router.Get("/api/model/:model/run-list/text", runListTextHandler, logRequest)
 	router.Get("/api/model/:model/run-list/text/lang/:lang", runListTextHandler, logRequest)
-	router.Get("/api/run-list-text", runListTextHandler, logRequest)
+	router.Get("/api/model-run-list-text", runListTextHandler, logRequest)
 
 	// GET /api/model/:model/run/:run/status
-	// GET /api/run-status?model=modelNameOrDigest&run=runDigestOrStampOrName
+	// GET /api/model-run-status?model=modelNameOrDigest&run=runDigestOrStampOrName
 	router.Get("/api/model/:model/run/:run/status", runStatusHandler, logRequest)
-	router.Get("/api/run-status", runStatusHandler, logRequest)
+	router.Get("/api/model-run-status", runStatusHandler, logRequest)
 
 	// GET /api/model/:model/run/:run/status/list
-	// GET /api/run-status-list?model=modelNameOrDigest&run=runDigestOrStampOrName
+	// GET /api/model-run-status-list?model=modelNameOrDigest&run=runDigestOrStampOrName
 	router.Get("/api/model/:model/run/:run/status/list", runStatusListHandler, logRequest)
-	router.Get("/api/run-status-list", runStatusListHandler, logRequest)
+	router.Get("/api/model-run-status-list", runStatusListHandler, logRequest)
 
 	// GET /api/model/:model/run/status/first
-	// GET /api/run-first-status?model=modelNameOrDigest
+	// GET /api/model-run-first-status?model=modelNameOrDigest
 	router.Get("/api/model/:model/run/status/first", firstRunStatusHandler, logRequest)
-	router.Get("/api/run-first-status", firstRunStatusHandler, logRequest)
+	router.Get("/api/model-run-first-status", firstRunStatusHandler, logRequest)
 
 	// GET /api/model/:model/run/status/last
-	// GET /api/run-last-status?model=modelNameOrDigest
+	// GET /api/model-run-last-status?model=modelNameOrDigest
 	router.Get("/api/model/:model/run/status/last", lastRunStatusHandler, logRequest)
-	router.Get("/api/run-last-status", lastRunStatusHandler, logRequest)
+	router.Get("/api/model-run-last-status", lastRunStatusHandler, logRequest)
 
 	// GET /api/model/:model/run/status/last-completed
-	// GET /api/run-last-completed-status?model=modelNameOrDigest
+	// GET /api/model-run-last-completed-status?model=modelNameOrDigest
 	router.Get("/api/model/:model/run/status/last-completed", lastCompletedRunStatusHandler, logRequest)
-	router.Get("/api/run-last-completed-status", lastCompletedRunStatusHandler, logRequest)
+	router.Get("/api/model-run-last-completed-status", lastCompletedRunStatusHandler, logRequest)
+
+	// GET /api/model/:model/run/:run
+	// GET /api/model-run?model=modelNameOrDigest&run=runDigestOrStampOrName
+	router.Get("/api/model/:model/run/:run", runFullHandler, logRequest)
+	router.Get("/api/model-run", runFullHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/", http.NotFound)
 
 	// GET /api/model/:model/run/:run/text
 	// GET /api/model/:model/run/:run/text/lang/:lang
-	// GET /api/run-text?model=modelNameOrDigest&run=runDigestOrStampOrName&lang=en
+	// GET /api/model-run-text?model=modelNameOrDigest&run=runDigestOrStampOrName&lang=en
 	router.Get("/api/model/:model/run/:run/text", runTextHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/text/lang/:lang", runTextHandler, logRequest)
-	router.Get("/api/run-text", runTextHandler, logRequest)
-	router.Get("/api/model/:model/run/:run/", http.NotFound)
+	router.Get("/api/model-run-text", runTextHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/text/", http.NotFound)
 	router.Get("/api/model/:model/run/:run/text/lang/", http.NotFound)
 
 	// GET /api/model/:model/run/:run/text/all
-	// GET /api/run-text-all?model=modelNameOrDigest&run=runDigestOrStampOrName
+	// GET /api/model-run-text-all?model=modelNameOrDigest&run=runDigestOrStampOrName
 	router.Get("/api/model/:model/run/:run/text/all", runAllTextHandler, logRequest)
-	router.Get("/api/run-text-all", runAllTextHandler, logRequest)
-
-	// GET /api/model/:model/run/last-completed/text
-	// GET /api/model/:model/run/last-completed/text/lang/:lang
-	// GET /api/run-last-completed-text?model=modelNameOrDigest&lang=en
-	router.Get("/api/model/:model/run/last-completed/text", lastCompletedRunTextHandler, logRequest)
-	router.Get("/api/model/:model/run/last-completed/text/lang/:lang", lastCompletedRunTextHandler, logRequest)
-	router.Get("/api/run-last-completed-text", lastCompletedRunTextHandler, logRequest)
-
-	// GET /api/model/:model/run/last-completed/text/all
-	// GET /api/run-last-completed-text-all?model=modelNameOrDigest
-	router.Get("/api/model/:model/run/last-completed/text/all", lastCompletedRunAllTextHandler, logRequest)
-	router.Get("/api/run-last-completed-text-all", lastCompletedRunAllTextHandler, logRequest)
+	router.Get("/api/model-run-text-all", runAllTextHandler, logRequest)
 
 	//
 	// GET model set of input parameters (workset)

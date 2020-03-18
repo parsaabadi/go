@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"golang.org/x/text/language"
@@ -15,24 +16,10 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
-// get "public" state of model catalog
-func (mc *ModelCatalog) toPublic() *ModelCatalogPub {
-
-	// lock run state catalog and return results
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	mp := ModelCatalogPub{
-		ModelDir:   mc.modelDir,
-		ModelCount: len(mc.modelLst),
-	}
-	return &mp
-}
-
 // RefreshSqlite open db-connection to model.sqlite files in model directory and read model_dic row for each model.
 // If multiple version of the same model (equal by digest) exist in different files then only one is used.
 // All previously opened db connections are closed.
-func (mc *ModelCatalog) RefreshSqlite(modelDir string) error {
+func (mc *ModelCatalog) RefreshSqlite(modelDir, modelLogDir string) error {
 
 	// model directory must exist
 	isDir := modelDir != "" && modelDir != "."
@@ -41,6 +28,12 @@ func (mc *ModelCatalog) RefreshSqlite(modelDir string) error {
 	}
 	if !isDir {
 		return errors.New("Error: model directory not exist or not accesible: " + modelDir)
+	}
+
+	// model log directory is optional, if empty or not exists then model log disabled
+	isLogDir := modelLogDir != "" && modelLogDir != "."
+	if isLogDir {
+		isLogDir = isDirExist(modelLogDir) == nil
 	}
 
 	// get list of model/dir/*.sqlite files
@@ -61,6 +54,7 @@ func (mc *ModelCatalog) RefreshSqlite(modelDir string) error {
 		omppLog.Log("Error: fail to list model directory: ", err.Error())
 		return errors.New("Error: fail to list model directory")
 	}
+	sort.Strings(pathLst) // sort by path to model.sqlite: same as sort by model name in default case
 
 	// make list of models from model.sqlite files:
 	// open db connection to model.sqlite and read list of model_dic rows.
@@ -126,6 +120,8 @@ func (mc *ModelCatalog) RefreshSqlite(modelDir string) error {
 			mLst = append(mLst, modelDef{
 				dbConn:     dbc,
 				binDir:     d,
+				logDir:     modelLogDir,
+				isLogDir:   isLogDir,
 				isMetaFull: false,
 				meta:       &db.ModelMeta{Model: dicLst[idx]},
 				langCodes:  ml,
@@ -138,9 +134,11 @@ func (mc *ModelCatalog) RefreshSqlite(modelDir string) error {
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	// update model directory
+	// update model directories
 	mc.modelDir = modelDir
 	mc.isDirEnabled = isDir
+	mc.modelLogDir = modelLogDir
+	mc.isLogDirEnabled = isLogDir
 
 	// close existing connections and store updated list of models and db connections
 	for k := range mc.modelLst {
@@ -176,11 +174,33 @@ func (mc *ModelCatalog) Close() error {
 	return firstErr
 }
 
+// get "public" state of model catalog
+func (mc *ModelCatalog) toPublic() *ModelCatalogPub {
+
+	// lock run state catalog and return results
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	mp := ModelCatalogPub{
+		ModelDir:        mc.modelDir,
+		ModelLogDir:     mc.modelLogDir,
+		IsLogDirEnabled: mc.isLogDirEnabled,
+	}
+	return &mp
+}
+
 // getModelDir return model directory
 func (mc *ModelCatalog) getModelDir() (string, bool) {
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 	return mc.modelDir, mc.isDirEnabled
+}
+
+// getModelLogDir return default model directory and true if that directory exist
+func (mc *ModelCatalog) getModelLogDir() (string, bool) {
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+	return mc.modelLogDir, mc.isLogDirEnabled
 }
 
 // indexByDigest return index of model by digest.
@@ -213,59 +233,79 @@ func (mc *ModelCatalog) indexByDigestOrName(dn string) (int, bool) {
 	return 0, false // not found
 }
 
-// paramIndexByDigestOrName return index of parameter by digest or by name.
-// It can be used only inside of lock.
-// If digest exist in model parameter list then return index by digest else index of name.
-// Return -1 if no digest or name found.
-func (mc *ModelCatalog) paramIndexByDigestOrName(modelIdx int, pdn string) (int, bool) {
-
-	if modelIdx < 0 || modelIdx >= len(mc.modelLst) {
-		return -1, false
-	}
-
-	if n, ok := mc.modelLst[modelIdx].meta.ParamByDigest(pdn); ok {
-		return n, ok
-	}
-	return mc.modelLst[modelIdx].meta.ParamByName(pdn)
-}
-
-// outTblIndexByDigestOrName return index of output table by digest or by name.
-// It can be used only inside of lock.
-// If digest exist in model output table list then return index by digest else index of name.
-// Return -1 if no digest or name found.
-func (mc *ModelCatalog) outTblIndexByDigestOrName(modelIdx int, tdn string) (int, bool) {
-
-	if modelIdx < 0 || modelIdx >= len(mc.modelLst) {
-		return -1, false
-	}
-
-	if n, ok := mc.modelLst[modelIdx].meta.OutTableByDigest(tdn); ok {
-		return n, ok
-	}
-	return mc.modelLst[modelIdx].meta.OutTableByName(tdn)
-}
-
-// AllModelDigests return copy of all model digests.
-func (mc *ModelCatalog) AllModelDigests() []string {
+/*
+// binDirectoryByDigest return model bin directory where model.exe expected to be located.
+func (mc *ModelCatalog) binDirectoryByDigest(digest string) (string, bool) {
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	ds := []string{}
-	for idx := range mc.modelLst {
-		ds = append(ds, mc.modelLst[idx].meta.Model.Digest)
-	}
-	return ds
-}
-
-// binDirectoryByDigestOrName return model bin where model.exe expected to be located by model digest or name.
-func (mc *ModelCatalog) binDirectoryByDigestOrName(dn string) (string, bool) {
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
+	idx, ok := mc.indexByDigest(digest)
 	if !ok {
 		return "", false // model not found, empty result
 	}
 
 	return mc.modelLst[idx].binDir, true
+}
+
+// logDirectoryByDigest return model log directory and log enabled/disabled flag by model digest.
+func (mc *ModelCatalog) logDirectoryByDigest(digest string) (string, bool) {
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigest(digest)
+	if !ok {
+		return "", false // model not found, empty result
+	}
+
+	return mc.modelLst[idx].logDir, mc.modelLst[idx].isLogDir
+}
+*/
+
+// AllModelDigests return digests for all models.
+func (mc *ModelCatalog) allModelDigests() []string {
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	ds := make([]string, len(mc.modelLst))
+	for idx := range mc.modelLst {
+		ds[idx] = mc.modelLst[idx].meta.Model.Digest
+	}
+	return ds
+}
+
+// binDirectoryByDigest return model bin directory where model.exe expected to be located.
+func (mc *ModelCatalog) modelBasicByDigest(digest string) (modelBasic, bool) {
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigest(digest)
+	if !ok {
+		return modelBasic{}, false // model not found, empty result
+	}
+	return modelBasic{
+			name:     mc.modelLst[idx].meta.Model.Name,
+			digest:   mc.modelLst[idx].meta.Model.Digest,
+			binDir:   mc.modelLst[idx].binDir,
+			logDir:   mc.modelLst[idx].logDir,
+			isLogDir: mc.modelLst[idx].isLogDir,
+		},
+		true
+}
+
+// AllModelBasics return basic info about all models: name, digest, files location.
+func (mc *ModelCatalog) allModels() []modelBasic {
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	mbs := make([]modelBasic, len(mc.modelLst))
+	for idx := range mc.modelLst {
+		mbs[idx] = modelBasic{
+			name:     mc.modelLst[idx].meta.Model.Name,
+			digest:   mc.modelLst[idx].meta.Model.Digest,
+			binDir:   mc.modelLst[idx].binDir,
+			logDir:   mc.modelLst[idx].logDir,
+			isLogDir: mc.modelLst[idx].isLogDir,
+		}
+	}
+	return mbs
 }

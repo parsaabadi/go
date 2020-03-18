@@ -147,7 +147,7 @@ func dbToDbTask(modelName string, modelDigest string, runOpts *config.RunOptions
 				continue // skip: run not completed
 			}
 
-			rm, err := db.GetRunFull(srcDb, runRow, "") // get full model run metadata
+			rm, err := db.GetRunFullText(srcDb, runRow, "") // get full model run metadata
 			if err != nil {
 				return err
 			}

@@ -14,10 +14,12 @@ import (
 // ModelCatalog is a list of the models and database connections.
 // If model directory specified then model catalog include model.sqlite files from model directory.
 type ModelCatalog struct {
-	theLock      sync.Mutex // mutex to lock for model list operations
-	isDirEnabled bool       // if true then use sqlite files from model directory
-	modelDir     string     // models bin directory, it is a root dir under which model.sqlite and model.exe expected to be located
-	modelLst     []modelDef // list of model_dic and associated database connections
+	theLock         sync.Mutex // mutex to lock for model list operations
+	isDirEnabled    bool       // if true then use sqlite files from model directory
+	modelDir        string     // models bin directory, it is a root dir under which model.sqlite and model.exe expected to be located
+	modelLogDir     string     // default model log directory
+	isLogDirEnabled bool       // if true then default log directory exist
+	modelLst        []modelDef // list of model metadata and associated database connections
 }
 
 // list of models and database connections
@@ -25,14 +27,17 @@ var theCatalog ModelCatalog
 
 // ModelCatalogPub is "public" state of model catalog for json import-export
 type ModelCatalogPub struct {
-	ModelDir   string // model directory
-	ModelCount int    // model count
+	ModelDir        string // model bin directory
+	ModelLogDir     string // default model log directory
+	IsLogDirEnabled bool   // if true then default log directory exist
 }
 
-// modelDef is database connection and model database rows
+// modelDef is database connection and model metadata database rows
 type modelDef struct {
 	dbConn        *sql.DB           // database connection
-	binDir        string            // database directory: directory part of models/bin/model.sqlite
+	binDir        string            // database and .exe directory: directory part of models/bin/model.sqlite
+	logDir        string            // model log directory
+	isLogDir      bool              // if true then use model log directory for model run logs
 	isMetaFull    bool              // if true then ModelMeta fully loaded else only ModelDicRow
 	meta          *db.ModelMeta     // model metadata, language-neutral part, should not be nil
 	isTxtMetaFull bool              // if true then ModelTxtMeta fully loaded else only []ModelTxtRow
@@ -41,6 +46,15 @@ type modelDef struct {
 	matcher       language.Matcher  // matcher to search text by language
 	langMeta      *db.LangMeta      // list of languages: one list per db connection, order of languages NOT the same as language codes
 	modelWord     *db.ModelWordMeta // if not nil then list of model words, order of languages NOT the same as language codes
+}
+
+// modelBasic is basic model info: name, digest, files location
+type modelBasic struct {
+	name     string // model name
+	digest   string // model digest
+	binDir   string // database and .exe directory: directory part of models/bin/model.sqlite
+	logDir   string // model log directory
+	isLogDir bool   // if true then use model log directory for model run logs
 }
 
 // ModelMetaFull is full model metadata: language-neutral db rows

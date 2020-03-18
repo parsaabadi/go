@@ -6,32 +6,41 @@ package main
 import (
 	"container/list"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 
+	"github.com/openmpp/go/ompp/db"
+
 	"github.com/openmpp/go/ompp/helper"
+	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // RunStateCatalog is a most recent state of model run for each model.
 type RunStateCatalog struct {
-	rscLock         sync.Mutex // mutex to lock for model list operations
-	isLogDirEnabled bool       // if true then use model log directory for model run logs
-	modelLogDir     string     // model log directory, if relative then must be relative to oms root directory
-	etcDir          string     // model run templates directory, if relative then must be relative to oms root directory
-	mpiTemplates    []string   // list of model run templates
-	lastTimeStamp   string     // most recent timestamp
-	runLst          *list.List // list of model runs state
+	rscLock       sync.Mutex               // mutex to lock for model list operations
+	models        map[string]modelRunBasic // model digest map to model basic info
+	etcDir        string                   // model run templates directory, if relative then must be relative to oms root directory
+	mpiTemplates  []string                 // list of model run templates
+	lastTimeStamp string                   // most recent timestamp
+	runLst        *list.List               // list of model runs state (procRunState) submitted through the service
+	modelLogs     map[string][]RunState    // model runs state (RunState) including log file path
 }
 
-// list of most recent state of model run for each model.
-var theRunStateCatalog RunStateCatalog
+var theRunStateCatalog RunStateCatalog // list of most recent state of model run for each model.
+
+// modelRunBasic is basic model info to run model and obtain model logs
+type modelRunBasic struct {
+	name      string // model name
+	binDir    string // database and .exe directory: directory part of models/bin/model.sqlite
+	logDir    string // model log directory
+	isLogDir  bool   // if true then use model log directory for model run logs
+	lastRunId int    // most recent model run id
+}
 
 // RunCatalogPub is "public" state of model run catalog for json import-export
 type RunCatalogPub struct {
-	ModelLogDir        string   // model log directory, if relative then must be relative to oms root directory
-	IsModelLogEnabled  bool     // if true then use model log directory for model run logs
 	LastTimeStamp      string   // most recent timestamp
-	RunCount           int      // count of model runs state
 	DefaultMpiTemplate string   // default template to run MPI models
 	MpiTemplates       []string // list of model run templates
 }
@@ -62,8 +71,10 @@ type RunState struct {
 	UpdateDateTime string // last update date-time
 	RunName        string // if not empty then run name
 	TaskRunName    string // if not empty then task run name
-	isLog          bool   // if true then redirect console output to log file
-	logPath        string // console output log file name: log/dir/modelName.timestamp.console.log
+	IsLog          bool   // if true then use run log file
+	LogFileName    string // log file name
+	logPath        string // log file path: log/dir/modelName.RunStamp.console.log
+	isHistory      bool   // if true then it is model run history or run doen by outside of oms service
 }
 
 // procRunState is model run state.
@@ -87,14 +98,11 @@ const logTickTimeout = 7
 // file name of MPI model run template by default
 const defaultMpiTemplate = "mpi.ModelRun.template.txt"
 
-// RefreshCatalog reset state of most recent model run for each model.
-func (rsc *RunStateCatalog) RefreshCatalog(digestLst []string, modelLogDir, etcDir string) error {
+// timeout in msec, sleep interval between scanning log directory
+const scanSleepTimeout = 2000
 
-	// model log directory is optional, if empty or not exists then model log disabled
-	isLog := modelLogDir != "" && modelLogDir != "."
-	if isLog {
-		isLog = isDirExist(modelLogDir) == nil
-	}
+// RefreshCatalog reset state of most recent model run for each model.
+func (rsc *RunStateCatalog) RefreshCatalog(etcDir string) error {
 
 	// get list of mpi template files
 	tl := []string{}
@@ -109,13 +117,24 @@ func (rsc *RunStateCatalog) RefreshCatalog(digestLst []string, modelLogDir, etcD
 		}
 	}
 
+	// make all models basic info: name, digest and files location
+	mbs := theCatalog.allModels()
+	rbs := make(map[string]modelRunBasic, len(mbs))
+
+	for idx := range mbs {
+		rbs[mbs[idx].digest] = modelRunBasic{
+			name:     mbs[idx].name,
+			binDir:   mbs[idx].binDir,
+			logDir:   mbs[idx].logDir,
+			isLogDir: mbs[idx].isLogDir,
+		}
+	}
+
 	// lock and update run state catalog
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
-	// update model log directory and etc template directory
-	rsc.isLogDirEnabled = isLog
-	rsc.modelLogDir = modelLogDir
+	// update etc directory and list of templates
 	rsc.etcDir = etcDir
 	rsc.mpiTemplates = tl
 
@@ -130,27 +149,33 @@ func (rsc *RunStateCatalog) RefreshCatalog(digestLst []string, modelLogDir, etcD
 			if !ok || rs == nil {
 				continue
 			}
-
-			// check if model digest exist in new model list
-			for k := range digestLst {
-				if rs.ModelDigest == digestLst[k] {
-					rLst.PushBack(rs)
-					n++
-					break // model digest found, append run state to run list history
-				}
+			if _, ok = rbs[rs.ModelDigest]; ok { // copy existing run history
+				rLst.PushBack(rs)
+				n++
 			}
 		}
 	}
 	rsc.runLst = rLst
 
-	return nil
-}
+	// model log history: add new models and delete existing models
+	if rsc.modelLogs == nil {
+		rsc.modelLogs = map[string][]RunState{}
+	}
+	// if model deleted then delete model logs history
+	for d := range rsc.modelLogs {
+		if _, ok := rbs[d]; !ok {
+			delete(rsc.modelLogs, d)
+		}
+	}
+	// if new model added then add new empty logs history
+	for d := range rbs {
+		if _, ok := rsc.modelLogs[d]; !ok {
+			rsc.modelLogs[d] = []RunState{}
+		}
+	}
+	rsc.models = rbs
 
-// getModelLogDir return model log directory
-func (rsc *RunStateCatalog) getModelLogDir() (string, bool) {
-	rsc.rscLock.Lock()
-	defer rsc.rscLock.Unlock()
-	return rsc.modelLogDir, rsc.isLogDirEnabled
+	return nil
 }
 
 // getNewTimeStamp return new unique timestamp and source time of it.
@@ -177,14 +202,163 @@ func (rsc *RunStateCatalog) toPublic() *RunCatalogPub {
 	defer rsc.rscLock.Unlock()
 
 	rcp := RunCatalogPub{
-		ModelLogDir:        rsc.modelLogDir,
-		IsModelLogEnabled:  rsc.isLogDirEnabled,
 		LastTimeStamp:      rsc.lastTimeStamp,
-		RunCount:           rsc.runLst.Len(),
 		DefaultMpiTemplate: defaultMpiTemplate,
 		MpiTemplates:       make([]string, len(rsc.mpiTemplates)),
 	}
 	copy(rcp.MpiTemplates, rsc.mpiTemplates)
 
 	return &rcp
+}
+
+// allModels return basic info about all models.
+func (rsc *RunStateCatalog) allModels() map[string]modelRunBasic {
+	rsc.rscLock.Lock()
+	defer rsc.rscLock.Unlock()
+
+	rbs := make(map[string]modelRunBasic, len(rsc.models))
+	for key, val := range rsc.models {
+		rbs[key] = val
+	}
+	return rbs
+}
+
+// add new log file names to model log list and update most recent run id
+// if run stamp already exist in model run history then replace run state with more recent data
+func (rsc *RunStateCatalog) addModelLogs(digest string, lastRunId int, runStateLst []RunState) {
+	rsc.rscLock.Lock()
+	defer rsc.rscLock.Unlock()
+
+	// update most recent run id for the model
+	rb := rsc.models[digest]
+	rb.lastRunId = lastRunId
+	rsc.models[digest] = rb
+
+	// add new runs to model run history
+	// it can be multiple runs with the same run stamp, append only last else update existing
+	for _, r := range runStateLst {
+
+		isFound := false
+		rsLst := rsc.modelLogs[digest]
+
+		for k := 0; !isFound && k < len(rsLst); k++ {
+			isFound = rsLst[k].RunStamp == r.RunStamp
+			if isFound {
+				rsLst[k] = r // run stamp found in model run history, update run status with more recent data
+			}
+		}
+		// if run stamp not found in model run history then append run
+		if !isFound {
+			rsc.modelLogs[digest] = append(rsc.modelLogs[digest], r)
+		}
+	}
+}
+
+// scan model log directories to collect list log files for each model run history
+func scanModelLogDirs(doneC <-chan bool) {
+
+	// path to model run log file found by log directory scan
+	type logItem struct {
+		runId       int    // model run id
+		runStamp    string // model run stamp
+		runName     string // model run name
+		isCompleted bool   // if true then run completed
+		updateDt    string // last update date-time
+		path        string // log file path
+	}
+
+	for {
+		rbs := theRunStateCatalog.allModels() // get current models
+
+		// find new model runs since last scan
+		for d, it := range rbs {
+
+			// model log directory path must be not empty to search for log files
+			if !it.isLogDir {
+				continue
+			}
+			if it.logDir == "" {
+				it.logDir = "." // assume current directory if log directory not specified but eanbled by isLogDir
+			}
+
+			// get list of new model runs since last scan
+			rl, ok := theCatalog.RunRowAfterList(d, it.lastRunId)
+			if !ok || len(rl) <= 0 {
+				continue // no new runs since last scan (or ignore get runs error)
+			}
+			it.lastRunId = rl[len(rl)-1].RunId // for next scan run id must be after last id of current scan
+
+			// append new runs to model run list
+			logLst := make([]logItem, len(rl))
+
+			for k := range rl {
+				logLst[k] = logItem{
+					runId:       rl[k].RunId,
+					runStamp:    rl[k].RunStamp,
+					runName:     rl[k].Name,
+					isCompleted: db.IsRunCompleted(rl[k].Status),
+					updateDt:    rl[k].UpdateDateTime,
+				}
+			}
+
+			// get list of model run log files
+			ptrn := it.logDir + "/" + it.name + "." + "*.log"
+
+			fLst, err := filepath.Glob(ptrn)
+			if err != nil {
+				omppLog.Log("Error at log files search: ", ptrn)
+				continue
+			}
+
+			// replace path separators by / and sort file paths list
+			for k := range fLst {
+				fLst[k] = filepath.ToSlash(fLst[k])
+			}
+			sort.Strings(fLst) // sort by file path
+
+			// search new model runs to find log file path
+			// append run state to run state list ordered by run id
+			rsLst := []RunState{}
+			for k := 0; k < len(logLst); k++ {
+
+				// search for modelName.runStamp.console.log
+				fn := it.logDir + "/" + it.name + "." + logLst[k].runStamp + ".console.log"
+				n := sort.SearchStrings(fLst, fn)
+				isFound := n < len(fLst) && fLst[n] == fn
+
+				// search for modelName.runStamp.log
+				if !isFound {
+					fn = it.logDir + "/" + it.name + "." + logLst[k].runStamp + ".log"
+					n = sort.SearchStrings(fLst, fn)
+					isFound = n < len(fLst) && fLst[n] == fn
+				}
+
+				if isFound {
+					rsLst = append(rsLst,
+						RunState{
+							ModelName:      it.name,
+							ModelDigest:    d,
+							RunStamp:       logLst[k].runStamp,
+							IsFinal:        logLst[k].isCompleted,
+							UpdateDateTime: logLst[k].updateDt,
+							RunName:        logLst[k].runName,
+							IsLog:          true,
+							LogFileName:    filepath.Base(fn),
+							logPath:        fn,
+							isHistory:      true,
+						})
+				}
+			}
+
+			// add new log file names to model log list and update most recent run id for that model
+			theRunStateCatalog.addModelLogs(d, it.lastRunId, rsLst)
+		}
+
+		// wait for doneC or or sleep
+		select {
+		case <-doneC:
+			return
+		case <-time.After(scanSleepTimeout * time.Millisecond):
+		}
+	}
 }

@@ -13,12 +13,12 @@ import (
 type CatalogState struct {
 	RootDir           string          // server root directory
 	RowPageMaxSize    int64           // default "page" size: row count to read parameters or output tables
-	DoubleFmt         string          // format to convert float or double value to string
 	RunHistoryMaxSize int             // max number of model run states to keep in run list history
+	DoubleFmt         string          // format to convert float or double value to string
 	LoginUrl          string          // user login URL for UI
 	LogoutUrl         string          // user logout URL for UI
-	ModelCatalogState ModelCatalogPub // "public" state of model catalog
-	RunCatalogState   RunCatalogPub   // "public" state of model run catalog
+	ModelCatalog      ModelCatalogPub // "public" state of model catalog
+	RunCatalog        RunCatalogPub   // "public" state of model run catalog
 }
 
 // serviceStateHandler return service state and configuration.
@@ -28,12 +28,12 @@ func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
 	st := CatalogState{
 		RootDir:           theCfg.rootDir,
 		RowPageMaxSize:    theCfg.pageMaxSize,
-		DoubleFmt:         theCfg.doubleFmt,
 		RunHistoryMaxSize: theCfg.runHistoryMaxSize,
+		DoubleFmt:         theCfg.doubleFmt,
 		LoginUrl:          theCfg.loginUrl,
 		LogoutUrl:         theCfg.logoutUrl,
-		ModelCatalogState: *theCatalog.toPublic(),
-		RunCatalogState:   *theRunStateCatalog.toPublic(),
+		ModelCatalog:      *theCatalog.toPublic(),
+		RunCatalog:        *theRunStateCatalog.toPublic(),
 	}
 	jsonResponse(w, r, st)
 }
@@ -43,6 +43,7 @@ func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
 func allModelsRefreshHandler(w http.ResponseWriter, r *http.Request) {
 
 	// model directory required to build list of model sqlite files
+	modelLogDir, _ := theCatalog.getModelLogDir()
 	modelDir, _ := theCatalog.getModelDir()
 	if modelDir == "" {
 		omppLog.Log("Failed to refersh models catalog: path to model directory cannot be empty")
@@ -52,11 +53,19 @@ func allModelsRefreshHandler(w http.ResponseWriter, r *http.Request) {
 	omppLog.Log("Model directory: ", modelDir)
 
 	// refresh models catalog
-	if err := theCatalog.RefreshSqlite(modelDir); err != nil {
+	if err := theCatalog.RefreshSqlite(modelDir, modelLogDir); err != nil {
 		omppLog.Log(err)
 		http.Error(w, "Failed to refersh models catalog: "+modelDir, http.StatusBadRequest)
 		return
 	}
+
+	// refresh run state catalog
+	if err := theRunStateCatalog.RefreshCatalog(etcDir); err != nil {
+		omppLog.Log(err)
+		http.Error(w, "Failed to refersh model runs catalog", http.StatusBadRequest)
+		return
+	}
+
 	w.Header().Set("Content-Location", "/api/admin/all-models/refresh/"+modelDir)
 	w.Header().Set("Content-Type", "text/plain")
 }

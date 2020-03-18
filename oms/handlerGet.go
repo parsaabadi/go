@@ -10,22 +10,18 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
-// homeHandler is static pages handler for front-end UI served on web / root.
-// Only GET requests expected.
-func homeHandler(w http.ResponseWriter, r *http.Request) {
-	setContentType(http.FileServer(http.Dir(htmlSubDir))).ServeHTTP(w, r)
-}
-
 // modelListHandler return list of model_dic rows:
 // GET /api/model-list
 func modelListHandler(w http.ResponseWriter, r *http.Request) {
 
 	// list of models digest and for each model in catalog and get model_dic row
-	ds := theCatalog.AllModelDigests()
+	mds := theCatalog.allModelDigests()
 
-	ml := make([]db.ModelDicRow, len(ds))
-	for idx := range ds {
-		ml[idx], _ = theCatalog.ModelDicByDigest(ds[idx])
+	ml := make([]db.ModelDicRow, 0, len(mds))
+	for _, d := range mds {
+		if m, ok := theCatalog.ModelDicByDigest(d); ok {
+			ml = append(ml, m)
+		}
 	}
 
 	// write json response
@@ -42,11 +38,11 @@ func modelTextListHandler(w http.ResponseWriter, r *http.Request) {
 	rqLangTags := getRequestLang(r, "lang") // get optional language argument and languages accepted by browser
 
 	// get model name, description, notes
-	ds := theCatalog.AllModelDigests()
+	mds := theCatalog.allModelDigests()
 
-	mtl := make([]ModelDicDescrNote, 0, len(ds))
-	for idx := range ds {
-		if mt, ok := theCatalog.ModelTextByDigest(ds[idx], rqLangTags); ok {
+	mtl := make([]ModelDicDescrNote, 0, len(mds))
+	for _, d := range mds {
+		if mt, ok := theCatalog.ModelTextByDigest(d, rqLangTags); ok {
 			mtl = append(mtl, *mt)
 		}
 	}
@@ -146,13 +142,26 @@ func modelProfileHandler(w http.ResponseWriter, r *http.Request) {
 	dn := getRequestParam(r, "model")
 	profile := getRequestParam(r, "profile")
 
-	mt, _ := theCatalog.ModelProfileByName(dn, profile)
-	jsonResponse(w, r, mt)
+	p, _ := theCatalog.ModelProfileByName(dn, profile)
+	jsonResponse(w, r, p)
+}
+
+// modelProfileListHandler return profile db rows by model digest-or-name:
+// GET /api/model/:model/profile-list
+// GET /api/model-profile-list?model=modelNameOrDigest
+// This is a list of profiles from model database, it is not a "model" profile(s).
+// There is no explicit link between profile and model, profile can be applicable to multiple models.
+func modelProfileListHandler(w http.ResponseWriter, r *http.Request) {
+
+	dn := getRequestParam(r, "model")
+
+	pl, _ := theCatalog.ProfileNamesByDigestOrName(dn)
+	jsonResponse(w, r, pl)
 }
 
 // runListHandler return list of run_lst db rows by model digest-or-name:
 // GET /api/model/:model/run-list
-// GET /api/run-list?model=modelNameOrDigest
+// GET /api/model-run-list?model=modelNameOrDigest
 // If multiple models with same name exist only one is returned.
 func runListHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -165,7 +174,7 @@ func runListHandler(w http.ResponseWriter, r *http.Request) {
 // runListTextHandler return list of run_lst and run_txt db rows by model digest-or-name:
 // GET /api/model/:model/run-list/text
 // GET /api/model/:model/run-list/text/lang/:lang
-// GET /api/run-list-text?model=modelNameOrDigest&lang=en
+// GET /api/model-run-list-text?model=modelNameOrDigest&lang=en
 // If multiple models with same name exist only one is returned.
 // If optional lang specified then result in that language else in browser language.
 func runListTextHandler(w http.ResponseWriter, r *http.Request) {
@@ -179,7 +188,7 @@ func runListTextHandler(w http.ResponseWriter, r *http.Request) {
 
 // runStatusHandler return run_lst db row by model digest-or-name and run digest-or-stamp-or-name:
 // GET /api/model/:model/run/:run/status
-// GET /api/run-status?model=modelNameOrDigest&run=runDigestOrStampOrName
+// GET /api/model-run-status?model=modelNameOrDigest&run=runDigestOrStampOrName
 // If multiple models with same name exist then result is undefined.
 // If multiple runs with same stamp or name exist then result is undefined.
 // If no such run exist in database then empty result returned.
@@ -194,7 +203,7 @@ func runStatusHandler(w http.ResponseWriter, r *http.Request) {
 
 // runStatusListHandler return list run_lst db rows by model digest-or-name and run digest-or-stamp-or-name:
 // GET /api/model/:model/run/:run/status/list
-// GET /api/run-status-list?model=modelNameOrDigest&run=runDigestOrStampOrName
+// GET /api/model-run-status-list?model=modelNameOrDigest&run=runDigestOrStampOrName
 // If no such run exist in database then empty result returned.
 func runStatusListHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -207,7 +216,7 @@ func runStatusListHandler(w http.ResponseWriter, r *http.Request) {
 
 // firstRunStatusHandler return first run_lst db row by model digest-or-name:
 // GET /api/model/:model/run/status/first
-// GET /api/run-first-status?model=modelNameOrDigest
+// GET /api/model-run-first-status?model=modelNameOrDigest
 // If multiple models or runs with same name exist only one is returned.
 // If no run exist in database then empty result returned.
 func firstRunStatusHandler(w http.ResponseWriter, r *http.Request) {
@@ -220,7 +229,7 @@ func firstRunStatusHandler(w http.ResponseWriter, r *http.Request) {
 
 // lastRunStatusHandler return last run_lst db row by model digest-or-name:
 // GET /api/model/:model/run/status/last
-// GET /api/run-last-status?model=modelNameOrDigest
+// GET /api/model-run-last-status?model=modelNameOrDigest
 // If multiple models or runs with same name exist only one is returned.
 // If no run exist in database then empty result returned.
 func lastRunStatusHandler(w http.ResponseWriter, r *http.Request) {
@@ -233,7 +242,7 @@ func lastRunStatusHandler(w http.ResponseWriter, r *http.Request) {
 
 // lastCompletedRunStatusHandler return last compeleted run_lst db row by model digest-or-name:
 // GET /api/model/:model/run/status/last-completed
-// GET /api/run-last-completed-status?model=modelNameOrDigest
+// GET /api/model-run-last-completed-status?model=modelNameOrDigest
 // Run completed if run status one of: s=success, x=exit, e=error
 // If multiple models or runs with same name exist only one is returned.
 // If no run exist in database then empty result returned.
@@ -245,11 +254,26 @@ func lastCompletedRunStatusHandler(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, r, rst)
 }
 
+// runFullHandler return run metadata: run_lst, run_options, run_progress, run_parameter db rows
+// by model digest-or-name and digest-or-stamp-or-name:
+// GET /api/model/:model/run/:run
+// GET /api/model-run?model=modelNameOrDigest&run=runDigestOrStampOrName
+// If multiple models with same name exist then result is undefined.
+// If multiple runs with same stamp or name exist then result is undefined.
+func runFullHandler(w http.ResponseWriter, r *http.Request) {
+
+	dn := getRequestParam(r, "model")
+	rdsn := getRequestParam(r, "run")
+
+	rp, _ := theCatalog.RunFull(dn, rdsn)
+	jsonResponse(w, r, rp)
+}
+
 // runTextHandler return full run metadata: run_lst, run_txt, parameter sub-value counts and text db rows
 // by model digest-or-name and digest-or-stamp-or-name:
 // GET /api/model/:model/run/:run/text
 // GET /api/model/:model/run/:run/text/lang/:lang
-// GET /api/run-text?model=modelNameOrDigest&run=runDigestOrStampOrName&lang=en
+// GET /api/model-run-text?model=modelNameOrDigest&run=runDigestOrStampOrName&lang=en
 // If multiple models with same name exist then result is undefined.
 // If multiple runs with same stamp or name exist then result is undefined.
 // It does not return non-completed runs (run in progress).
@@ -268,7 +292,7 @@ func runTextHandler(w http.ResponseWriter, r *http.Request) {
 // runAllTextHandler return full run metadata: run_lst, run_txt, parameter sub-value counts and text db rows
 // by model digest-or-name and digest-or-stamp-or-name:
 // GET /api/model/:model/run/:run/text/all
-// GET /api/run-text-all?model=modelNameOrDigest&run=runDigestOrStampOrName
+// GET /api/model-run-text-all?model=modelNameOrDigest&run=runDigestOrStampOrName
 // If multiple models with same name exist then result is undefined.
 // If multiple runs with same stamp or name exist then result is undefined.
 // It does not return non-completed runs (run in progress).
@@ -280,38 +304,6 @@ func runAllTextHandler(w http.ResponseWriter, r *http.Request) {
 	rdsn := getRequestParam(r, "run")
 
 	rp, _ := theCatalog.RunTextFull(dn, rdsn, true, nil)
-	jsonResponse(w, r, rp)
-}
-
-// lastCompletedRunTextHandler return last compeleted run_lst and run_txt db rows by model digest-or-name:
-// GET /api/model/:model/run/last-completed/text
-// GET /api/model/:model/run/last-completed/text/lang/:lang
-// GET /api/run-last-completed-text?model=modelNameOrDigest&lang=en
-// Run completed if run status one of: s=success, x=exit, e=error
-// If multiple models or runs with same name exist only one is returned.
-// If no run exist in database then empty result returned.
-// If optional lang specified then result in that language else in browser language.
-func lastCompletedRunTextHandler(w http.ResponseWriter, r *http.Request) {
-
-	dn := getRequestParam(r, "model")
-	rqLangTags := getRequestLang(r, "lang") // get optional language argument and languages accepted by browser
-
-	rp, _ := theCatalog.LastCompletedRunText(dn, false, rqLangTags)
-	jsonResponse(w, r, rp)
-}
-
-// lastCompletedRunAllTextHandler return last compeleted run_lst and run_txt db rows by model digest-or-name:
-// GET /api/model/:model/run/last-completed/text/all
-// GET /api/run-last-completed-text-all?model=modelNameOrDigest
-// Run completed if run status one of: s=success, x=exit, e=error
-// If multiple models or runs with same name exist only one is returned.
-// If no run exist in database then empty result returned.
-// Text rows returned in all languages.
-func lastCompletedRunAllTextHandler(w http.ResponseWriter, r *http.Request) {
-
-	dn := getRequestParam(r, "model")
-
-	rp, _ := theCatalog.LastCompletedRunText(dn, true, nil)
 	jsonResponse(w, r, rp)
 }
 

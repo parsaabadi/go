@@ -11,10 +11,6 @@ Log can be enabled/disabled for two independent streams:
 
 "Stamped" file name produced by adding time-stamp and/or pid-stamp, i.e.:
   exeName.log => exeName.2012_08_17_16_04_59_148.123.log
-
-Log message by default prefixed with date-time: 2012-08-17 16:04:59.148 ....
-It can be disabled by log setting "is no msg time" = true, i.e.:
-  exeName -v -OpenM.LogNoMsgTime
 */
 package omppLog
 
@@ -61,11 +57,7 @@ func Log(msg ...interface{}) {
 	// make message string and log to console
 	var m string
 	now := time.Now()
-	if logOpts.IsNoMsgTime {
-		m = fmt.Sprint(msg...)
-	} else {
-		m = helper.MakeDateTime(now) + " " + fmt.Sprint(msg...)
-	}
+	m = helper.MakeDateTime(now) + " " + fmt.Sprint(msg...)
 	if logOpts.IsConsole {
 		fmt.Println(m)
 	}

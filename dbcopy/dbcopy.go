@@ -144,7 +144,6 @@ Also dbcopy support OpenM++ standard log settings (described in wiki at http://w
   -OpenM.LogFilePath:  path to log file, default = current/dir/exeName.log
   -OpenM.LogUseTs:     if true then use time-stamp in log file name
   -OpenM.LogUsePid:    if true then use pid-stamp in log file name
-  -OpenM.LogNoMsgTime: if true then do not prefix log messages with date-time
   -OpenM.LogSql:       if true then log sql statements into log file
 */
 package main

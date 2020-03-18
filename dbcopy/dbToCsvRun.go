@@ -28,7 +28,7 @@ func toRunListCsv(
 	isAllInOne bool) error {
 
 	// get all successfully completed model runs
-	rl, err := db.GetRunFullList(dbConn, modelDef.Model.ModelId, true, "")
+	rl, err := db.GetRunFullTextList(dbConn, modelDef.Model.ModelId, true, "")
 	if err != nil {
 		return err
 	}

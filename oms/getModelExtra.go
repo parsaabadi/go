@@ -71,6 +71,37 @@ func (mc *ModelCatalog) ModelProfileByName(dn, profile string) (*db.ProfileMeta,
 	return p, true
 }
 
+// ProfileNamesByDigestOrName return list of profile(s) names by model digest-or-name.
+// This is a list of profiles from model database, it is not a "model" profile(s).
+// There is no explicit link between profile and model, profile can be applicable to multiple models.
+func (mc *ModelCatalog) ProfileNamesByDigestOrName(dn string) ([]string, bool) {
+
+	// if model digest-or-name is empty then return empty results
+	if dn == "" {
+		omppLog.Log("Warning: invalid (empty) model digest and name")
+		return []string{}, false
+	}
+
+	// find model index by digest
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return []string{}, false // return empty result: model not found or error
+	}
+
+	// read profile names from database
+	nameLst, err := db.GetProfileList(mc.modelLst[idx].dbConn)
+	if err != nil {
+		omppLog.Log("Error at get profile list from model database: ", dn, ": ", err.Error())
+		return []string{}, false
+	}
+
+	return nameLst, true
+}
+
 // WordListByDigestOrName return model "words" by model digest and prefered language tags.
 // Model "words" are arrays of rows from lang_word and model_word db tables.
 // It can be in prefered language, default model language or empty if no lang_word or model_word rows exist.

@@ -174,61 +174,62 @@ func (mc *ModelCatalog) FirstOrLastRunStatus(dn string, isFisrt, isCompleted boo
 	return rp, true
 }
 
-// LastCompletedRunText return last compeleted run_lst and run_txt db rows by model digest-or-name.
-// Run completed if run status one of: s=success, x=exit, e=error.
-// Text (description and notes) can be in prefered language or all languages.
-// If prefered language requested and it is not found in db then return empty text results.
-func (mc *ModelCatalog) LastCompletedRunText(dn string, isAllLang bool, preferedLang []language.Tag) (*db.RunPub, bool) {
+// RunRowList return list of run_lst db rows by model digest and run digest-stamp-orr-name sorted by run_id.
+// If there are multiple rows with same run stamp or run digest then multiple rows returned.
+func (mc *ModelCatalog) RunRowList(digest string, rdsn string) ([]db.RunRow, bool) {
 
-	// if model digest-or-name is empty then return empty results
-	if dn == "" {
-		omppLog.Log("Warning: invalid (empty) model digest and name")
-		return &db.RunPub{}, false
+	// if model digest is empty then return empty results
+	if digest == "" {
+		omppLog.Log("Warning: invalid (empty) model digest")
+		return []db.RunRow{}, false
 	}
 
-	// load model metadata in order to convert to "public"
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return &db.RunPub{}, false // return empty result: model not found or error
-	}
-
-	// lock catalog and find model index by digest or name
+	// lock catalog and find model index by digest
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	// get last completed run_lst db row
-	r, err := db.GetLastCompletedRun(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId)
+	idx, ok := mc.indexByDigest(digest)
+	if !ok {
+		omppLog.Log("Warning: model digest not found: ", digest)
+		return []db.RunRow{}, false
+	}
+
+	// get run_lst db rows by digest, stamp or run name
+	rLst, err := db.GetRunListByDigestOrStampOrName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, rdsn)
 	if err != nil {
-		omppLog.Log("Error at get last completed run: ", dn, ": ", err.Error())
-		return &db.RunPub{}, false // return empty result: run select error
+		omppLog.Log("Error at get run status: ", digest, ": ", rdsn, ": ", err.Error())
+		return []db.RunRow{}, false // return empty result: run select error
 	}
-	if r == nil {
-		// omppLog.Log("Warning: there is no completed run not found for the model: ", dn)
-		return &db.RunPub{}, false // return empty result: run_lst row not found
+	return rLst, true
+}
+
+// RunRowList return list of run_lst db rows by model digest, sorted by run_id.
+// If afterRunId > 0 then return only runs where run_id > afterRunId.
+func (mc *ModelCatalog) RunRowAfterList(digest string, afterRunId int) ([]db.RunRow, bool) {
+
+	// if model digest is empty then return empty results
+	if digest == "" {
+		omppLog.Log("Warning: invalid (empty) model digest")
+		return []db.RunRow{}, false
 	}
 
-	// get run_txt db row for that run using matched prefered language or all languages
-	lc := ""
-	if !isAllLang {
-		_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
-		lc = mc.modelLst[idx].langCodes[np]
+	// lock catalog and find model index by digest
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigest(digest)
+	if !ok {
+		omppLog.Log("Warning: model digest not found: ", digest)
+		return []db.RunRow{}, false
 	}
 
-	rt, err := db.GetRunText(mc.modelLst[idx].dbConn, r.RunId, lc)
+	// get run list
+	rl, err := db.GetRunList(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, afterRunId)
 	if err != nil {
-		omppLog.Log("Error at get run text of last completed run: ", dn, ": ", r.RunId, ": ", err.Error())
-		return &db.RunPub{}, false // return empty result: run select error
+		omppLog.Log("Error at get run list: ", digest, ": ", err.Error())
+		return []db.RunRow{}, false // return empty result: run select error
 	}
-
-	// convert to "public" model run format
-	rp, err := (&db.RunMeta{Run: *r, Txt: rt}).ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
-	if err != nil {
-		omppLog.Log("Error at last completed run conversion: ", dn, ": ", r.Name, ": ", err.Error())
-		return &db.RunPub{}, false // return empty result: conversion error
-	}
-
-	return rp, true
+	return rl, true
 }
 
 // RunList return list of run_lst db rows by model digest-or-name.
@@ -252,7 +253,7 @@ func (mc *ModelCatalog) RunList(dn string) ([]db.RunPub, bool) {
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	rl, err := db.GetRunList(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId)
+	rl, err := db.GetRunList(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, 0)
 	if err != nil {
 		omppLog.Log("Error at get run list: ", dn, ": ", err.Error())
 		return []db.RunPub{}, false // return empty result: run select error
@@ -349,7 +350,56 @@ func (mc *ModelCatalog) RunListText(dn string, preferedLang []language.Tag) ([]d
 	return rpl, true
 }
 
-// RunTextFull return full run metadata by model digest-or-name and run digest-or-stamp-or-name.
+// RunFull return full run metadata (without text) by model digest-or-name and run digest-or-stamp-or-name.
+// It does not return run text metadata: decription and notes from run_txt and run_parameter_txt tables.
+func (mc *ModelCatalog) RunFull(dn, rdsn string) (*db.RunPub, bool) {
+
+	// if model digest-or-name is empty then return empty results
+	if dn == "" {
+		omppLog.Log("Warning: invalid (empty) model digest and name")
+		return &db.RunPub{}, false
+	}
+
+	// load model metadata in order to convert to "public"
+	idx, ok := mc.loadModelMeta(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return &db.RunPub{}, false // return empty result: model not found or error
+	}
+
+	// lock catalog and find model index by digest or name
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	// get run_lst db row by digest, stamp or run name
+	r, err := db.GetRunByDigestOrStampOrName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, rdsn)
+	if err != nil {
+		omppLog.Log("Error at get run status: ", dn, ": ", rdsn, ": ", err.Error())
+		return &db.RunPub{}, false // return empty result: run select error
+	}
+	if r == nil {
+		omppLog.Log("Warning run status not found: ", dn, ": ", rdsn)
+		return &db.RunPub{}, false // return empty result: run_lst row not found
+	}
+
+	// get full metadata db rows
+	rm, err := db.GetRunFull(mc.modelLst[idx].dbConn, r)
+	if err != nil {
+		omppLog.Log("Error at get run: ", dn, ": ", r.Name, ": ", err.Error())
+		return &db.RunPub{}, false // return empty result: run select error
+	}
+
+	// convert to "public" model run format
+	rp, err := rm.ToPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
+	if err != nil {
+		omppLog.Log("Error at completed run conversion: ", dn, ": ", r.Name, ": ", err.Error())
+		return &db.RunPub{}, false // return empty result: conversion error
+	}
+
+	return rp, true
+}
+
+// RunTextFull return full run metadata (including text) by model digest-or-name and run digest-or-stamp-or-name.
 // It does not return non-completed runs (run in progress).
 // Run completed if run status one of: s=success, x=exit, e=error.
 // Text (description and notes) can be in prefered language or all languages.
@@ -395,7 +445,7 @@ func (mc *ModelCatalog) RunTextFull(dn, rdsn string, isAllLang bool, preferedLan
 		lc = mc.modelLst[idx].langCodes[np]
 	}
 
-	rm, err := db.GetRunFull(mc.modelLst[idx].dbConn, r, lc)
+	rm, err := db.GetRunFullText(mc.modelLst[idx].dbConn, r, lc)
 	if err != nil {
 		omppLog.Log("Error at get run text: ", dn, ": ", r.Name, ": ", err.Error())
 		return &db.RunPub{}, false // return empty result: run select error

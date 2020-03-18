@@ -212,12 +212,20 @@ func getRunLst(dbConn *sql.DB, query string) ([]RunRow, error) {
 	return runRs, nil
 }
 
-// GetRunList return list of model runs: run_lst rows.
-func GetRunList(dbConn *sql.DB, modelId int) ([]RunRow, error) {
+// GetRunList return list of model runs by model_id: run_lst rows.
+//
+// If afterRunId > 0 then return only runs where run_id > afterRunId
+func GetRunList(dbConn *sql.DB, modelId int, afterRunId int) ([]RunRow, error) {
 
 	// model not found: model id must be positive
 	if modelId <= 0 {
 		return nil, nil
+	}
+
+	// run id filter
+	runFlt := ""
+	if afterRunId > 0 {
+		runFlt = " AND H.run_id > " + strconv.Itoa(afterRunId)
 	}
 
 	// get list of runs for that model id
@@ -227,6 +235,7 @@ func GetRunList(dbConn *sql.DB, modelId int) ([]RunRow, error) {
 		" H.update_dt, H.run_digest, H.run_stamp" +
 		" FROM run_lst H" +
 		" WHERE H.model_id = " + strconv.Itoa(modelId) +
+		runFlt +
 		" ORDER BY 1"
 
 	runRs, err := getRunLst(dbConn, q)
@@ -438,12 +447,73 @@ func getRunProgress(dbConn *sql.DB, query string) ([]runProgressRow, error) {
 	return rpLst, nil
 }
 
-// GetRunFull return full metadata for completed model run:
+// GetRunFull return full metadata for completed model run: run_lst, run_option, run_parameter, run_progress rows.
+func GetRunFull(dbConn *sql.DB, runRow *RunRow) (*RunMeta, error) {
+
+	// validate parameters
+	if runRow == nil {
+		return nil, errors.New("invalid (empty) model run row, it may be model run not found")
+	}
+
+	// run meta header: run_lst row, model name and digest
+	meta := &RunMeta{Run: *runRow, Txt: []RunTxtRow{}}
+
+	// get run options by run id
+	q := "SELECT" +
+		" M.run_id, M.option_key, M.option_value" +
+		" FROM run_option M" +
+		" INNER JOIN run_lst H ON (H.run_id = M.run_id)" +
+		" WHERE H.run_id = " + strconv.Itoa(runRow.RunId) +
+		" ORDER BY 1, 2"
+
+	optRs, err := getRunOpts(dbConn, q)
+	if err != nil {
+		return nil, err
+	}
+	meta.Opts = optRs[runRow.RunId]
+
+	// append run_parameter rows: Hid and sub-value count
+	q = "SELECT M.run_id, M.parameter_hid, M.sub_count" +
+		" FROM run_parameter M" +
+		" INNER JOIN run_lst H ON (H.run_id = M.run_id)" +
+		" WHERE H.run_id = " + strconv.Itoa(runRow.RunId) +
+		" ORDER BY 1, 2"
+
+	hi := make(map[int]int) // map (parameter Hid) => index in parameter array
+
+	err = SelectRows(dbConn, q,
+		func(rows *sql.Rows) error {
+			var r runParam
+			var nId int
+			if err := rows.Scan(&nId, &r.ParamHid, &r.SubCount); err != nil {
+				return err
+			}
+			r.Txt = []RunParamTxtRow{}
+			i := len(meta.Param)
+			meta.Param = append(meta.Param, r)
+			hi[r.ParamHid] = i
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	// get run sub-values progress for that run id
+	rpRs, err := GetRunProgress(dbConn, runRow.RunId)
+	if err != nil {
+		return nil, err
+	}
+	meta.Progress = rpRs
+
+	return meta, nil
+}
+
+// GetRunFullText return full metadata, including text, for completed model run:
 // run_lst, run_txt, run_option, run_parameter, run_parameter_txt, run_progress rows.
 //
 // It does not return non-completed runs (run in progress).
 // If langCode not empty then only specified language selected else all languages
-func GetRunFull(dbConn *sql.DB, runRow *RunRow, langCode string) (*RunMeta, error) {
+func GetRunFullText(dbConn *sql.DB, runRow *RunRow, langCode string) (*RunMeta, error) {
 
 	// validate parameters
 	if runRow == nil {
@@ -549,13 +619,13 @@ func GetRunFull(dbConn *sql.DB, runRow *RunRow, langCode string) (*RunMeta, erro
 	return meta, nil
 }
 
-// GetRunFullList return list of full metadata for completed model runs:
+// GetRunFullTextList return list of full metadata, including text, for completed model runs:
 // run_lst, run_txt, run_option, run_parameter, run_parameter_txt, run_progress rows.
 //
 // If isSuccess true then return only successfully completed runs else all completed runs.
 // It does not return non-completed runs (run in progress).
 // If langCode not empty then only specified language selected else all languages
-func GetRunFullList(dbConn *sql.DB, modelId int, isSuccess bool, langCode string) ([]RunMeta, error) {
+func GetRunFullTextList(dbConn *sql.DB, modelId int, isSuccess bool, langCode string) ([]RunMeta, error) {
 
 	// where filters
 	var statusFilter string

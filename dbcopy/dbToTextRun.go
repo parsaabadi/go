@@ -85,7 +85,7 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 	}
 
 	// get full model run metadata
-	meta, err := db.GetRunFull(srcDb, runRow, "")
+	meta, err := db.GetRunFullText(srcDb, runRow, "")
 	if err != nil {
 		return err
 	}
@@ -127,7 +127,7 @@ func toRunListText(
 	dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleFmt string, isIdCsv bool, isWriteUtf8bom bool, isUseIdNames bool) error {
 
 	// get all successfully completed model runs
-	rl, err := db.GetRunFullList(dbConn, modelDef.Model.ModelId, true, "")
+	rl, err := db.GetRunFullTextList(dbConn, modelDef.Model.ModelId, true, "")
 	if err != nil {
 		return err
 	}

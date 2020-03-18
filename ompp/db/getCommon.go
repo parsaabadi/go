@@ -102,6 +102,18 @@ func getOpts(dbConn *sql.DB, query string) (map[string]string, error) {
 	return kv, nil
 }
 
+// GetModelOptions return model run_option table rows as map of maps: map(run_id, map(key, value)).
+func GetModelRunOptions(dbConn *sql.DB, modelId int) (map[int]map[string]string, error) {
+
+	return getRunOpts(dbConn,
+		"SELECT"+
+			" M.run_id, M.option_key, M.option_value"+
+			" FROM run_option M"+
+			" INNER JOIN run_lst H ON (H.run_id = M.run_id)"+
+			" WHERE H.model_id = "+strconv.Itoa(modelId)+
+			" ORDER BY 1, 2")
+}
+
 // getRunOpts return run_option rows as map of maps: map(run_id, map(key, value)).
 func getRunOpts(dbConn *sql.DB, query string) (map[int]map[string]string, error) {
 

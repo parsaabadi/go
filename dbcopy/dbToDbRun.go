@@ -102,7 +102,7 @@ func dbToDbRun(modelName string, modelDigest string, runOpts *config.RunOptions)
 	}
 
 	// get full model run metadata
-	meta, err := db.GetRunFull(srcDb, runRow, "")
+	meta, err := db.GetRunFullText(srcDb, runRow, "")
 	if err != nil {
 		return err
 	}
@@ -141,7 +141,7 @@ func copyRunListDbToDb(
 	srcDb *sql.DB, dstDb *sql.DB, srcModel *db.ModelMeta, dstModel *db.ModelMeta, dstLang *db.LangMeta, doubleFmt string) error {
 
 	// source: get all successfully completed model runs in all languages
-	srcRl, err := db.GetRunFullList(srcDb, srcModel.Model.ModelId, true, "")
+	srcRl, err := db.GetRunFullTextList(srcDb, srcModel.Model.ModelId, true, "")
 	if err != nil {
 		return err
 	}
