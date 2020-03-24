@@ -139,7 +139,8 @@ func GetRunListByDigestOrStampOrName(dbConn *sql.DB, modelId int, rdsn string) (
 
 	rLst, err := getRunLst(dbConn,
 		sql+" WHERE H.model_id = "+strconv.Itoa(modelId)+
-			" AND H.run_digest = "+toQuoted(rdsn))
+			" AND H.run_digest = "+toQuoted(rdsn)+
+			" ORDER BY 1")
 
 	if err == nil && len(rLst) <= 0 {
 		rLst, err = getRunLst(dbConn,
