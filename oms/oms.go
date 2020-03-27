@@ -77,6 +77,7 @@ Also oms support OpenM++ standard log settings (described in wiki at http://www.
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"net/http"
@@ -281,6 +282,7 @@ func mainBody(args []string) error {
 		router.Get("/*", http.NotFound) // only /api, any other pages not found
 	}
 
+	// initialize server
 	addr := runOpts.String(listenArgKey)
 	omppLog.Log("Listen at ", addr)
 	if !isApiOnly {
@@ -292,7 +294,22 @@ func mainBody(args []string) error {
 	}
 	omppLog.Log("To finish press Ctrl+C")
 
-	err = http.ListenAndServe(addr, router)
+	srv := http.Server{Addr: addr, Handler: router}
+
+	// add shutdown handler, it does not wait for requests, reset connections
+	// PUT /api/admin/shutdown
+	adminShutdownHandler := func(w http.ResponseWriter, r *http.Request) {
+
+		// close models catalog
+		omppLog.Log("Shutdown server...")
+		if err := theCatalog.Close(); err != nil {
+			omppLog.Log(err)
+		}
+		srv.Shutdown(context.Background())
+	}
+	router.Put("/api/admin/shutdown", adminShutdownHandler, logRequest)
+
+	err = srv.ListenAndServe()
 
 	doneScanC <- true
 	return err

@@ -197,7 +197,7 @@ func (mc *ModelCatalog) loadModelWord(dn string) int {
 	idx, ok := mc.indexByDigestOrName(dn)
 	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return idx // model not found, index is negative
+		return -1
 	}
 	if mc.modelLst[idx].modelWord != nil { // exit if model_word already loaded
 		return idx

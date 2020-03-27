@@ -217,6 +217,7 @@ func (mc *ModelCatalog) indexByDigest(digest string) (int, bool) {
 // indexByDigestOrName return index of model by digest or by name.
 // It can be used only inside of lock.
 // If digest exist in model list then return index by digest else first index of name.
+// If not found then return false flag.
 func (mc *ModelCatalog) indexByDigestOrName(dn string) (int, bool) {
 	n := -1
 	for k := range mc.modelLst {

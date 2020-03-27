@@ -150,7 +150,7 @@ func (mc *ModelCatalog) loadModelMetaText(dn string) (int, bool) {
 	idx, ok := mc.indexByDigestOrName(dn)
 	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return 0, false // model not found, index is negative
+		return 0, false
 	}
 	if mc.modelLst[idx].txtMeta != nil && mc.modelLst[idx].isTxtMetaFull { // exit if model metadata already loaded
 		return idx, true
