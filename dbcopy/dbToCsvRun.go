@@ -53,7 +53,7 @@ func toRunListCsv(
 	}
 
 	// write model run rows into csv
-	row := make([]string, 11)
+	row := make([]string, 12)
 
 	idx := 0
 	err = toCsvFile(
@@ -63,7 +63,7 @@ func toRunListCsv(
 		[]string{
 			"run_id", "model_id", "run_name", "sub_count",
 			"sub_started", "sub_completed", "create_dt", "status",
-			"update_dt", "run_digest", "run_stamp"},
+			"update_dt", "run_digest", "value_digest", "run_stamp"},
 		func() (bool, []string, error) {
 			if 0 <= idx && idx < len(rl) {
 				row[0] = strconv.Itoa(rl[idx].Run.RunId)
@@ -75,7 +75,8 @@ func toRunListCsv(
 				row[6] = rl[idx].Run.CreateDateTime
 				row[7] = rl[idx].Run.Status
 				row[8] = rl[idx].Run.UpdateDateTime
-				row[9] = rl[idx].Run.Digest
+				row[9] = rl[idx].Run.RunDigest
+				row[9] = rl[idx].Run.ValueDigest
 				row[10] = rl[idx].Run.RunStamp
 				idx++
 				return false, row, nil
@@ -342,9 +343,9 @@ func toRunCsv(
 		csvDir = filepath.Join(outDir, "all_model_runs")
 	} else {
 		if !isUseIdNames {
-			csvDir = filepath.Join(outDir, "run."+helper.ToAlphaNumeric(meta.Run.Name))
+			csvDir = filepath.Join(outDir, "run."+helper.CleanSpecialChars(meta.Run.Name))
 		} else {
-			csvDir = filepath.Join(outDir, "run."+strconv.Itoa(runId)+"."+helper.ToAlphaNumeric(meta.Run.Name))
+			csvDir = filepath.Join(outDir, "run."+strconv.Itoa(runId)+"."+helper.CleanSpecialChars(meta.Run.Name))
 		}
 	}
 

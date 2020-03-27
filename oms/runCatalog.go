@@ -259,10 +259,18 @@ func scanModelLogDirs(doneC <-chan bool) {
 	}
 
 	for {
-		rbs := theRunCatalog.allModels() // get current models
+		// get current models from run catalog and main catalog
+		rbs := theRunCatalog.allModels()
+		dLst := theCatalog.allModelDigests()
+		sort.Strings(dLst)
 
 		// find new model runs since last scan
 		for d, it := range rbs {
+
+			// skip model if digest does not exist in main catalog, ie: catalog closed
+			if i := sort.SearchStrings(dLst, d); i < 0 || i >= len(dLst) || dLst[i] != d {
+				continue
+			}
 
 			// model log directory path must be not empty to search for log files
 			if !it.isLogDir {

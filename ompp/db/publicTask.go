@@ -105,7 +105,7 @@ func (meta *TaskMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskPub, e
 			"SELECT"+
 				" TRS.task_run_id, TRS.run_id, TRS.set_id, W.set_name,"+
 				" R.run_name, R.sub_completed, R.create_dt, R.status,"+
-				" R.run_digest, R.run_stamp"+
+				" R.run_digest, R.value_digest, R.run_stamp"+
 				" FROM task_run_set TRS"+
 				" INNER JOIN workset_lst W ON (W.set_id = TRS.set_id)"+
 				" INNER JOIN run_lst R ON (R.run_id = TRS.run_id)"+
@@ -113,11 +113,15 @@ func (meta *TaskMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskPub, e
 				" ORDER BY 1, 2",
 			func(rows *sql.Rows) error {
 				var trId, wId, rId int
+				var svd sql.NullString
 				var r taskRunSetPub
 				if err := rows.Scan(&trId, &rId, &wId, &r.SetName,
 					&r.Run.Name, &r.Run.SubCompleted, &r.Run.CreateDateTime, &r.Run.Status,
-					&r.Run.Digest, &r.Run.RunStamp); err != nil {
+					&r.Run.RunDigest, &svd, &r.Run.RunStamp); err != nil {
 					return err
+				}
+				if svd.Valid {
+					r.Run.ValueDigest = svd.String
 				}
 				for k := range meta.TaskRun { // include only task run id's which are in the meta list of run id's
 
@@ -157,9 +161,7 @@ func (meta *TaskMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskPub, e
 // (2) isTaskRunNotFound = true if some of task run (pairs of set, model run) set or model run not found in current database.
 //
 // Worksets are searched by set name, which is unique inside of the model.
-// Model run serached by:
-// if run digest not empty then by digest;
-// else if run status is error then by run_name, sub_count, sub_completed, status, create_dt.
+// Model run searched by run digest.
 func (pub *TaskPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskMeta, bool, bool, error) {
 
 	// validate parameters
@@ -240,13 +242,12 @@ func (pub *TaskPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskMeta, 
 
 	// build task run history body as list of (run id, set id)
 	// select only runs where status is completed (success, exit, error)
-	// if digest not empty then use digest as run key
-	// else if run status is error then use run_name, sub_count, sub_completed, status, create_dt
+	// use run digest as run key
 
 	tri := make(map[int][]TaskRunSetRow, len(pub.TaskRun)) // map [index in pub.TaskRun] => [](run id, set id)
 
 	err = SelectRows(dbConn,
-		"SELECT R.run_id, R.run_name, R.sub_count, R.sub_completed, R.create_dt, R.status, R.run_digest, R.run_stamp"+
+		"SELECT R.run_id, R.run_digest"+
 			" FROM run_lst R"+
 			" WHERE R.model_id = "+strconv.Itoa(modelDef.Model.ModelId)+
 			" AND R.status IN ("+toQuoted(DoneRunStatus)+", "+toQuoted(ErrorRunStatus)+", "+toQuoted(ExitRunStatus)+")"+
@@ -254,20 +255,9 @@ func (pub *TaskPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskMeta, 
 		func(rows *sql.Rows) error {
 
 			var rId int
-			var trsName string
-			var trsSubCount int
-			var trsSubCompleted int
-			var trsCreateDateTime string
-			var trsStatus string
-			var dg sql.NullString
-			var trsStamp string
-			if err := rows.Scan(
-				&rId, &trsName, &trsSubCount, &trsSubCompleted, &trsCreateDateTime, &trsStatus, &dg, &trsStamp); err != nil {
+			var trsRunDigest string
+			if err := rows.Scan(&rId, &trsRunDigest); err != nil {
 				return err
-			}
-			sd := ""
-			if dg.Valid {
-				sd = dg.String // run digest
 			}
 
 			// find pair of (run, set) in the history of task run
@@ -280,18 +270,8 @@ func (pub *TaskPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskMeta, 
 						continue // skip: no set id for that row of task run history
 					}
 
-					// find run:
-					// if digest not empty then by digest
-					// else if run status is error then by name, status...
-					if (sd != "" && sd == pub.TaskRun[k].TaskRunSet[j].Run.Digest) ||
-						(sd == "" &&
-							trsStatus == ErrorRunStatus &&
-							trsName == pub.TaskRun[k].TaskRunSet[j].Run.Name &&
-							trsSubCount == pub.TaskRun[k].SubCount &&
-							trsSubCompleted == pub.TaskRun[k].TaskRunSet[j].Run.SubCompleted &&
-							trsCreateDateTime == pub.TaskRun[k].TaskRunSet[j].Run.CreateDateTime &&
-							trsStatus == pub.TaskRun[k].TaskRunSet[j].Run.Status &&
-							trsStamp == pub.TaskRun[k].TaskRunSet[j].Run.RunStamp) {
+					// find run by run digest
+					if trsRunDigest != "" && trsRunDigest == pub.TaskRun[k].TaskRunSet[j].Run.RunDigest {
 
 						rsLst := tri[k]
 						tri[k] = append(rsLst, TaskRunSetRow{RunId: rId, SetId: sId}) // add (run id, set id) to task run history

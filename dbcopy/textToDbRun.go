@@ -25,23 +25,28 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 		return errors.New("invalid (empty) model name")
 	}
 
-	// get model run name and id
-	runName := runOpts.String(runNameArgKey)
+	// get model run id and/or digest and/or name
 	runId := runOpts.Int(runIdArgKey, 0)
-
-	if runId < 0 || runId == 0 && runName == "" {
-		return errors.New("dbcopy invalid argument(s) for model run id: " + runOpts.String(runIdArgKey) + " and/or name: " + runOpts.String(runNameArgKey))
+	runDigest := runOpts.String(runDigestArgKey)
+	runName := runOpts.String(runNameArgKey)
+	if runId < 0 || runId == 0 && runDigest == "" && runName == "" {
+		return errors.New("dbcopy invalid argument(s) for model run: " + runOpts.String(runIdArgKey) + " " + runOpts.String(runNameArgKey) + " " + runOpts.String(runDigestArgKey))
 	}
 
-	// root for run data: input directory or name of input.zip
-	// it is input directory/modelName.run.id
-	// or input directory/modelName.run.runName
+	// root directory of run data is input directory or name of input.zip, result is one of:
+	// input/modelName.run.id
+	// input/modelName.run.runName
+	// input/modelName.run.runDigest
 	// for csv files this "root" combined subdirectory: root/run.id.runName or root/run.runName
 	inpDir := ""
-	if runId > 0 {
+	switch {
+	case runId > 0:
 		inpDir = filepath.Join(runOpts.String(inputDirArgKey), modelName+".run."+strconv.Itoa(runId))
-	} else {
-		inpDir = filepath.Join(runOpts.String(inputDirArgKey), modelName+".run."+runName)
+	case runDigest != "":
+		inpDir = filepath.Join(runOpts.String(inputDirArgKey), modelName+".run."+helper.CleanSpecialChars(runDigest))
+	default:
+		// if not run id and not digest then run name
+		inpDir = filepath.Join(runOpts.String(inputDirArgKey), modelName+".run."+helper.CleanSpecialChars(runName))
 	}
 
 	// unzip if required and use unzipped directory as "root" input directory
@@ -62,17 +67,20 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 	if runOpts.IsExist(runNameArgKey) && runOpts.IsExist(runIdArgKey) { // both: run id and name
 
 		metaPath = filepath.Join(inpDir,
-			modelName+".run."+strconv.Itoa(runId)+"."+helper.ToAlphaNumeric(runName)+".json")
+			modelName+".run."+strconv.Itoa(runId)+"."+helper.CleanSpecialChars(runName)+".json")
 
-	} else { // run id or run name only
+	} else { // only run id or run name and/or run digest
 
 		// make path search patterns for metadata json and csv directory
 		var mp string
-		if runOpts.IsExist(runNameArgKey) && !runOpts.IsExist(runIdArgKey) { // run name only
-			mp = modelName + ".run.*" + helper.ToAlphaNumeric(runName) + ".json"
-		}
-		if !runOpts.IsExist(runNameArgKey) && runOpts.IsExist(runIdArgKey) { // run id only
+		switch {
+		case runOpts.IsExist(runNameArgKey) && !runOpts.IsExist(runIdArgKey): // run name and not run id
+			mp = modelName + ".run.*" + helper.CleanSpecialChars(runName) + ".json"
+		case !runOpts.IsExist(runNameArgKey) && runOpts.IsExist(runIdArgKey): // run id and not run name
 			mp = modelName + ".run." + strconv.Itoa(runId) + ".*.json"
+		default:
+			// run digest and no run name or run id
+			mp = modelName + ".run.*.json"
 		}
 
 		// find path to metadata json by pattern
@@ -81,7 +89,7 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 			return err
 		}
 		if len(fl) <= 0 {
-			return errors.New("no metadata json file found for model run: " + strconv.Itoa(runId) + " " + runName)
+			return errors.New("no metadata json file found for model run: " + strconv.Itoa(runId) + " " + runName + " " + runDigest)
 		}
 		metaPath = fl[0]
 		if len(fl) > 1 {
@@ -91,10 +99,10 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 
 	// check results: metadata json file or csv directory must exist
 	if metaPath == "" {
-		return errors.New("no metadata json file found for model run: " + strconv.Itoa(runId) + " " + runName)
+		return errors.New("no metadata json file found for model run: " + strconv.Itoa(runId) + " " + runName + " " + runDigest)
 	}
 	if _, err := os.Stat(metaPath); err != nil {
-		return errors.New("no metadata json file found for model run: " + strconv.Itoa(runId) + " " + runName)
+		return errors.New("no metadata json file found for model run: " + strconv.Itoa(runId) + " " + runName + " " + runDigest)
 	}
 
 	// get connection string and driver name
@@ -140,7 +148,7 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 		return err
 	}
 	if dstId <= 0 {
-		return errors.New("model run not found or empty: " + strconv.Itoa(runId) + " " + runName)
+		return errors.New("model run not found or empty: " + strconv.Itoa(runId) + " " + runName + " " + runDigest)
 	}
 
 	return nil
@@ -292,13 +300,13 @@ func fromRunTextToDb(
 	}
 
 	// update model run digest
-	if meta.Run.Digest == "" {
+	if meta.Run.ValueDigest == "" {
 
-		sd, err := db.UpdateRunDigest(dbConn, dstId)
+		svd, err := db.UpdateRunValueDigest(dbConn, dstId)
 		if err != nil {
 			return 0, err
 		}
-		meta.Run.Digest = sd
+		meta.Run.ValueDigest = svd
 	}
 
 	return dstId, nil

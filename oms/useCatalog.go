@@ -233,34 +233,6 @@ func (mc *ModelCatalog) indexByDigestOrName(dn string) (int, bool) {
 	return 0, false // not found
 }
 
-/*
-// binDirectoryByDigest return model bin directory where model.exe expected to be located.
-func (mc *ModelCatalog) binDirectoryByDigest(digest string) (string, bool) {
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigest(digest)
-	if !ok {
-		return "", false // model not found, empty result
-	}
-
-	return mc.modelLst[idx].binDir, true
-}
-
-// logDirectoryByDigest return model log directory and log enabled/disabled flag by model digest.
-func (mc *ModelCatalog) logDirectoryByDigest(digest string) (string, bool) {
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigest(digest)
-	if !ok {
-		return "", false // model not found, empty result
-	}
-
-	return mc.modelLst[idx].logDir, mc.modelLst[idx].isLogDir
-}
-*/
-
 // AllModelDigests return digests for all models.
 func (mc *ModelCatalog) allModelDigests() []string {
 	mc.theLock.Lock()

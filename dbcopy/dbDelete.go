@@ -50,25 +50,6 @@ func dbDeleteModel(modelName string, modelDigest string, runOpts *config.RunOpti
 // delete model run metadata, parameters run values and outpurt tables run values from database
 func dbDeleteRun(modelName string, modelDigest string, runOpts *config.RunOptions) error {
 
-	// get model run name and id
-	runName := runOpts.String(runNameArgKey)
-	runId := runOpts.Int(runIdArgKey, 0)
-
-	// conflicting options: use run id if positive else use run name
-	if runOpts.IsExist(runNameArgKey) && runOpts.IsExist(runIdArgKey) {
-		if runId > 0 {
-			omppLog.Log("dbcopy options conflict. Using run id: ", runId, " ignore run name: ", runName)
-			runName = ""
-		} else {
-			omppLog.Log("dbcopy options conflict. Using run name: ", runName, " ignore run id: ", runId)
-			runId = 0
-		}
-	}
-
-	if runId < 0 || runId == 0 && runName == "" {
-		return errors.New("dbcopy invalid argument(s) for run id: " + runOpts.String(runIdArgKey) + " and/or run name: " + runOpts.String(runNameArgKey))
-	}
-
 	// open source database connection and check is it valid
 	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(dbConnStrArgKey), runOpts.String(dbDriverArgKey))
 	srcDb, _, err := db.Open(cs, dn, false)
@@ -91,40 +72,35 @@ func dbDeleteRun(modelName string, modelDigest string, runOpts *config.RunOption
 		return errors.New("model " + modelName + " " + modelDigest + " not found")
 	}
 
-	// get model run metadata by id or name
-	var runRow *db.RunRow
-	if runId > 0 {
-		if runRow, err = db.GetRun(srcDb, runId); err != nil {
-			return err
-		}
-		if runRow == nil {
-			return errors.New("model run not found, id: " + strconv.Itoa(runId))
-		}
-	} else {
-		if runRow, err = db.GetRunByName(srcDb, modelId, runName); err != nil {
-			return err
-		}
-		if runRow == nil {
-			return errors.New("model run not found: " + runName)
-		}
+	// find model run metadata by id, run digest or name
+	runId, runDigest, runName := runIdDigestNameFromOptions(runOpts)
+	if runId < 0 || runId == 0 && runName == "" && runDigest == "" {
+		return errors.New("dbcopy invalid argument(s) run id: " + runOpts.String(runIdArgKey) + ", run name: " + runOpts.String(runNameArgKey) + ", run digest: " + runOpts.String(runDigestArgKey))
+	}
+	runRow, e := findModelRunByIdDigestName(srcDb, modelId, runId, runDigest, runName)
+	if e != nil {
+		return e
+	}
+	if runRow == nil {
+		return errors.New("model run not found: " + runOpts.String(runIdArgKey) + " " + runOpts.String(runNameArgKey) + " " + runOpts.String(runDigestArgKey))
 	}
 
-	// check is this workset belong to the model
+	// check is this run belong to the model
 	if runRow.ModelId != modelId {
-		return errors.New("model run " + strconv.Itoa(runRow.RunId) + " " + runRow.Name + " does not belong to model " + modelName + " " + modelDigest)
+		return errors.New("model run " + strconv.Itoa(runRow.RunId) + " " + runRow.Name + " " + runRow.RunDigest + " does not belong to model " + modelName + " " + modelDigest)
 	}
 
 	// run must be completed: status success, error or exit
 	if !db.IsRunCompleted(runRow.Status) {
-		return errors.New("model run not completed: " + strconv.Itoa(runRow.RunId) + " " + runRow.Name)
+		return errors.New("model run not completed: " + strconv.Itoa(runRow.RunId) + " " + runRow.Name + " " + runRow.RunDigest)
 	}
 
 	// delete model run metadata, parameters run values and output tables run values from database
-	omppLog.Log("Delete model run ", runRow.RunId, " ", runRow.Name)
+	omppLog.Log("Delete model run ", runRow.RunId, " ", runRow.Name, " ", runRow.RunDigest)
 
 	err = db.DeleteRun(srcDb, runRow.RunId)
 	if err != nil {
-		return errors.New("failed to delete model run " + strconv.Itoa(runRow.RunId) + " " + runRow.Name + " " + err.Error())
+		return errors.New("failed to delete model run " + strconv.Itoa(runRow.RunId) + " " + runRow.Name + " " + runRow.RunDigest + ": " + err.Error())
 	}
 	return nil
 }

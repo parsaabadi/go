@@ -40,7 +40,8 @@ type RunPub struct {
 	CreateDateTime string            // create_dt     VARCHAR(32)  NOT NULL, -- start date-time
 	Status         string            // status        VARCHAR(1)   NOT NULL, -- run status: i=init p=progress s=success x=exit e=error(failed)
 	UpdateDateTime string            // update_dt     VARCHAR(32)  NOT NULL, -- last update date-time
-	Digest         string            // run_digest    VARCHAR(32)  NULL,     -- digest of the run
+	RunDigest      string            // run_digest    VARCHAR(32)  NULL,     -- digest of the run metadata: model digest, run name, sub count, created date-time, run stamp
+	ValueDigest    string            // value_digest  VARCHAR(32),           -- if not NULL then digest of the run values: all parameters and output tables
 	RunStamp       string            // run_stamp     VARCHAR(32)  NOT NULL, -- process run stamp, by default is log time stamp
 	Txt            []DescrNote       // run text: description and notes by language
 	Opts           map[string]string // options used to run the model: run_option
@@ -50,10 +51,10 @@ type RunPub struct {
 
 // ParamRunSetPub is "public" run or workset parameter metadata for json import-export
 type ParamRunSetPub struct {
-	Name     string     // parameter name
-	SubCount int        // number of parameter sub-values
-	DefaultSubId int    // default sub-value id for that parameter workset
-	Txt      []LangNote // parameter value notes by language
+	Name         string     // parameter name
+	SubCount     int        // number of parameter sub-values
+	DefaultSubId int        // default sub-value id for that parameter workset
+	Txt          []LangNote // parameter value notes by language
 }
 
 // ParamValuePub is "public" run or workset parameter metadata and values for json import-export.
@@ -76,7 +77,8 @@ type RunRow struct {
 	CreateDateTime string // create_dt     VARCHAR(32)  NOT NULL, -- start date-time
 	Status         string // status        VARCHAR(1)   NOT NULL, -- run status: i=init p=progress s=success x=exit e=error(failed)
 	UpdateDateTime string // update_dt     VARCHAR(32)  NOT NULL, -- last update date-time
-	Digest         string // run_digest    VARCHAR(32)  NULL,     -- digest of the run
+	RunDigest      string // run_digest    VARCHAR(32)  NULL,     -- digest of the run metadata: model digest, run name, sub count, created date-time, run stamp
+	ValueDigest    string // value_digest  VARCHAR(32),           -- if not NULL then digest of the run values: all parameters and output tables
 	RunStamp       string // run_stamp     VARCHAR(32)  NOT NULL, -- process run stamp, by default is log time stamp
 }
 
@@ -307,16 +309,15 @@ type taskRunPub struct {
 
 // taskRunSetPub is "public" metadata of task run history body: run and set pairs.
 // To find workset name is used, it is unique by model.
-// To find model run:
-// if digest not empty then use digest;
-// else if status is error then by run_name, sub_count, sub_completed, status, create_dt.
+// To find model run use run digest.
 type taskRunSetPub struct {
 	Run struct { // "public" link to model run
 		Name           string // run_name      VARCHAR(255) NOT NULL
 		SubCompleted   int    // sub_completed INT          NOT NULL, -- number of subvalues completed
 		CreateDateTime string // create_dt     VARCHAR(32)  NOT NULL, -- start date-time
 		Status         string // status        VARCHAR(1)   NOT NULL, -- run status: i=init p=progress s=success x=exit e=error(failed)
-		Digest         string // run_digest    VARCHAR(32)  NULL,     -- digest of the run
+		RunDigest      string // run_digest    VARCHAR(32)  NULL,     -- digest of the run metadata: model digest, run name, sub count, created date-time, run stamp
+		ValueDigest    string // value_digest  VARCHAR(32),           -- if not NULL then digest of the run values: all parameters and output tables
 		RunStamp       string // run_stamp     VARCHAR(32)  NOT NULL, -- process run stamp, by default is log time stamp
 	}
 	SetName string // name of input workset which used for that model run

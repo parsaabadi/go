@@ -9,18 +9,13 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"time"
-
-	"github.com/openmpp/go/ompp/helper"
 )
 
 // UpdateRun insert new or return existing model run metadata in database.
 //
 // Run status must be completed (success, exit or error) otherwise error returned.
 // If this run already exist then nothing is updated in database, only metadata updated with actual run id.
-// Following is used to find existing model run:
-// if digest not "" empty then by run digest;
-// else if status is error then by run_name, sub_count, sub_completed, status, create_dt, run_stamp.
+// Run digest is used to find existing model run, it cannot be empty "" string otherwise error returned.
 //
 // Double format is used for progress value float conversion, if non-empty format supplied.
 //
@@ -40,47 +35,33 @@ func (meta *RunMeta) UpdateRun(dbConn *sql.DB, modelDef *ModelMeta, langDef *Lan
 	if !IsRunCompleted(meta.Run.Status) {
 		return false, errors.New("model run not completed: " + strconv.Itoa(meta.Run.RunId) + " " + meta.Run.Name)
 	}
+	if meta.Run.RunDigest == "" {
+		return false, errors.New("invalid (empty) run digest: " + strconv.Itoa(meta.Run.RunId) + " " + meta.Run.Name)
+	}
 
-	// find existing run:
-	// if digest not "" empty then by run digest
-	// else if status is error then by run_name, sub_count, sub_completed, status, create_dt, run_stamp
+	// find existing run by run digest
 	var dstId int
 
-	if meta.Run.Digest != "" || (meta.Run.Status == ErrorRunStatus && meta.Run.Name != "" && meta.Run.CreateDateTime != "") {
-
-		q := "SELECT MIN(R.run_id)" +
-			" FROM run_lst R" +
-			" WHERE R.model_id = " + strconv.Itoa(modelDef.Model.ModelId)
-
-		if meta.Run.Digest != "" {
-			q += " AND R.run_digest = " + toQuoted(meta.Run.Digest)
-		} else {
-			q += " AND R.run_name = " + toQuoted(meta.Run.Name) +
-				" AND R.sub_count = " + strconv.Itoa(meta.Run.SubCount) +
-				" AND R.sub_completed = " + strconv.Itoa(meta.Run.SubCompleted) +
-				" AND R.status = " + toQuoted(meta.Run.Status) +
-				" AND R.create_dt = " + toQuoted(meta.Run.CreateDateTime) +
-				" AND R.run_stamp = " + toQuoted(meta.Run.RunStamp)
-		}
-
-		err := SelectFirst(dbConn,
-			q,
-			func(row *sql.Row) error {
-				var rId sql.NullInt64
-				if err := row.Scan(&rId); err != nil {
-					return err
-				}
-				if rId.Valid {
-					dstId = int(rId.Int64)
-				}
-				return nil
-			})
-		switch {
-		case err == sql.ErrNoRows:
-			dstId = 0 // model run not exist, select min() should always return run_id or null
-		case err != nil:
-			return false, err
-		}
+	err := SelectFirst(dbConn,
+		"SELECT MIN(R.run_id)"+
+			" FROM run_lst R"+
+			" WHERE R.model_id = "+strconv.Itoa(modelDef.Model.ModelId)+
+			" AND R.run_digest = "+toQuoted(meta.Run.RunDigest),
+		func(row *sql.Row) error {
+			var rId sql.NullInt64
+			if err := row.Scan(&rId); err != nil {
+				return err
+			}
+			if rId.Valid {
+				dstId = int(rId.Int64)
+			}
+			return nil
+		})
+	switch {
+	case err == sql.ErrNoRows:
+		dstId = 0 // model run not exist, select min() should always return run_id or null
+	case err != nil:
+		return false, err
 	}
 
 	// if run id exist then update run id
@@ -113,9 +94,9 @@ func (meta *RunMeta) UpdateRun(dbConn *sql.DB, modelDef *ModelMeta, langDef *Lan
 	return false, nil
 }
 
-// UpdateRunDigest does recalculate and update run_lst table with new run digest and return it.
+// UpdateRunValueDigest does recalculate and update run_lst table with new run value digest and return it.
 // If run not exist or status is not success or exit then digest is "" empty (not updated).
-func UpdateRunDigest(dbConn *sql.DB, runId int) (string, error) {
+func UpdateRunValueDigest(dbConn *sql.DB, runId int) (string, error) {
 
 	// validate parameters
 	if runId <= 0 {
@@ -127,34 +108,32 @@ func UpdateRunDigest(dbConn *sql.DB, runId int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	sd, err := doUpdateRunDigest(trx, runId)
+	svd, err := doUpdateRunValueDigest(trx, runId)
 	if err != nil {
 		trx.Rollback()
 		return "", err
 	}
 	trx.Commit()
 
-	return sd, nil
+	return svd, nil
 }
 
-// doUpdateRunDigest recalculate and update run_lst table with new run digest and return it.
+// doUpdateRunValueDigest recalculate and update run_lst table with new run digest and return it.
 // It does update as part of transaction
 // If run not exist or status is not success or exit then digest is "" empty (not updated).
 // Run digest include run metadata, run parameters value digests and output tables value digests
-func doUpdateRunDigest(trx *sql.Tx, runId int) (string, error) {
+func doUpdateRunValueDigest(trx *sql.Tx, runId int) (string, error) {
 
 	// check if this run exists and status is success or exit
-	srId := strconv.Itoa(runId)
 	var mId int
-	var runName string
-	var runStatus string
 	var subCount int
 	var subCompleted int
+	var runStatus string
 
 	err := TrxSelectFirst(trx,
-		"SELECT model_id, run_name, sub_count, sub_completed, status FROM run_lst WHERE run_id = "+srId,
+		"SELECT model_id, sub_count, sub_completed, status FROM run_lst WHERE run_id = "+strconv.Itoa(runId),
 		func(row *sql.Row) error {
-			return row.Scan(&mId, &runName, &subCount, &subCompleted, &runStatus)
+			return row.Scan(&mId, &subCount, &subCompleted, &runStatus)
 		})
 	switch {
 	case err == sql.ErrNoRows:
@@ -170,21 +149,21 @@ func doUpdateRunDigest(trx *sql.Tx, runId int) (string, error) {
 	hMd5 := md5.New()
 
 	_, err = hMd5.Write([]byte(
-		"run_name,sub_count,sub_completed,status\n" +
-			runName + "," + strconv.Itoa(subCount) + "," + strconv.Itoa(subCompleted) + "," + runStatus + "\n"))
+		"sub_count,sub_completed,status\n" +
+			strconv.Itoa(subCount) + "," + strconv.Itoa(subCompleted) + "," + runStatus + "\n"))
 	if err != nil {
 		return "", err
 	}
 
 	// append run parameters value digest header
-	_, err = hMd5.Write([]byte("run_digest\n"))
+	_, err = hMd5.Write([]byte("value_digest\n"))
 	if err != nil {
 		return "", err
 	}
 
 	// append run parameters values digest to run digest
 	err = TrxSelectRows(trx,
-		"SELECT M.model_parameter_id, R.run_digest"+
+		"SELECT M.model_parameter_id, R.value_digest"+
 			" FROM run_parameter R"+
 			" INNER JOIN model_parameter_dic M ON (M.parameter_hid = R.parameter_hid)"+
 			" WHERE M.model_id = "+strconv.Itoa(mId)+
@@ -214,14 +193,14 @@ func doUpdateRunDigest(trx *sql.Tx, runId int) (string, error) {
 	if runStatus == DoneRunStatus {
 
 		// append output tables value digest header
-		_, err = hMd5.Write([]byte("run_digest\n"))
+		_, err = hMd5.Write([]byte("value_digest\n"))
 		if err != nil {
 			return "", err
 		}
 
 		// append output tables values digest to run digest
 		err = TrxSelectRows(trx,
-			"SELECT M.model_table_id, R.run_digest"+
+			"SELECT M.model_table_id, R.value_digest"+
 				" FROM run_table R"+
 				" INNER JOIN model_table_dic M ON (M.table_hid = R.table_hid)"+
 				" WHERE M.model_id = "+strconv.Itoa(mId)+
@@ -252,7 +231,7 @@ func doUpdateRunDigest(trx *sql.Tx, runId int) (string, error) {
 	dg := fmt.Sprintf("%x", hMd5.Sum(nil))
 
 	err = TrxUpdate(trx,
-		"UPDATE run_lst SET run_digest = "+toQuoted(dg)+" WHERE run_id = "+srId)
+		"UPDATE run_lst SET value_digest = "+toQuoted(dg)+" WHERE run_id = "+strconv.Itoa(runId))
 	if err != nil {
 		return "", err
 	}
@@ -271,18 +250,25 @@ func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, meta *RunMeta, langDef *LangM
 		return errors.New("model run not completed: " + strconv.Itoa(meta.Run.RunId) + " " + meta.Run.Name)
 	}
 
+	// run name, sub-value count, create date-time, run stamp and run digest should not be empty
+	if meta.Run.RunDigest == "" {
+		return errors.New("invalid (empty) run digest: " + meta.Run.Name + " model: " + modelDef.Model.Name + " " + modelDef.Model.Digest)
+	}
+	if meta.Run.SubCount <= 0 {
+		return errors.New("invalid run sub-value count: " + strconv.Itoa(meta.Run.SubCount) + ", run: " + meta.Run.Name + " " + meta.Run.RunDigest + " model: " + modelDef.Model.Name + " " + modelDef.Model.Digest)
+	}
+	if meta.Run.CreateDateTime == "" {
+		return errors.New("invalid (empty) run create date-time: " + meta.Run.Name + " " + meta.Run.RunDigest + " model: " + modelDef.Model.Name + " " + modelDef.Model.Digest)
+	}
+	if meta.Run.RunStamp == "" {
+		return errors.New("invalid (empty) run stamp: " + meta.Run.Name + " " + meta.Run.RunDigest + " model: " + modelDef.Model.Name + " " + modelDef.Model.Digest)
+	}
+
 	meta.Run.ModelId = modelDef.Model.ModelId // update model id
 
-	// run name, create date-time, update date-time should not be empty
-	if meta.Run.CreateDateTime == "" {
-		meta.Run.CreateDateTime = helper.MakeDateTime(time.Now())
-	}
+	// update date-time should not be empty if run completed
 	if meta.Run.UpdateDateTime == "" {
 		meta.Run.UpdateDateTime = meta.Run.CreateDateTime
-	}
-	if meta.Run.Name == "" {
-		meta.Run.Name = helper.ToAlphaNumeric(
-			modelDef.Model.Name + "_" + meta.Run.CreateDateTime + "_" + strconv.Itoa(meta.Run.RunId))
 	}
 
 	// get new run id
@@ -307,15 +293,13 @@ func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, meta *RunMeta, langDef *LangM
 	srId := strconv.Itoa(runId)
 
 	// INSERT INTO run_lst: treat empty run digest as NULL
-	var sd string
-	if meta.Run.Digest != "" {
-		sd = meta.Run.Digest
-	} else {
-		sd = "NULL"
+	svd := "NULL"
+	if meta.Run.ValueDigest != "" {
+		svd = meta.Run.ValueDigest
 	}
 	err = TrxUpdate(trx,
 		"INSERT INTO run_lst"+
-			" (run_id, model_id, run_name, sub_count, sub_started, sub_completed, sub_restart, create_dt, status, update_dt, run_digest, run_stamp)"+
+			" (run_id, model_id, run_name, sub_count, sub_started, sub_completed, sub_restart, create_dt, status, update_dt, run_digest, value_digest, run_stamp)"+
 			" VALUES ("+
 			srId+", "+
 			strconv.Itoa(modelDef.Model.ModelId)+", "+
@@ -327,7 +311,8 @@ func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, meta *RunMeta, langDef *LangM
 			toQuoted(meta.Run.CreateDateTime)+", "+
 			toQuoted(meta.Run.Status)+", "+
 			toQuoted(meta.Run.UpdateDateTime)+", "+
-			toQuoted(sd)+", "+
+			toQuoted(meta.Run.RunDigest)+", "+
+			toQuoted(svd)+", "+
 			toQuotedMax(meta.Run.RunStamp, codeDbMax)+")")
 	if err != nil {
 		return err

@@ -141,7 +141,7 @@ func doWriteRunParameter(
 
 	// insert into run_parameter with digest and current run id as base run id
 	err = TrxUpdate(trx,
-		"INSERT INTO run_parameter (run_id, parameter_hid, base_run_id, sub_count, run_digest)"+
+		"INSERT INTO run_parameter (run_id, parameter_hid, base_run_id, sub_count, value_digest)"+
 			" VALUES ("+
 			srId+", "+sHid+", "+srId+", "+strconv.Itoa(subCount)+", "+toQuoted(digest)+")")
 	if err != nil {
@@ -153,7 +153,7 @@ func doWriteRunParameter(
 	err = TrxSelectFirst(trx,
 		"SELECT MIN(run_id) FROM run_parameter"+
 			" WHERE parameter_hid = "+sHid+
-			" AND run_digest = "+toQuoted(digest),
+			" AND value_digest = "+toQuoted(digest),
 		func(row *sql.Row) error {
 			if err := row.Scan(&nBase); err != nil {
 				return err
@@ -161,7 +161,7 @@ func doWriteRunParameter(
 			return nil
 		})
 	switch {
-	// case err == sql.ErrNoRows: it must exist
+	// case err == sql.ErrNoRows: it must exist, at least as newly inserted row above
 	case err != nil:
 		return err
 	}

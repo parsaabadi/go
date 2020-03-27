@@ -126,7 +126,7 @@ func doWriteOutputTable(
 
 	// insert into run_table with digest and current run id as base run id
 	err = TrxUpdate(trx,
-		"INSERT INTO run_table (run_id, table_hid, base_run_id, run_digest)"+
+		"INSERT INTO run_table (run_id, table_hid, base_run_id, value_digest)"+
 			" VALUES ("+
 			srId+", "+sHid+", "+srId+", "+toQuoted(digest)+")")
 	if err != nil {
@@ -138,7 +138,7 @@ func doWriteOutputTable(
 	err = TrxSelectFirst(trx,
 		"SELECT MIN(run_id) FROM run_table"+
 			" WHERE table_hid = "+sHid+
-			" AND run_digest = "+toQuoted(digest),
+			" AND value_digest = "+toQuoted(digest),
 		func(row *sql.Row) error {
 			if err := row.Scan(&nBase); err != nil {
 				return err
@@ -146,7 +146,7 @@ func doWriteOutputTable(
 			return nil
 		})
 	switch {
-	// case err == sql.ErrNoRows: it must exist
+	// case err == sql.ErrNoRows: it must exist, at least as newly inserted row above
 	case err != nil:
 		return err
 	}

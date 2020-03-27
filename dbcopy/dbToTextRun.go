@@ -19,25 +19,6 @@ import (
 // copy model run from database into text json and csv files
 func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOptions) error {
 
-	// get model run name and id
-	runName := runOpts.String(runNameArgKey)
-	runId := runOpts.Int(runIdArgKey, 0)
-
-	// conflicting options: use run id if positive else use run name
-	if runOpts.IsExist(runNameArgKey) && runOpts.IsExist(runIdArgKey) {
-		if runId > 0 {
-			omppLog.Log("dbcopy options conflict. Using run id: ", runId, " ignore run name: ", runName)
-			runName = ""
-		} else {
-			omppLog.Log("dbcopy options conflict. Using run name: ", runName, " ignore run id: ", runId)
-			runId = 0
-		}
-	}
-
-	if runId < 0 || runId == 0 && runName == "" {
-		return errors.New("dbcopy invalid argument(s) for run id: " + runOpts.String(runIdArgKey) + " and/or run name: " + runOpts.String(runNameArgKey))
-	}
-
 	// open source database connection and check is it valid
 	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(dbConnStrArgKey), runOpts.String(dbDriverArgKey))
 	srcDb, _, err := db.Open(cs, dn, false)
@@ -58,25 +39,22 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 	}
 	modelName = modelDef.Model.Name // set model name: it can be empty and only model digest specified
 
-	// get model run metadata by id or name
-	var runRow *db.RunRow
-	var outDir string
-	if runId > 0 {
-		if runRow, err = db.GetRun(srcDb, runId); err != nil {
-			return err
-		}
-		if runRow == nil {
-			return errors.New("model run not found, id: " + strconv.Itoa(runId))
-		}
-		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".run."+strconv.Itoa(runId))
-	} else {
-		if runRow, err = db.GetRunByName(srcDb, modelDef.Model.ModelId, runName); err != nil {
-			return err
-		}
-		if runRow == nil {
-			return errors.New("model run not found: " + runName)
-		}
-		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".run."+runName)
+	// find model run metadata by id, run digest or name
+	runId, runDigest, runName := runIdDigestNameFromOptions(runOpts)
+	if runId < 0 || runId == 0 && runName == "" && runDigest == "" {
+		return errors.New("dbcopy invalid argument(s) run id: " + runOpts.String(runIdArgKey) + ", run name: " + runOpts.String(runNameArgKey) + ", run digest: " + runOpts.String(runDigestArgKey))
+	}
+	runRow, e := findModelRunByIdDigestName(srcDb, modelDef.Model.ModelId, runId, runDigest, runName)
+	if e != nil {
+		return e
+	}
+	if runRow == nil {
+		return errors.New("model run not found: " + runOpts.String(runIdArgKey) + " " + runOpts.String(runNameArgKey) + " " + runOpts.String(runDigestArgKey))
+	}
+
+	// check is this run belong to the model
+	if runRow.ModelId != modelDef.Model.ModelId {
+		return errors.New("model run " + strconv.Itoa(runRow.RunId) + " " + runRow.Name + " " + runRow.RunDigest + " does not belong to model " + modelName + " " + modelDigest)
 	}
 
 	// run must be completed: status success, error or exit
@@ -92,6 +70,17 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 
 	// create new "root" output directory for model run metadata
 	// for csv files this "root" combined as root/run.1234.runName
+	var outDir string
+	switch {
+	case runId > 0:
+		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".run."+strconv.Itoa(runId))
+	case runDigest != "":
+		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".run."+helper.CleanSpecialChars(runDigest))
+	default:
+		// if not run id and not digest then run name
+		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".run."+helper.CleanSpecialChars(runRow.Name))
+	}
+
 	err = os.MkdirAll(outDir, 0750)
 	if err != nil {
 		return err
@@ -167,9 +156,9 @@ func toRunText(
 	// create run subdir under model dir
 	var csvName string
 	if !isUseIdNames {
-		csvName = "run." + helper.ToAlphaNumeric(pub.Name)
+		csvName = "run." + helper.CleanSpecialChars(pub.Name)
 	} else {
-		csvName = "run." + strconv.Itoa(runId) + "." + helper.ToAlphaNumeric(pub.Name)
+		csvName = "run." + strconv.Itoa(runId) + "." + helper.CleanSpecialChars(pub.Name)
 	}
 	csvDir := filepath.Join(outDir, csvName)
 
@@ -261,4 +250,58 @@ func toRunText(
 		return err
 	}
 	return nil
+}
+
+// check dbcopy run options and return only one of: run id, run digest or name to find model run.
+func runIdDigestNameFromOptions(runOpts *config.RunOptions) (int, string, string) {
+
+	// from dbcopy options get model run id and/or run digest and/or run name
+	runId := runOpts.Int(runIdArgKey, 0)
+	runDigest := runOpts.String(runDigestArgKey)
+	runName := runOpts.String(runNameArgKey)
+
+	// conflicting options: use run id if positive else use run digest if not empty else run name
+	if runOpts.IsExist(runIdArgKey) && (runOpts.IsExist(runNameArgKey) || runOpts.IsExist(runDigestArgKey)) {
+		if runId > 0 {
+			if runName != "" {
+				omppLog.Log("dbcopy options conflict. Using run id: ", runId, " ignore run name: ", runName)
+			}
+			if runDigest != "" {
+				omppLog.Log("dbcopy options conflict. Using run id: ", runId, " ignore run digest: ", runDigest)
+			}
+			runName = ""
+			runDigest = ""
+		} else {
+			if runDigest != "" {
+				omppLog.Log("dbcopy options conflict. Using run digest: ", runDigest, " ignore run id: ", runId)
+				if runName != "" {
+					omppLog.Log("dbcopy options conflict. Using run digest: ", runDigest, " ignore run name: ", runName)
+					runName = ""
+				}
+			} else {
+				omppLog.Log("dbcopy options conflict. Using run name: ", runName, " ignore run id: ", runId)
+			}
+			runId = 0
+		}
+	}
+	if runName != "" && runDigest != "" {
+		omppLog.Log("dbcopy options conflict. Using run digest: ", runDigest, " ignore run name: ", runName)
+		runName = ""
+	}
+
+	return runId, runDigest, runName
+}
+
+// find model run metadata by id, run digest or name, retun run_lst db row or nil if model run not found.
+func findModelRunByIdDigestName(dbConn *sql.DB, modelId, runId int, runDigest, runName string) (*db.RunRow, error) {
+
+	switch {
+	case runId > 0:
+		return db.GetRun(dbConn, runId)
+	case runDigest != "":
+		return db.GetRunByDigest(dbConn, runDigest)
+	default:
+		// if not run id and not digest then run name
+		return db.GetRunByName(dbConn, modelId, runName)
+	}
 }

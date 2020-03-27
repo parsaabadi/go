@@ -73,7 +73,7 @@ func (mc *ModelCatalog) UpdateRunText(rp *db.RunPub) (bool, string, string, erro
 		return false, "", "", nil
 	}
 
-	rdsn := rp.Digest
+	rdsn := rp.RunDigest
 	if rdsn == "" {
 		rdsn = rp.RunStamp
 	}

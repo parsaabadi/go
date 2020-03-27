@@ -47,14 +47,14 @@ func textToDbTask(modelName string, modelDigest string, runOpts *config.RunOptio
 	if runOpts.IsExist(taskNameArgKey) && runOpts.IsExist(taskIdArgKey) { // both: task id and name
 
 		metaPath = filepath.Join(inpDir,
-			modelName+".task."+strconv.Itoa(taskId)+"."+helper.ToAlphaNumeric(taskName)+".json")
+			modelName+".task."+strconv.Itoa(taskId)+"."+helper.CleanSpecialChars(taskName)+".json")
 
 	} else { // task id or task name only
 
 		// make path search patterns for metadata json file
 		var mp string
 		if runOpts.IsExist(taskNameArgKey) && !runOpts.IsExist(taskIdArgKey) { // task name only
-			mp = modelName + ".task.*" + helper.ToAlphaNumeric(taskName) + ".json"
+			mp = modelName + ".task.*" + helper.CleanSpecialChars(taskName) + ".json"
 		}
 		if !runOpts.IsExist(taskNameArgKey) && runOpts.IsExist(taskIdArgKey) { // task id only
 			mp = modelName + ".task." + strconv.Itoa(taskId) + ".*.json"
@@ -142,7 +142,7 @@ func textToDbTask(modelName string, modelDigest string, runOpts *config.RunOptio
 		for k := range pub.TaskRun[j].TaskRunSet {
 
 			// check is this run id already processed
-			runDigest := pub.TaskRun[j].TaskRunSet[k].Run.Digest
+			runDigest := pub.TaskRun[j].TaskRunSet[k].Run.RunDigest
 			for i := range runLst {
 				if runDigest == runLst[i] {
 					continue nextRun
@@ -164,8 +164,8 @@ func textToDbTask(modelName string, modelDigest string, runOpts *config.RunOptio
 			}
 
 			// make path search patterns for metadata json and csv directory
-			//cp := "run.*" + helper.ToAlphaNumeric(runName)
-			mp := modelName + ".run.*" + helper.ToAlphaNumeric(runName) + ".json"
+			//cp := "run.*" + helper.CleanSpecialChars(runName)
+			mp := modelName + ".run.*" + helper.CleanSpecialChars(runName) + ".json"
 			var jsonPath, csvDir string
 
 			// find path to metadata json by pattern
@@ -235,7 +235,7 @@ func textToDbTask(modelName string, modelDigest string, runOpts *config.RunOptio
 		wsLst = append(wsLst, setName)
 
 		// make path search patterns for metadata json and csv directory
-		cp := "set.*" + helper.ToAlphaNumeric(setName)
+		cp := "set.*" + helper.CleanSpecialChars(setName)
 		mp := modelName + "." + cp + ".json"
 		var jsonPath, csvDir string
 

@@ -16,25 +16,6 @@ import (
 // copy model run from source database to destination database
 func dbToDbRun(modelName string, modelDigest string, runOpts *config.RunOptions) error {
 
-	// get model run name and id
-	runName := runOpts.String(runNameArgKey)
-	runId := runOpts.Int(runIdArgKey, 0)
-
-	// conflicting options: use run id if positive else use run name
-	if runOpts.IsExist(runNameArgKey) && runOpts.IsExist(runIdArgKey) {
-		if runId > 0 {
-			omppLog.Log("dbcopy options conflict. Using run id: ", runId, " ignore model run name: ", runName)
-			runName = ""
-		} else {
-			omppLog.Log("dbcopy options conflict. Using model run name: ", runName, " ignore run id: ", runId)
-			runId = 0
-		}
-	}
-
-	if runId < 0 || runId == 0 && runName == "" {
-		return errors.New("dbcopy invalid argument(s) for model run id: " + runOpts.String(runIdArgKey) + " and/or name: " + runOpts.String(runNameArgKey))
-	}
-
 	// validate source and destination
 	inpConnStr := runOpts.String(dbConnStrArgKey)
 	inpDriver := runOpts.String(dbDriverArgKey)
@@ -78,22 +59,22 @@ func dbToDbRun(modelName string, modelDigest string, runOpts *config.RunOptions)
 	}
 	modelName = srcModel.Model.Name // set model name: it can be empty and only model digest specified
 
-	// get model run metadata by id or name
-	var runRow *db.RunRow
-	if runId > 0 {
-		if runRow, err = db.GetRun(srcDb, runId); err != nil {
-			return err
-		}
-		if runRow == nil {
-			return errors.New("model run not found, id: " + strconv.Itoa(runId))
-		}
-	} else {
-		if runRow, err = db.GetRunByName(srcDb, srcModel.Model.ModelId, runName); err != nil {
-			return err
-		}
-		if runRow == nil {
-			return errors.New("model run not found: " + runName)
-		}
+	// find source model run metadata by id, run digest or name
+	runId, runDigest, runName := runIdDigestNameFromOptions(runOpts)
+	if runId < 0 || runId == 0 && runName == "" && runDigest == "" {
+		return errors.New("dbcopy invalid argument(s) run id: " + runOpts.String(runIdArgKey) + ", run name: " + runOpts.String(runNameArgKey) + ", run digest: " + runOpts.String(runDigestArgKey))
+	}
+	runRow, e := findModelRunByIdDigestName(srcDb, srcModel.Model.ModelId, runId, runDigest, runName)
+	if e != nil {
+		return e
+	}
+	if runRow == nil {
+		return errors.New("model run not found: " + runOpts.String(runIdArgKey) + " " + runOpts.String(runNameArgKey) + " " + runOpts.String(runDigestArgKey))
+	}
+
+	// check is this run belong to the source model
+	if runRow.ModelId != srcModel.Model.ModelId {
+		return errors.New("model run " + strconv.Itoa(runRow.RunId) + " " + runRow.Name + " " + runRow.RunDigest + " does not belong to model " + modelName + " " + modelDigest)
 	}
 
 	// run must be completed: status success, error or exit

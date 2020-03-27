@@ -36,7 +36,7 @@ func (meta *WorksetMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*Workset
 			return nil, err
 		}
 		if runRow != nil {
-			pub.BaseRunDigest = runRow.Digest // base run found
+			pub.BaseRunDigest = runRow.RunDigest // base run found
 		}
 	}
 
