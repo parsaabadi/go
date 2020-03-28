@@ -269,8 +269,9 @@ func runFullHandler(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, r, rp)
 }
 
-// runTextHandler return full run metadata: run_lst, run_txt, parameter sub-value counts and text db rows
-// by model digest-or-name and digest-or-stamp-or-name:
+// runTextHandler return full run metadata: run_lst, run_options, run_progress, run_parameter db rows 
+// and corresponding text db rows from run_txt and run_parameter_txt tables
+// by model digest-or-name and digest-or-stamp-or-name and language:
 // GET /api/model/:model/run/:run/text
 // GET /api/model/:model/run/:run/text/lang/:lang
 // GET /api/model-run-text?model=modelNameOrDigest&run=runDigestOrStampOrName&lang=en
@@ -289,7 +290,8 @@ func runTextHandler(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, r, rp)
 }
 
-// runAllTextHandler return full run metadata: run_lst, run_txt, parameter sub-value counts and text db rows
+// runAllTextHandler return full run metadata: run_lst, run_options, run_progress, run_parameter db rows 
+// and corresponding text db rows from run_txt and run_parameter_txt tables
 // by model digest-or-name and digest-or-stamp-or-name:
 // GET /api/model/:model/run/:run/text/all
 // GET /api/model-run-text-all?model=modelNameOrDigest&run=runDigestOrStampOrName

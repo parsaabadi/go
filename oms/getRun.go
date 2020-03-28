@@ -174,7 +174,7 @@ func (mc *ModelCatalog) FirstOrLastRunStatus(dn string, isFisrt, isCompleted boo
 	return rp, true
 }
 
-// RunRowList return list of run_lst db rows by model digest and run digest-stamp-orr-name sorted by run_id.
+// RunRowList return list of run_lst db rows by model digest and run digest-stamp-or-name sorted by run_id.
 // If there are multiple rows with same run stamp or run digest then multiple rows returned.
 func (mc *ModelCatalog) RunRowList(digest string, rdsn string) ([]db.RunRow, bool) {
 
@@ -203,7 +203,7 @@ func (mc *ModelCatalog) RunRowList(digest string, rdsn string) ([]db.RunRow, boo
 	return rLst, true
 }
 
-// RunRowList return list of run_lst db rows by model digest, sorted by run_id.
+// RunRowAfterList return list of run_lst db rows by model digest, sorted by run_id.
 // If afterRunId > 0 then return only runs where run_id > afterRunId.
 func (mc *ModelCatalog) RunRowAfterList(digest string, afterRunId int) ([]db.RunRow, bool) {
 
