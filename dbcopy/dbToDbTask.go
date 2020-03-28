@@ -53,9 +53,8 @@ func dbToDbTask(modelName string, modelDigest string, runOpts *config.RunOptions
 	}
 	defer srcDb.Close()
 
-	nv, err := db.OpenmppSchemaVersion(srcDb)
-	if err != nil || nv < db.MinSchemaVersion {
-		return errors.New("invalid source database, likely not an openM++ database")
+	if err := db.CheckOpenmppSchemaVersion(srcDb); err != nil {
+		return err
 	}
 
 	// open destination database and check is it valid
@@ -66,9 +65,8 @@ func dbToDbTask(modelName string, modelDigest string, runOpts *config.RunOptions
 	}
 	defer dstDb.Close()
 
-	nv, err = db.OpenmppSchemaVersion(dstDb)
-	if err != nil || nv < db.MinSchemaVersion {
-		return errors.New("invalid destination database, likely not an openM++ database")
+	if err := db.CheckOpenmppSchemaVersion(dstDb); err != nil {
+		return err
 	}
 
 	// source: get model metadata

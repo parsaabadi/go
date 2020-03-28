@@ -38,6 +38,12 @@ const (
 	OdbcDbDriver    = "odbc"    // ODBC db driver name
 )
 
+// MinSchemaVersion is a minimal compatible db schema version
+const MinSchemaVersion = 102
+
+// MaxSchemaVersion is a maximum compatible db schema version
+const MaxSchemaVersion = 102
+
 // Open database connection.
 //
 // Default driver name: "SQLite" and connection string is compatible with model connection, ie:
@@ -375,6 +381,36 @@ func TrxUpdateStatement(dbTrx *sql.Tx, query string, put func() (bool, []interfa
 		if err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// OpenmppSchemaVersion return db schema: select id_value from id_lst where id_key = 'openmpp'
+func OpenmppSchemaVersion(dbConn *sql.DB) (int, error) {
+
+	var nVer int
+
+	err := SelectFirst(dbConn,
+		"SELECT id_value FROM id_lst WHERE id_key = 'openmpp'",
+		func(row *sql.Row) error {
+			return row.Scan(&nVer)
+		})
+	switch {
+	case err == sql.ErrNoRows:
+		return 0, nil
+	case err != nil:
+		return -1, err
+	}
+
+	return nVer, nil
+}
+
+// CheckOpenmppSchemaVersion return error if it is not openM++ db or schema version incompatible
+func CheckOpenmppSchemaVersion(dbConn *sql.DB) error {
+
+	nv, err := OpenmppSchemaVersion(dbConn)
+	if err != nil || nv < MinSchemaVersion || nv > MaxSchemaVersion {
+		return errors.New("invalid database, likely not an openM++ database")
 	}
 	return nil
 }

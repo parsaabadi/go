@@ -8,29 +8,6 @@ import (
 	"strconv"
 )
 
-// MinSchemaVersion is a minimal compatible db schema version
-const MinSchemaVersion = 100
-
-// OpenmppSchemaVersion return db schema: select id_value from id_lst where id_key = 'openmpp'
-func OpenmppSchemaVersion(dbConn *sql.DB) (int, error) {
-
-	var nVer int
-
-	err := SelectFirst(dbConn,
-		"SELECT id_value FROM id_lst WHERE id_key = 'openmpp'",
-		func(row *sql.Row) error {
-			return row.Scan(&nVer)
-		})
-	switch {
-	case err == sql.ErrNoRows:
-		return 0, nil
-	case err != nil:
-		return -1, err
-	}
-
-	return nVer, nil
-}
-
 // GetProfileList return profile names: profile_lst table rows.
 //
 // Profile is a named group of (key, value) options, similar to ini-file.

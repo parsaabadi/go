@@ -27,9 +27,8 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 	}
 	defer srcDb.Close()
 
-	nv, err := db.OpenmppSchemaVersion(srcDb)
-	if err != nil || nv < db.MinSchemaVersion {
-		return errors.New("invalid database, likely not an openM++ database")
+	if err := db.CheckOpenmppSchemaVersion(srcDb); err != nil {
+		return err
 	}
 
 	// get model metadata

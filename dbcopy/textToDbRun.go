@@ -122,9 +122,8 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 	}
 	defer dstDb.Close()
 
-	nv, err := db.OpenmppSchemaVersion(dstDb)
-	if err != nil || nv < db.MinSchemaVersion {
-		return errors.New("invalid database, likely not an openM++ database")
+	if err := db.CheckOpenmppSchemaVersion(dstDb); err != nil {
+		return err
 	}
 
 	// get model metadata

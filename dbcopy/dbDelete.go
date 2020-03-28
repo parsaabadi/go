@@ -23,9 +23,8 @@ func dbDeleteModel(modelName string, modelDigest string, runOpts *config.RunOpti
 	}
 	defer srcDb.Close()
 
-	nv, err := db.OpenmppSchemaVersion(srcDb)
-	if err != nil || nv < db.MinSchemaVersion {
-		return errors.New("invalid database, likely not an openM++ database")
+	if err := db.CheckOpenmppSchemaVersion(srcDb); err != nil {
+		return err
 	}
 
 	// find the model
@@ -58,9 +57,8 @@ func dbDeleteRun(modelName string, modelDigest string, runOpts *config.RunOption
 	}
 	defer srcDb.Close()
 
-	nv, err := db.OpenmppSchemaVersion(srcDb)
-	if err != nil || nv < db.MinSchemaVersion {
-		return errors.New("invalid database, likely not an openM++ database")
+	if err := db.CheckOpenmppSchemaVersion(srcDb); err != nil {
+		return err
 	}
 
 	// find the model by name and/or digest
@@ -135,9 +133,8 @@ func dbDeleteWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 	}
 	defer srcDb.Close()
 
-	nv, err := db.OpenmppSchemaVersion(srcDb)
-	if err != nil || nv < db.MinSchemaVersion {
-		return errors.New("invalid database, likely not an openM++ database")
+	if err := db.CheckOpenmppSchemaVersion(srcDb); err != nil {
+		return err
 	}
 
 	// find the model
@@ -217,9 +214,8 @@ func dbDeleteTask(modelName string, modelDigest string, runOpts *config.RunOptio
 	}
 	defer srcDb.Close()
 
-	nv, err := db.OpenmppSchemaVersion(srcDb)
-	if err != nil || nv < db.MinSchemaVersion {
-		return errors.New("invalid database, likely not an openM++ database")
+	if err := db.CheckOpenmppSchemaVersion(srcDb); err != nil {
+		return err
 	}
 
 	// find the model

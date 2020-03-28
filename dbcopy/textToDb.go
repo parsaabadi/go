@@ -43,9 +43,8 @@ func textToDb(modelName string, runOpts *config.RunOptions) error {
 	}
 	defer dstDb.Close()
 
-	nv, err := db.OpenmppSchemaVersion(dstDb)
-	if err != nil || nv < db.MinSchemaVersion {
-		return errors.New("invalid database, likely not an openM++ database")
+	if err := db.CheckOpenmppSchemaVersion(dstDb); err != nil {
+		return err
 	}
 
 	// use modelName as subdirectory inside of input and output directories or as name of model.zip file
