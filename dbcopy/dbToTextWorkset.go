@@ -175,9 +175,9 @@ func toWorksetText(
 	// create workset subdir under output dir
 	var csvName string
 	if !isUseIdNames {
-		csvName = "set." + helper.CleanSpecialChars(pub.Name)
+		csvName = "set." + helper.CleanPath(pub.Name)
 	} else {
-		csvName = "set." + strconv.Itoa(setId) + "." + helper.CleanSpecialChars(pub.Name)
+		csvName = "set." + strconv.Itoa(setId) + "." + helper.CleanPath(pub.Name)
 	}
 	csvDir := filepath.Join(outDir, csvName)
 

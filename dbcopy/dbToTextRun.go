@@ -74,10 +74,10 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 	case runId > 0:
 		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".run."+strconv.Itoa(runId))
 	case runDigest != "":
-		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".run."+helper.CleanSpecialChars(runDigest))
+		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".run."+helper.CleanPath(runDigest))
 	default:
 		// if not run id and not digest then run name
-		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".run."+helper.CleanSpecialChars(runRow.Name))
+		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".run."+helper.CleanPath(runRow.Name))
 	}
 
 	err = os.MkdirAll(outDir, 0750)
@@ -155,9 +155,9 @@ func toRunText(
 	// create run subdir under model dir
 	var csvName string
 	if !isUseIdNames {
-		csvName = "run." + helper.CleanSpecialChars(pub.Name)
+		csvName = "run." + helper.CleanPath(pub.Name)
 	} else {
-		csvName = "run." + strconv.Itoa(runId) + "." + helper.CleanSpecialChars(pub.Name)
+		csvName = "run." + strconv.Itoa(runId) + "." + helper.CleanPath(pub.Name)
 	}
 	csvDir := filepath.Join(outDir, csvName)
 

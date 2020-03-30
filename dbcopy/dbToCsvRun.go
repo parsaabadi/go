@@ -343,9 +343,9 @@ func toRunCsv(
 		csvDir = filepath.Join(outDir, "all_model_runs")
 	} else {
 		if !isUseIdNames {
-			csvDir = filepath.Join(outDir, "run."+helper.CleanSpecialChars(meta.Run.Name))
+			csvDir = filepath.Join(outDir, "run."+helper.CleanPath(meta.Run.Name))
 		} else {
-			csvDir = filepath.Join(outDir, "run."+strconv.Itoa(runId)+"."+helper.CleanSpecialChars(meta.Run.Name))
+			csvDir = filepath.Join(outDir, "run."+strconv.Itoa(runId)+"."+helper.CleanPath(meta.Run.Name))
 		}
 	}
 

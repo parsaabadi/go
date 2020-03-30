@@ -26,7 +26,7 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 
 	// make model process run stamp, if not specified then use timestamp by default
 	ts, dtNow := rsc.getNewTimeStamp()
-	rStamp := helper.CleanSpecialChars(req.RunStamp)
+	rStamp := helper.CleanPath(req.RunStamp)
 	if rStamp == "" {
 		rStamp = ts
 	}
@@ -115,7 +115,7 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 	}
 
 	// make model exe or use mpi run exe, assume model exe name same as model name
-	mExe := helper.CleanSpecialChars(req.ModelName)
+	mExe := helper.CleanPath(req.ModelName)
 	if binDir == "" || binDir == "." || binDir == "./" {
 		mExe = "./" + mExe
 	} else {
@@ -214,7 +214,7 @@ func (rsc *RunCatalog) makeCommand(binDir, workDir string, mArgs []string, req *
 	isTmpl := req.Template != ""
 
 	// make path to model exe assuming exe name same as model name
-	mExe := helper.CleanSpecialChars(req.ModelName)
+	mExe := helper.CleanPath(req.ModelName)
 	if binDir == "" || binDir == "." || binDir == "./" {
 		mExe = "./" + mExe
 	} else {

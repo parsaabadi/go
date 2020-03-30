@@ -44,9 +44,9 @@ func MakeTimeStamp(t time.Time) string {
 	return fmt.Sprintf("%04d_%02d_%02d_%02d_%02d_%02d_%03d", y, mm, dd, h, mi, s, ms)
 }
 
-// CleanSpecialChars replace all ["'`$}{@:\] by _ underscore
-func CleanSpecialChars(src string) string {
-	re := regexp.MustCompile("[\"'`$}{@:\\\\]")
+// CleanPath replace special file path characters: "'`$}{@><:|?*&^;/\ by _ underscore
+func CleanPath(src string) string {
+	re := regexp.MustCompile("[\"'`$}{@><:|?*&^;/\\\\]")
 	return re.ReplaceAllString(src, "_")
 }
 
