@@ -433,10 +433,6 @@ func (mc *ModelCatalog) RunTextFull(dn, rdsn string, isAllLang bool, preferedLan
 		omppLog.Log("Warning run status not found: ", dn, ": ", rdsn)
 		return &db.RunPub{}, false // return empty result: run_lst row not found
 	}
-	if !db.IsRunCompleted(r.Status) {
-		omppLog.Log("Warning run is not completed: ", dn, ": ", rdsn, ": ", r.Status)
-		return &db.RunPub{}, false // return empty result: run not completed
-	}
 
 	// get full metadata db rows using matched prefered language or in all languages
 	lc := ""
