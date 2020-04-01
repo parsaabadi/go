@@ -125,7 +125,7 @@ func setContentType(next http.Handler) http.Handler {
 
 	var ctDef = map[string]string{
 		".css": "text/css; charset=utf-8",
-		".js":  "application/javascript",
+		".js":  "text/javascript",
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -135,7 +135,6 @@ func setContentType(next http.Handler) http.Handler {
 				w.Header().Set("Content-Type", ct)
 			}
 		}
-
 		next.ServeHTTP(w, r) // invoke next handler
 	})
 }
