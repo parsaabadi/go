@@ -279,6 +279,7 @@ func scanModelLogDirs(doneC <-chan bool) {
 			if it.logDir == "" {
 				it.logDir = "." // assume current directory if log directory not specified but eanbled by isLogDir
 			}
+			it.logDir = filepath.ToSlash(it.logDir) // use / path separator
 
 			// get list of new model runs since last scan
 			rl, ok := theCatalog.RunRowAfterList(d, it.lastRunId)
