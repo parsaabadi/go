@@ -17,10 +17,6 @@ Following arguments supporetd by oms:
   -oms.ApiOnly false
 if true then API only web-service, it is false by default and oms also act as http server for openM++ UI.
 
-  -oms.loginUrl  /public/login.html
-  -oms.logoutUrl /public/logout.html
-login / logout URL which UI can use for users authentication
-
   -oms.RootDir some/path
 oms root directory, default: current directory.
 Expected to have /html subdirectory unless -oms.ApiOnly true specified.
@@ -102,8 +98,6 @@ const (
 	listenShortKey       = "l"                 // address to listen (short form)
 	logRequestArgKey     = "oms.LogRequest"    // if true then log http request
 	apiOnlyArgKey        = "oms.ApiOnly"       // if true then API only web-service, no UI
-	loginUrlKey          = "oms.loginUrl"      // user login URL for UI
-	logoutUrlKey         = "oms.logoutUrl"     // user logout URL for UI
 	uiLangsArgKey        = "oms.Languages"     // list of supported languages
 	encodingArgKey       = "oms.CodePage"      // code page for converting source files, e.g. windows-1252
 	pageSizeAgrKey       = "oms.MaxRowCount"   // max number of rows to return from read parameters or output tables
@@ -122,16 +116,16 @@ const runHistoryDefaultSize int = 100
 
 // server run configuration
 var theCfg = struct {
-	rootDir           string // server root directory
-	pageMaxSize       int64  // default "page" size: row count to read parameters or output tables
-	runHistoryMaxSize int    // max number of model run states to keep in run list history
-	doubleFmt         string // format to convert float or double value to string
-	loginUrl          string // user login URL for UI
-	logoutUrl         string // user logout URL for UI
+	rootDir           string            // server root directory
+	pageMaxSize       int64             // default "page" size: row count to read parameters or output tables
+	runHistoryMaxSize int               // max number of model run states to keep in run list history
+	doubleFmt         string            // format to convert float or double value to string
+	env               map[string]string // server config environmemt variables
 }{
 	pageMaxSize:       100,
 	runHistoryMaxSize: runHistoryDefaultSize,
 	doubleFmt:         "%.15g",
+	env:               map[string]string{},
 }
 
 // if true then log http requests
@@ -163,8 +157,6 @@ func mainBody(args []string) error {
 	_ = flag.String(listenShortKey, "localhost:4040", "address to listen (short form of "+listenArgKey+")")
 	_ = flag.Bool(logRequestArgKey, false, "if true then log HTTP requests")
 	_ = flag.Bool(apiOnlyArgKey, false, "if true then API only web-service, no UI")
-	_ = flag.String(loginUrlKey, "", "user login URL for authentication in UI")
-	_ = flag.String(logoutUrlKey, "", "user logout URL for UI")
 	_ = flag.String(uiLangsArgKey, "en", "comma-separated list of supported languages")
 	_ = flag.String(encodingArgKey, "", "code page to convert source file into utf-8, e.g.: windows-1252")
 	_ = flag.Int64(pageSizeAgrKey, theCfg.pageMaxSize, "max number of rows to return from read parameters or output tables")
@@ -186,8 +178,6 @@ func mainBody(args []string) error {
 	}
 	isLogRequest = runOpts.Bool(logRequestArgKey)
 	isApiOnly := runOpts.Bool(apiOnlyArgKey)
-	theCfg.loginUrl = runOpts.String(loginUrlKey)
-	theCfg.logoutUrl = runOpts.String(logoutUrlKey)
 
 	theCfg.pageMaxSize = runOpts.Int64(pageSizeAgrKey, theCfg.pageMaxSize)
 	theCfg.doubleFmt = runOpts.String(doubleFormatArgKey)
@@ -198,6 +188,16 @@ func mainBody(args []string) error {
 	}
 
 	theCfg.rootDir = runOpts.String(rootDirArgKey) // server root directory
+
+	// get server config environmemt variables
+	env := os.Environ()
+	for _, e := range env {
+		if strings.HasPrefix(e, "OM_CFG_") {
+			if kv := strings.SplitN(e, "=", 2); len(kv) == 2 {
+				theCfg.env[kv[0]] = kv[1]
+			}
+		}
+	}
 
 	// if UI required then server root directory must have html subdir
 	if !isApiOnly {
@@ -284,19 +284,9 @@ func mainBody(args []string) error {
 
 	// initialize server
 	addr := runOpts.String(listenArgKey)
-	omppLog.Log("Listen at ", addr)
-	if !isApiOnly {
-		if !strings.HasPrefix(addr, ":") {
-			omppLog.Log("To start open in your browser: ", addr)
-		} else {
-			omppLog.Log("To start open in your browser: ", "localhost", addr)
-		}
-	}
-	omppLog.Log("To finish press Ctrl+C")
-
 	srv := http.Server{Addr: addr, Handler: router}
 
-	// add shutdown handler, it does not wait for requests, reset connections
+	// add shutdown handler, it does not wait for requests, it does reset connections and exit
 	// PUT /api/admin/shutdown
 	adminShutdownHandler := func(w http.ResponseWriter, r *http.Request) {
 
@@ -309,7 +299,18 @@ func mainBody(args []string) error {
 	}
 	router.Put("/api/admin/shutdown", adminShutdownHandler, logRequest)
 
-	err = srv.ListenAndServe()
+	// initialization completed, start the server
+	omppLog.Log("Listen at ", addr)
+	if !isApiOnly {
+		if !strings.HasPrefix(addr, ":") {
+			omppLog.Log("To start open in your browser: ", addr)
+		} else {
+			omppLog.Log("To start open in your browser: ", "localhost", addr)
+		}
+	}
+	omppLog.Log("To finish press Ctrl+C")
+
+	err = srv.ListenAndServe() // start the server
 
 	doneScanC <- true
 	return err
