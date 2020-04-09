@@ -114,17 +114,12 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 		mArgs = append(mArgs, key, val) // append command line argument key and value
 	}
 
-	// make model exe or use mpi run exe, assume model exe name same as model name
+	// assume model exe name is the same as model name
 	mExe := helper.CleanPath(req.ModelName)
-	if binDir == "" || binDir == "." || binDir == "./" {
-		mExe = "./" + mExe
-	} else {
-		mExe = filepath.Join(binDir, mExe)
-	}
 
-	cmd, err := rsc.makeCommand(binDir, wDir, mArgs, req)
+	cmd, err := rsc.makeCommand(mExe, binDir, wDir, mArgs, req)
 	if err != nil {
-		omppLog.Log("Error at applying run template to ", req.ModelName, ": ", err.Error())
+		omppLog.Log("Error at starting run model ", req.ModelName, ": ", err.Error())
 		return rs, err
 	}
 
@@ -159,7 +154,7 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 	go doLog(req.ModelDigest, rs.RunStamp, errPipe, errDoneC)
 
 	// start the model
-	omppLog.Log("Run model: ", mExe, ", directory: ", wDir)
+	omppLog.Log("Run model: ", mExe, " in directory: ", wDir)
 	omppLog.Log(strings.Join(cmd.Args, " "))
 
 	err = cmd.Start()
@@ -204,7 +199,7 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 // makeCommand return command to run the model.
 // If template file name specified then template processing results used to create command line.
 // If this is MPI model run then tempalate is requred and by default "mpi.ModelRun.template.txt" being used.
-func (rsc *RunCatalog) makeCommand(binDir, workDir string, mArgs []string, req *RunRequest) (*exec.Cmd, error) {
+func (rsc *RunCatalog) makeCommand(mExe, binDir, workDir string, mArgs []string, req *RunRequest) (*exec.Cmd, error) {
 
 	// check is it MPI or regular process model run, to run MPI model template is required
 	isMpi := req.Mpi.Np != 0
@@ -213,19 +208,16 @@ func (rsc *RunCatalog) makeCommand(binDir, workDir string, mArgs []string, req *
 	}
 	isTmpl := req.Template != ""
 
-	// make path to model exe assuming exe name same as model name
-	mExe := helper.CleanPath(req.ModelName)
-	if binDir == "" || binDir == "." || binDir == "./" {
-		mExe = "./" + mExe
-	} else {
-		mExe = filepath.Join(binDir, mExe)
-	}
-
 	// if this is regular non-MPI model.exe run and no template:
 	//	 ./modelExe -OpenM.LogToFile true ...etc...
 	var cmd *exec.Cmd
 
 	if !isTmpl && !isMpi {
+		if binDir == "" || binDir == "." || binDir == "./" {
+			mExe = "./" + mExe
+		} else {
+			mExe = filepath.Join(binDir, mExe)
+		}
 		cmd = exec.Command(mExe, mArgs...)
 	}
 
@@ -241,7 +233,7 @@ func (rsc *RunCatalog) makeCommand(binDir, workDir string, mArgs []string, req *
 		// set template parameters
 		d := struct {
 			ModelName string            // model name
-			ExePath   string            // path to model exe as: binDir/modelname
+			ExeStem   string            // base part of model exe name, usually modelName
 			Dir       string            // work directory to run the model
 			BinDir    string            // bin directory where model.exe is located
 			MpiNp     int               // number of MPI processes
@@ -249,7 +241,7 @@ func (rsc *RunCatalog) makeCommand(binDir, workDir string, mArgs []string, req *
 			Env       map[string]string // environment variables to run the model
 		}{
 			ModelName: req.ModelName,
-			ExePath:   mExe,
+			ExeStem:   mExe,
 			Dir:       workDir,
 			BinDir:    binDir,
 			MpiNp:     req.Mpi.Np,
@@ -292,7 +284,7 @@ func (rsc *RunCatalog) makeCommand(binDir, workDir string, mArgs []string, req *
 		cmd = exec.Command(cExe, cArgs...)
 	}
 
-	// if this is not MPI then set work directory and append to environment variables
+	// if this is not MPI run then set work directory and append to environment variables
 	if !isMpi {
 
 		cmd.Dir = workDir

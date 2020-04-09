@@ -21,7 +21,8 @@ type RunCatalog struct {
 	rscLock       sync.Mutex                     // mutex to lock for model list operations
 	models        map[string]modelRunBasic       // model digest map to model basic info
 	etcDir        string                         // model run templates directory, if relative then must be relative to oms root directory
-	mpiTemplates  []string                       // list of model run templates
+	runTemplates  []string                       // list of model run templates
+	mpiTemplates  []string                       // list of model MPI run templates
 	lastTimeStamp string                         // most recent timestamp
 	runLst        *list.List                     // list of model runs state (runStateLog) submitted through the service
 	modelLogs     map[string]map[string]RunState // model runs state: map model digest to run stamp to run state
@@ -41,8 +42,9 @@ type modelRunBasic struct {
 // RunCatalogConfig is "public" state of model run catalog for json import-export
 type RunCatalogConfig struct {
 	LastTimeStamp      string   // most recent timestamp
-	DefaultMpiTemplate string   // default template to run MPI models
-	MpiTemplates       []string // list of model run templates
+	RunTemplates       []string // list of model run templates
+	DefaultMpiTemplate string   // default template to run MPI model
+	MpiTemplates       []string // list of model MPI run templates
 }
 
 // RunRequest is request to run the model with specified model options.
@@ -104,14 +106,23 @@ const scanSleepTimeout = 4021
 // RefreshCatalog reset state of most recent model run for each model.
 func (rsc *RunCatalog) RefreshCatalog(etcDir string) error {
 
-	// get list of mpi template files
-	tl := []string{}
+	// get list of template files
+	rsc.runTemplates = []string{}
+	rsc.mpiTemplates = []string{}
 	if isDirExist(etcDir) == nil {
+		if fl, err := filepath.Glob(etcDir + "/" + "run.*.template.txt"); err == nil {
+			for k := range fl {
+				f := filepath.Base(fl[k])
+				if f != "." && f != ".." && f != "/" && f != "\\" {
+					rsc.runTemplates = append(rsc.runTemplates, f)
+				}
+			}
+		}
 		if fl, err := filepath.Glob(etcDir + "/" + "mpi.*.template.txt"); err == nil {
 			for k := range fl {
 				f := filepath.Base(fl[k])
 				if f != "." && f != ".." && f != "/" && f != "\\" {
-					tl = append(tl, f)
+					rsc.mpiTemplates = append(rsc.mpiTemplates, f)
 				}
 			}
 		}
@@ -136,7 +147,6 @@ func (rsc *RunCatalog) RefreshCatalog(etcDir string) error {
 
 	// update etc directory and list of templates
 	rsc.etcDir = etcDir
-	rsc.mpiTemplates = tl
 
 	// copy existing models run history
 	rLst := list.New()
@@ -203,9 +213,11 @@ func (rsc *RunCatalog) toPublicConfig() *RunCatalogConfig {
 
 	rcp := RunCatalogConfig{
 		LastTimeStamp:      rsc.lastTimeStamp,
+		RunTemplates:       make([]string, len(rsc.runTemplates)),
 		DefaultMpiTemplate: defaultMpiTemplate,
 		MpiTemplates:       make([]string, len(rsc.mpiTemplates)),
 	}
+	copy(rcp.RunTemplates, rsc.runTemplates)
 	copy(rcp.MpiTemplates, rsc.mpiTemplates)
 
 	return &rcp
