@@ -136,9 +136,9 @@ func worksetReadonlyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 
 // worksetCreateHandler creates new workset and append parameter(s) from json request:
 // PUT  /api/workset-create
-// POST /api/workset-create
 // Json keys: model digest or name and workset name.
 // If multiple models with same name exist then result is undefined, it is recommended to use model digest.
+// If workset name is empty in json request then automatically generate unique workset name.
 // If workset with same name already exist for that model then return error.
 // Json content: workset "public" metadata and optioanl parameters list.
 // Workset and parameters "public" metadata expected to be same as return of GET /api/model/:model/workset/:set/text/all
@@ -157,7 +157,13 @@ func worksetCreateHandler(w http.ResponseWriter, r *http.Request) {
 	if dn == "" {
 		dn = wp.ModelName
 	}
+
+	// if workset name is empty then automatically generate name
 	wsn := wp.Name
+	if wsn == "" {
+		ts, _ := theCatalog.getNewTimeStamp()
+		wsn = "auto_name_set_of_parameters_" + ts
+	}
 
 	// return error if workset already exist or unable to get workset status
 	_, ok, notFound := theCatalog.WorksetStatus(dn, wsn)
@@ -177,7 +183,7 @@ func worksetCreateHandler(w http.ResponseWriter, r *http.Request) {
 		WorksetHdrPub: db.WorksetHdrPub{
 			ModelName:      wp.ModelName,
 			ModelDigest:    wp.ModelDigest,
-			Name:           wp.Name,
+			Name:           wsn,
 			BaseRunDigest:  wp.BaseRunDigest,
 			IsReadonly:     false,
 			UpdateDateTime: wp.UpdateDateTime,
@@ -186,7 +192,7 @@ func worksetCreateHandler(w http.ResponseWriter, r *http.Request) {
 		Param: []db.ParamRunSetPub{},
 	}
 
-	ok, _, err := theCatalog.UpdateWorkset(true, &newWp)
+	ok, _, wsRow, err := theCatalog.UpdateWorkset(true, &newWp)
 	if err != nil {
 		http.Error(w, "Failed create workset metadata "+dn+" : "+wsn+" : "+err.Error(), http.StatusBadRequest)
 		return
@@ -209,18 +215,18 @@ func worksetCreateHandler(w http.ResponseWriter, r *http.Request) {
 		theCatalog.UpdateWorksetReadonly(dn, wsn, wp.IsReadonly)
 	}
 	w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+wsn) // respond with workset location
-	w.Header().Set("Content-Type", "text/plain")
+	jsonResponse(w, r, wsRow)
 }
 
 // worksetReplaceHandler replace workset and all parameters from multipart-form:
 // PUT /api/workset-new
-// POST /api/workset-new
 // Expected multipart form parts:
 // first workset part with workset metadata in json
 // and multiple parts file-csv=parameterName.csv.
 // Json keys: model digest or name and workset name.
 // Json content: workset "public" metadata.
 // If multiple models with same name exist then result is undefined, it is recommended to use model digest.
+// If workset name is empty in json request then automatically generate unique workset name.
 // If no such workset exist in database then new workset created.
 // If workset already exist then it is delete-insert operation:
 // existing metadata, parameter list, parameter metadata and parameter values deleted from database
@@ -231,7 +237,6 @@ func worksetReplaceHandler(w http.ResponseWriter, r *http.Request) {
 
 // worksetMergeHandler merge workset metadata and parameters metadata and values from multipart-form:
 // PATCH /api/workset
-// POST /api/workset
 // Expected multipart form parts:
 // first workset part with workset metadata in json
 // and optional multiple parts file-csv=parameterName.csv.
@@ -239,6 +244,7 @@ func worksetReplaceHandler(w http.ResponseWriter, r *http.Request) {
 // Json content: workset "public" metadata.
 // If multiple models with same name exist then result is undefined, it is recommended to use model digest.
 // If no such workset exist in database then new workset created.
+// If workset name is empty in json request then automatically generate unique workset name.
 // If workset already exist then merge operation existing workset metadata with new.
 // If workset not exist then create new workset.
 // Merge parameter list: if parameter exist then merge metadata.
@@ -269,17 +275,21 @@ func worksetUpdateHandler(isReplace bool, w http.ResponseWriter, r *http.Request
 	if !jsonMultipartDecode(w, mr, "workset", &newWp) {
 		return // error at json decode, response done with http error
 	}
-
-	// get existing workset metadata
 	dn := newWp.ModelDigest
 	if dn == "" {
 		dn = newWp.ModelName
 	}
-	wsn := newWp.Name
 
-	oldWp, _, err := theCatalog.WorksetTextFull(dn, wsn, true, nil)
+	// if workset name is empty then automatically generate name
+	if newWp.Name == "" {
+		ts, _ := theCatalog.getNewTimeStamp()
+		newWp.Name = "auto_name_set_of_parameters_" + ts
+	}
+
+	// get existing workset metadata
+	oldWp, _, err := theCatalog.WorksetTextFull(dn, newWp.Name, true, nil)
 	if err != nil {
-		http.Error(w, "Failed to get existing workset metadata "+dn+" : "+wsn, http.StatusBadRequest)
+		http.Error(w, "Failed to get existing workset metadata "+dn+" : "+newWp.Name, http.StatusBadRequest)
 		return
 	}
 
@@ -302,13 +312,13 @@ func worksetUpdateHandler(isReplace bool, w http.ResponseWriter, r *http.Request
 	isReadonly := newWp.IsReadonly
 	newWp.IsReadonly = false
 
-	ok, _, err := theCatalog.UpdateWorkset(isReplace, &newWp)
+	ok, _, wsRow, err := theCatalog.UpdateWorkset(isReplace, &newWp)
 	if err != nil {
-		http.Error(w, "Failed update workset metadata "+dn+" : "+wsn+" : "+err.Error(), http.StatusBadRequest)
+		http.Error(w, "Failed update workset metadata "+dn+" : "+newWp.Name+" : "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	if !ok {
-		http.Error(w, "Failed update workset metadata "+dn+" : "+wsn, http.StatusBadRequest)
+		http.Error(w, "Failed update workset metadata "+dn+" : "+newWp.Name, http.StatusBadRequest)
 		return
 	}
 
@@ -321,7 +331,7 @@ func worksetUpdateHandler(isReplace bool, w http.ResponseWriter, r *http.Request
 			break // end of posted data
 		}
 		if err != nil {
-			http.Error(w, "Failed to get next part of multipart form "+dn+" : "+wsn, http.StatusBadRequest)
+			http.Error(w, "Failed to get next part of multipart form "+dn+" : "+newWp.Name, http.StatusBadRequest)
 			return
 		}
 
@@ -335,7 +345,7 @@ func worksetUpdateHandler(isReplace bool, w http.ResponseWriter, r *http.Request
 		ext := path.Ext(part.FileName())
 		if ext != ".csv" {
 			part.Close()
-			http.Error(w, "Error: parameter file must have .csv extension "+wsn+" : "+part.FileName(), http.StatusBadRequest)
+			http.Error(w, "Error: parameter file must have .csv extension "+newWp.Name+" : "+part.FileName(), http.StatusBadRequest)
 			return
 		}
 		name := strings.TrimSuffix(path.Base(part.FileName()), ext)
@@ -349,7 +359,7 @@ func worksetUpdateHandler(isReplace bool, w http.ResponseWriter, r *http.Request
 		}
 		if np < 0 {
 			part.Close()
-			http.Error(w, "Error: parameter must be in workset parameters list: "+wsn+" : "+name, http.StatusBadRequest)
+			http.Error(w, "Error: parameter must be in workset parameters list: "+newWp.Name+" : "+name, http.StatusBadRequest)
 			return
 		}
 
@@ -360,7 +370,7 @@ func worksetUpdateHandler(isReplace bool, w http.ResponseWriter, r *http.Request
 		_, err = theCatalog.UpdateWorksetParameterCsv(isReplace, &newWp, &newParamLst[np], rd)
 		part.Close() // done with csv parameter data
 		if err != nil {
-			http.Error(w, "Failed update workset parameter "+wsn+" : "+name+" : "+err.Error(), http.StatusBadRequest)
+			http.Error(w, "Failed update workset parameter "+newWp.Name+" : "+name+" : "+err.Error(), http.StatusBadRequest)
 			return
 		}
 		pim[np] = true // parameter metadata and csv values updated
@@ -376,18 +386,18 @@ func worksetUpdateHandler(isReplace bool, w http.ResponseWriter, r *http.Request
 		// update only parameter metadata
 		_, err = theCatalog.UpdateWorksetParameterCsv(isReplace, &newWp, &newParamLst[k], nil)
 		if err != nil {
-			http.Error(w, "Failed update workset parameter "+wsn+" : "+newParamLst[k].Name+" : "+err.Error(), http.StatusBadRequest)
+			http.Error(w, "Failed update workset parameter "+newWp.Name+" : "+newParamLst[k].Name+" : "+err.Error(), http.StatusBadRequest)
 			return
 		}
 	}
 
 	// if required make workset read-only
 	if isReadonly {
-		theCatalog.UpdateWorksetReadonly(dn, wsn, isReadonly)
+		theCatalog.UpdateWorksetReadonly(dn, newWp.Name, isReadonly)
 	}
 
-	w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+wsn) // respond with workset location
-	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+newWp.Name) // respond with workset location
+	jsonResponse(w, r, wsRow)
 }
 
 // worksetDeleteHandler delete workset and workset parameters:
@@ -593,7 +603,6 @@ func runDeleteHandler(w http.ResponseWriter, r *http.Request) {
 
 // runTextMergeHandler merge model run text (description and notes) and run parameter value notes into database.
 // PATCH /api/run/text
-// POST  /api/run/text
 // Model can be identified by digest or name and model run also identified by run digest-or-stamp-or-name.
 // If multiple models with same name exist then result is undefined.
 // If multiple runs with same stamp or name exist then result is undefined.
@@ -646,9 +655,9 @@ func taskDeleteHandler(w http.ResponseWriter, r *http.Request) {
 
 // taskDefReplaceHandler replace task definition: task text (description and notes) and task input worksets into database.
 // PUT  /api/task-new
-// POST /api/task-new
 // It does delete existing and insert new rows into task_txt and task_set db tables.
 // If task does not exist then new task created.
+// If task name is empty in json request then automatically generate unique task name.
 // Json body expected to contain TaskDefPub, any other TaskPub data silently ignored.
 // Model can be identified by digest or name and model run also identified by run digest-or-name.
 // If multiple models with same name exist then result is undefined.
@@ -658,9 +667,9 @@ func taskDefReplaceHandler(w http.ResponseWriter, r *http.Request) {
 
 // taskDefMergeHandler merge task definition: task text (description and notes) and task input worksets into database.
 // PATCH /api/task
-// POST  /api/task
 // It does update existing or insert new rows into task_txt and task_set db tables.
 // If task does not exist then new task created.
+// If task name is empty in json request then automatically generate unique task name.
 // Json body expected to contain TaskDefPub, any other TaskPub data silently ignored.
 // Model can be identified by digest or name and model run also identified by run digest-or-name.
 // If multiple models with same name exist then result is undefined.
@@ -679,6 +688,12 @@ func taskDefUpdateHandler(w http.ResponseWriter, r *http.Request, isReplace bool
 		return // error at json decode, response done with http error
 	}
 
+	// if task name is empty then automatically generate name
+	if tpd.Name == "" {
+		ts, _ := theCatalog.getNewTimeStamp()
+		tpd.Name = "auto_name_task_" + ts
+	}
+
 	// update task definition in model catalog
 	ok, dn, tn, err := theCatalog.UpdateTaskDef(isReplace, &tpd)
 	if err != nil {
@@ -688,6 +703,12 @@ func taskDefUpdateHandler(w http.ResponseWriter, r *http.Request, isReplace bool
 	}
 	if ok {
 		w.Header().Set("Content-Location", "/api/model/"+dn+"/task/"+tn)
-		w.Header().Set("Content-Type", "text/plain")
+		jsonResponse(w, r,
+			struct {
+				Name string // task name
+			}{
+				Name: tn,
+			},
+		)
 	}
 }

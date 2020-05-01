@@ -12,20 +12,18 @@ import (
 
 	"github.com/openmpp/go/ompp/db"
 
-	"github.com/openmpp/go/ompp/helper"
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // RunCatalog is a most recent state of model run for each model.
 type RunCatalog struct {
-	rscLock       sync.Mutex                     // mutex to lock for model list operations
-	models        map[string]modelRunBasic       // model digest map to model basic info
-	etcDir        string                         // model run templates directory, if relative then must be relative to oms root directory
-	runTemplates  []string                       // list of model run templates
-	mpiTemplates  []string                       // list of model MPI run templates
-	lastTimeStamp string                         // most recent timestamp
-	runLst        *list.List                     // list of model runs state (runStateLog) submitted through the service
-	modelLogs     map[string]map[string]RunState // model runs state: map model digest to run stamp to run state
+	rscLock      sync.Mutex                     // mutex to lock for model list operations
+	models       map[string]modelRunBasic       // model digest map to model basic info
+	etcDir       string                         // model run templates directory, if relative then must be relative to oms root directory
+	runTemplates []string                       // list of model run templates
+	mpiTemplates []string                       // list of model MPI run templates
+	runLst       *list.List                     // list of model runs state (runStateLog) submitted through the service
+	modelLogs    map[string]map[string]RunState // model runs state: map model digest to run stamp to run state
 }
 
 var theRunCatalog RunCatalog // list of most recent state of model run for each model.
@@ -41,7 +39,6 @@ type modelRunBasic struct {
 
 // RunCatalogConfig is "public" state of model run catalog for json import-export
 type RunCatalogConfig struct {
-	LastTimeStamp      string   // most recent timestamp
 	RunTemplates       []string // list of model run templates
 	DefaultMpiTemplate string   // default template to run MPI model
 	MpiTemplates       []string // list of model MPI run templates
@@ -188,22 +185,6 @@ func (rsc *RunCatalog) RefreshCatalog(etcDir string) error {
 	return nil
 }
 
-// getNewTimeStamp return new unique timestamp and source time of it.
-func (rsc *RunCatalog) getNewTimeStamp() (string, time.Time) {
-	rsc.rscLock.Lock()
-	defer rsc.rscLock.Unlock()
-
-	dtNow := time.Now()
-	ts := helper.MakeTimeStamp(dtNow)
-	if ts == rsc.lastTimeStamp {
-		time.Sleep(2 * time.Millisecond)
-		dtNow = time.Now()
-		ts = helper.MakeTimeStamp(dtNow)
-	}
-	rsc.lastTimeStamp = ts
-	return ts, dtNow
-}
-
 // get "public" configuration of model run catalog
 func (rsc *RunCatalog) toPublicConfig() *RunCatalogConfig {
 
@@ -212,7 +193,6 @@ func (rsc *RunCatalog) toPublicConfig() *RunCatalogConfig {
 	defer rsc.rscLock.Unlock()
 
 	rcp := RunCatalogConfig{
-		LastTimeStamp:      rsc.lastTimeStamp,
 		RunTemplates:       make([]string, len(rsc.runTemplates)),
 		DefaultMpiTemplate: defaultMpiTemplate,
 		MpiTemplates:       make([]string, len(rsc.mpiTemplates)),

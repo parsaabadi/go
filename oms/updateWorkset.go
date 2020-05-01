@@ -69,7 +69,8 @@ func (mc *ModelCatalog) UpdateWorksetReadonly(dn, wsn string, isReadonly bool) (
 }
 
 // UpdateWorkset update workset metadata: create new workset, replace existsing or merge metadata.
-func (mc *ModelCatalog) UpdateWorkset(isReplace bool, wp *db.WorksetPub) (bool, bool, error) {
+// Return: isUpdated true/false flag, isEraseParam true/false warining flag, workset_lst db row and error
+func (mc *ModelCatalog) UpdateWorkset(isReplace bool, wp *db.WorksetPub) (bool, bool, *db.WorksetRow, error) {
 
 	// if model digest-or-name or workset name is empty then return empty results
 	dn := wp.ModelDigest
@@ -78,18 +79,18 @@ func (mc *ModelCatalog) UpdateWorkset(isReplace bool, wp *db.WorksetPub) (bool, 
 	}
 	if dn == "" {
 		omppLog.Log("Warning: invalid (empty) model digest and name")
-		return false, false, nil
+		return false, false, nil, nil
 	}
 	if wp.Name == "" {
 		omppLog.Log("Warning: invalid (empty) workset name")
-		return false, false, nil
+		return false, false, nil, nil
 	}
 
 	// if model metadata not loaded then read it from database
 	idx, ok := mc.loadModelMeta(dn)
 	if !ok {
 		omppLog.Log("Error: model digest or name not found: ", dn)
-		return false, false, errors.New("Error: model digest or name not found: " + dn)
+		return false, false, nil, errors.New("Error: model digest or name not found: " + dn)
 	}
 
 	// lock catalog and update workset
@@ -100,11 +101,11 @@ func (mc *ModelCatalog) UpdateWorkset(isReplace bool, wp *db.WorksetPub) (bool, 
 	w, err := db.GetWorksetByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, wp.Name)
 	if err != nil {
 		omppLog.Log("Error at get workset status: ", dn, ": ", wp.Name, ": ", err.Error())
-		return false, false, err
+		return false, false, nil, err
 	}
 	if w != nil && w.IsReadonly {
 		omppLog.Log("Failed to update read-only workset: ", dn, ": ", wp.Name)
-		return false, false, errors.New("Failed to update read-only workset: " + dn + ": " + wp.Name)
+		return false, false, nil, errors.New("Failed to update read-only workset: " + dn + ": " + wp.Name)
 	}
 
 	// if workset does not exist then clean paramters list to create empty workset
@@ -118,17 +119,28 @@ func (mc *ModelCatalog) UpdateWorkset(isReplace bool, wp *db.WorksetPub) (bool, 
 	wm, err := wp.FromPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
 	if err != nil {
 		omppLog.Log("Error at workset json conversion: ", dn, ": ", wp.Name, ": ", err.Error())
-		return false, isEraseParam, err
+		return false, isEraseParam, nil, err
 	}
 
 	// update workset metadata
 	err = wm.UpdateWorkset(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, isReplace, mc.modelLst[idx].langMeta)
 	if err != nil {
 		omppLog.Log("Error at update workset: ", dn, ": ", wp.Name, ": ", err.Error())
-		return false, isEraseParam, err
+		return false, isEraseParam, nil, err
 	}
 
-	return true, isEraseParam, nil
+	// get updated workset status: it must exist
+	w, err = db.GetWorksetByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, wp.Name)
+	if err != nil {
+		omppLog.Log("Error at update workset: ", dn, ": ", wp.Name, ": ", err.Error())
+		return false, isEraseParam, nil, err
+	}
+	if w == nil {
+		omppLog.Log("Error at update workset, it does not exist: ", dn, ": ", wp.Name)
+		return false, isEraseParam, nil, errors.New("Failed to update workset, it does not exist: " + dn + ": " + wp.Name)
+	}
+
+	return true, isEraseParam, w, nil
 }
 
 // DeleteWorkset do delete workset, including parameter values from database.

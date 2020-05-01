@@ -773,19 +773,13 @@ func apiUpdateRoutes(router *vestigo.Router) {
 	router.Post("/api/workset-readonly", worksetReadonlyUpdateHandler, logRequest)
 
 	// PUT  /api/workset-create
-	// POST /api/workset-create
 	router.Put("/api/workset-create", worksetCreateHandler, logRequest)
-	router.Post("/api/workset-create", worksetCreateHandler, logRequest)
 
 	// PUT  /api/workset-new
-	// POST /api/workset-new
 	router.Put("/api/workset-new", worksetReplaceHandler, logRequest)
-	router.Post("/api/workset-new", worksetReplaceHandler, logRequest)
 
 	// PATCH /api/workset
-	// POST  /api/workset
 	router.Patch("/api/workset", worksetMergeHandler, logRequest)
-	router.Post("/api/workset", worksetMergeHandler, logRequest)
 
 	// DELETE /api/model/:model/workset/:set
 	// POST   /api/workset-delete?model=modelNameOrDigest&set=setName
@@ -822,9 +816,7 @@ func apiUpdateRoutes(router *vestigo.Router) {
 	//
 
 	// PATCH /api/run/text
-	// POST  /api/run/text
 	router.Patch("/api/run/text", runTextMergeHandler, logRequest)
-	router.Post("/api/run/text", runTextMergeHandler, logRequest)
 
 	// DELETE /api/model/:model/run/:run
 	// POST   /api/run/delete?model=modelNameOrDigest&run=runDigestOrStampOrName
@@ -836,14 +828,10 @@ func apiUpdateRoutes(router *vestigo.Router) {
 	//
 
 	// PUT  /api/task-new
-	// POST /api/task-new
 	router.Put("/api/task-new", taskDefReplaceHandler, logRequest)
-	router.Post("/api/task-new", taskDefReplaceHandler, logRequest)
 
 	// PATCH /api/task
-	// POST  /api/task
 	router.Patch("/api/task", taskDefMergeHandler, logRequest)
-	router.Post("/api/task", taskDefMergeHandler, logRequest)
 
 	// DELETE /api/model/:model/task/:task
 	// POST   /api/task-delete?model=modelNameOrDigest&task=taskName

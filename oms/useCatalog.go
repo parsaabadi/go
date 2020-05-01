@@ -9,10 +9,12 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"golang.org/x/text/language"
 
 	"github.com/openmpp/go/ompp/db"
+	"github.com/openmpp/go/ompp/helper"
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
@@ -184,6 +186,7 @@ func (mc *ModelCatalog) toPublicConfig() *ModelCatalogConfig {
 		ModelDir:        mc.modelDir,
 		ModelLogDir:     mc.modelLogDir,
 		IsLogDirEnabled: mc.isLogDirEnabled,
+		LastTimeStamp:   mc.lastTimeStamp,
 	}
 	return &mp
 }
@@ -280,4 +283,20 @@ func (mc *ModelCatalog) allModels() []modelBasic {
 		}
 	}
 	return mbs
+}
+
+// getNewTimeStamp return new unique timestamp and source time of it.
+func (mc *ModelCatalog) getNewTimeStamp() (string, time.Time) {
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	dtNow := time.Now()
+	ts := helper.MakeTimeStamp(dtNow)
+	if ts == mc.lastTimeStamp {
+		time.Sleep(2 * time.Millisecond)
+		dtNow = time.Now()
+		ts = helper.MakeTimeStamp(dtNow)
+	}
+	mc.lastTimeStamp = ts
+	return ts, dtNow
 }

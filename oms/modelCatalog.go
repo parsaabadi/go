@@ -19,6 +19,7 @@ type ModelCatalog struct {
 	modelDir        string     // models bin directory, it is a root dir under which model.sqlite and model.exe expected to be located
 	modelLogDir     string     // default model log directory
 	isLogDirEnabled bool       // if true then default log directory exist
+	lastTimeStamp   string     // most recent timestamp
 	modelLst        []modelDef // list of model metadata and associated database connections
 }
 
@@ -30,6 +31,7 @@ type ModelCatalogConfig struct {
 	ModelDir        string // model bin directory
 	ModelLogDir     string // default model log directory
 	IsLogDirEnabled bool   // if true then default log directory exist
+	LastTimeStamp   string // most recent timestamp
 }
 
 // modelDef is database connection and model metadata database rows

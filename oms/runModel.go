@@ -25,7 +25,7 @@ import (
 func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 
 	// make model process run stamp, if not specified then use timestamp by default
-	ts, dtNow := rsc.getNewTimeStamp()
+	ts, dtNow := theCatalog.getNewTimeStamp()
 	rStamp := helper.CleanPath(req.RunStamp)
 	if rStamp == "" {
 		rStamp = ts
@@ -55,7 +55,6 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 		rsc.updateRunState(req.ModelDigest, rs.RunStamp, true, err.Error())
 		rs.IsFinal = true
 		return rs, err // exit with error: model failed to start
-
 	}
 
 	binDir := mb.binDir
