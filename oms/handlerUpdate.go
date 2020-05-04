@@ -162,7 +162,7 @@ func worksetCreateHandler(w http.ResponseWriter, r *http.Request) {
 	wsn := wp.Name
 	if wsn == "" {
 		ts, _ := theCatalog.getNewTimeStamp()
-		wsn = "auto_name_set_of_parameters_" + ts
+		wsn = "set_" + ts
 	}
 
 	// return error if workset already exist or unable to get workset status
@@ -283,7 +283,7 @@ func worksetUpdateHandler(isReplace bool, w http.ResponseWriter, r *http.Request
 	// if workset name is empty then automatically generate name
 	if newWp.Name == "" {
 		ts, _ := theCatalog.getNewTimeStamp()
-		newWp.Name = "auto_name_set_of_parameters_" + ts
+		newWp.Name = "set_" + ts
 	}
 
 	// get existing workset metadata
@@ -691,7 +691,7 @@ func taskDefUpdateHandler(w http.ResponseWriter, r *http.Request, isReplace bool
 	// if task name is empty then automatically generate name
 	if tpd.Name == "" {
 		ts, _ := theCatalog.getNewTimeStamp()
-		tpd.Name = "auto_name_task_" + ts
+		tpd.Name = "task_" + ts
 	}
 
 	// update task definition in model catalog
