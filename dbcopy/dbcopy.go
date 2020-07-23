@@ -82,7 +82,7 @@ If neccesary you can specify exact directory for input parameters by using "-dbc
   dbcopy -m redModel -s Default -p 101 -dbcopy.To db -dbcopy.ToDatabase "Database=dst.sqlite;OpenMode=ReadWrite"
 
 Dbcopy create output directories (and json files) for model data by combining model name and run name or input set name.
-By default names combined with run id (set id) to make it unique.
+By default names may be combined with run id (set id) to make it unique.
 For example:
 	json file: modelName.run.1234.MyRun.json
 	directory: modelName/run.1234.MyRun
@@ -202,7 +202,7 @@ const (
 type useIdNames uint8
 
 const (
-	defaultUseIdNames useIdNames = iota // default db facet
+	defaultUseIdNames useIdNames = iota // default: use id only to prevent name conflicts
 	yesUseIdNames                       // always use run and set id in directory and file names
 	noUseIdNames                        // never use run and set id in directory and file names
 )
