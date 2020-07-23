@@ -149,7 +149,7 @@ func cvtItemIdToCode(msgName string, typeOf *TypeMeta, isTotalEnabled bool,
 	var cvt func(itemId int) (string, error)
 
 	switch {
-	case !typeOf.IsBuiltIn(): // enum dimension: find enum id by code
+	case !typeOf.IsBuiltIn(): // enum dimension: find enum code by id
 
 		cvt = func(itemId int) (string, error) {
 			for j := range typeOf.Enum {
