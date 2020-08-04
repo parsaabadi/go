@@ -141,12 +141,12 @@ func doInsertTaskBody(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta, langDef 
 
 		// get new task run id
 		id := 0
-		err := TrxUpdate(trx, "UPDATE id_lst SET id_value = id_value + 1 WHERE id_key = 'task_run_id'")
+		err := TrxUpdate(trx, "UPDATE id_lst SET id_value = id_value + 1 WHERE id_key = 'run_id_set_id'")
 		if err != nil {
 			return err
 		}
 		err = TrxSelectFirst(trx,
-			"SELECT id_value FROM id_lst WHERE id_key = 'task_run_id'",
+			"SELECT id_value FROM id_lst WHERE id_key = 'run_id_set_id'",
 			func(row *sql.Row) error {
 				return row.Scan(&id)
 			})
@@ -348,7 +348,7 @@ func doCreateTaskRow(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta) (bool, er
 	//       THEN id_value + 1
 	//     ELSE id_value
 	//   END
-	// WHERE id_key = 'task_id'
+	// WHERE id_key = 'run_id_set_id'
 	err := TrxUpdate(trx,
 		"UPDATE id_lst SET id_value ="+
 			" CASE"+
@@ -359,7 +359,7 @@ func doCreateTaskRow(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta) (bool, er
 			" THEN id_value + 1"+
 			" ELSE id_value"+
 			" END"+
-			" WHERE id_key = 'task_id'")
+			" WHERE id_key = 'run_id_set_id'")
 	if err != nil {
 		return false, err
 	}
@@ -381,7 +381,7 @@ func doCreateTaskRow(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta) (bool, er
 
 		// get new task id
 		err = TrxSelectFirst(trx,
-			"SELECT id_value FROM id_lst WHERE id_key = 'task_id'",
+			"SELECT id_value FROM id_lst WHERE id_key = 'run_id_set_id'",
 			func(row *sql.Row) error {
 				return row.Scan(&taskId)
 			})

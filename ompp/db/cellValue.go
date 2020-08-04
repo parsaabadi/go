@@ -8,8 +8,8 @@ import (
 	"strconv"
 )
 
-// cellValue is dimensions item as id and value of input parameter or output table.
-type cellValue struct {
+// cellIdValue is dimensions item as id and value of input parameter or output table.
+type cellIdValue struct {
 	DimIds []int       // dimensions enum ids or int values if dimension type simple
 	IsNull bool        // if true then value is NULL
 	Value  interface{} // value: int64, bool, float64 or string
@@ -29,7 +29,7 @@ type cellCodeValue struct {
 // If parameter type is enum based then cell value is enum id and csv row value is enum code.
 type CsvConverter interface {
 	// return file name of csv file to store parameter or output table rows
-	CsvFileName(modelDef *ModelMeta, name string) (string, error)
+	CsvFileName(modelDef *ModelMeta, name string, isIdCsv bool) (string, error)
 
 	// retrun first line of csv file with column names: expr_name,dim0,dim1,expr_value.
 	// if isIdHeader is true: expr_id,dim0,dim1,expr_value

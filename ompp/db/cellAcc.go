@@ -11,9 +11,9 @@ import (
 
 // CellAcc is value of output table accumulator.
 type CellAcc struct {
-	cellValue     // dimensions and value
-	AccId     int // output table accumulator id
-	SubId     int // output table subvalue id
+	cellIdValue     // dimensions and value
+	AccId       int // output table accumulator id
+	SubId       int // output table subvalue id
 }
 
 // CellCodeAcc is value of output table accumulator.
@@ -25,7 +25,7 @@ type CellCodeAcc struct {
 }
 
 // CsvFileName return file name of csv file to store output table accumulator rows
-func (CellAcc) CsvFileName(modelDef *ModelMeta, name string) (string, error) {
+func (CellAcc) CsvFileName(modelDef *ModelMeta, name string, isIdCsv bool) (string, error) {
 
 	// validate parameters
 	if modelDef == nil {
@@ -41,6 +41,9 @@ func (CellAcc) CsvFileName(modelDef *ModelMeta, name string) (string, error) {
 		return "", errors.New("output table not found: " + name)
 	}
 
+	if isIdCsv {
+		return modelDef.Table[k].Name + ".id.acc.csv", nil
+	}
 	return modelDef.Table[k].Name + ".acc.csv", nil
 }
 
@@ -243,7 +246,7 @@ func (CellAcc) CsvToCell(
 	cvt := func(row []string) (interface{}, error) {
 
 		// make conversion buffer and check input csv row size
-		cell := CellAcc{cellValue: cellValue{DimIds: make([]int, table.Rank)}}
+		cell := CellAcc{cellIdValue: cellIdValue{DimIds: make([]int, table.Rank)}}
 
 		n := len(cell.DimIds)
 		if len(row) != n+3 {

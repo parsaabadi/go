@@ -11,8 +11,8 @@ import (
 
 // CellExpr is value of output table expression.
 type CellExpr struct {
-	cellValue     // dimensions and value
-	ExprId    int // output table expression id
+	cellIdValue     // dimensions and value
+	ExprId      int // output table expression id
 }
 
 // CellCodeExpr is value of output table expression.
@@ -23,7 +23,7 @@ type CellCodeExpr struct {
 }
 
 // CsvFileName return file name of csv file to store output table expression rows
-func (CellExpr) CsvFileName(modelDef *ModelMeta, name string) (string, error) {
+func (CellExpr) CsvFileName(modelDef *ModelMeta, name string, isIdCsv bool) (string, error) {
 
 	// validate parameters
 	if modelDef == nil {
@@ -39,6 +39,9 @@ func (CellExpr) CsvFileName(modelDef *ModelMeta, name string) (string, error) {
 		return "", errors.New("output table not found: " + name)
 	}
 
+	if isIdCsv {
+		return modelDef.Table[k].Name + ".id.csv", nil
+	}
 	return modelDef.Table[k].Name + ".csv", nil
 }
 
@@ -237,7 +240,7 @@ func (CellExpr) CsvToCell(
 	cvt := func(row []string) (interface{}, error) {
 
 		// make conversion buffer and check input csv row size
-		cell := CellExpr{cellValue: cellValue{DimIds: make([]int, table.Rank)}}
+		cell := CellExpr{cellIdValue: cellIdValue{DimIds: make([]int, table.Rank)}}
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {

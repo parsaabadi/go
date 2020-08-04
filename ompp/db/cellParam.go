@@ -11,8 +11,8 @@ import (
 
 // CellParam is value of input parameter.
 type CellParam struct {
-	cellValue     // dimensions and value
-	SubId     int // parameter subvalue id
+	cellIdValue     // dimensions and value
+	SubId       int // parameter subvalue id
 }
 
 // CellCodeParam is value of input parameter.
@@ -23,7 +23,7 @@ type CellCodeParam struct {
 }
 
 // CsvFileName return file name of csv file to store parameter rows
-func (CellParam) CsvFileName(modelDef *ModelMeta, name string) (string, error) {
+func (CellParam) CsvFileName(modelDef *ModelMeta, name string, isIdCsv bool) (string, error) {
 
 	// validate parameters
 	if modelDef == nil {
@@ -39,6 +39,9 @@ func (CellParam) CsvFileName(modelDef *ModelMeta, name string) (string, error) {
 		return "", errors.New("parameter not found: " + name)
 	}
 
+	if isIdCsv {
+		return modelDef.Param[k].Name + ".id.csv", nil
+	}
 	return modelDef.Param[k].Name + ".csv", nil
 }
 
@@ -347,7 +350,7 @@ func (CellParam) CsvToCell(
 	cvt := func(row []string) (interface{}, error) {
 
 		// make conversion buffer and check input csv row size
-		cell := CellParam{cellValue: cellValue{DimIds: make([]int, param.Rank)}}
+		cell := CellParam{cellIdValue: cellIdValue{DimIds: make([]int, param.Rank)}}
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {
@@ -584,7 +587,7 @@ func (CellCodeParam) CodeToIdCell(modelDef *ModelMeta, name string,
 		}
 
 		dstCell := CellParam{
-			cellValue: cellValue{
+			cellIdValue: cellIdValue{
 				DimIds: make([]int, param.Rank),
 				IsNull: srcCell.IsNull,
 			},

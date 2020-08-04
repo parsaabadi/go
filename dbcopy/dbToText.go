@@ -163,7 +163,7 @@ func toCsvCellFile(
 	}
 
 	// create csv file or open existing for append
-	fn, err := cell.CsvFileName(modelDef, name)
+	fn, err := cell.CsvFileName(modelDef, name, isIdCsv)
 	if err != nil {
 		return err
 	}

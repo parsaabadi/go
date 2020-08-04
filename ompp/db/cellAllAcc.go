@@ -27,7 +27,7 @@ type CellCodeAllAcc struct {
 }
 
 // CsvFileName return file name of csv file to store all accumulators rows
-func (CellAllAcc) CsvFileName(modelDef *ModelMeta, name string) (string, error) {
+func (CellAllAcc) CsvFileName(modelDef *ModelMeta, name string, isIdCsv bool) (string, error) {
 
 	// validate parameters
 	if modelDef == nil {
@@ -43,6 +43,9 @@ func (CellAllAcc) CsvFileName(modelDef *ModelMeta, name string) (string, error) 
 		return "", errors.New("output table not found: " + name)
 	}
 
+	if isIdCsv {
+		return modelDef.Table[k].Name + ".id.acc-all.csv", nil
+	}
 	return modelDef.Table[k].Name + ".acc-all.csv", nil
 }
 

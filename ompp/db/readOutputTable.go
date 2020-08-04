@@ -255,7 +255,7 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLayou
 			if layout.IsAccum {
 
 				if !layout.IsAllAccum {
-					var ca = CellAcc{cellValue: cellValue{DimIds: make([]int, table.Rank)}}
+					var ca = CellAcc{cellIdValue: cellIdValue{DimIds: make([]int, table.Rank)}}
 					ca.AccId = n1
 					ca.SubId = n2
 					copy(ca.DimIds, d)
@@ -287,7 +287,7 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLayou
 			}
 			// else output table expression
 
-			var ce = CellExpr{cellValue: cellValue{DimIds: make([]int, table.Rank)}}
+			var ce = CellExpr{cellIdValue: cellIdValue{DimIds: make([]int, table.Rank)}}
 			ce.ExprId = n1
 			copy(ce.DimIds, d)
 			ce.IsNull = !vf.Valid

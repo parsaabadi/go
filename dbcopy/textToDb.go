@@ -188,7 +188,7 @@ func fromLangTextJsonToDb(dbConn *sql.DB, modelDef *db.ModelMeta, inpDir string)
 	return langDef, nil
 }
 
-// fromCsvFile read parameter or output table csv file and convert it to list of db cells
+// fromCsvFile read parameter or output table csv file and convert it to list of db cells.
 func fromCsvFile(
 	csvDir string, modelDef *db.ModelMeta, name string, subCount int, cell db.CsvConverter, encodingName string) (*list.List, error) {
 
@@ -199,7 +199,8 @@ func fromCsvFile(
 	}
 
 	// open csv file, convert to utf-8 and parse csv into db cells
-	fn, err := cell.CsvFileName(modelDef, name)
+	// reading from .id.csv files not supported by converteres
+	fn, err := cell.CsvFileName(modelDef, name, false)
 	if err != nil {
 		return nil, errors.New("invalid csv file name: " + err.Error())
 	}

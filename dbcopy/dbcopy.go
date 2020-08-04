@@ -16,9 +16,8 @@ Only model argument does not have default value and must be specified explicitly
 
 Model digest is globally unique and you may want to it if there are multiple versions of the model.
 
-There are 5 possible copy directions: "text", "db", "db2db", "csv", "csv-all".
+There are 5 possible copy to directions: "text", "db", "db2db", "csv", "csv-all".
 By default it is copy to "text".
-Also you can use "csv-1" as a synonym of "csv-all".
 It is also possible to delete entire model or some model data from database (see dbcopy.Delete below).
 
 Copy to "text": read from database and save into metadata .json and .csv values (parameters and output tables):
@@ -44,8 +43,8 @@ It is also possible to copy only:
 model run results and input parameters, set of input parameters (workset), modeling task metadata and run history.
 
 To copy only one set of input parameters:
-  dbcopy -m redModel -dbcopy.SetName Default
   dbcopy -m redModel -s Default
+  dbcopy -m redModel -dbcopy.SetName Default
 
 To copy only one model run results and input parameters:
   dbcopy -m modelOne -dbcopy.RunId 101
@@ -193,7 +192,7 @@ const (
 	zipArgKey          = "dbcopy.Zip"              // create output or use as input model.zip
 	doubleFormatArgKey = "dbcopy.DoubleFormat"     // convert to string format for float and double
 	useIdCsvArgKey     = "dbcopy.IdCsv"            // if true then create csv files with enum id's default: enum code
-	useIdNamesArgKey   = "dbcopy.IdOutputNames"    // if true then always use id's in output directory and file names, false never use it, default: only if csv name conflict
+	useIdNamesArgKey   = "dbcopy.IdOutputNames"    // if true then always use id's in output directory and file names, false never use it
 	encodingArgKey     = "dbcopy.CodePage"         // code page for converting source files, e.g. windows-1252
 	useUtf8CsvArgKey   = "dbcopy.Utf8BomIntoCsv"   // if true then write utf-8 BOM into csv file
 )
@@ -222,13 +221,13 @@ func mainBody(args []string) error {
 
 	// set dbcopy command line argument keys and ini-file keys
 	_ = flag.String(copyToArgKey, "text", "copy to: `text`=db-to-text, db=text-to-db, db2db=db-to-db, csv=db-to-csv, csv-all=db-to-csv-all-in-one")
-	_ = flag.Bool(deleteArgKey, false, "delete from database: model, workset (set of model input parameters), model run or modeling task")
+	_ = flag.Bool(deleteArgKey, false, "delete from database: model, set of input parameters, model run or modeling task")
 	_ = flag.String(modelNameArgKey, "", "model name")
 	_ = flag.String(modelNameShortKey, "", "model name (short of "+modelNameArgKey+")")
 	_ = flag.String(modelDigestArgKey, "", "model hash digest")
-	_ = flag.String(setNameArgKey, "", "workset name (set of model input parameters), if specified then copy only this workset")
-	_ = flag.String(setNameShortKey, "", "workset name (short of "+setNameArgKey+")")
-	_ = flag.Int(setIdArgKey, 0, "workset id (set of model input parameters), if specified then copy only this workset")
+	_ = flag.String(setNameArgKey, "", "set name (name of model input parameters set), if specified then copy only this set")
+	_ = flag.String(setNameShortKey, "", "set name (short of "+setNameArgKey+")")
+	_ = flag.Int(setIdArgKey, 0, "set id (id of model input parameters set), if specified then copy only this set")
 	_ = flag.String(runNameArgKey, "", "model run name, if specified then copy only this run data")
 	_ = flag.Int(runIdArgKey, 0, "model run id, if specified then copy only this run data")
 	_ = flag.String(runDigestArgKey, "", "model run hash digest, if specified then copy only this run data")
@@ -240,12 +239,12 @@ func mainBody(args []string) error {
 	_ = flag.String(toDbDriverArgKey, db.SQLiteDbDriver, "output database driver name: SQLite, odbc, sqlite3")
 	_ = flag.String(inputDirArgKey, "", "input directory to read model .json and .csv files")
 	_ = flag.String(outputDirArgKey, "", "output directory for model .json and .csv files")
-	_ = flag.String(paramDirArgKey, "", "path to parameters directory (workset directory)")
+	_ = flag.String(paramDirArgKey, "", "path to parameters directory (input parameters set directory)")
 	_ = flag.String(paramDirShortKey, "", "path to parameters directory (short of "+paramDirArgKey+")")
 	_ = flag.Bool(zipArgKey, false, "create output model.zip or use model.zip as input")
 	_ = flag.String(doubleFormatArgKey, "%.15g", "convert to string format for float and double")
 	_ = flag.Bool(useIdCsvArgKey, false, "if true then create csv files with enum id's default: enum code")
-	_ = flag.Bool(useIdNamesArgKey, false, "if true then always use id's in output directory names, false never use, by default: only if csv name conflict")
+	_ = flag.Bool(useIdNamesArgKey, false, "if true then always use id's in output directory names, false never use. Default for csv: only if name conflict")
 	_ = flag.String(encodingArgKey, "", "code page to convert source file into utf-8, e.g.: windows-1252")
 	_ = flag.Bool(useUtf8CsvArgKey, false, "if true then write utf-8 BOM into csv file")
 
@@ -289,7 +288,7 @@ func mainBody(args []string) error {
 		return errors.New("dbcopy invalid arguments: output database can be specified only if " + copyToArgKey + "=db or =db2db")
 	}
 	// id csv is only for output
-	if copyToArg != "text" && copyToArg != "csv" && copyToArg != "csv-all" && copyToArg != "csv-1" && runOpts.IsExist(useIdCsvArgKey) {
+	if copyToArg != "text" && copyToArg != "csv" && copyToArg != "csv-all" && runOpts.IsExist(useIdCsvArgKey) {
 		return errors.New("dbcopy invalid arguments: " + useIdCsvArgKey + " can be used only if " + copyToArgKey + "=text or =csv or =csv-all")
 	}
 	// parameter directory is only for workset copy db-to-text or text-to-db
@@ -367,7 +366,7 @@ func mainBody(args []string) error {
 			err = dbToText(modelName, modelDigest, runOpts)
 		case "csv":
 			err = dbToCsv(modelName, modelDigest, false, runOpts)
-		case "csv-all", "csv-1":
+		case "csv-all":
 			err = dbToCsv(modelName, modelDigest, true, runOpts)
 		case "db":
 			err = textToDb(modelName, runOpts)
