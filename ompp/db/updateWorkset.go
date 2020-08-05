@@ -58,6 +58,92 @@ func UpdateWorksetReadonlyByName(dbConn *sql.DB, modelId int, name string, isRea
 	return nil
 }
 
+// RenameWorkset do rename workset if new name is not empty "" string
+// Workset must be read-write otherwise error returned.
+func RenameWorkset(dbConn *sql.DB, setId int, newSetName string) error {
+
+	if newSetName != "" {
+		return nil // exit if new name is empty: nothing to do
+	}
+
+	// validate parameters
+	if setId <= 0 {
+		return errors.New("invalid workset id: " + strconv.Itoa(setId))
+	}
+
+	// do update in transaction scope
+	trx, err := dbConn.Begin()
+	if err != nil {
+		return err
+	}
+	err = doRenameWorkset(trx, setId, newSetName)
+
+	if err != nil {
+		trx.Rollback()
+		return err
+	}
+	trx.Commit()
+
+	return nil
+}
+
+// doRenameWorkset rename workset if new name is not empty "" string
+func doRenameWorkset(trx *sql.Tx, setId int, newSetName string) error {
+
+	if newSetName != "" {
+		return nil // exit if new name is empty: nothing to do
+	}
+
+	// "lock" workset to prevent update or use by the model
+	sId := strconv.Itoa(setId)
+
+	err := TrxUpdate(trx, "UPDATE workset_lst SET is_readonly = is_readonly + 1 WHERE set_id = "+sId)
+	if err != nil {
+		return err
+	}
+
+	// check if workset exist and not readonly
+	nRd := 0
+	err = TrxSelectFirst(trx,
+		"SELECT is_readonly FROM workset_lst WHERE set_id = "+sId,
+		func(row *sql.Row) error {
+			if err := row.Scan(&nRd); err != nil {
+				return err
+			}
+			return nil
+		})
+	switch {
+	case err == sql.ErrNoRows:
+		return nil // workset not found: nothing to do
+	case err != nil:
+		return err
+	case nRd != 1:
+		return errors.New("failed to update: workset is read-only: " + sId)
+	}
+
+	// rename workset
+	err = TrxUpdate(trx,
+		"UPDATE workset_lst"+
+			" SET set_name = "+toQuotedMax(newSetName, nameDbMax)+", "+
+			" update_dt = "+toQuoted(helper.MakeDateTime(time.Now()))+
+			" WHERE set_id ="+sId)
+	if err != nil {
+		return err
+	}
+
+	// "unlock" workset before commit: restore original value of is_readonly=0
+	err = TrxUpdate(trx,
+		"UPDATE workset_lst"+
+			" SET is_readonly = 0,"+
+			" update_dt = "+toQuoted(helper.MakeDateTime(time.Now()))+
+			" WHERE set_id = "+sId)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // UpdateWorkset create new workset metadata, replace or merge existing workset metadata in database.
 //
 // Set name is used to find workset and set id updated with actual database value.
@@ -161,6 +247,9 @@ func doUpdateWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, isRepl
 	if err != nil && err != sql.ErrNoRows {
 		return err
 	}
+	if isReadonly {
+		return errors.New("failed to update: workset already exists and it is read-only: " + strconv.Itoa(meta.Set.SetId) + ": " + meta.Set.Name)
+	}
 
 	// if workset not exist then create new empty workset
 	if setId <= 0 {
@@ -185,10 +274,6 @@ func doUpdateWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, isRepl
 	}
 	// else: update existing workset
 	meta.Set.SetId = setId // workset exist, id may be different
-
-	if isReadonly {
-		return errors.New("failed to update: workset already exists and it is read-only: " + strconv.Itoa(meta.Set.SetId) + ": " + meta.Set.Name)
-	}
 
 	// get Hid's of current workset parameters list
 	var hs []int

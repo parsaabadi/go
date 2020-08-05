@@ -241,11 +241,17 @@ func dbToDbTask(modelName string, modelDigest string, runOpts *config.RunOptions
 	}
 
 	// convert task db rows into "public" format
-	// and copy source task metadata into destination database
 	pub, err := meta.ToPublic(srcDb, srcModel)
 	if err != nil {
 		return err
 	}
+
+	// rename destination task
+	if runOpts.IsExist(taskNewNameArgKey) {
+		pub.Name = runOpts.String(taskNewNameArgKey)
+	}
+
+	// copy source task metadata into destination database
 	_, err = copyTaskDbToDb(srcDb, dstDb, srcModel, dstModel, meta.Task.TaskId, pub, dstLang)
 	if err != nil {
 		return err

@@ -4,6 +4,16 @@
 /*
 dbcopy is command line tool for import-export OpenM++ model metadata, input parameters and run results.
 
+Dbcopy support 5 possible -dbcopy.To directions:
+  "text":    copy from database to .json and .csv files (this is default)
+  "db":      copy from .json and .csv files to database
+  "db2db":   copy from one database to other
+  "csv":     copy from databse to .csv files
+  "csv-all": copy from databse to .csv files
+
+Dbcopy also can delete entire model or model run results, set of input parameters or modeling task from database (see dbcopy.Delete below).
+Dbcopy also can rename model run results, set of input parameters or modeling task in database (see dbcopy.Rename below).
+
 Arguments for dbcopy can be specified on command line or through .ini file:
   dbcopy -ini my.ini
   dbcopy -OpenM.IniFile my-dbcopy.ini
@@ -15,10 +25,6 @@ Only model argument does not have default value and must be specified explicitly
   dbcopy -dbcopy.ModelDigest 649f17f26d67c37b78dde94f79772445
 
 Model digest is globally unique and you may want to it if there are multiple versions of the model.
-
-There are 5 possible copy to directions: "text", "db", "db2db", "csv", "csv-all".
-By default it is copy to "text".
-It is also possible to delete entire model or some model data from database (see dbcopy.Delete below).
 
 Copy to "text": read from database and save into metadata .json and .csv values (parameters and output tables):
   dbcopy -m modelOne
@@ -40,7 +46,7 @@ And for all model runs input parameters and output tables saved into all_model_r
 
 By default entire model data is copied.
 It is also possible to copy only:
-model run results and input parameters, set of input parameters (workset), modeling task metadata and run history.
+model run results and input parameters, set of input parameters (workset), modeling task metadata and task run history.
 
 To copy only one set of input parameters:
   dbcopy -m redModel -s Default
@@ -118,6 +124,16 @@ To delete from database entire model, model run results, set of input parameters
   dbcopy -m modelOne -dbcopy.Delete -dbcopy.TaskId 1
   dbcopy -m modelOne -dbcopy.Delete -dbcopy.TaskName taskOne
 
+To rename model run results, input set of parameters or modeling task:
+  dbcopy -m modelOne -dbcopy.Rename -dbcopy.RunId 101 -dbcopy.ToRunName New_Run_Name
+  dbcopy -m modelOne -dbcopy.Rename -dbcopy.RunName MyFirstRun -dbcopy.ToRunName New_Run_Name
+  dbcopy -m modelOne -dbcopy.Rename -dbcopy.RunDigest d722febf683992aa624ce9844a2e597d -dbcopy.ToRunName New_Run_Name
+  dbcopy -m modelOne -dbcopy.Rename -s Default -dbcopy.ToSetName New_Default_Name
+  dbcopy -m modelOne -dbcopy.Rename -dbcopy.SetName Default -dbcopy.ToSetName New_Default_Name
+  dbcopy -m modelOne -dbcopy.Rename -dbcopy.SetId 2 -dbcopy.ToSetName New_Default_Name
+  dbcopy -m modelOne -dbcopy.Rename -dbcopy.TaskName taskOne -dbcopy.ToTaskName New_Task_Name
+  dbcopy -m modelOne -dbcopy.Rename -dbcopy.TaskId 1 -dbcopy.ToTaskName New_Task_Name
+
 OpenM++ using hash digest to compare models, input parameters and output values.
 By default float and double values converted into text with "%.15g" format.
 It is possible to specify other format for float values digest calculation:
@@ -175,11 +191,14 @@ const (
 	modelDigestArgKey  = "dbcopy.ModelDigest"      // model hash digest
 	setNameArgKey      = "dbcopy.SetName"          // workset name
 	setNameShortKey    = "s"                       // workset name (short form)
+	setNewNameArgKey   = "dbcopy.ToSetName"        // new workset name, to rename workset
 	setIdArgKey        = "dbcopy.SetId"            // workset id, workset is a set of model input parameters
 	runNameArgKey      = "dbcopy.RunName"          // model run name
+	runNewNameArgKey   = "dbcopy.ToRunName"        // new run name, to rename run
 	runIdArgKey        = "dbcopy.RunId"            // model run id
 	runDigestArgKey    = "dbcopy.RunDigest"        // model run hash digest
 	taskNameArgKey     = "dbcopy.TaskName"         // modeling task name
+	taskNewNameArgKey  = "dbcopy.ToTaskName"       // new task name, to rename task
 	taskIdArgKey       = "dbcopy.TaskId"           // modeling task id
 	dbConnStrArgKey    = "dbcopy.Database"         // db connection string
 	dbDriverArgKey     = "dbcopy.DatabaseDriver"   // db driver name, ie: SQLite, odbc, sqlite3
@@ -227,11 +246,14 @@ func mainBody(args []string) error {
 	_ = flag.String(modelDigestArgKey, "", "model hash digest")
 	_ = flag.String(setNameArgKey, "", "set name (name of model input parameters set), if specified then copy only this set")
 	_ = flag.String(setNameShortKey, "", "set name (short of "+setNameArgKey+")")
+	_ = flag.String(setNewNameArgKey, "", "rename input set of parameters to that new name")
 	_ = flag.Int(setIdArgKey, 0, "set id (id of model input parameters set), if specified then copy only this set")
 	_ = flag.String(runNameArgKey, "", "model run name, if specified then copy only this run data")
+	_ = flag.String(runNewNameArgKey, "", "rename model run to that new name")
 	_ = flag.Int(runIdArgKey, 0, "model run id, if specified then copy only this run data")
 	_ = flag.String(runDigestArgKey, "", "model run hash digest, if specified then copy only this run data")
 	_ = flag.String(taskNameArgKey, "", "modeling task name, if specified then copy only this modeling task data")
+	_ = flag.String(taskNewNameArgKey, "", "rename modeling task to that new name")
 	_ = flag.Int(taskIdArgKey, 0, "modeling task id, if specified then copy only this run modeling task data")
 	_ = flag.String(dbConnStrArgKey, "", "input database connection string")
 	_ = flag.String(dbDriverArgKey, db.SQLiteDbDriver, "input database driver name: SQLite, odbc, sqlite3")
@@ -295,6 +317,18 @@ func mainBody(args []string) error {
 	if runOpts.IsExist(paramDirArgKey) &&
 		(copyToArg != "text" && copyToArg != "db" || !runOpts.IsExist(setNameArgKey) && !runOpts.IsExist(setIdArgKey)) {
 		return errors.New("dbcopy invalid arguments: " + paramDirArgKey + " can be used only with " + setNameArgKey + " or " + setIdArgKey + " and if " + copyToArgKey + "=text or =db")
+	}
+	// new run name can be used with run name, run id or run digest arguments
+	if runOpts.IsExist(runNewNameArgKey) && !runOpts.IsExist(runNameArgKey) && !runOpts.IsExist(runIdArgKey) && !runOpts.IsExist(runDigestArgKey) {
+		return errors.New("dbcopy invalid arguments: " + runNewNameArgKey + " can be used only with " + runNameArgKey + ", " + runIdArgKey + " or " + runDigestArgKey)
+	}
+	// new set name can be used with set name or set id arguments
+	if runOpts.IsExist(setNewNameArgKey) && !runOpts.IsExist(setNameArgKey) && !runOpts.IsExist(setNameShortKey) && !runOpts.IsExist(setIdArgKey) {
+		return errors.New("dbcopy invalid arguments: " + setNewNameArgKey + " can be used only with " + setNameArgKey + ", " + setNameShortKey + " or " + setIdArgKey)
+	}
+	// new task name can be used with task name or task id arguments
+	if runOpts.IsExist(taskNewNameArgKey) && !runOpts.IsExist(taskNameArgKey) && !runOpts.IsExist(taskIdArgKey) {
+		return errors.New("dbcopy invalid arguments: " + taskNewNameArgKey + " can be used only with " + taskNameArgKey + " or " + taskIdArgKey)
 	}
 
 	// do delete model run, workset or entire model

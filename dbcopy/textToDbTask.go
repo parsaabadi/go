@@ -287,7 +287,7 @@ func textToDbTask(modelName string, modelDigest string, runOpts *config.RunOptio
 		}
 
 		// write workset metadata into json and parameter values into csv files
-		dstId, err := fromWorksetTextToDb(dbConn, modelDef, langDef, setName, jsonPath, csvDir, encName)
+		dstId, err := fromWorksetTextToDb(dbConn, modelDef, langDef, setName, "", jsonPath, csvDir, encName)
 		if err != nil {
 			return err
 		}
@@ -325,12 +325,18 @@ func textToDbTask(modelName string, modelDigest string, runOpts *config.RunOptio
 		omppLog.Log("Warning: task ", pub.Name, " model run(s) not completed, copy of task run history incomplete")
 	}
 
+	// rename destination task
+	srcTaskName := pub.Name
+	if runOpts.IsExist(taskNewNameArgKey) {
+		pub.Name = runOpts.String(taskNewNameArgKey)
+	}
+
 	// insert or update modeling task and task run history into database
 	dstId, err := fromTaskJsonToDb(dstDb, modelDef, langDef, &pub)
 	if err != nil {
 		return err
 	}
-	omppLog.Log("Modeling task from ", pub.Name, " into id: ", dstId)
+	omppLog.Log("Modeling task from ", srcTaskName, " into: ", dstId, " ", pub.Name)
 
 	return nil
 }

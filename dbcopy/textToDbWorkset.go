@@ -177,8 +177,9 @@ func textToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 
 	// read from metadata json and csv files and update target database
 	encName := runOpts.String(encodingArgKey)
+	dstSetName := runOpts.String(setNewNameArgKey)
 
-	dstId, err := fromWorksetTextToDb(dstDb, modelDef, langDef, setName, metaPath, csvDir, encName)
+	dstId, err := fromWorksetTextToDb(dstDb, modelDef, langDef, setName, dstSetName, metaPath, csvDir, encName)
 	if err != nil {
 		return err
 	}
@@ -224,7 +225,7 @@ func fromWorksetTextListToDb(
 		}
 
 		// update or insert workset metadata and parameters from csv if csv directory exist
-		_, err := fromWorksetTextToDb(dbConn, modelDef, langDef, "", fl[k], csvDir, encodingName)
+		_, err := fromWorksetTextToDb(dbConn, modelDef, langDef, "", "", fl[k], csvDir, encodingName)
 		if err != nil {
 			return err
 		}
@@ -238,7 +239,7 @@ func fromWorksetTextListToDb(
 // update set id's and base run id's with actual id in destination database
 // it return source workset id (set id from metadata json file) and destination set id
 func fromWorksetTextToDb(
-	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, srcName string, metaPath string, csvDir string, encodingName string,
+	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, srcSetName string, dstSetName string, metaPath string, csvDir string, encodingName string,
 ) (int, error) {
 
 	// if no metadata file and no csv directory then exit: nothing to do
@@ -251,7 +252,7 @@ func fromWorksetTextToDb(
 	var pub db.WorksetPub
 
 	if metaPath == "" && csvDir != "" { // no metadata json file, only csv directory
-		pub.Name = srcName
+		pub.Name = srcSetName
 		pub.ModelName = modelDef.Model.Name
 	}
 
@@ -268,13 +269,14 @@ func fromWorksetTextToDb(
 				return 0, nil
 			}
 			// metadata empty but there is csv directory: use expected model name and set name
-			pub.Name = srcName
+			pub.Name = srcSetName
 			pub.ModelName = modelDef.Model.Name
 		}
 	}
 	if pub.Name == "" {
 		return 0, errors.New("workset name is empty and metadata json file not found or empty")
 	}
+	srcSetName = pub.Name
 
 	// if only csv directory specified:
 	//   make list of parameters based on csv file names
@@ -302,6 +304,11 @@ func fromWorksetTextToDb(
 	paramLst := append([]db.ParamRunSetPub{}, pub.Param...)
 	pub.Param = []db.ParamRunSetPub{}
 
+	// rename destination workset
+	if dstSetName != "" {
+		pub.Name = dstSetName
+	}
+
 	// destination: convert from "public" format into destination db rows
 	// display warning if base run not found in destination database
 	ws, err := pub.FromPublic(dbConn, modelDef)
@@ -313,7 +320,7 @@ func fromWorksetTextToDb(
 	}
 
 	// if destination workset exists then make it read-write and delete all existing parameters from workset
-	wsRow, err := db.GetWorksetByName(dbConn, modelDef.Model.ModelId, pub.Name)
+	wsRow, err := db.GetWorksetByName(dbConn, modelDef.Model.ModelId, ws.Set.Name)
 	if err != nil {
 		return 0, err
 	}
@@ -336,7 +343,7 @@ func fromWorksetTextToDb(
 	dstId := ws.Set.SetId // actual set id from destination database
 
 	// read all workset parameters and copy into destination database
-	omppLog.Log("Workset ", ws.Set.Name, " into id: ", dstId)
+	omppLog.Log("Workset ", srcSetName, " into: ", dstId, " "+ws.Set.Name)
 
 	// read all workset parameters from csv files
 	for j := range paramLst {

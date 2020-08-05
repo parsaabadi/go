@@ -117,11 +117,17 @@ func dbToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOpti
 	}
 
 	// convert workset db rows into "public" format
-	// and copy source workset metadata and parameters into destination database
 	pub, err := srcWs.ToPublic(srcDb, srcModel)
 	if err != nil {
 		return err
 	}
+
+	// rename destination workset
+	if runOpts.IsExist(setNewNameArgKey) {
+		pub.Name = runOpts.String(setNewNameArgKey)
+	}
+
+	// copy source workset metadata and parameters into destination database
 	_, err = copyWorksetDbToDb(srcDb, dstDb, srcModel, dstModel, srcWs.Set.SetId, pub, dstLang)
 	if err != nil {
 		return err

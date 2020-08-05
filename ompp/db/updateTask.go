@@ -12,6 +12,34 @@ import (
 	"github.com/openmpp/go/ompp/helper"
 )
 
+// RenameTask do rename task if new name is not empty "" string
+func RenameTask(dbConn *sql.DB, taskId int, newTaskName string) error {
+
+	if newTaskName != "" {
+		return nil // exit if new name is empty: nothing to do
+	}
+
+	// validate parameters
+	if taskId <= 0 {
+		return errors.New("invalid task id: " + strconv.Itoa(taskId))
+	}
+
+	// do update in transaction scope
+	trx, err := dbConn.Begin()
+	if err != nil {
+		return err
+	}
+	err = TrxUpdate(trx,
+		"UPDATE task_lst SET task_name = "+toQuotedMax(newTaskName, nameDbMax)+" WHERE task_id = "+strconv.Itoa(taskId))
+	if err != nil {
+		trx.Rollback()
+		return err
+	}
+	trx.Commit()
+
+	return nil
+}
+
 // UpdateTaskFull delete existing and insert new modeling task and task run history in database.
 //
 // Model id, task id, run id, set id updated with actual database id's.
@@ -88,7 +116,7 @@ func doReplaceTaskFull(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta, langDef
 		// restore actual task name, if required
 		// UPDATE task_lst SET task_name = 'my task' WHERE task_id = 88
 		err = TrxUpdate(trx,
-			"UPDATE task_lst SET task_name = "+toQuoted(meta.Task.Name)+" WHERE task_id = "+stId)
+			"UPDATE task_lst SET task_name = "+toQuotedMax(meta.Task.Name, nameDbMax)+" WHERE task_id = "+stId)
 		if err != nil {
 			return err
 		}
@@ -117,8 +145,8 @@ func doInsertTaskBody(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta, langDef 
 				"INSERT INTO task_txt (task_id, lang_id, descr, note) VALUES ("+
 					stId+", "+
 					strconv.Itoa(lId)+", "+
-					toQuoted(meta.Txt[j].Descr)+", "+
-					toQuotedOrNull(meta.Txt[j].Note)+")")
+					toQuotedMax(meta.Txt[j].Descr, descrDbMax)+", "+
+					toQuotedOrNullMax(meta.Txt[j].Note, noteDbMax)+")")
 			if err != nil {
 				return err
 			}
