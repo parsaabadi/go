@@ -33,6 +33,30 @@ func DeleteWorkset(dbConn *sql.DB, setId int) error {
 	return nil
 }
 
+// DeleteWorksetAllParameters delete all parameters metadata and values from workset.
+//
+// Workset must be read-write in order to delete all parameters.
+// If workset does not exist then nothing deleted and no errors returned, it is empty operation.
+func DeleteWorksetAllParameters(dbConn *sql.DB, setId int) error {
+
+	// validate parameters
+	if setId <= 0 {
+		return errors.New("invalid workset id: " + strconv.Itoa(setId))
+	}
+
+	// delete inside of transaction scope
+	trx, err := dbConn.Begin()
+	if err != nil {
+		return err
+	}
+	if err := dbDeleteWorksetAllParameters(trx, setId); err != nil {
+		trx.Rollback()
+		return err
+	}
+	trx.Commit()
+	return nil
+}
+
 // doDeleteWorkset delete workset metadata and workset parameter values from database.
 // It does update as part of transaction
 func dbDeleteWorkset(trx *sql.Tx, setId int) error {
@@ -42,6 +66,63 @@ func dbDeleteWorkset(trx *sql.Tx, setId int) error {
 	err := TrxUpdate(trx, "UPDATE workset_lst SET set_name = 'deleted' WHERE set_id = "+sId)
 	if err != nil {
 		return err
+	}
+
+	// delete all parameters data and metadats from workset
+	err = dbDeleteWorksetAllParameters(trx, setId)
+	if err != nil {
+		return err
+	}
+
+	// delete workset from modeling tasks
+	err = TrxUpdate(trx, "DELETE FROM task_set WHERE set_id = "+sId)
+	if err != nil {
+		return err
+	}
+
+	err = TrxUpdate(trx, "DELETE FROM workset_txt WHERE set_id = "+sId)
+	if err != nil {
+		return err
+	}
+
+	err = TrxUpdate(trx, "DELETE FROM workset_lst WHERE set_id = "+sId)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// dbDeleteWorksetAllParameters delete all parameters metadata and values from workset.
+// It does update as part of transaction
+// Workset must be read-write in order to delete all parameters.
+func dbDeleteWorksetAllParameters(trx *sql.Tx, setId int) error {
+
+	// "lock" workset to prevent update or use by the model
+	sId := strconv.Itoa(setId)
+
+	err := TrxUpdate(trx, "UPDATE workset_lst SET is_readonly = is_readonly + 1 WHERE set_id = "+sId)
+	if err != nil {
+		return err
+	}
+
+	// check if workset exist and not readonly
+	nRd := 0
+	err = TrxSelectFirst(trx,
+		"SELECT is_readonly FROM workset_lst WHERE set_id = "+sId,
+		func(row *sql.Row) error {
+			if err := row.Scan(&nRd); err != nil {
+				return err
+			}
+			return nil
+		})
+	switch {
+	case err == sql.ErrNoRows:
+		return nil // workset not found: nothing to do
+	case err != nil:
+		return err
+	case nRd != 1:
+		return errors.New("failed to update: workset is read-only: " + sId)
 	}
 
 	// build a list of workset parameters db-tables
@@ -71,33 +152,25 @@ func dbDeleteWorkset(trx *sql.Tx, setId int) error {
 		}
 	}
 
-	// delete workset from modeling tasks
-	err = TrxUpdate(trx, "DELETE FROM task_set WHERE set_id = "+sId)
-	if err != nil {
-		return err
-	}
-
-	// delete model workset metadata
+	// delete workset parameters metadata
 	err = TrxUpdate(trx, "DELETE FROM workset_parameter_txt WHERE set_id = "+sId)
 	if err != nil {
 		return err
 	}
-
 	err = TrxUpdate(trx, "DELETE FROM workset_parameter WHERE set_id = "+sId)
 	if err != nil {
 		return err
 	}
 
-	err = TrxUpdate(trx, "DELETE FROM workset_txt WHERE set_id = "+sId)
+	// "unlock" workset before commit: restore original value of is_readonly=0
+	err = TrxUpdate(trx,
+		"UPDATE workset_lst"+
+			" SET is_readonly = 0,"+
+			" update_dt = "+toQuoted(helper.MakeDateTime(time.Now()))+
+			" WHERE set_id = "+sId)
 	if err != nil {
 		return err
 	}
-
-	err = TrxUpdate(trx, "DELETE FROM workset_lst WHERE set_id = "+sId)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 

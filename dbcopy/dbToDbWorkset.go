@@ -187,13 +187,17 @@ func copyWorksetDbToDb(
 		omppLog.Log("Warning: workset ", dstWs.Set.Name, ", base run not found by digest ", pub.BaseRunDigest)
 	}
 
-	// if destination workset exists then delete it to remove all parameter values
+	// if destination workset exists then make it read-write and delete all existing parameters from workset
 	wsRow, err := db.GetWorksetByName(dstDb, dstModel.Model.ModelId, pub.Name)
 	if err != nil {
 		return 0, err
 	}
 	if wsRow != nil {
-		err = db.DeleteWorkset(dstDb, wsRow.SetId) // delete existing workset
+		err = db.UpdateWorksetReadonly(dstDb, wsRow.SetId, false) // make destination workset read-write
+		if err != nil {
+			return 0, errors.New("failed to clear workset read-only status: " + strconv.Itoa(wsRow.SetId) + " " + wsRow.Name + " " + err.Error())
+		}
+		err = db.DeleteWorksetAllParameters(dstDb, wsRow.SetId) // delete all parameters from workset
 		if err != nil {
 			return 0, errors.New("failed to delete workset " + strconv.Itoa(wsRow.SetId) + " " + wsRow.Name + " " + err.Error())
 		}
