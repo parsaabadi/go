@@ -13,31 +13,48 @@ import (
 )
 
 // RenameTask do rename task if new name is not empty "" string
-func RenameTask(dbConn *sql.DB, taskId int, newTaskName string) error {
+func RenameTask(dbConn *sql.DB, taskId int, newTaskName string) (bool, error) {
 
-	if newTaskName != "" {
-		return nil // exit if new name is empty: nothing to do
+	if newTaskName == "" {
+		return false, nil // exit if new name is empty: nothing to do
 	}
 
 	// validate parameters
 	if taskId <= 0 {
-		return errors.New("invalid task id: " + strconv.Itoa(taskId))
+		return false, errors.New("invalid task id: " + strconv.Itoa(taskId))
+	}
+
+	// check if new name is unique
+	err := SelectFirst(dbConn,
+		"SELECT COUNT(*) FROM task_lst WHERE task_id <> "+strconv.Itoa(taskId)+" AND task_name = "+toQuoted(newTaskName),
+		func(row *sql.Row) error {
+			nCnt := 0
+			if err := row.Scan(&nCnt); err != nil {
+				return err
+			}
+			if nCnt != 0 {
+				return errors.New("failed to update: task name must be unique: " + newTaskName)
+			}
+			return nil
+		})
+	if err != nil {
+		return false, err
 	}
 
 	// do update in transaction scope
 	trx, err := dbConn.Begin()
 	if err != nil {
-		return err
+		return false, err
 	}
 	err = TrxUpdate(trx,
 		"UPDATE task_lst SET task_name = "+toQuotedMax(newTaskName, nameDbMax)+" WHERE task_id = "+strconv.Itoa(taskId))
 	if err != nil {
 		trx.Rollback()
-		return err
+		return false, err
 	}
 	trx.Commit()
 
-	return nil
+	return true, nil
 }
 
 // UpdateTaskFull delete existing and insert new modeling task and task run history in database.

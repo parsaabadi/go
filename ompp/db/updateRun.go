@@ -11,6 +11,48 @@ import (
 	"strconv"
 )
 
+// RenameRun do rename model run if new name is not empty "" string.
+func RenameRun(dbConn *sql.DB, runId int, newRunName string) (bool, error) {
+
+	if newRunName == "" {
+		return false, nil // exit if new name is empty: nothing to do
+	}
+
+	// validate parameters
+	if runId <= 0 {
+		return false, errors.New("invalid run id: " + strconv.Itoa(runId))
+	}
+
+	// find model run, exit if not found
+	runRow, err := GetRun(dbConn, runId)
+	if err != nil {
+		return false, err
+	}
+	if runRow == nil {
+		return false, nil // model run not found: nothing to do
+	}
+
+	// run must be completed: status success, error or exit
+	if !IsRunCompleted(runRow.Status) {
+		return false, errors.New("model run not completed: " + strconv.Itoa(runRow.RunId) + " " + runRow.Name + " " + runRow.RunDigest)
+	}
+
+	// do update in transaction scope
+	trx, err := dbConn.Begin()
+	if err != nil {
+		return false, err
+	}
+	err = TrxUpdate(trx,
+		"UPDATE run_lst SET run_name = "+toQuotedMax(newRunName, nameDbMax)+" WHERE run_id = "+strconv.Itoa(runId))
+	if err != nil {
+		trx.Rollback()
+		return false, err
+	}
+	trx.Commit()
+
+	return true, nil
+}
+
 // UpdateRun insert new or return existing model run metadata in database.
 //
 // Run status must be completed (success, exit or error) otherwise error returned.

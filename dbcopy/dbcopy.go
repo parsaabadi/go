@@ -186,6 +186,7 @@ import (
 const (
 	copyToArgKey       = "dbcopy.To"               // copy to: text=db-to-text, db=text-to-db, db2db=db-to-db, csv=db-to-csv, csv-all=db-to-csv-all-in-one
 	deleteArgKey       = "dbcopy.Delete"           // delete model or workset or model run or modeling task from database
+	renameArgKey       = "dbcopy.Rename"           // rename workset or model run or modeling task
 	modelNameArgKey    = "dbcopy.ModelName"        // model name
 	modelNameShortKey  = "m"                       // model name (short form)
 	modelDigestArgKey  = "dbcopy.ModelDigest"      // model hash digest
@@ -241,6 +242,7 @@ func mainBody(args []string) error {
 	// set dbcopy command line argument keys and ini-file keys
 	_ = flag.String(copyToArgKey, "text", "copy to: `text`=db-to-text, db=text-to-db, db2db=db-to-db, csv=db-to-csv, csv-all=db-to-csv-all-in-one")
 	_ = flag.Bool(deleteArgKey, false, "delete from database: model, set of input parameters, model run or modeling task")
+	_ = flag.Bool(renameArgKey, false, "rename set of input parameters, model run or modeling task")
 	_ = flag.String(modelNameArgKey, "", "model name")
 	_ = flag.String(modelNameShortKey, "", "model name (short of "+modelNameArgKey+")")
 	_ = flag.String(modelDigestArgKey, "", "model hash digest")
@@ -297,14 +299,16 @@ func mainBody(args []string) error {
 	}
 	omppLog.Log("Model ", modelName, " ", modelDigest)
 
-	// minimal validation of run options:
-	// to-database can be used only with "db" or "db2db"
+	// minimal validation of run options
+	//
 	copyToArg := strings.ToLower(runOpts.String(copyToArgKey))
 	isDel := runOpts.Bool(deleteArgKey)
+	isRename := runOpts.Bool(renameArgKey)
 
-	if isDel && runOpts.IsExist(copyToArgKey) {
-		return errors.New("dbcopy invalid arguments: " + deleteArgKey + " cannot be used with " + copyToArgKey)
+	if (isDel || isRename) && runOpts.IsExist(copyToArgKey) {
+		return errors.New("dbcopy invalid arguments: " + deleteArgKey + " or " + renameArgKey + " cannot be used with " + copyToArgKey)
 	}
+	// to-database can be used only with "db" or "db2db"
 	if copyToArg != "db" && copyToArg != "db2db" &&
 		(runOpts.IsExist(toDbConnStrArgKey) || runOpts.IsExist(toDbDriverArgKey)) {
 		return errors.New("dbcopy invalid arguments: output database can be specified only if " + copyToArgKey + "=db or =db2db")
@@ -323,8 +327,8 @@ func mainBody(args []string) error {
 		return errors.New("dbcopy invalid arguments: " + runNewNameArgKey + " can be used only with " + runNameArgKey + ", " + runIdArgKey + " or " + runDigestArgKey)
 	}
 	// new set name can be used with set name or set id arguments
-	if runOpts.IsExist(setNewNameArgKey) && !runOpts.IsExist(setNameArgKey) && !runOpts.IsExist(setNameShortKey) && !runOpts.IsExist(setIdArgKey) {
-		return errors.New("dbcopy invalid arguments: " + setNewNameArgKey + " can be used only with " + setNameArgKey + ", " + setNameShortKey + " or " + setIdArgKey)
+	if runOpts.IsExist(setNewNameArgKey) && !runOpts.IsExist(setNameArgKey) && !runOpts.IsExist(setIdArgKey) {
+		return errors.New("dbcopy invalid arguments: " + setNewNameArgKey + " can be used only with " + setNameArgKey + " or " + setIdArgKey)
 	}
 	// new task name can be used with task name or task id arguments
 	if runOpts.IsExist(taskNewNameArgKey) && !runOpts.IsExist(taskNameArgKey) && !runOpts.IsExist(taskIdArgKey) {
@@ -351,8 +355,22 @@ func mainBody(args []string) error {
 			err = dbDeleteModel(modelName, modelDigest, runOpts) // delete entrire model
 		}
 
+	// do rename
+	case isRename:
+
+		switch {
+		case runOpts.IsExist(runNameArgKey) || runOpts.IsExist(runIdArgKey) || runOpts.IsExist(runDigestArgKey): // rename model run
+			err = dbRenameRun(modelName, modelDigest, runOpts)
+		case runOpts.IsExist(setNameArgKey) || runOpts.IsExist(setIdArgKey): // rename workset
+			err = dbRenameWorkset(modelName, modelDigest, runOpts)
+		case runOpts.IsExist(taskNameArgKey) || runOpts.IsExist(taskIdArgKey): // rename modeling task
+			err = dbRenameTask(modelName, modelDigest, runOpts)
+		default:
+			return errors.New("dbcopy invalid argument(s) for rename operation")
+		}
+
 	// copy model run
-	case !isDel && (runOpts.IsExist(runNameArgKey) || runOpts.IsExist(runIdArgKey)) || runOpts.IsExist(runDigestArgKey):
+	case !isDel && !isRename && (runOpts.IsExist(runNameArgKey) || runOpts.IsExist(runIdArgKey)) || runOpts.IsExist(runDigestArgKey):
 
 		switch copyToArg {
 		case "text":
@@ -366,7 +384,7 @@ func mainBody(args []string) error {
 		}
 
 	// copy workset
-	case !isDel && (runOpts.IsExist(setNameArgKey) || runOpts.IsExist(setIdArgKey)):
+	case !isDel && !isRename && (runOpts.IsExist(setNameArgKey) || runOpts.IsExist(setIdArgKey)):
 
 		switch copyToArg {
 		case "text":
@@ -380,7 +398,7 @@ func mainBody(args []string) error {
 		}
 
 	// copy modeling task
-	case !isDel && (runOpts.IsExist(taskNameArgKey) || runOpts.IsExist(taskIdArgKey)):
+	case !isDel && !isRename && (runOpts.IsExist(taskNameArgKey) || runOpts.IsExist(taskIdArgKey)):
 
 		switch copyToArg {
 		case "text":

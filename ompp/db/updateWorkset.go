@@ -15,33 +15,16 @@ import (
 // UpdateWorksetReadonly update workset readonly status.
 func UpdateWorksetReadonly(dbConn *sql.DB, setId int, isReadonly bool) error {
 
-	// do update in transaction scope
-	trx, err := dbConn.Begin()
-	if err != nil {
-		return err
-	}
-	err = TrxUpdate(trx,
+	return Update(dbConn,
 		"UPDATE workset_lst"+
 			" SET is_readonly = "+toBoolSqlConst(isReadonly)+", "+" update_dt = "+toQuoted(helper.MakeDateTime(time.Now()))+
 			" WHERE set_id ="+strconv.Itoa(setId))
-	if err != nil {
-		trx.Rollback()
-		return err
-	}
-	trx.Commit()
-
-	return nil
 }
 
 // UpdateWorksetReadonlyByName update workset readonly status by workset name.
 func UpdateWorksetReadonlyByName(dbConn *sql.DB, modelId int, name string, isReadonly bool) error {
 
-	// do update in transaction scope
-	trx, err := dbConn.Begin()
-	if err != nil {
-		return err
-	}
-	err = TrxUpdate(trx,
+	return Update(dbConn,
 		"UPDATE workset_lst"+
 			" SET is_readonly = "+toBoolSqlConst(isReadonly)+", "+" update_dt = "+toQuoted(helper.MakeDateTime(time.Now()))+
 			" WHERE set_id = ("+
@@ -49,49 +32,46 @@ func UpdateWorksetReadonlyByName(dbConn *sql.DB, modelId int, name string, isRea
 			" WHERE W.model_id = "+strconv.Itoa(modelId)+
 			" AND set_name = "+toQuoted(name)+
 			")")
-	if err != nil {
-		trx.Rollback()
-		return err
-	}
-	trx.Commit()
-
-	return nil
 }
 
-// RenameWorkset do rename workset if new name is not empty "" string
-// Workset must be read-write otherwise error returned.
-func RenameWorkset(dbConn *sql.DB, setId int, newSetName string) error {
+// RenameWorkset do rename workset if new name is not empty "" string.
+//
+// If isAnyReadonly parameter is true then do rename regarless of workset read-only status
+// else return error if workset is not read-write.
+func RenameWorkset(dbConn *sql.DB, setId int, newSetName string, isAnyReadonly bool) (bool, error) {
 
-	if newSetName != "" {
-		return nil // exit if new name is empty: nothing to do
+	if newSetName == "" {
+		return false, nil // exit if new name is empty: nothing to do
 	}
 
 	// validate parameters
 	if setId <= 0 {
-		return errors.New("invalid workset id: " + strconv.Itoa(setId))
+		return false, errors.New("invalid workset id: " + strconv.Itoa(setId))
 	}
 
 	// do update in transaction scope
 	trx, err := dbConn.Begin()
 	if err != nil {
-		return err
+		return false, err
 	}
-	err = doRenameWorkset(trx, setId, newSetName)
+	isFound, err := doRenameWorkset(trx, setId, newSetName, isAnyReadonly)
 
 	if err != nil {
 		trx.Rollback()
-		return err
+		return false, err
 	}
 	trx.Commit()
 
-	return nil
+	return isFound, nil
 }
 
-// doRenameWorkset rename workset if new name is not empty "" string
-func doRenameWorkset(trx *sql.Tx, setId int, newSetName string) error {
+// doRenameWorkset rename workset if new name is not empty "" string.
+// if isAnyReadonly parameter is true then ignore workset read-only status
+// else return error if workset is not read-write
+func doRenameWorkset(trx *sql.Tx, setId int, newSetName string, isAnyReadonly bool) (bool, error) {
 
-	if newSetName != "" {
-		return nil // exit if new name is empty: nothing to do
+	if newSetName == "" {
+		return false, nil // exit if new name is empty: nothing to do
 	}
 
 	// "lock" workset to prevent update or use by the model
@@ -99,11 +79,11 @@ func doRenameWorkset(trx *sql.Tx, setId int, newSetName string) error {
 
 	err := TrxUpdate(trx, "UPDATE workset_lst SET is_readonly = is_readonly + 1 WHERE set_id = "+sId)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	// check if workset exist and not readonly
-	nRd := 0
+	var nRd int = 0
 	err = TrxSelectFirst(trx,
 		"SELECT is_readonly FROM workset_lst WHERE set_id = "+sId,
 		func(row *sql.Row) error {
@@ -114,34 +94,43 @@ func doRenameWorkset(trx *sql.Tx, setId int, newSetName string) error {
 		})
 	switch {
 	case err == sql.ErrNoRows:
-		return nil // workset not found: nothing to do
+		return false, nil // workset not found: nothing to do
 	case err != nil:
-		return err
-	case nRd != 1:
-		return errors.New("failed to update: workset is read-only: " + sId)
+		return false, err
+	case !isAnyReadonly && nRd != 1: // return error only if read-only validation required
+		return false, errors.New("failed to update: workset is read-only: " + sId)
 	}
 
-	// rename workset
+	// check if new name is unique
+	err = TrxSelectFirst(trx,
+		"SELECT COUNT(*) FROM workset_lst WHERE set_id <> "+sId+" AND set_name = "+toQuoted(newSetName),
+		func(row *sql.Row) error {
+			nCnt := 0
+			if err := row.Scan(&nCnt); err != nil {
+				return err
+			}
+			if nCnt != 0 {
+				return errors.New("failed to update: workset name must be unique: " + newSetName)
+			}
+			return nil
+		})
+	if err != nil {
+		return false, err
+	}
+
+	// rename workset and
+	// "unlock" workset before commit: restore original value of is_readonly
 	err = TrxUpdate(trx,
 		"UPDATE workset_lst"+
 			" SET set_name = "+toQuotedMax(newSetName, nameDbMax)+", "+
+			" is_readonly = is_readonly - 1,"+
 			" update_dt = "+toQuoted(helper.MakeDateTime(time.Now()))+
 			" WHERE set_id ="+sId)
 	if err != nil {
-		return err
+		return false, err
 	}
 
-	// "unlock" workset before commit: restore original value of is_readonly=0
-	err = TrxUpdate(trx,
-		"UPDATE workset_lst"+
-			" SET is_readonly = 0,"+
-			" update_dt = "+toQuoted(helper.MakeDateTime(time.Now()))+
-			" WHERE set_id = "+sId)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return true, nil
 }
 
 // UpdateWorkset create new workset metadata, replace or merge existing workset metadata in database.
