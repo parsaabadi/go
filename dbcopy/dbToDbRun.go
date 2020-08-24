@@ -58,11 +58,11 @@ func dbToDbRun(modelName string, modelDigest string, runOpts *config.RunOptions)
 	modelName = srcModel.Model.Name // set model name: it can be empty and only model digest specified
 
 	// find source model run metadata by id, run digest or name
-	runId, runDigest, runName := runIdDigestNameFromOptions(runOpts)
-	if runId < 0 || runId == 0 && runName == "" && runDigest == "" {
+	runId, runDigest, runName, isFirst, isLast := runIdDigestNameFromOptions(runOpts)
+	if runId < 0 || runId == 0 && runName == "" && runDigest == "" && !isFirst && !isLast {
 		return errors.New("dbcopy invalid argument(s) run id: " + runOpts.String(runIdArgKey) + ", run name: " + runOpts.String(runNameArgKey) + ", run digest: " + runOpts.String(runDigestArgKey))
 	}
-	runRow, e := findModelRunByIdDigestName(srcDb, srcModel.Model.ModelId, runId, runDigest, runName)
+	runRow, e := findModelRunByIdDigestName(srcDb, srcModel.Model.ModelId, runId, runDigest, runName, isFirst, isLast)
 	if e != nil {
 		return e
 	}

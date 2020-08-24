@@ -39,11 +39,11 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 	modelName = modelDef.Model.Name // set model name: it can be empty and only model digest specified
 
 	// find model run metadata by id, run digest or name
-	runId, runDigest, runName := runIdDigestNameFromOptions(runOpts)
-	if runId < 0 || runId == 0 && runName == "" && runDigest == "" {
+	runId, runDigest, runName, isFirst, isLast := runIdDigestNameFromOptions(runOpts)
+	if runId < 0 || runId == 0 && runName == "" && runDigest == "" && !isFirst && !isLast {
 		return errors.New("dbcopy invalid argument(s) run id: " + runOpts.String(runIdArgKey) + ", run name: " + runOpts.String(runNameArgKey) + ", run digest: " + runOpts.String(runDigestArgKey))
 	}
-	runRow, e := findModelRunByIdDigestName(srcDb, modelDef.Model.ModelId, runId, runDigest, runName)
+	runRow, e := findModelRunByIdDigestName(srcDb, modelDef.Model.ModelId, runId, runDigest, runName, isFirst, isLast)
 	if e != nil {
 		return e
 	}
@@ -75,6 +75,10 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".run."+strconv.Itoa(runId))
 	case runDigest != "":
 		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".run."+helper.CleanPath(runDigest))
+	case runName == "" && isFirst:
+		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".first.run")
+	case runName == "" && isLast:
+		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".last.run")
 	default:
 		// if not run id and not digest then run name
 		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".run."+helper.CleanPath(runRow.Name))
@@ -252,12 +256,14 @@ func toRunText(
 }
 
 // check dbcopy run options and return only one of: run id, run digest or name to find model run.
-func runIdDigestNameFromOptions(runOpts *config.RunOptions) (int, string, string) {
+func runIdDigestNameFromOptions(runOpts *config.RunOptions) (int, string, string, bool, bool) {
 
 	// from dbcopy options get model run id and/or run digest and/or run name
 	runId := runOpts.Int(runIdArgKey, 0)
 	runDigest := runOpts.String(runDigestArgKey)
 	runName := runOpts.String(runNameArgKey)
+	isFirst := runOpts.Bool(runFirstArgKey)
+	isLast := runOpts.Bool(runLastArgKey)
 
 	// conflicting options: use run id if positive else use run digest if not empty else run name
 	if runOpts.IsExist(runIdArgKey) && (runOpts.IsExist(runNameArgKey) || runOpts.IsExist(runDigestArgKey)) {
@@ -287,20 +293,43 @@ func runIdDigestNameFromOptions(runOpts *config.RunOptions) (int, string, string
 		omppLog.Log("dbcopy options conflict. Using run digest: ", runDigest, " ignore run name: ", runName)
 		runName = ""
 	}
+	if isFirst && isLast {
+		omppLog.Log("dbcopy options conflict: '-", runFirstArgKey, "' flag should not be combined with '-", runLastArgKey)
+		isFirst = false
+	}
+	if isFirst && (runId > 0 || runDigest != "") {
+		omppLog.Log("dbcopy options conflict: '-", runFirstArgKey, "' flag should not be combined with '-", runIdArgKey, "' or '-", runDigestArgKey, "'")
+		isFirst = false
+	}
+	if isLast && (runId > 0 || runDigest != "") {
+		omppLog.Log("dbcopy options conflict: '-", runLastArgKey, "' flag should not be combined with '-", runIdArgKey, "' or '-", runDigestArgKey, "'")
+		isLast = false
+	}
+	if isLast && (runId > 0 || runDigest != "") {
+		omppLog.Log("dbcopy options conflict: '-", runLastArgKey, "' flag should not be combined with '-", runIdArgKey, "' or '-", runDigestArgKey, "'")
+		isLast = false
+	}
 
-	return runId, runDigest, runName
+	return runId, runDigest, runName, isFirst, isLast
 }
 
-// find model run metadata by id, run digest or name, retun run_lst db row or nil if model run not found.
-func findModelRunByIdDigestName(dbConn *sql.DB, modelId, runId int, runDigest, runName string) (*db.RunRow, error) {
+// find model run metadata by id, run digest, run name or last run, retun run_lst db row or nil if model run not found.
+func findModelRunByIdDigestName(dbConn *sql.DB, modelId, runId int, runDigest, runName string, isFirst, isLast bool) (*db.RunRow, error) {
 
 	switch {
 	case runId > 0:
 		return db.GetRun(dbConn, runId)
 	case runDigest != "":
 		return db.GetRunByDigest(dbConn, runDigest)
+	case isLast && runName != "":
+		return db.GetLastRunByName(dbConn, modelId, runName)
+	case isLast && runName == "":
+		return db.GetLastRun(dbConn, modelId)
+	case isFirst && runName == "":
+		return db.GetFirstRun(dbConn, modelId)
 	default:
-		// if not run id and not digest then run name
+		// if not run id and not run digest and not last run and not first run any name
+		// then first run by name
 		return db.GetRunByName(dbConn, modelId, runName)
 	}
 }

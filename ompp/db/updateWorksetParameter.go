@@ -73,7 +73,7 @@ func (meta *WorksetMeta) UpdateWorksetParameter(
 			return 0, errors.New("parameter not found: " + param.Name)
 		}
 
-		err = doWriteSetParameter(trx, pm, meta.Set.SetId, param.SubCount, false, cellLst)
+		err = doWriteSetParameter(trx, pm, meta.Set.SetId, param.SubCount, param.DefaultSubId, false, cellLst)
 		if err != nil {
 			trx.Rollback()
 			return 0, err

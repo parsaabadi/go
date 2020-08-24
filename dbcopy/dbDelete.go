@@ -71,11 +71,11 @@ func dbDeleteRun(modelName string, modelDigest string, runOpts *config.RunOption
 	}
 
 	// find model run metadata by id, run digest or name
-	runId, runDigest, runName := runIdDigestNameFromOptions(runOpts)
-	if runId < 0 || runId == 0 && runName == "" && runDigest == "" {
+	runId, runDigest, runName, isFirst, isLast := runIdDigestNameFromOptions(runOpts)
+	if runId < 0 || runId == 0 && runName == "" && runDigest == "" && !isFirst && !isLast {
 		return errors.New("dbcopy invalid argument(s) run id: " + runOpts.String(runIdArgKey) + ", run name: " + runOpts.String(runNameArgKey) + ", run digest: " + runOpts.String(runDigestArgKey))
 	}
-	runRow, e := findModelRunByIdDigestName(srcDb, modelId, runId, runDigest, runName)
+	runRow, e := findModelRunByIdDigestName(srcDb, modelId, runId, runDigest, runName, isFirst, isLast)
 	if e != nil {
 		return e
 	}

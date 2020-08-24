@@ -18,7 +18,7 @@ func GetWorkset(dbConn *sql.DB, setId int) (*WorksetRow, error) {
 			" WHERE W.set_id = "+strconv.Itoa(setId))
 }
 
-// GetDefaultWorkset return default working set for the model.
+// GetDefaultWorkset return default working set for the model: workset_lst table row.
 //
 // Default workset is a first workset for the model, each model must have default workset.
 func GetDefaultWorkset(dbConn *sql.DB, modelId int) (*WorksetRow, error) {
@@ -248,27 +248,48 @@ func GetWorksetRunIds(dbConn *sql.DB, setId int) ([]int, error) {
 	return idRs, nil
 }
 
-// GetWorksetParamList return Hid and sub-values count for all parameters included in that workset:
+// GetWorksetParam return sub-values count and default sub-value id for workset parameter:
 // SELECT parameter_hid, sub_count, default_sub_id FROM workset_parameter
-func GetWorksetParamList(dbConn *sql.DB, setId int) ([]int, []int, error) {
+func GetWorksetParam(dbConn *sql.DB, setId int, paramHid int) (int, int, error) {
 
-	var hidRs, countRs []int
+	var nSub, defId int
+
+	err := SelectFirst(dbConn,
+		"SELECT sub_count,default_sub_id FROM workset_parameter WHERE set_id = "+strconv.Itoa(setId)+" AND parameter_hid = "+strconv.Itoa(paramHid),
+		func(row *sql.Row) error {
+			if err := row.Scan(&nSub, &defId); err != nil {
+				return err
+			}
+			return nil
+		})
+	if err != nil && err != sql.ErrNoRows {
+		return 0, 0, err
+	}
+	return nSub, defId, nil
+}
+
+// GetWorksetParamList return Hid, sub-values count and default sub-value id for all parameters included in that workset:
+// SELECT parameter_hid, sub_count, default_sub_id FROM workset_parameter
+func GetWorksetParamList(dbConn *sql.DB, setId int) ([]int, []int, []int, error) {
+
+	var hidRs, countRs, defIdRs []int
 
 	err := SelectRows(dbConn,
-		"SELECT parameter_hid, sub_count FROM workset_parameter WHERE set_id = "+strconv.Itoa(setId)+" ORDER BY 1",
+		"SELECT parameter_hid, sub_count,default_sub_id FROM workset_parameter WHERE set_id = "+strconv.Itoa(setId)+" ORDER BY 1",
 		func(rows *sql.Rows) error {
-			var h, n int
-			if err := rows.Scan(&h, &n); err != nil {
+			var h, n, i int
+			if err := rows.Scan(&h, &n, &i); err != nil {
 				return err
 			}
 			hidRs = append(hidRs, h)
 			countRs = append(countRs, n)
+			defIdRs = append(defIdRs, i)
 			return nil
 		})
 	if err != nil && err != sql.ErrNoRows {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return hidRs, countRs, nil
+	return hidRs, countRs, defIdRs, nil
 }
 
 // GetWorksetParamText return parameter value notes: workset_parameter_txt table rows.

@@ -50,12 +50,24 @@ func WriteParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *WriteParamLayou
 		return errors.New("invalid (empty) parameter values")
 	}
 
-	// find parameter id by name
+	// find parameter id by name and default sub-value id for workset parameter
 	var param *ParamMeta
 	if k, ok := modelDef.ParamByName(layout.Name); ok {
 		param = &modelDef.Param[k]
 	} else {
 		return errors.New("parameter not found: " + layout.Name)
+	}
+
+	var defSubId int = 0
+	if !layout.IsToRun {
+		n, defId, e := GetWorksetParam(dbConn, layout.ToId, param.ParamHid)
+		if e != nil {
+			return e
+		}
+		if n <= 0 {
+			return errors.New("parameter not found: " + layout.Name + " in workset: " + strconv.Itoa(layout.ToId))
+		}
+		defSubId = defId
 	}
 
 	// do insert or update parameter in transaction scope
@@ -66,7 +78,7 @@ func WriteParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *WriteParamLayou
 	if layout.IsToRun {
 		err = doWriteRunParameter(trx, modelDef, param, layout.ToId, layout.SubCount, cellLst, layout.DoubleFmt)
 	} else {
-		err = doWriteSetParameter(trx, param, layout.ToId, layout.SubCount, layout.IsPage, cellLst)
+		err = doWriteSetParameter(trx, param, layout.ToId, layout.SubCount, defSubId, layout.IsPage, cellLst)
 	}
 	if err != nil {
 		trx.Rollback()
@@ -182,7 +194,7 @@ func doWriteRunParameter(
 		// make sql to insert parameter values into model run
 		// prepare put() closure to convert each cell into insert sql statement parameters
 		q := makeSqlInsertParamValue(param.DbRunTable, "run_id", param.Dim, runId)
-		put := makePutInsertParamValue(param, subCount, cellLst)
+		put := makePutInsertParamValue(param, subCount, 0, cellLst)
 
 		// execute sql insert using put() above for each row
 		if err = TrxUpdateStatement(trx, q, put); err != nil {
@@ -220,7 +232,7 @@ func digestParameter(modelDef *ModelMeta, param *ParamMeta, cellLst *list.List, 
 // doWriteSetParameter insert or update parameter values in workset.
 // It does insert as part of transaction
 // If workset already contain parameter values then values updated else inserted.
-func doWriteSetParameter(trx *sql.Tx, param *ParamMeta, setId int, subCount int, isPage bool, cellLst *list.List) error {
+func doWriteSetParameter(trx *sql.Tx, param *ParamMeta, setId int, subCount int, defaultSubId int, isPage bool, cellLst *list.List) error {
 
 	// start workset update
 	sId := strconv.Itoa(setId)
@@ -273,7 +285,7 @@ func doWriteSetParameter(trx *sql.Tx, param *ParamMeta, setId int, subCount int,
 	// make sql to insert parameter values into workset
 	// prepare put() closure to convert each cell into insert sql statement parameters
 	q := makeSqlInsertParamValue(param.DbSetTable, "set_id", param.Dim, setId)
-	put := makePutInsertParamValue(param, subCount, cellLst)
+	put := makePutInsertParamValue(param, subCount, defaultSubId, cellLst)
 
 	// execute sql insert using put() above for each row
 	if err = TrxUpdateStatement(trx, q, put); err != nil {
@@ -310,7 +322,7 @@ func makeSqlInsertParamValue(dbTable string, runSetCol string, dims []ParamDimsR
 }
 
 // prepare put() closure to convert each cell into insert sql statement parameters
-func makePutInsertParamValue(param *ParamMeta, subCount int, cellLst *list.List) func() (bool, []interface{}, error) {
+func makePutInsertParamValue(param *ParamMeta, subCount int, defaultSubId int, cellLst *list.List) func() (bool, []interface{}, error) {
 
 	// converter from value into db value
 	fv := cvtValue(param)
@@ -336,7 +348,10 @@ func makePutInsertParamValue(param *ParamMeta, subCount int, cellLst *list.List)
 			return false, nil, errors.New("invalid size of row buffer, expected: " + strconv.Itoa(n+2))
 		}
 
-		if cell.SubId < 0 || cell.SubId >= subCount {
+		// parameter sub-value id and default sub-value id can be any integer
+		// however if workset created by openM++ tools (e.g. by omc) then default id =0 and sub-value ids: [0,subCount-1]
+		// to validate allow non-zero based sub id only for single sub-values set
+		if defaultSubId == 0 && (cell.SubId < 0 || cell.SubId >= subCount) || subCount == 1 && cell.SubId != defaultSubId {
 			return false, nil, errors.New("invalid sub-value id: " + strconv.Itoa(cell.SubId) + " parameter: " + param.Name)
 		}
 

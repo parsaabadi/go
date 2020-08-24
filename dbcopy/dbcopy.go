@@ -54,8 +54,14 @@ To copy only one set of input parameters:
 
 To copy only one model run results and input parameters:
   dbcopy -m modelOne -dbcopy.RunId 101
-  dbcopy -m modelOne -dbcopy.RunName MyFirstRun
   dbcopy -m modelOne -dbcopy.RunDigest d722febf683992aa624ce9844a2e597d
+  dbcopy -m modelOne -dbcopy.RunName "My Model Run"
+
+Model run name is not unique and by default first model run with such name is used.
+To use last model run or first model run do:
+  dbcopy -m modelOne -dbcopy.RunName "My Model Run" -dbcopy.LastRun
+  dbcopy -m modelOne -dbcopy.LastRun
+  dbcopy -m modelOne -dbcopy.FisrtRun
 
 To copy only one modeling task metadata and run history:
   dbcopy -m modelOne -dbcopy.TaskId 1
@@ -117,8 +123,10 @@ If you want to write utf-8 BOM into output csv file then:
 To delete from database entire model, model run results, set of input parameters or modeling task:
   dbcopy -m modelOne -dbcopy.Delete
   dbcopy -m modelOne -dbcopy.Delete -dbcopy.RunId 101
-  dbcopy -m modelOne -dbcopy.Delete -dbcopy.RunName MyFirstRun
+  dbcopy -m modelOne -dbcopy.Delete -dbcopy.RunName "My Model Run"
   dbcopy -m modelOne -dbcopy.Delete -dbcopy.RunDigest d722febf683992aa624ce9844a2e597d
+  dbcopy -m modelOne -dbcopy.Delete -dbcopy.FirstRun
+  dbcopy -m modelOne -dbcopy.Delete -dbcopy.LastRun
   dbcopy -m modelOne -dbcopy.Delete -dbcopy.SetId 2
   dbcopy -m modelOne -dbcopy.Delete -s Default
   dbcopy -m modelOne -dbcopy.Delete -dbcopy.TaskId 1
@@ -126,13 +134,15 @@ To delete from database entire model, model run results, set of input parameters
 
 To rename model run results, input set of parameters or modeling task:
   dbcopy -m modelOne -dbcopy.Rename -dbcopy.RunId 101 -dbcopy.ToRunName New_Run_Name
-  dbcopy -m modelOne -dbcopy.Rename -dbcopy.RunName MyFirstRun -dbcopy.ToRunName New_Run_Name
-  dbcopy -m modelOne -dbcopy.Rename -dbcopy.RunDigest d722febf683992aa624ce9844a2e597d -dbcopy.ToRunName New_Run_Name
-  dbcopy -m modelOne -dbcopy.Rename -s Default -dbcopy.ToSetName New_Default_Name
-  dbcopy -m modelOne -dbcopy.Rename -dbcopy.SetName Default -dbcopy.ToSetName New_Default_Name
-  dbcopy -m modelOne -dbcopy.Rename -dbcopy.SetId 2 -dbcopy.ToSetName New_Default_Name
-  dbcopy -m modelOne -dbcopy.Rename -dbcopy.TaskName taskOne -dbcopy.ToTaskName New_Task_Name
-  dbcopy -m modelOne -dbcopy.Rename -dbcopy.TaskId 1 -dbcopy.ToTaskName New_Task_Name
+  dbcopy -m modelOne -dbcopy.Rename -dbcopy.RunName "My Model Run" -dbcopy.ToRunName "New Run Name"
+  dbcopy -m modelOne -dbcopy.Rename -dbcopy.RunDigest d722febf683992aa624ce9844a2e597d -dbcopy.ToRunName "New Run Name"
+  dbcopy -m modelOne -dbcopy.Rename -s Default -dbcopy.ToSetName "New Name"
+  dbcopy -m modelOne -dbcopy.Rename -dbcopy.FirstRun
+  dbcopy -m modelOne -dbcopy.Rename -dbcopy.LastRun
+  dbcopy -m modelOne -dbcopy.Rename -dbcopy.SetName Default -dbcopy.ToSetName "New Name"
+  dbcopy -m modelOne -dbcopy.Rename -dbcopy.SetId 2 -dbcopy.ToSetName "New Name"
+  dbcopy -m modelOne -dbcopy.Rename -dbcopy.TaskName taskOne -dbcopy.ToTaskName "New Task Name"
+  dbcopy -m modelOne -dbcopy.Rename -dbcopy.TaskId 1 -dbcopy.ToTaskName "New Task Name"
 
 OpenM++ using hash digest to compare models, input parameters and output values.
 By default float and double values converted into text with "%.15g" format.
@@ -198,6 +208,8 @@ const (
 	runNewNameArgKey   = "dbcopy.ToRunName"        // new run name, to rename run
 	runIdArgKey        = "dbcopy.RunId"            // model run id
 	runDigestArgKey    = "dbcopy.RunDigest"        // model run hash digest
+	runFirstArgKey     = "dbcopy.FirstRun"         // use first model run
+	runLastArgKey      = "dbcopy.LastRun"          // use last model run
 	taskNameArgKey     = "dbcopy.TaskName"         // modeling task name
 	taskNewNameArgKey  = "dbcopy.ToTaskName"       // new task name, to rename task
 	taskIdArgKey       = "dbcopy.TaskId"           // modeling task id
@@ -254,6 +266,8 @@ func mainBody(args []string) error {
 	_ = flag.String(runNewNameArgKey, "", "rename model run to that new name")
 	_ = flag.Int(runIdArgKey, 0, "model run id, if specified then copy only this run data")
 	_ = flag.String(runDigestArgKey, "", "model run hash digest, if specified then copy only this run data")
+	_ = flag.Bool(runFirstArgKey, false, "if true then select first model run or first model run with specified name ")
+	_ = flag.Bool(runLastArgKey, false, "if true then select last model run or last model run with specified name ")
 	_ = flag.String(taskNameArgKey, "", "modeling task name, if specified then copy only this modeling task data")
 	_ = flag.String(taskNewNameArgKey, "", "rename modeling task to that new name")
 	_ = flag.Int(taskIdArgKey, 0, "modeling task id, if specified then copy only this run modeling task data")
@@ -323,7 +337,9 @@ func mainBody(args []string) error {
 		return errors.New("dbcopy invalid arguments: " + paramDirArgKey + " can be used only with " + setNameArgKey + " or " + setIdArgKey + " and if " + copyToArgKey + "=text or =db")
 	}
 	// new run name can be used with run name, run id or run digest arguments
-	if runOpts.IsExist(runNewNameArgKey) && !runOpts.IsExist(runNameArgKey) && !runOpts.IsExist(runIdArgKey) && !runOpts.IsExist(runDigestArgKey) {
+	if runOpts.IsExist(runNewNameArgKey) &&
+		!runOpts.IsExist(runNameArgKey) && !runOpts.IsExist(runIdArgKey) && !runOpts.IsExist(runDigestArgKey) &&
+		!runOpts.IsExist(runFirstArgKey) && !runOpts.IsExist(runLastArgKey) {
 		return errors.New("dbcopy invalid arguments: " + runNewNameArgKey + " can be used only with " + runNameArgKey + ", " + runIdArgKey + " or " + runDigestArgKey)
 	}
 	// new set name can be used with set name or set id arguments
@@ -345,7 +361,9 @@ func mainBody(args []string) error {
 	case isDel:
 
 		switch {
-		case runOpts.IsExist(runNameArgKey) || runOpts.IsExist(runIdArgKey) || runOpts.IsExist(runDigestArgKey): // delete model run
+		case runOpts.IsExist(runNameArgKey) || runOpts.IsExist(runIdArgKey) || runOpts.IsExist(runDigestArgKey) ||
+			runOpts.IsExist(runFirstArgKey) || runOpts.IsExist(runLastArgKey):
+			// delete model run
 			err = dbDeleteRun(modelName, modelDigest, runOpts)
 		case runOpts.IsExist(setNameArgKey) || runOpts.IsExist(setIdArgKey): // delete workset
 			err = dbDeleteWorkset(modelName, modelDigest, runOpts)
@@ -359,7 +377,9 @@ func mainBody(args []string) error {
 	case isRename:
 
 		switch {
-		case runOpts.IsExist(runNameArgKey) || runOpts.IsExist(runIdArgKey) || runOpts.IsExist(runDigestArgKey): // rename model run
+		case runOpts.IsExist(runNameArgKey) || runOpts.IsExist(runIdArgKey) || runOpts.IsExist(runDigestArgKey) ||
+			runOpts.IsExist(runFirstArgKey) || runOpts.IsExist(runLastArgKey):
+			// rename model run
 			err = dbRenameRun(modelName, modelDigest, runOpts)
 		case runOpts.IsExist(setNameArgKey) || runOpts.IsExist(setIdArgKey): // rename workset
 			err = dbRenameWorkset(modelName, modelDigest, runOpts)
@@ -370,7 +390,8 @@ func mainBody(args []string) error {
 		}
 
 	// copy model run
-	case !isDel && !isRename && (runOpts.IsExist(runNameArgKey) || runOpts.IsExist(runIdArgKey)) || runOpts.IsExist(runDigestArgKey):
+	case !isDel && !isRename &&
+		(runOpts.IsExist(runNameArgKey) || runOpts.IsExist(runIdArgKey) || runOpts.IsExist(runDigestArgKey) || runOpts.IsExist(runFirstArgKey) || runOpts.IsExist(runLastArgKey)):
 
 		switch copyToArg {
 		case "text":

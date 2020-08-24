@@ -388,18 +388,11 @@ func (mc *ModelCatalog) UpdateWorksetParameterPage(dn, wsn, name string, cellLst
 	}
 
 	// parameter must be in workset already
-	hIds, nSubs, err := db.GetWorksetParamList(mc.modelLst[idx].dbConn, wst.SetId)
+	n, _, err := db.GetWorksetParam(mc.modelLst[idx].dbConn, wst.SetId, pHid)
 	if err != nil {
-		return err
+		return errors.New("Error at getting workset parameters list: " + wsn + ": " + err.Error())
 	}
-	for k := range hIds {
-		ok = hIds[k] == pHid
-		if ok {
-			layout.SubCount = nSubs[k]
-			break
-		}
-	}
-	if !ok {
+	if n <= 0 {
 		return errors.New("Workset: " + wsn + " must contain parameter: " + name)
 	}
 
@@ -492,14 +485,12 @@ func (mc *ModelCatalog) CopyParameterToWsFromRun(dn, wsn, name, rdsn string) err
 	}
 
 	// if parameter already in the workset then return error
-	hIds, _, err := db.GetWorksetParamList(mc.modelLst[idx].dbConn, wst.SetId)
+	n, _, err := db.GetWorksetParam(mc.modelLst[idx].dbConn, wst.SetId, pHid)
 	if err != nil {
 		return errors.New("Error at getting workset parameters list: " + wsn + ": " + err.Error())
 	}
-	for _, h := range hIds {
-		if h == pHid {
-			return errors.New("Parameter copy failed, workset already contains parameter: " + wsn + ": " + name)
-		}
+	if n <= 0 {
+		return errors.New("Parameter copy failed, workset already contains parameter: " + wsn + ": " + name)
 	}
 
 	// find run by digest or stamp or name: it must be completed
@@ -564,14 +555,12 @@ func (mc *ModelCatalog) CopyParameterBetweenWs(dn, dstWsName, name, srcWsName st
 	}
 
 	// if parameter already in the workset then return error
-	hIds, _, err := db.GetWorksetParamList(mc.modelLst[idx].dbConn, dstWs.SetId)
+	n, _, err := db.GetWorksetParam(mc.modelLst[idx].dbConn, dstWs.SetId, pHid)
 	if err != nil {
 		return errors.New("Error at getting workset parameters list: " + dstWsName + ": " + err.Error())
 	}
-	for _, h := range hIds {
-		if h == pHid {
-			return errors.New("Parameter copy failed, workset already contains parameter: " + dstWsName + ": " + name)
-		}
+	if n <= 0 {
+		return errors.New("Parameter copy failed, workset already contains parameter: " + dstWsName + ": " + name)
 	}
 
 	// find source workset by name: it must be read-only

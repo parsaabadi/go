@@ -308,9 +308,11 @@ func (CellAllAcc) CsvToCell(
 		if err != nil {
 			return nil, err
 		}
-		if nSub < 0 || nSub >= subCount {
+		/* validation done at writing
+		if subCount == 1 && nSub != defaultSubId || nSub < 0 || nSub >= subCount {
 			return nil, errors.New("invalid sub-value id: " + strconv.Itoa(nSub) + " output table: " + name)
 		}
+		*/
 		cell.SubId = nSub
 
 		// convert dimensions: enum code to enum id or integer value for simple type dimension

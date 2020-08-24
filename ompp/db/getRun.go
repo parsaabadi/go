@@ -109,6 +109,24 @@ func GetRunByName(dbConn *sql.DB, modelId int, name string) (*RunRow, error) {
 			")")
 }
 
+// GetLastRunByName return model run row by run name: run_lst table row.
+//
+// If there is multiple runs with this name then run with max(run_id) returned
+func GetLastRunByName(dbConn *sql.DB, modelId int, name string) (*RunRow, error) {
+	return getRunRow(dbConn,
+		"SELECT"+
+			" H.run_id, H.model_id, H.run_name, H.sub_count,"+
+			" H.sub_started, H.sub_completed, H.create_dt, H.status,"+
+			" H.update_dt, H.run_digest, H.value_digest, H.run_stamp"+
+			" FROM run_lst H"+
+			" WHERE H.run_id = "+
+			" ("+
+			" SELECT MAX(M.run_id) FROM run_lst M"+
+			" WHERE M.model_id = "+strconv.Itoa(modelId)+
+			" AND M.run_name = "+toQuoted(name)+
+			")")
+}
+
 // GetRunByDigestOrStampOrName return model run row by run digest or run stamp or run name: run_lst table row.
 //
 // It does select run row by digest, if not found then by model id and stamp, if not found by model id and run name.
