@@ -141,7 +141,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 			}
 
 			// write model run metadata into json, parameters and output result values into csv files
-			if err = toRunText(srcDb, modelDef, rm, outDir, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames); err != nil {
+			if err = toRunText(srcDb, modelDef, rm, outDir, "", dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames); err != nil {
 				return err
 			}
 		}

@@ -69,7 +69,7 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 
 	// create new "root" output directory for model run metadata
 	// for csv files this "root" combined as root/run.1234.runName
-	var outDir string
+	var outDir, csvName string
 	switch {
 	case runId > 0:
 		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".run."+strconv.Itoa(runId))
@@ -77,8 +77,10 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".run."+helper.CleanPath(runDigest))
 	case runName == "" && isFirst:
 		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".first.run")
+		csvName = "first.run"
 	case runName == "" && isLast:
 		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".last.run")
+		csvName = "last.run"
 	default:
 		// if not run id and not digest then run name
 		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".run."+helper.CleanPath(runRow.Name))
@@ -98,7 +100,7 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
 	isWriteUtf8bom := runOpts.Bool(useUtf8CsvArgKey)
-	if err = toRunText(srcDb, modelDef, meta, outDir, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames); err != nil {
+	if err = toRunText(srcDb, modelDef, meta, outDir, csvName, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames); err != nil {
 		return err
 	}
 
@@ -126,7 +128,7 @@ func toRunListText(
 
 	// read all run parameters, output accumulators and expressions and dump it into csv files
 	for k := range rl {
-		err = toRunText(dbConn, modelDef, &rl[k], outDir, doubleFmt, isIdCsv, isWriteUtf8bom, isUseIdNames)
+		err = toRunText(dbConn, modelDef, &rl[k], outDir, "", doubleFmt, isIdCsv, isWriteUtf8bom, isUseIdNames)
 		if err != nil {
 			return err
 		}
@@ -142,6 +144,7 @@ func toRunText(
 	modelDef *db.ModelMeta,
 	meta *db.RunMeta,
 	outDir string,
+	csvName string,
 	doubleFmt string,
 	isIdCsv bool,
 	isWriteUtf8bom bool,
@@ -157,10 +160,10 @@ func toRunText(
 	}
 
 	// create run subdir under model dir
-	var csvName string
-	if !isUseIdNames {
+	switch {
+	case csvName == "" && !isUseIdNames:
 		csvName = "run." + helper.CleanPath(pub.Name)
-	} else {
+	case csvName == "" && isUseIdNames:
 		csvName = "run." + strconv.Itoa(runId) + "." + helper.CleanPath(pub.Name)
 	}
 	csvDir := filepath.Join(outDir, csvName)
