@@ -136,9 +136,9 @@ To rename model run results, input set of parameters or modeling task:
   dbcopy -m modelOne -dbcopy.Rename -dbcopy.RunId 101 -dbcopy.ToRunName New_Run_Name
   dbcopy -m modelOne -dbcopy.Rename -dbcopy.RunName "My Model Run" -dbcopy.ToRunName "New Run Name"
   dbcopy -m modelOne -dbcopy.Rename -dbcopy.RunDigest d722febf683992aa624ce9844a2e597d -dbcopy.ToRunName "New Run Name"
+  dbcopy -m modelOne -dbcopy.Rename -dbcopy.FirstRun -dbcopy.ToRunName "New Run Name"
+  dbcopy -m modelOne -dbcopy.Rename -dbcopy.LastRun  -dbcopy.ToRunName "New Run Name"
   dbcopy -m modelOne -dbcopy.Rename -s Default -dbcopy.ToSetName "New Name"
-  dbcopy -m modelOne -dbcopy.Rename -dbcopy.FirstRun
-  dbcopy -m modelOne -dbcopy.Rename -dbcopy.LastRun
   dbcopy -m modelOne -dbcopy.Rename -dbcopy.SetName Default -dbcopy.ToSetName "New Name"
   dbcopy -m modelOne -dbcopy.Rename -dbcopy.SetId 2 -dbcopy.ToSetName "New Name"
   dbcopy -m modelOne -dbcopy.Rename -dbcopy.TaskName taskOne -dbcopy.ToTaskName "New Task Name"
@@ -338,17 +338,23 @@ func mainBody(args []string) error {
 	}
 	// new run name can be used with run name, run id or run digest arguments
 	if runOpts.IsExist(runNewNameArgKey) &&
-		!runOpts.IsExist(runNameArgKey) && !runOpts.IsExist(runIdArgKey) && !runOpts.IsExist(runDigestArgKey) &&
-		!runOpts.IsExist(runFirstArgKey) && !runOpts.IsExist(runLastArgKey) {
-		return errors.New("dbcopy invalid arguments: " + runNewNameArgKey + " can be used only with " + runNameArgKey + ", " + runIdArgKey + " or " + runDigestArgKey)
+		(!isRename ||
+			!runOpts.IsExist(runNameArgKey) && !runOpts.IsExist(runIdArgKey) && !runOpts.IsExist(runDigestArgKey) &&
+				!runOpts.IsExist(runFirstArgKey) && !runOpts.IsExist(runLastArgKey)) {
+		return errors.New("dbcopy invalid arguments: " + runNewNameArgKey + " must be used with " + renameArgKey +
+			" and any of: " + runNameArgKey + ", " + runIdArgKey + ", " + runDigestArgKey + ", " + runFirstArgKey + ", " + runLastArgKey)
 	}
 	// new set name can be used with set name or set id arguments
-	if runOpts.IsExist(setNewNameArgKey) && !runOpts.IsExist(setNameArgKey) && !runOpts.IsExist(setIdArgKey) {
-		return errors.New("dbcopy invalid arguments: " + setNewNameArgKey + " can be used only with " + setNameArgKey + " or " + setIdArgKey)
+	if runOpts.IsExist(setNewNameArgKey) &&
+		(isRename ||
+			!runOpts.IsExist(setNameArgKey) && !runOpts.IsExist(setIdArgKey)) {
+		return errors.New("dbcopy invalid arguments: " + setNewNameArgKey + " must be used with " + renameArgKey + " any of: " + setNameArgKey + ", " + setIdArgKey)
 	}
 	// new task name can be used with task name or task id arguments
-	if runOpts.IsExist(taskNewNameArgKey) && !runOpts.IsExist(taskNameArgKey) && !runOpts.IsExist(taskIdArgKey) {
-		return errors.New("dbcopy invalid arguments: " + taskNewNameArgKey + " can be used only with " + taskNameArgKey + " or " + taskIdArgKey)
+	if runOpts.IsExist(taskNewNameArgKey) &&
+		(!isRename ||
+			!runOpts.IsExist(taskNameArgKey) && !runOpts.IsExist(taskIdArgKey)) {
+		return errors.New("dbcopy invalid arguments: " + taskNewNameArgKey + " must be used with " + renameArgKey + " any of: " + taskNameArgKey + ", " + taskIdArgKey)
 	}
 
 	// do delete model run, workset or entire model

@@ -42,12 +42,22 @@ func RenameRun(dbConn *sql.DB, runId int, newRunName string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+
+	// update run name
 	err = TrxUpdate(trx,
 		"UPDATE run_lst SET run_name = "+toQuotedMax(newRunName, nameDbMax)+" WHERE run_id = "+strconv.Itoa(runId))
 	if err != nil {
 		trx.Rollback()
 		return false, err
 	}
+
+	// recalculate and update run digest
+	_, err = doUpdateRunMetaDigest(trx, runId)
+	if err != nil {
+		trx.Rollback()
+		return false, err
+	}
+
 	trx.Commit()
 
 	return true, nil
@@ -160,7 +170,73 @@ func UpdateRunValueDigest(dbConn *sql.DB, runId int) (string, error) {
 	return svd, nil
 }
 
-// doUpdateRunValueDigest recalculate and update run_lst table with new run digest and return it.
+// doUpdateRunMetaDigest recalculate and update run_lst table with new run_digest and return it.
+// Run metadata digest include: model digest, run name, sub count, created date-time, run stamp
+// It does update as part of transaction
+// If run not exist or status is not success or exit then digest is "" empty (not updated).
+func doUpdateRunMetaDigest(trx *sql.Tx, runId int) (string, error) {
+
+	// check if this run exists and status is success or exit
+	var mId int
+	var runName string
+	var subCount int
+	var createDt string
+	var runStatus string
+	var runStamp string
+
+	err := TrxSelectFirst(trx,
+		"SELECT model_id, run_name, sub_count, create_dt, status, run_stamp FROM run_lst WHERE run_id = "+strconv.Itoa(runId),
+		func(row *sql.Row) error {
+			return row.Scan(&mId, &runName, &subCount, &createDt, &runStatus, &runStamp)
+		})
+	switch {
+	case err == sql.ErrNoRows:
+		return "", nil // run not exist
+	case err != nil:
+		return "", err
+	}
+	if runStatus != DoneRunStatus && runStatus != ExitRunStatus { // run status not success or exit
+		return "", err
+	}
+
+	// get model digest
+	var modelDigest string
+
+	err = TrxSelectFirst(trx,
+		"SELECT model_digest FROM model_dic WHERE model_id = "+strconv.Itoa(mId),
+		func(row *sql.Row) error {
+			return row.Scan(&modelDigest)
+		})
+	switch {
+	case err == sql.ErrNoRows:
+		return "", nil // model not exist: it is not possible inside of current transaction
+	case err != nil:
+		return "", err
+	}
+
+	// digest header: run metadata
+	hMd5 := md5.New()
+
+	_, err = hMd5.Write([]byte(
+		"model_digest,run_name,sub_count,create_dt,run_stamp\n" +
+			modelDigest + "," + runName + "," + strconv.Itoa(subCount) + "," + createDt + "," + runStamp + "\n"))
+	if err != nil {
+		return "", err
+	}
+
+	// update model run digest
+	dg := fmt.Sprintf("%x", hMd5.Sum(nil))
+
+	err = TrxUpdate(trx,
+		"UPDATE run_lst SET run_digest = "+toQuoted(dg)+" WHERE run_id = "+strconv.Itoa(runId))
+	if err != nil {
+		return "", err
+	}
+
+	return dg, nil
+}
+
+// doUpdateRunValueDigest recalculate and update run_lst table with new value_digest and return it.
 // It does update as part of transaction
 // If run not exist or status is not success or exit then digest is "" empty (not updated).
 // Run digest include run metadata, run parameters value digests and output tables value digests

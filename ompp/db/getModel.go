@@ -37,6 +37,35 @@ func GetModelList(dbConn *sql.DB) ([]ModelDicRow, error) {
 	return modelRs, nil
 }
 
+// GetModelRow return model_dic table row by model id.
+func GetModelRow(dbConn *sql.DB, modelId int) (*ModelDicRow, error) {
+
+	// select model_dic row
+	var modelRow = ModelDicRow{ModelId: modelId}
+
+	err := SelectFirst(dbConn,
+		"SELECT"+
+			" M.model_id, M.model_name, M.model_digest, M.model_type,"+
+			" M.model_ver, M.create_dt, L.lang_code"+
+			" FROM model_dic M"+
+			" INNER JOIN lang_lst L ON (L.lang_id = M.default_lang_id)"+
+			" WHERE M.model_id = "+strconv.Itoa(modelId)+
+			" ORDER BY 1",
+		func(row *sql.Row) error {
+			return row.Scan(
+				&modelRow.ModelId, &modelRow.Name, &modelRow.Digest, &modelRow.Type,
+				&modelRow.Version, &modelRow.CreateDateTime, &modelRow.DefaultLangCode)
+		})
+	switch {
+	case err == sql.ErrNoRows:
+		return nil, nil // model not found
+	case err != nil:
+		return nil, err
+	}
+
+	return &modelRow, nil
+}
+
 // GetModelId return model id if exists.
 //
 // Model selected by name and/or digest, i.e.: ("modelOne", "abcd20120817160459148")
@@ -112,29 +141,15 @@ func GetModelById(dbConn *sql.DB, modelId int) (*ModelMeta, error) {
 	}
 
 	// select model_dic row
-	var modelRow = ModelDicRow{ModelId: modelId}
-
-	err := SelectFirst(dbConn,
-		"SELECT"+
-			" M.model_id, M.model_name, M.model_digest, M.model_type,"+
-			" M.model_ver, M.create_dt, L.lang_code"+
-			" FROM model_dic M"+
-			" INNER JOIN lang_lst L ON (L.lang_id = M.default_lang_id)"+
-			" WHERE M.model_id = "+strconv.Itoa(modelId)+
-			" ORDER BY 1",
-		func(row *sql.Row) error {
-			return row.Scan(
-				&modelRow.ModelId, &modelRow.Name, &modelRow.Digest, &modelRow.Type,
-				&modelRow.Version, &modelRow.CreateDateTime, &modelRow.DefaultLangCode)
-		})
-	switch {
-	case err == sql.ErrNoRows:
-		return nil, errors.New("model not found, id: " + strconv.Itoa(modelId))
-	case err != nil:
+	modelRow, err := GetModelRow(dbConn, modelId)
+	if err != nil {
 		return nil, err
 	}
+	if modelRow == nil {
+		return nil, errors.New("model not found, id: " + strconv.Itoa(modelId))
+	}
 
-	return getModel(dbConn, &modelRow)
+	return getModel(dbConn, modelRow)
 }
 
 // getModel return model metadata by modelRow (model_dic row).
