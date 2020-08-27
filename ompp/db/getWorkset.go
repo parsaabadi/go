@@ -249,13 +249,13 @@ func GetWorksetRunIds(dbConn *sql.DB, setId int) ([]int, error) {
 }
 
 // GetWorksetParam return sub-values count and default sub-value id for workset parameter:
-// SELECT parameter_hid, sub_count, default_sub_id FROM workset_parameter
+// SELECT sub_count, default_sub_id FROM workset_parameter
 func GetWorksetParam(dbConn *sql.DB, setId int, paramHid int) (int, int, error) {
 
 	var nSub, defId int
 
 	err := SelectFirst(dbConn,
-		"SELECT sub_count,default_sub_id FROM workset_parameter WHERE set_id = "+strconv.Itoa(setId)+" AND parameter_hid = "+strconv.Itoa(paramHid),
+		"SELECT sub_count, default_sub_id FROM workset_parameter WHERE set_id = "+strconv.Itoa(setId)+" AND parameter_hid = "+strconv.Itoa(paramHid),
 		func(row *sql.Row) error {
 			if err := row.Scan(&nSub, &defId); err != nil {
 				return err
@@ -275,7 +275,7 @@ func GetWorksetParamList(dbConn *sql.DB, setId int) ([]int, []int, []int, error)
 	var hidRs, countRs, defIdRs []int
 
 	err := SelectRows(dbConn,
-		"SELECT parameter_hid, sub_count,default_sub_id FROM workset_parameter WHERE set_id = "+strconv.Itoa(setId)+" ORDER BY 1",
+		"SELECT parameter_hid, sub_count, default_sub_id FROM workset_parameter WHERE set_id = "+strconv.Itoa(setId)+" ORDER BY 1",
 		func(rows *sql.Rows) error {
 			var h, n, i int
 			if err := rows.Scan(&h, &n, &i); err != nil {

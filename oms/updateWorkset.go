@@ -388,13 +388,14 @@ func (mc *ModelCatalog) UpdateWorksetParameterPage(dn, wsn, name string, cellLst
 	}
 
 	// parameter must be in workset already
-	n, _, err := db.GetWorksetParam(mc.modelLst[idx].dbConn, wst.SetId, pHid)
+	nSub, _, err := db.GetWorksetParam(mc.modelLst[idx].dbConn, wst.SetId, pHid)
 	if err != nil {
 		return errors.New("Error at getting workset parameters list: " + wsn + ": " + err.Error())
 	}
-	if n <= 0 {
+	if nSub <= 0 {
 		return errors.New("Workset: " + wsn + " must contain parameter: " + name)
 	}
+	layout.SubCount = nSub
 
 	// write parameter values
 	return db.WriteParameter(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, &layout, cellLst)
@@ -485,11 +486,11 @@ func (mc *ModelCatalog) CopyParameterToWsFromRun(dn, wsn, name, rdsn string) err
 	}
 
 	// if parameter already in the workset then return error
-	n, _, err := db.GetWorksetParam(mc.modelLst[idx].dbConn, wst.SetId, pHid)
+	nSub, _, err := db.GetWorksetParam(mc.modelLst[idx].dbConn, wst.SetId, pHid)
 	if err != nil {
 		return errors.New("Error at getting workset parameters list: " + wsn + ": " + err.Error())
 	}
-	if n <= 0 {
+	if nSub > 0 {
 		return errors.New("Parameter copy failed, workset already contains parameter: " + wsn + ": " + name)
 	}
 
@@ -555,11 +556,11 @@ func (mc *ModelCatalog) CopyParameterBetweenWs(dn, dstWsName, name, srcWsName st
 	}
 
 	// if parameter already in the workset then return error
-	n, _, err := db.GetWorksetParam(mc.modelLst[idx].dbConn, dstWs.SetId, pHid)
+	nSub, _, err := db.GetWorksetParam(mc.modelLst[idx].dbConn, dstWs.SetId, pHid)
 	if err != nil {
 		return errors.New("Error at getting workset parameters list: " + dstWsName + ": " + err.Error())
 	}
-	if n <= 0 {
+	if nSub > 0 {
 		return errors.New("Parameter copy failed, workset already contains parameter: " + dstWsName + ": " + name)
 	}
 
