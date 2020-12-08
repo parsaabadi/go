@@ -8,8 +8,6 @@ github.com/husobee/vestigo v1.1.1 h1:bsReVP78YhmHUn/nQ4AxIEfObmWMSLGLGXP1OwgFa9s
 github.com/husobee/vestigo v1.1.1/go.mod h1:JigD7C8lzUfpo1uzqYgefpyZLswrtJbAQxMw7ds7YCE=
 github.com/mattn/go-sqlite3 v1.14.5 h1:1IdxlwTNazvbKJQSxoJ5/9ECbEeaTTyeU7sEAZ5KKTQ=
 github.com/mattn/go-sqlite3 v1.14.5/go.mod h1:WVKg1VTActs4Qso6iwGbiFih2UIHo0ENGwNd0Lj+XmI=
-github.com/openmpp/go v1.6.3 h1:aeA1fdWokwogFaL75pdJSCgiamiMMtf3Qe+EXxvfcLY=
-github.com/openmpp/go v1.6.3/go.mod h1:OT41jSpLU+WNQ3cVbmVcjsDhEmhmeu1rKqwqOOFEGv8=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
