@@ -165,7 +165,7 @@ func mainBody(args []string) error {
 
 	// pairs of full and short argument names to map short name to full name
 	optFs := []config.FullShort{
-		config.FullShort{Full: listenArgKey, Short: listenShortKey},
+		{Full: listenArgKey, Short: listenShortKey},
 	}
 
 	// parse command line arguments and ini-file
