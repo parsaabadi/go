@@ -23,8 +23,7 @@ func (mc *ModelCatalog) ParameterCellConverter(
 	}
 
 	// load model metadata and return index in model catalog
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return nil, false // return empty result: model not found or error
 	}
@@ -32,6 +31,12 @@ func (mc *ModelCatalog) ParameterCellConverter(
 	// lock catalog and search model parameter by name
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return nil, false // return empty result: model not found or error
+	}
 
 	if _, ok = mc.modelLst[idx].meta.ParamByName(name); !ok {
 		omppLog.Log("Error: model parameter not found: ", dn, ": ", name)
@@ -71,8 +76,7 @@ func (mc *ModelCatalog) TableToCodeCellConverter(
 	}
 
 	// load model metadata and return index in model catalog
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return nil, false // return empty result: model not found or error
 	}
@@ -80,6 +84,12 @@ func (mc *ModelCatalog) TableToCodeCellConverter(
 	// lock catalog and search model output table by name
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return nil, false // return empty result: model not found or error
+	}
 
 	if _, ok = mc.modelLst[idx].meta.OutTableByName(name); !ok {
 		omppLog.Log("Error: model output table not found: ", dn, ": ", name)
@@ -123,8 +133,7 @@ func (mc *ModelCatalog) ParameterToCsvConverter(
 	}
 
 	// load model metadata and return index in model catalog
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return []string{}, nil, false // return empty result: model not found or error
 	}
@@ -132,6 +141,12 @@ func (mc *ModelCatalog) ParameterToCsvConverter(
 	// lock catalog and search model parameter by name
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return []string{}, nil, false // return empty result: model not found or error
+	}
 
 	if _, ok = mc.modelLst[idx].meta.ParamByName(name); !ok {
 		omppLog.Log("Error: model parameter not found: ", dn, ": ", name)
@@ -177,8 +192,7 @@ func (mc *ModelCatalog) TableToCsvConverter(
 	}
 
 	// load model metadata and return index in model catalog
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return []string{}, nil, false // return empty result: model not found or error
 	}
@@ -186,6 +200,12 @@ func (mc *ModelCatalog) TableToCsvConverter(
 	// lock catalog and search model output table by name
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.loadModelMeta(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return []string{}, nil, false // return empty result: model not found or error
+	}
 
 	if _, ok = mc.modelLst[idx].meta.OutTableByName(name); !ok {
 		omppLog.Log("Error: model output table not found: ", dn, ": ", name)

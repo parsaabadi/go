@@ -60,14 +60,18 @@ func (mc *ModelCatalog) ModelMetaByDigestOrName(dn string) (*db.ModelMeta, bool)
 	}
 
 	// if model metadata not loaded then read it from database
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		return &db.ModelMeta{}, false // return empty result: model not found or error
 	}
 
 	// lock model catalog and return copy of model metadata
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		return &db.ModelMeta{}, false // return empty result: model not found or error
+	}
 
 	m, err := mc.modelLst[idx].meta.Clone()
 	if err != nil {

@@ -58,14 +58,18 @@ func (mc *ModelCatalog) loadModelText(digest string) int {
 func (mc *ModelCatalog) ModelTextByDigest(digest string, preferedLang []language.Tag) (*ModelDicDescrNote, bool) {
 
 	// if model_dic_txt rows not loaded then read it from database
-	idx := mc.loadModelText(digest)
-	if idx < 0 {
+	if mc.loadModelText(digest) < 0 {
 		return &ModelDicDescrNote{}, false // return empty result: model not found or error
 	}
 
 	// lock model catalog
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigest(digest)
+	if !ok {
+		return &ModelDicDescrNote{}, false // return empty result: model not found or error
+	}
 
 	// match prefered languages and model languages
 	_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
@@ -108,20 +112,23 @@ func (mc *ModelCatalog) ModelMetaAllTextByDigest(dn string) (*db.ModelTxtMeta, b
 	}
 
 	// before text metadata we must load language-neutral model metadata
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		return &db.ModelTxtMeta{}, false // return empty result: model not found or error
 	}
 
 	// if language-specific model metadata not loaded then read it from database
-	idx, ok = mc.loadModelMetaText(dn)
-	if !ok {
+	if _, ok := mc.loadModelMetaText(dn); !ok {
 		return &db.ModelTxtMeta{}, false // return empty result: model not found or error
 	}
 
 	// lock model catalog and return copy of model metadata
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		return &db.ModelTxtMeta{}, false // return empty result: model not found or error
+	}
 
 	t := &db.ModelTxtMeta{}
 	if err := helper.DeepCopy(mc.modelLst[idx].txtMeta, t); err != nil {
@@ -182,20 +189,23 @@ func (mc *ModelCatalog) ModelMetaTextByDigestOrName(dn string, preferedLang []la
 	}
 
 	// before text metadata we must load language-neutral model metadata
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		return &ModelMetaDescrNote{}, false // return empty result: model not found or error
 	}
 
 	// if language-specific model metadata not loaded then read it from database
-	idx, ok = mc.loadModelMetaText(dn)
-	if !ok {
+	if _, ok := mc.loadModelMetaText(dn); !ok {
 		return &ModelMetaDescrNote{}, false // return empty result: model not found or error
 	}
 
 	// lock model catalog
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		return &ModelMetaDescrNote{}, false // return empty result: model not found or error
+	}
 
 	// match prefered languages and model languages
 	_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)

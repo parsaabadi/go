@@ -89,8 +89,7 @@ func (mc *ModelCatalog) WorksetList(dn string) ([]db.WorksetPub, bool) {
 	}
 
 	// load model metadata in order to convert to "public"
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return []db.WorksetPub{}, false // return empty result: model not found or error
 	}
@@ -98,6 +97,12 @@ func (mc *ModelCatalog) WorksetList(dn string) ([]db.WorksetPub, bool) {
 	// lock catalog and find model index by digest or name
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return []db.WorksetPub{}, false // return empty result: model not found or error
+	}
 
 	wl, err := db.GetWorksetList(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId)
 	if err != nil {
@@ -138,8 +143,7 @@ func (mc *ModelCatalog) WorksetListText(dn string, preferedLang []language.Tag) 
 	}
 
 	// load model metadata in order to convert to "public"
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return []db.WorksetPub{}, false // return empty result: model not found or error
 	}
@@ -147,6 +151,12 @@ func (mc *ModelCatalog) WorksetListText(dn string, preferedLang []language.Tag) 
 	// lock catalog and find model index by digest or name
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return []db.WorksetPub{}, false // return empty result: model not found or error
+	}
 
 	// get workset_txt db row for each workset_lst using matched prefered language
 	_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
@@ -214,8 +224,7 @@ func (mc *ModelCatalog) WorksetTextFull(dn, wsn string, isAllLang bool, prefered
 	}
 
 	// load model metadata in order to convert to "public"
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return &db.WorksetPub{}, false, nil // return empty result: model not found or error
 	}
@@ -223,6 +232,12 @@ func (mc *ModelCatalog) WorksetTextFull(dn, wsn string, isAllLang bool, prefered
 	// lock catalog and find model index by digest or name
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return &db.WorksetPub{}, false, nil // return empty result: model not found or error
+	}
 
 	// get workset_lst db row by name
 	w, err := db.GetWorksetByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, wsn)

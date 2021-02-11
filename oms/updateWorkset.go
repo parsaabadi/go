@@ -87,8 +87,7 @@ func (mc *ModelCatalog) UpdateWorkset(isReplace bool, wp *db.WorksetPub) (bool, 
 	}
 
 	// if model metadata not loaded then read it from database
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		omppLog.Log("Error: model digest or name not found: ", dn)
 		return false, false, nil, errors.New("Error: model digest or name not found: " + dn)
 	}
@@ -96,6 +95,12 @@ func (mc *ModelCatalog) UpdateWorkset(isReplace bool, wp *db.WorksetPub) (bool, 
 	// lock catalog and update workset
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Error: model digest or name not found: ", dn)
+		return false, false, nil, errors.New("Error: model digest or name not found: " + dn)
+	}
 
 	// find workset in database: it must be read-write if exists
 	w, err := db.GetWorksetByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, wp.Name)
@@ -157,8 +162,7 @@ func (mc *ModelCatalog) DeleteWorkset(dn, wsn string) (bool, error) {
 	}
 
 	// if model metadata not loaded then read it from database
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return false, nil // return empty result: model not found or error
 	}
@@ -166,6 +170,12 @@ func (mc *ModelCatalog) DeleteWorkset(dn, wsn string) (bool, error) {
 	// lock catalog and delete workset
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return false, nil // return empty result: model not found or error
+	}
 
 	// find workset in database
 	w, err := db.GetWorksetByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, wsn)
@@ -208,8 +218,7 @@ func (mc *ModelCatalog) UpdateWorksetParameter(
 	}
 
 	// if model metadata not loaded then read it from database
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		omppLog.Log("Error: model digest or name not found: ", dn)
 		return false, errors.New("Error: model digest or name not found: " + dn)
 	}
@@ -217,6 +226,12 @@ func (mc *ModelCatalog) UpdateWorksetParameter(
 	// lock catalog and update workset
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Error: model digest or name not found: ", dn)
+		return false, errors.New("Error: model digest or name not found: " + dn)
+	}
 
 	// convert workset from "public" into db rows
 	wm, err := wp.FromPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
@@ -275,8 +290,7 @@ func (mc *ModelCatalog) UpdateWorksetParameterCsv(
 	}
 
 	// if model metadata not loaded then read it from database
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		omppLog.Log("Error: model digest or name not found: ", dn)
 		return false, errors.New("Error: model digest or name not found: " + dn)
 	}
@@ -284,6 +298,12 @@ func (mc *ModelCatalog) UpdateWorksetParameterCsv(
 	// lock catalog and update workset
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Error: model digest or name not found: ", dn)
+		return false, errors.New("Error: model digest or name not found: " + dn)
+	}
 
 	// convert workset from "public" into db rows
 	wm, err := wp.FromPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
@@ -359,14 +379,18 @@ func (mc *ModelCatalog) UpdateWorksetParameterPage(dn, wsn, name string, cellLst
 	}
 
 	// load model metadata and return index in model catalog
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		return errors.New("Model digest or name not found: " + dn)
 	}
 
 	// lock catalog and search model parameter by name
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		return errors.New("Model digest or name not found: " + dn)
+	}
 
 	pHid := 0
 	if k, ok := mc.modelLst[idx].meta.ParamByName(name); ok {
@@ -419,8 +443,7 @@ func (mc *ModelCatalog) DeleteWorksetParameter(dn, wsn, name string) (bool, erro
 	}
 
 	// if model metadata not loaded then read it from database
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return false, nil // return empty result: model not found or error
 	}
@@ -428,6 +451,12 @@ func (mc *ModelCatalog) DeleteWorksetParameter(dn, wsn, name string) (bool, erro
 	// lock catalog and update workset
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return false, nil // return empty result: model not found or error
+	}
 
 	// delete workset from database
 	hId, err := db.DeleteWorksetParameter(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, wsn, name)
@@ -459,14 +488,18 @@ func (mc *ModelCatalog) CopyParameterToWsFromRun(dn, wsn, name, rdsn string) err
 	}
 
 	// if model metadata not loaded then read it from database
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		return errors.New("Model digest or name not found: " + dn)
 	}
 
 	// lock catalog to update workset
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		return errors.New("Model digest or name not found: " + dn)
+	}
 
 	// search model parameter by name
 	pHid := 0
@@ -529,14 +562,18 @@ func (mc *ModelCatalog) CopyParameterBetweenWs(dn, dstWsName, name, srcWsName st
 	}
 
 	// if model metadata not loaded then read it from database
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		return errors.New("Model digest or name not found: " + dn)
 	}
 
 	// lock catalog to update workset
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		return errors.New("Model digest or name not found: " + dn)
+	}
 
 	// search model parameter by name
 	pHid := 0

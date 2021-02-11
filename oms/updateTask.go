@@ -38,8 +38,7 @@ func (mc *ModelCatalog) UpdateTaskDef(isReplace bool, tpd *db.TaskDefPub) (bool,
 	}
 
 	// if model metadata not loaded then read it from database
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return false, dn, tn, nil // return empty result: model not found or error
 	}
@@ -47,6 +46,12 @@ func (mc *ModelCatalog) UpdateTaskDef(isReplace bool, tpd *db.TaskDefPub) (bool,
 	// lock catalog and update model run
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return false, dn, tn, nil // return empty result: model not found or error
+	}
 
 	// convert run from "public" into db rows
 	// all input worskset names must exist in workset_lst
@@ -93,8 +98,7 @@ func (mc *ModelCatalog) DeleteTask(dn, tn string) (bool, error) {
 	}
 
 	// if model metadata not loaded then read it from database
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return false, nil // return empty result: model not found or error
 	}
@@ -102,6 +106,12 @@ func (mc *ModelCatalog) DeleteTask(dn, tn string) (bool, error) {
 	// lock catalog and delete task
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return false, nil // return empty result: model not found or error
+	}
 
 	// find task in database
 	t, err := db.GetTaskByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, tn)

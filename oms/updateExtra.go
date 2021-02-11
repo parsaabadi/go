@@ -24,8 +24,7 @@ func (mc *ModelCatalog) ReplaceProfile(dn string, pm *db.ProfileMeta) (bool, err
 	}
 
 	// if model metadata not loaded then read it from database
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		omppLog.Log("Error: model digest or name not found: ", dn)
 		return false, errors.New("Error: model digest or name not found: " + dn)
 	}
@@ -33,6 +32,12 @@ func (mc *ModelCatalog) ReplaceProfile(dn string, pm *db.ProfileMeta) (bool, err
 	// lock catalog and update profile
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Error: model digest or name not found: ", dn)
+		return false, errors.New("Error: model digest or name not found: " + dn)
+	}
 
 	err := db.UpdateProfile(mc.modelLst[idx].dbConn, pm)
 	if err != nil {
@@ -59,8 +64,7 @@ func (mc *ModelCatalog) DeleteProfile(dn, profile string) (bool, error) {
 	}
 
 	// if model metadata not loaded then read it from database
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		omppLog.Log("Error: model digest or name not found: ", dn)
 		return false, errors.New("Error: model digest or name not found: " + dn)
 	}
@@ -68,6 +72,12 @@ func (mc *ModelCatalog) DeleteProfile(dn, profile string) (bool, error) {
 	// lock catalog and update profile
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Error: model digest or name not found: ", dn)
+		return false, errors.New("Error: model digest or name not found: " + dn)
+	}
 
 	err := db.DeleteProfile(mc.modelLst[idx].dbConn, profile)
 	if err != nil {
@@ -98,8 +108,7 @@ func (mc *ModelCatalog) ReplaceProfileOption(dn, profile, key, val string) (bool
 	}
 
 	// if model metadata not loaded then read it from database
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		omppLog.Log("Error: model digest or name not found: ", dn)
 		return false, errors.New("Error: model digest or name not found: " + dn)
 	}
@@ -107,6 +116,12 @@ func (mc *ModelCatalog) ReplaceProfileOption(dn, profile, key, val string) (bool
 	// lock catalog and update profile option
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Error: model digest or name not found: ", dn)
+		return false, errors.New("Error: model digest or name not found: " + dn)
+	}
 
 	err := db.UpdateProfileOption(mc.modelLst[idx].dbConn, profile, key, val)
 	if err != nil {
@@ -137,8 +152,7 @@ func (mc *ModelCatalog) DeleteProfileOption(dn, profile, key string) (bool, erro
 	}
 
 	// if model metadata not loaded then read it from database
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		omppLog.Log("Error: model digest or name not found: ", dn)
 		return false, errors.New("Error: model digest or name not found: " + dn)
 	}
@@ -146,6 +160,12 @@ func (mc *ModelCatalog) DeleteProfileOption(dn, profile, key string) (bool, erro
 	// lock catalog and delete profile option
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Error: model digest or name not found: ", dn)
+		return false, errors.New("Error: model digest or name not found: " + dn)
+	}
 
 	err := db.DeleteProfileOption(mc.modelLst[idx].dbConn, profile, key)
 	if err != nil {

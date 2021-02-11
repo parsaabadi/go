@@ -24,8 +24,7 @@ func (mc *ModelCatalog) DeleteRun(dn, rdsn string) (bool, error) {
 	}
 
 	// if model metadata not loaded then read it from database
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return false, nil // return empty result: model not found or error
 	}
@@ -33,6 +32,12 @@ func (mc *ModelCatalog) DeleteRun(dn, rdsn string) (bool, error) {
 	// lock catalog and delete model run
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return false, nil // return empty result: model not found or error
+	}
 
 	// find model run by digest, stamp or run name
 	r, err := db.GetRunByDigestOrStampOrName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, rdsn)
@@ -86,8 +91,7 @@ func (mc *ModelCatalog) UpdateRunText(rp *db.RunPub) (bool, string, string, erro
 	}
 
 	// if model metadata not loaded then read it from database
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return false, dn, rdsn, nil // return empty result: model not found or error
 	}
@@ -95,6 +99,12 @@ func (mc *ModelCatalog) UpdateRunText(rp *db.RunPub) (bool, string, string, erro
 	// lock catalog and update model run
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return false, dn, rdsn, nil // return empty result: model not found or error
+	}
 
 	// find model run by digest, stamp or run name
 	r, err := db.GetRunByDigestOrStampOrName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, rdsn)

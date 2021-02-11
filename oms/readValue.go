@@ -25,8 +25,7 @@ func (mc *ModelCatalog) ReadParameter(dn, src string, layout *db.ReadParamLayout
 	}
 
 	// load model metadata and return index in model catalog
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return nil, nil, false // return empty result: model not found or error
 	}
@@ -34,6 +33,12 @@ func (mc *ModelCatalog) ReadParameter(dn, src string, layout *db.ReadParamLayout
 	// lock catalog and search model parameter by name
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return nil, nil, false // return empty result: model not found or error
+	}
 
 	if _, ok = mc.modelLst[idx].meta.ParamByName(layout.Name); !ok {
 		omppLog.Log("Warning: parameter not found: ", layout.Name)
@@ -82,8 +87,7 @@ func (mc *ModelCatalog) ReadOutTable(dn, src string, layout *db.ReadTableLayout)
 	}
 
 	// load model metadata and return index in model catalog
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return nil, nil, false // return empty result: model not found or error
 	}
@@ -91,6 +95,12 @@ func (mc *ModelCatalog) ReadOutTable(dn, src string, layout *db.ReadTableLayout)
 	// lock catalog and search model output table by name
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return nil, nil, false // return empty result: model not found or error
+	}
 
 	if _, ok = mc.modelLst[idx].meta.OutTableByName(layout.Name); !ok {
 		omppLog.Log("Warning: output table not found: ", layout.Name)

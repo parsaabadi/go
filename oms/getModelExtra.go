@@ -114,14 +114,18 @@ func (mc *ModelCatalog) WordListByDigestOrName(dn string, preferedLang []languag
 	}
 
 	// if model_word rows not loaded then read it from database
-	idx := mc.loadModelWord(dn)
-	if idx < 0 {
+	if mc.loadModelWord(dn) < 0 {
 		return &ModelLangWord{}, false // return empty result: model not found or error
 	}
 
 	// lock model catalog
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		return &ModelLangWord{}, false // return empty result: model not found or error
+	}
 
 	// match prefered languages and model languages
 	_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)

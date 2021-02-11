@@ -243,8 +243,7 @@ func (mc *ModelCatalog) RunList(dn string) ([]db.RunPub, bool) {
 	}
 
 	// load model metadata in order to convert to "public"
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return []db.RunPub{}, false // return empty result: model not found or error
 	}
@@ -252,6 +251,12 @@ func (mc *ModelCatalog) RunList(dn string) ([]db.RunPub, bool) {
 	// lock catalog and find model index by digest or name
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return []db.RunPub{}, false // return empty result: model not found or error
+	}
 
 	rl, err := db.GetRunList(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, 0)
 	if err != nil {
@@ -291,8 +296,7 @@ func (mc *ModelCatalog) RunListText(dn string, preferedLang []language.Tag) ([]d
 	}
 
 	// load model metadata in order to convert to "public"
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return []db.RunPub{}, false // return empty result: model not found or error
 	}
@@ -300,6 +304,12 @@ func (mc *ModelCatalog) RunListText(dn string, preferedLang []language.Tag) ([]d
 	// lock catalog and find model index by digest or name
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return []db.RunPub{}, false // return empty result: model not found or error
+	}
 
 	// get run_txt db row for each run_lst using matched prefered language
 	_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
@@ -361,8 +371,7 @@ func (mc *ModelCatalog) RunFull(dn, rdsn string) (*db.RunPub, bool) {
 	}
 
 	// load model metadata in order to convert to "public"
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return &db.RunPub{}, false // return empty result: model not found or error
 	}
@@ -370,6 +379,12 @@ func (mc *ModelCatalog) RunFull(dn, rdsn string) (*db.RunPub, bool) {
 	// lock catalog and find model index by digest or name
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return &db.RunPub{}, false // return empty result: model not found or error
+	}
 
 	// get run_lst db row by digest, stamp or run name
 	r, err := db.GetRunByDigestOrStampOrName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, rdsn)
@@ -413,8 +428,7 @@ func (mc *ModelCatalog) RunTextFull(dn, rdsn string, isAllLang bool, preferedLan
 	}
 
 	// load model metadata in order to convert to "public"
-	idx, ok := mc.loadModelMeta(dn)
-	if !ok {
+	if _, ok := mc.loadModelMeta(dn); !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return &db.RunPub{}, false // return empty result: model not found or error
 	}
@@ -422,6 +436,12 @@ func (mc *ModelCatalog) RunTextFull(dn, rdsn string, isAllLang bool, preferedLan
 	// lock catalog and find model index by digest or name
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return &db.RunPub{}, false // return empty result: model not found or error
+	}
 
 	// get run_lst db row by digest, stamp or run name
 	r, err := db.GetRunByDigestOrStampOrName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, rdsn)
