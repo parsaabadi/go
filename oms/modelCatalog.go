@@ -68,7 +68,7 @@ type ModelMetaFull struct {
 
 // ModelMetaDescrNote is language-specific model metadata db rows.
 // It is sliced by one single language, but it can be different single language for each row.
-// It is either user prefered language, model default language, first of the row or empty "" language.
+// It is either user preferred language, model default language, first of the row or empty "" language.
 type ModelMetaDescrNote struct {
 	ModelDicDescrNote                  // model text rows: model_dic_txt
 	TypeTxt           []TypeDescrNote  // model type text rows: type_dic_txt join to model_type_dic
@@ -147,7 +147,7 @@ type GroupDescrNote struct {
 }
 
 // ModelLangWord is (code, label) rows from lang_word and model_word language-specific db tables.
-// It is either in user prefered language or model default language.
+// It is either in user preferred language or model default language.
 type ModelLangWord struct {
 	ModelName     string      // model name for text metadata
 	ModelDigest   string      // model digest for text metadata

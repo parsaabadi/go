@@ -53,9 +53,9 @@ func (mc *ModelCatalog) loadModelText(digest string) int {
 	return idx
 }
 
-// ModelTextByDigest return model_dic_txt db row by model digest and prefered language tags.
-// It can be in prefered language, default model language or empty if no model model_dic_txt rows exist.
-func (mc *ModelCatalog) ModelTextByDigest(digest string, preferedLang []language.Tag) (*ModelDicDescrNote, bool) {
+// ModelTextByDigest return model_dic_txt db row by model digest and preferred language tags.
+// It can be in preferred language, default model language or empty if no model model_dic_txt rows exist.
+func (mc *ModelCatalog) ModelTextByDigest(digest string, preferredLang []language.Tag) (*ModelDicDescrNote, bool) {
 
 	// if model_dic_txt rows not loaded then read it from database
 	if mc.loadModelText(digest) < 0 {
@@ -71,8 +71,8 @@ func (mc *ModelCatalog) ModelTextByDigest(digest string, preferedLang []language
 		return &ModelDicDescrNote{}, false // return empty result: model not found or error
 	}
 
-	// match prefered languages and model languages
-	_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
+	// match preferred languages and model languages
+	_, np, _ := mc.modelLst[idx].matcher.Match(preferredLang...)
 	lc := mc.modelLst[idx].langCodes[np]
 	lcd := mc.modelLst[idx].meta.Model.DefaultLangCode
 
@@ -178,9 +178,9 @@ func (mc *ModelCatalog) loadModelMetaText(dn string) (int, bool) {
 }
 
 // ModelMetaTextByDigestOrName return language-specific model metadata
-// by model digest or name and prefered language tags.
+// by model digest or name and preferred language tags.
 // It can be in default model language or empty if no model text db rows exist.
-func (mc *ModelCatalog) ModelMetaTextByDigestOrName(dn string, preferedLang []language.Tag) (*ModelMetaDescrNote, bool) {
+func (mc *ModelCatalog) ModelMetaTextByDigestOrName(dn string, preferredLang []language.Tag) (*ModelMetaDescrNote, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
@@ -207,8 +207,8 @@ func (mc *ModelCatalog) ModelMetaTextByDigestOrName(dn string, preferedLang []la
 		return &ModelMetaDescrNote{}, false // return empty result: model not found or error
 	}
 
-	// match prefered languages and model languages
-	_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
+	// match preferred languages and model languages
+	_, np, _ := mc.modelLst[idx].matcher.Match(preferredLang...)
 	lc := mc.modelLst[idx].langCodes[np]
 	lcd := mc.modelLst[idx].meta.Model.DefaultLangCode
 

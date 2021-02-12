@@ -97,22 +97,29 @@ func getInt64RequestParam(r *http.Request, name string, defaultVal int64) (int64
 	return defaultVal, false // value is not integer
 }
 
-// get languages accepted by browser and
-// append optional language argument on top of the list
-func getRequestLang(r *http.Request, name string) []language.Tag {
+// get languages accepted by browser and by optional language request parameter, for example: ..../lang:EN
+// if language parameter specified then return it as a first element of result (it a preferred language)
+func getRequestLang(r *http.Request, rqLangParamName string) []language.Tag {
+
+	ln := r.URL.Query().Get(rqLangParamName)
+	if ln == "" {
+		ln = vestigo.Param(r, rqLangParamName)
+	}
+
+	return getRequestLangTags(r, ln)
+}
+
+// get languages accepted by browser and combine it with preferred language code,
+// which can be an optional parameter of request: ..../lang:EN
+// if preferred language not empty "" string then return it as a first element of result
+func getRequestLangTags(r *http.Request, langCode string) []language.Tag {
 
 	// browser languages
 	rqLangTags, _, _ := language.ParseAcceptLanguage(r.Header.Get("Accept-Language"))
 
-	// if optional url parameter ?lang or router parameter /:lang specified
-	ln := r.URL.Query().Get(name)
-	if ln == "" {
-		ln = vestigo.Param(r, name)
-	}
-
-	// add lang parameter as top language
-	if ln != "" {
-		if t := language.Make(ln); t != language.Und {
+	// insert lang parameter as first element: use it as preferred language
+	if langCode != "" {
+		if t := language.Make(langCode); t != language.Und {
 			rqLangTags = append([]language.Tag{t}, rqLangTags...)
 		}
 	}

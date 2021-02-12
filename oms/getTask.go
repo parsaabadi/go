@@ -63,8 +63,8 @@ func (mc *ModelCatalog) TaskList(dn string) ([]db.TaskPub, bool) {
 }
 
 // TaskListText return list of task_lst and task_txt db rows by model digest-or-name.
-// Text (description and notes) are in prefered language or if text in such language exists.
-func (mc *ModelCatalog) TaskListText(dn string, preferedLang []language.Tag) ([]db.TaskPub, bool) {
+// Text (description and notes) are in preferred language or if text in such language exists.
+func (mc *ModelCatalog) TaskListText(dn string, preferredLang []language.Tag) ([]db.TaskPub, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
@@ -88,8 +88,8 @@ func (mc *ModelCatalog) TaskListText(dn string, preferedLang []language.Tag) ([]
 		return []db.TaskPub{}, false // return empty result: model not found or error
 	}
 
-	// get task_txt db row for each task_lst using matched prefered language
-	_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
+	// get task_txt db row for each task_lst using matched preferred language
+	_, np, _ := mc.modelLst[idx].matcher.Match(preferredLang...)
 	lc := mc.modelLst[idx].langCodes[np]
 
 	tl, txl, err := db.GetTaskListText(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, lc)
@@ -435,9 +435,9 @@ func (mc *ModelCatalog) FirstOrLastTaskRunStatus(dn, tn string, isFirst, isCompl
 // from db-tables: task_lst, task_txt, task_set, task_run_lst, task_run_set.
 // It does not return non-completed task runs (run in progress).
 // Run completed if run status one of: s=success, x=exit, e=error.
-// Text (description and notes) can be in prefered language or all languages.
-// If prefered language requested and it is not found in db then return empty text results.
-func (mc *ModelCatalog) TaskTextFull(dn, tn string, isAllLang bool, preferedLang []language.Tag) (*db.TaskPub, *db.TaskRunSetTxt, bool) {
+// Text (description and notes) can be in preferred language or all languages.
+// If preferred language requested and it is not found in db then return empty text results.
+func (mc *ModelCatalog) TaskTextFull(dn, tn string, isAllLang bool, preferredLang []language.Tag) (*db.TaskPub, *db.TaskRunSetTxt, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
@@ -472,10 +472,10 @@ func (mc *ModelCatalog) TaskTextFull(dn, tn string, isAllLang bool, preferedLang
 		return &db.TaskPub{}, nil, false // return empty result: task_lst row not found
 	}
 
-	// get full metadata db rows using matched prefered language or in all languages
+	// get full metadata db rows using matched preferred language or in all languages
 	lc := ""
 	if !isAllLang {
-		_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
+		_, np, _ := mc.modelLst[idx].matcher.Match(preferredLang...)
 		lc = mc.modelLst[idx].langCodes[np]
 	}
 

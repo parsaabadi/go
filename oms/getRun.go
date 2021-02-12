@@ -286,8 +286,8 @@ func (mc *ModelCatalog) RunList(dn string) ([]db.RunPub, bool) {
 }
 
 // RunListText return list of run_lst and run_txt db rows by model digest-or-name.
-// Text (description and notes) are in prefered language or if text in such language exists.
-func (mc *ModelCatalog) RunListText(dn string, preferedLang []language.Tag) ([]db.RunPub, bool) {
+// Text (description and notes) are in preferred language or if text in such language exists.
+func (mc *ModelCatalog) RunListText(dn string, preferredLang []language.Tag) ([]db.RunPub, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
@@ -311,8 +311,8 @@ func (mc *ModelCatalog) RunListText(dn string, preferedLang []language.Tag) ([]d
 		return []db.RunPub{}, false // return empty result: model not found or error
 	}
 
-	// get run_txt db row for each run_lst using matched prefered language
-	_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
+	// get run_txt db row for each run_lst using matched preferred language
+	_, np, _ := mc.modelLst[idx].matcher.Match(preferredLang...)
 	lc := mc.modelLst[idx].langCodes[np]
 
 	rl, rt, err := db.GetRunListText(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, lc)
@@ -417,9 +417,9 @@ func (mc *ModelCatalog) RunFull(dn, rdsn string) (*db.RunPub, bool) {
 // RunTextFull return full run metadata (including text) by model digest-or-name and run digest-or-stamp-or-name.
 // It does not return non-completed runs (run in progress).
 // Run completed if run status one of: s=success, x=exit, e=error.
-// Text (description and notes) can be in prefered language or all languages.
-// If prefered language requested and it is not found in db then return empty text results.
-func (mc *ModelCatalog) RunTextFull(dn, rdsn string, isAllLang bool, preferedLang []language.Tag) (*db.RunPub, bool) {
+// Text (description and notes) can be in preferred language or all languages.
+// If preferred language requested and it is not found in db then return empty text results.
+func (mc *ModelCatalog) RunTextFull(dn, rdsn string, isAllLang bool, preferredLang []language.Tag) (*db.RunPub, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
@@ -454,10 +454,10 @@ func (mc *ModelCatalog) RunTextFull(dn, rdsn string, isAllLang bool, preferedLan
 		return &db.RunPub{}, false // return empty result: run_lst row not found
 	}
 
-	// get full metadata db rows using matched prefered language or in all languages
+	// get full metadata db rows using matched preferred language or in all languages
 	lc := ""
 	if !isAllLang {
-		_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
+		_, np, _ := mc.modelLst[idx].matcher.Match(preferredLang...)
 		lc = mc.modelLst[idx].langCodes[np]
 	}
 

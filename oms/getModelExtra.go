@@ -102,10 +102,10 @@ func (mc *ModelCatalog) ProfileNamesByDigestOrName(dn string) ([]string, bool) {
 	return nameLst, true
 }
 
-// WordListByDigestOrName return model "words" by model digest and prefered language tags.
+// WordListByDigestOrName return model "words" by model digest and preferred language tags.
 // Model "words" are arrays of rows from lang_word and model_word db tables.
-// It can be in prefered language, default model language or empty if no lang_word or model_word rows exist.
-func (mc *ModelCatalog) WordListByDigestOrName(dn string, preferedLang []language.Tag) (*ModelLangWord, bool) {
+// It can be in preferred language, default model language or empty if no lang_word or model_word rows exist.
+func (mc *ModelCatalog) WordListByDigestOrName(dn string, preferredLang []language.Tag) (*ModelLangWord, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
@@ -127,12 +127,12 @@ func (mc *ModelCatalog) WordListByDigestOrName(dn string, preferedLang []languag
 		return &ModelLangWord{}, false // return empty result: model not found or error
 	}
 
-	// match prefered languages and model languages
-	_, np, _ := mc.modelLst[idx].matcher.Match(preferedLang...)
+	// match preferred languages and model languages
+	_, np, _ := mc.modelLst[idx].matcher.Match(preferredLang...)
 	lc := mc.modelLst[idx].langCodes[np]
 	lcd := mc.modelLst[idx].meta.Model.DefaultLangCode
 
-	// find lang_word rows in prefered or model default language
+	// find lang_word rows in preferred or model default language
 	mlw := ModelLangWord{
 		ModelName:   mc.modelLst[idx].meta.Model.Name,
 		ModelDigest: mc.modelLst[idx].meta.Model.Digest}
@@ -158,7 +158,7 @@ func (mc *ModelCatalog) WordListByDigestOrName(dn string, preferedLang []languag
 		}
 	}
 
-	// find model_word rows in prefered or model default language
+	// find model_word rows in preferred or model default language
 	nd = 0
 	for i = 0; i < len(mc.modelLst[idx].modelWord.ModelWord); i++ {
 		if mc.modelLst[idx].modelWord.ModelWord[i].LangCode == lc {
