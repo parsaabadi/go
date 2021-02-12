@@ -6,6 +6,8 @@ package main
 import (
 	"net/http"
 
+	"golang.org/x/text/language"
+
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
@@ -20,6 +22,15 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 	var src RunRequest
 	if !jsonRequestDecode(w, r, &src) {
 		return // error at json decode, response done with http error
+	}
+
+	// if log messages language not specified then use browser preferred language
+	if _, ok := src.Opts["OpenM.MessageLanguage"]; !ok {
+		if rqLangTags, _, e := language.ParseAcceptLanguage(r.Header.Get("Accept-Language")); e == nil {
+			if len(rqLangTags) > 0 && rqLangTags[0] != language.Und {
+				src.Opts["OpenM.MessageLanguage"] = rqLangTags[0].String()
+			}
+		}
 	}
 
 	// find model metadata by digest or name
