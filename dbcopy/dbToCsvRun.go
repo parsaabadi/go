@@ -267,6 +267,46 @@ func toRunListCsv(
 		return errors.New("failed to write model run parameter text into csv " + err.Error())
 	}
 
+	// write run output tables rows into csv
+	row = make([]string, 2)
+
+	idx = 0
+	j = 0
+	err = toCsvFile(
+		outDir,
+		"run_table.csv",
+		isWriteUtf8bom,
+		[]string{"run_id", "table_hid"},
+		func() (bool, []string, error) {
+
+			if idx < 0 || idx >= len(rl) { // end of model run rows
+				return true, row, nil
+			}
+
+			// if end of current run output tables then find next run with table rows
+			if j < 0 || j >= len(rl[idx].Table) {
+				j = 0
+				for {
+					idx++
+					if idx < 0 || idx >= len(rl) { // end of run rows
+						return true, row, nil
+					}
+					if len(rl[idx].Table) > 0 {
+						break
+					}
+				}
+			}
+
+			// make run output table []string row
+			row[0] = strconv.Itoa(rl[idx].Run.RunId)
+			row[1] = strconv.Itoa(rl[idx].Table[j].TableHid)
+			j++
+			return false, row, nil
+		})
+	if err != nil {
+		return errors.New("failed to write run output tables into csv " + err.Error())
+	}
+
 	// write run progress rows into csv
 	row = make([]string, 7)
 
@@ -400,10 +440,22 @@ func toRunCsv(
 		}
 	}
 
-	// write all output tables into csv file
+	// write output tables into csv file, if the table included in run results
 	tblLt := &db.ReadTableLayout{ReadLayout: db.ReadLayout{FromId: runId}}
 
 	for j := range modelDef.Table {
+
+		// check if table exist in model run results
+		var isFound bool
+		for k := range meta.Table {
+			isFound = meta.Table[k].TableHid == modelDef.Table[j].TableHid
+			if isFound {
+				break
+			}
+		}
+		if !isFound {
+			continue // skip table: it is suppressed and not in run results
+		}
 
 		// write output table expression values into csv file
 		tblLt.Name = modelDef.Table[j].Name

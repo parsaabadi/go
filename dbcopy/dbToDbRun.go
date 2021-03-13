@@ -183,7 +183,7 @@ func copyRunDbToDb(
 		DoubleFmt:   doubleFmt,
 		IsToRun:     true}
 
-	// copy all parameters values for that modrel run
+	// copy all parameters values for that model run
 	for j := range srcModel.Param {
 
 		// source: read parameter values
@@ -206,13 +206,25 @@ func copyRunDbToDb(
 		}
 	}
 
-	// copy all output tables values for that modrel run
+	// copy all output tables values for that model run, if the table included in run results
 	tblLt := db.ReadTableLayout{ReadLayout: db.ReadLayout{FromId: srcId}}
 	dstTblLt := db.WriteTableLayout{
 		WriteLayout: db.WriteLayout{ToId: dstId},
 		DoubleFmt:   doubleFmt}
 
 	for j := range srcModel.Table {
+
+		// check if table exist in model run results
+		var isFound bool
+		for k := range pub.Table {
+			isFound = pub.Table[k].Name == srcModel.Table[j].Name
+			if isFound {
+				break
+			}
+		}
+		if !isFound {
+			continue // skip table: it is suppressed and not in run results
+		}
 
 		// source: read output table accumulator
 		tblLt.Name = srcModel.Table[j].Name

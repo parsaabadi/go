@@ -34,6 +34,7 @@ func (meta *RunMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunPub, err
 		Opts:           make(map[string]string, len(meta.Opts)),
 		Txt:            make([]DescrNote, len(meta.Txt)),
 		Param:          make([]ParamRunSetPub, len(meta.Param)),
+		Table:          make([]TableRunPub, len(meta.Table)),
 		Progress:       make([]RunProgress, len(meta.Progress)),
 	}
 
@@ -50,10 +51,10 @@ func (meta *RunMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunPub, err
 			Note:     meta.Txt[k].Note}
 	}
 
-	// run parameters value notes
+	// run parameters and parameter value notes
 	for k := range meta.Param {
 
-		// find model parameter index by name
+		// find model parameter index by Hid
 		idx, ok := modelDef.ParamByHid(meta.Param[k].ParamHid)
 		if !ok {
 			return nil, errors.New("model run: " + strconv.Itoa(meta.Run.RunId) + " " + meta.Run.Name + ", parameter " + strconv.Itoa(meta.Param[k].ParamHid) + " not found")
@@ -70,6 +71,17 @@ func (meta *RunMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunPub, err
 				Note:     meta.Param[k].Txt[j].Note,
 			}
 		}
+	}
+
+	// output tables included into model run results
+	for k := range meta.Table {
+
+		// find model output table index by Hid
+		idx, ok := modelDef.OutTableByHid(meta.Table[k].TableHid)
+		if !ok {
+			return nil, errors.New("model run: " + strconv.Itoa(meta.Run.RunId) + " " + meta.Run.Name + ", table " + strconv.Itoa(meta.Table[k].TableHid) + " not found")
+		}
+		pub.Table[k] = TableRunPub{Name: modelDef.Table[idx].Name}
 	}
 
 	// copy run_progress rows
@@ -114,6 +126,7 @@ func (pub *RunPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunMeta, er
 		Txt:      make([]RunTxtRow, len(pub.Txt)),
 		Opts:     make(map[string]string, len(pub.Opts)),
 		Param:    make([]runParam, len(pub.Param)),
+		Table:    make([]runTable, len(pub.Table)),
 		Progress: make([]RunProgress, len(pub.Progress)),
 	}
 
@@ -130,7 +143,7 @@ func (pub *RunPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunMeta, er
 		meta.Opts[k] = v
 	}
 
-	// run parameters value notes: run_parameter_txt rows
+	// run parameters and parameter value notes: run_parameter_txt rows
 	// use set id default zero
 	for k := range pub.Param {
 
@@ -152,6 +165,17 @@ func (pub *RunPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunMeta, er
 				meta.Param[k].Txt[j].Note = pub.Param[k].Txt[j].Note
 			}
 		}
+	}
+
+	// output tables included into model run results
+	for k := range meta.Table {
+
+		// find model output table index by name
+		idx, ok := modelDef.OutTableByName(pub.Table[k].Name)
+		if !ok {
+			return nil, errors.New("model run: " + pub.Name + " output table " + pub.Param[k].Name + " not found")
+		}
+		meta.Table[k].TableHid = modelDef.Table[idx].TableHid
 	}
 
 	// copy run_progress rows

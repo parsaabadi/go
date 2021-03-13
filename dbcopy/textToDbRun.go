@@ -270,12 +270,24 @@ func fromRunTextToDb(
 		}
 	}
 
-	// restore run output tables accumulators and expressions
+	// restore run output tables accumulators and expressions, if the table included in run results
 	tblLt := db.WriteTableLayout{
 		WriteLayout: db.WriteLayout{ToId: meta.Run.RunId},
 		DoubleFmt:   doubleFmt}
 
 	for j := range modelDef.Table {
+
+		// check if table exist in model run results
+		var isFound bool
+		for k := range meta.Table {
+			isFound = meta.Table[k].TableHid == modelDef.Table[j].TableHid
+			if isFound {
+				break
+			}
+		}
+		if !isFound {
+			continue // skip table: it is suppressed and not in run results
+		}
 
 		// read output table accumulator(s) values from csv file
 		var ca db.CellAcc

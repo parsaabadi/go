@@ -466,7 +466,7 @@ func getRunProgress(dbConn *sql.DB, query string) ([]runProgressRow, error) {
 	return rpLst, nil
 }
 
-// GetRunFull return full metadata for completed model run: run_lst, run_option, run_parameter, run_progress rows.
+// GetRunFull return full metadata for completed model run: run_lst, run_option, run_parameter, run_table, run_progress rows.
 func GetRunFull(dbConn *sql.DB, runRow *RunRow) (*RunMeta, error) {
 
 	// validate parameters
@@ -498,8 +498,6 @@ func GetRunFull(dbConn *sql.DB, runRow *RunRow) (*RunMeta, error) {
 		" WHERE H.run_id = " + strconv.Itoa(runRow.RunId) +
 		" ORDER BY 1, 2"
 
-	hi := make(map[int]int) // map (parameter Hid) => index in parameter array
-
 	err = SelectRows(dbConn, q,
 		func(rows *sql.Rows) error {
 			var r runParam
@@ -508,9 +506,28 @@ func GetRunFull(dbConn *sql.DB, runRow *RunRow) (*RunMeta, error) {
 				return err
 			}
 			r.Txt = []RunParamTxtRow{}
-			i := len(meta.Param)
 			meta.Param = append(meta.Param, r)
-			hi[r.ParamHid] = i
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	// append run_table rows: table Hid
+	q = "SELECT M.run_id, M.table_hid" +
+		" FROM run_table M" +
+		" INNER JOIN run_lst H ON (H.run_id = M.run_id)" +
+		" WHERE H.run_id = " + strconv.Itoa(runRow.RunId) +
+		" ORDER BY 1, 2"
+
+	err = SelectRows(dbConn, q,
+		func(rows *sql.Rows) error {
+			var r runTable
+			var nId int
+			if err := rows.Scan(&nId, &r.TableHid); err != nil {
+				return err
+			}
+			meta.Table = append(meta.Table, r)
 			return nil
 		})
 	if err != nil {
@@ -528,7 +545,7 @@ func GetRunFull(dbConn *sql.DB, runRow *RunRow) (*RunMeta, error) {
 }
 
 // GetRunFullText return full metadata, including text, for completed model run:
-// run_lst, run_txt, run_option, run_parameter, run_parameter_txt, run_progress rows.
+// run_lst, run_txt, run_option, run_parameter, run_parameter_txt, run_table, run_progress rows.
 //
 // It does not return non-completed runs (run in progress).
 // If langCode not empty then only specified language selected else all languages
@@ -628,6 +645,27 @@ func GetRunFullText(dbConn *sql.DB, runRow *RunRow, langCode string) (*RunMeta, 
 		meta.Param[i].Txt = append(meta.Param[i].Txt, paramTxtRs[k])
 	}
 
+	// append run_table rows: table Hid
+	q = "SELECT M.run_id, M.table_hid" +
+		" FROM run_table M" +
+		" INNER JOIN run_lst H ON (H.run_id = M.run_id)" +
+		runWhere +
+		" ORDER BY 1, 2"
+
+	err = SelectRows(dbConn, q,
+		func(rows *sql.Rows) error {
+			var r runTable
+			var nId int
+			if err := rows.Scan(&nId, &r.TableHid); err != nil {
+				return err
+			}
+			meta.Table = append(meta.Table, r)
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
 	// get run sub-values progress for that run id
 	rpRs, err := GetRunProgress(dbConn, runRow.RunId)
 	if err != nil {
@@ -639,7 +677,7 @@ func GetRunFullText(dbConn *sql.DB, runRow *RunRow, langCode string) (*RunMeta, 
 }
 
 // GetRunFullTextList return list of full metadata, including text, for completed model runs:
-// run_lst, run_txt, run_option, run_parameter, run_parameter_txt, run_progress rows.
+// run_lst, run_txt, run_option, run_parameter, run_parameter_txt, run_table, run_progress rows.
 //
 // If isSuccess true then return only successfully completed runs else all completed runs.
 // It does not return non-completed runs (run in progress).
@@ -808,6 +846,34 @@ func GetRunFullTextList(dbConn *sql.DB, modelId int, isSuccess bool, langCode st
 		if j, ok := mh[paramTxtRs[k].ParamHid]; ok {
 			rl[i].Param[j].Txt = append(rl[i].Param[j].Txt, paramTxtRs[k])
 		}
+	}
+
+	// append run_table rows: table Hid
+	q = "SELECT M.run_id, M.table_hid" +
+		" FROM run_table M" +
+		" INNER JOIN run_lst H ON (H.run_id = M.run_id)" +
+		" WHERE H.model_id = " + smId +
+		statusFilter +
+		" ORDER BY 1, 2"
+
+	err = SelectRows(dbConn, q,
+		func(rows *sql.Rows) error {
+			var r runTable
+			var nId int
+			if err := rows.Scan(&nId, &r.TableHid); err != nil {
+				return err
+			}
+
+			idx, ok := m[nId] // find run id index
+			if !ok {
+				return nil // skip run if not in previous run list
+			}
+			rl[idx].Table = append(rl[idx].Table, r) // append run_table row
+
+			return nil
+		})
+	if err != nil {
+		return nil, err
 	}
 
 	return rl, nil

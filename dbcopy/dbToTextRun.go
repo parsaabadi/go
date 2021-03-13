@@ -100,6 +100,7 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
 	isWriteUtf8bom := runOpts.Bool(useUtf8CsvArgKey)
+
 	if err = toRunText(srcDb, modelDef, meta, outDir, csvName, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames); err != nil {
 		return err
 	}
@@ -196,10 +197,22 @@ func toRunText(
 		}
 	}
 
-	// write all output tables into csv file
+	// write output tables into csv file, if the table included in run results
 	tblLt := &db.ReadTableLayout{ReadLayout: db.ReadLayout{FromId: runId}}
 
 	for j := range modelDef.Table {
+
+		// check if table exist in model run results
+		var isFound bool
+		for k := range meta.Table {
+			isFound = meta.Table[k].TableHid == modelDef.Table[j].TableHid
+			if isFound {
+				break
+			}
+		}
+		if !isFound {
+			continue // skip table: it is suppressed and not in run results
+		}
 
 		// write output table expression values into csv file
 		tblLt.Name = modelDef.Table[j].Name

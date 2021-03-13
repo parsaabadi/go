@@ -400,7 +400,7 @@ func GetTaskRunByName(dbConn *sql.DB, taskId int, name string) (*TaskRunRow, err
 
 // GetTaskRunByStampOrName return modeling task run status by task id and task run stamp or task run name: task_run_lst table row.
 //
-// It does select task run row by task id and stamp, if not found by task id and run name.
+// It does select task run row by task id and stamp, if not found then by task id and run name.
 // If there is multiple task runs with this stamp or name then run with min(task_run_id) returned.
 func GetTaskRunByStampOrName(dbConn *sql.DB, taskId int, trsn string) (*TaskRunRow, error) {
 
@@ -413,7 +413,7 @@ func GetTaskRunByStampOrName(dbConn *sql.DB, taskId int, trsn string) (*TaskRunR
 
 // GetTaskRunListByStampOrName return modeling task run rows from task_run_lst table by task id and task run stamp or task run name.
 //
-// It does select task run row by task id and stamp, if not found by task id and run name.
+// It does select task run rows by task id and stamp, if not found then by task id and run name.
 // If there is multiple task runs with this stamp or name then multiple rows returned.
 func GetTaskRunListByStampOrName(dbConn *sql.DB, taskId int, trsn string) ([]TaskRunRow, error) {
 
@@ -433,6 +433,20 @@ func GetTaskRunListByStampOrName(dbConn *sql.DB, taskId int, trsn string) ([]Tas
 				" ORDER BY 1")
 	}
 	return runRs, err
+}
+
+// GetTaskRunSetRows retrun task run body (pairs of run id and set id) by task run id: task_run_set table rows.
+//
+// It does not return non-completed task run (run in progress).
+// Task run completed if run status one of: s=success, x=exit, e=error
+func GetTaskRunSetRows(dbConn *sql.DB, taskRunId int) ([]TaskRunSetRow, error) {
+	return getTaskRunSetLst(dbConn,
+		"SELECT TRS.task_run_id, TRS.run_id, TRS.set_id, TRS.task_id"+
+			" FROM task_run_lst M"+
+			" INNER JOIN task_run_set TRS ON (TRS.task_run_id = M.task_run_id)"+
+			" WHERE M.task_run_id = "+strconv.Itoa(taskRunId)+
+			" AND M.status IN ("+toQuoted(DoneRunStatus)+", "+toQuoted(ErrorRunStatus)+", "+toQuoted(ExitRunStatus)+")"+
+			" ORDER BY 1, 2")
 }
 
 // GetTaskFirstRun return first run of the modeling task: task_run_lst table row.
@@ -471,7 +485,7 @@ func GetTaskLastCompletedRun(dbConn *sql.DB, taskId int) (*TaskRunRow, error) {
 			" )")
 }
 
-// GetTaskRunList return model run history: master row from task_lst and task_run_lst, task_run_set rows.
+// GetTaskRunList return model run history: master row from task_lst and all rows from task_run_lst, task_run_set where task run is completed.
 //
 // It does not return non-completed task runs (run in progress).
 // Task run completed if run status one of: s=success, x=exit, e=error

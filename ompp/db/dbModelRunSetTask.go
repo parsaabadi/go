@@ -26,6 +26,7 @@ type RunMeta struct {
 	Txt      []RunTxtRow       // run text rows: run_txt
 	Opts     map[string]string // options used to run the model: run_option
 	Param    []runParam        // run parameters: parameter_hid, sub-value count, run_parameter_txt table rows
+	Table    []runTable        // run tables: table_hid fom run_table rows
 	Progress []RunProgress     // run progress by sub-values: run_progress table rows
 }
 
@@ -46,6 +47,7 @@ type RunPub struct {
 	Txt            []DescrNote       // run text: description and notes by language
 	Opts           map[string]string // options used to run the model: run_option
 	Param          []ParamRunSetPub  // run parameters: name, sub-value count and value notes by language
+	Table          []TableRunPub     // run tables: name for tables included in run_table
 	Progress       []RunProgress     // run progress by sub-values: run_progress table rows
 }
 
@@ -61,6 +63,11 @@ type ParamRunSetPub struct {
 type ParamValuePub struct {
 	ParamRunSetPub                 // parameter metadata
 	Value          []CellCodeParam // parameter value(s)
+}
+
+// TableRunPub is "public" metadata for output tables included in model run results
+type TableRunPub struct {
+	Name string // parameter name
 }
 
 // RunRow is model run row: run_lst table row.
@@ -90,7 +97,7 @@ type RunTxtRow struct {
 	Note     string // note      VARCHAR(32000)
 }
 
-// RunParam is a holder for run parameter Hid, subvalue count and run_parameter_txt rows
+// runParam is a holder for run parameter Hid, subvalue count and run_parameter_txt rows
 type runParam struct {
 	ParamHid int              // parameter_hid INT NOT NULL
 	SubCount int              // number of parameter sub-values
@@ -103,6 +110,11 @@ type RunParamTxtRow struct {
 	ParamHid int    // parameter_hid INT         NOT NULL
 	LangCode string // lang_code     VARCHAR(32) NOT NULL
 	Note     string // note          VARCHAR(32000)
+}
+
+// runTable is a holder for run table Hid where row exist in run_table
+type runTable struct {
+	TableHid int // table_hid INT NOT NULL
 }
 
 // RunProgress is a "public" sub-value run_progress db row
