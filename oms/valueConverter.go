@@ -201,7 +201,7 @@ func (mc *ModelCatalog) TableToCsvConverter(
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	idx, ok := mc.loadModelMeta(dn)
+	idx, ok := mc.indexByDigestOrName(dn)
 	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return []string{}, nil, false // return empty result: model not found or error
