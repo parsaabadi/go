@@ -444,31 +444,31 @@ func cvtValue(param *ParamMeta) func(bool, interface{}) (interface{}, error) {
 			if isNull {
 				return sql.NullFloat64{Float64: 0.0, Valid: false}, nil
 			}
-			switch src.(type) {
+			switch v := src.(type) {
 			case float64:
-				return sql.NullFloat64{Float64: src.(float64), Valid: !isNull}, nil
+				return sql.NullFloat64{Float64: v, Valid: !isNull}, nil
 			case float32:
-				return sql.NullFloat64{Float64: float64(src.(float32)), Valid: !isNull}, nil
+				return sql.NullFloat64{Float64: float64(v), Valid: !isNull}, nil
 			case int:
-				return sql.NullFloat64{Float64: float64(src.(int)), Valid: !isNull}, nil
+				return sql.NullFloat64{Float64: float64(v), Valid: !isNull}, nil
 			case uint:
-				return sql.NullFloat64{Float64: float64(src.(uint)), Valid: !isNull}, nil
+				return sql.NullFloat64{Float64: float64(v), Valid: !isNull}, nil
 			case int64:
-				return sql.NullFloat64{Float64: float64(src.(int64)), Valid: !isNull}, nil
+				return sql.NullFloat64{Float64: float64(v), Valid: !isNull}, nil
 			case uint64:
-				return sql.NullFloat64{Float64: float64(src.(uint64)), Valid: !isNull}, nil
+				return sql.NullFloat64{Float64: float64(v), Valid: !isNull}, nil
 			case int32:
-				return sql.NullFloat64{Float64: float64(src.(int32)), Valid: !isNull}, nil
+				return sql.NullFloat64{Float64: float64(v), Valid: !isNull}, nil
 			case uint32:
-				return sql.NullFloat64{Float64: float64(src.(uint32)), Valid: !isNull}, nil
+				return sql.NullFloat64{Float64: float64(v), Valid: !isNull}, nil
 			case int16:
-				return sql.NullFloat64{Float64: float64(src.(int16)), Valid: !isNull}, nil
+				return sql.NullFloat64{Float64: float64(v), Valid: !isNull}, nil
 			case uint16:
-				return sql.NullFloat64{Float64: float64(src.(uint16)), Valid: !isNull}, nil
+				return sql.NullFloat64{Float64: float64(v), Valid: !isNull}, nil
 			case int8:
-				return sql.NullFloat64{Float64: float64(src.(int8)), Valid: !isNull}, nil
+				return sql.NullFloat64{Float64: float64(v), Valid: !isNull}, nil
 			case uint8:
-				return sql.NullFloat64{Float64: float64(src.(uint8)), Valid: !isNull}, nil
+				return sql.NullFloat64{Float64: float64(v), Valid: !isNull}, nil
 			}
 			return nil, errors.New("invalid parameter value type, expected: float or double")
 		}

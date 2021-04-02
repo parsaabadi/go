@@ -8,34 +8,44 @@ Web-service allow to view and update model database(s) and run openM++ models fr
 Web-server allow to serve static html (css, images, javascipt) content from html subdirectory.
 
 Arguments for oms can be specified on command line or through .ini file:
-  oms -ini my.ini
+  oms -ini my-oms.ini
   oms -OpenM.IniFile my-oms.ini
 Command line arguments take precedence over ini-file options.
 
 Following arguments supporetd by oms:
 
-  -oms.ApiOnly false
-if true then API only web-service, it is false by default and oms also act as http server for openM++ UI.
-
-  -oms.RootDir some/path
+  -oms.RootDir om/root
 oms root directory, default: current directory.
-Expected to have /html subdirectory unless -oms.ApiOnly true specified.
-Expected to have /models/bin subdirectory unless other location specified: -oms.ModelDir /some/models/bin.
-Recommended to have /models/log subdirectory unless other location specified: -oms.ModelLogDir /some/models/log.
-Expected to have /etc subdirectory with templates to run models on MPI cluster.
-Recommended to have /log subdirectory to store oms we-service log files.
+Expected to have models/bin/ subdirectory unless other location specified: -oms.ModelDir /dir/models/bin.
+Recommended to have models/log/ subdirectory unless other location specified: -oms.ModelLogDir /dir/models/log.
+Expected to have html/ subdirectory unless -oms.ApiOnly true specified.
+Expected to have etc/ subdirectory with templates to run models on MPI cluster.
+Recommended to have log/ subdirectory to store oms web-service log files.
 
   -oms.ModelDir models/bin
-models directory, default: models/bin, if relative then must be relative to oms root directory.
-It must contain model.sqlite database files and model executables.
+models executable and model.sqlite database files directory, default: models/bin,
+If relative then must be relative to oms root directory.
 
   -oms.ModelLogDir models/log
 models log directory, default: models/log, if relative then must be relative to oms root directory.
 
-  -l localhost:4040
+  -oms.HomeDir models
+user personal home directory to store files and settings.
+If relative then must be relative to oms root directory.
+Default value is empty "" string and it is disable use of home directory.
+
+  -oms.HomeRootDir home
+root of users home directories to store files and settings.
+If relative then must be relative to oms root directory.
+Default value is empty "" string and it is disable use of home directories.
+
+-l localhost:4040
   -oms.Listen localhost:4040
 address to listen, default: localhost:4040.
 Use -l :4040 if you need to access oms web-service from other computer (make sure firewall configured properly).
+
+  -oms.ApiOnly false
+if true then API only web-service, it is false by default and oms also act as http server for openM++ UI.
 
   -oms.LogRequest false
 if true then log HTTP requests on console and/or log file.
@@ -92,8 +102,10 @@ import (
 // config keys to get values from ini-file or command line arguments.
 const (
 	rootDirArgKey        = "oms.RootDir"       // oms root directory, expected subdir: html
-	modelDirArgKey       = "oms.ModelDir"      // models directory, if relative then must be relative to oms root directory
+	modelDirArgKey       = "oms.ModelDir"      // models executable and model.sqlite directory, if relative then must be relative to oms root directory
 	modelLogDirArgKey    = "oms.ModelLogDir"   // models log directory, if relative then must be relative to oms root directory
+	homeDirArgKey        = "oms.HomeDir"       // user personal home directory, if relative then must be relative to oms root directory
+	homeRootDirArgKey    = "oms.HomeRootDir"   // root of users home directories, if relative then must be relative to oms root directory
 	listenArgKey         = "oms.Listen"        // address to listen, default: localhost:4040
 	listenShortKey       = "l"                 // address to listen (short form)
 	logRequestArgKey     = "oms.LogRequest"    // if true then log http request
@@ -117,12 +129,16 @@ const runHistoryDefaultSize int = 100
 // server run configuration
 var theCfg = struct {
 	rootDir           string            // server root directory
+	isSingleUser      bool              // if true then it is a single user mode
+	homeDir           string            // user(s) home directory
 	pageMaxSize       int64             // default "page" size: row count to read parameters or output tables
 	runHistoryMaxSize int               // max number of model run states to keep in run list history
 	doubleFmt         string            // format to convert float or double value to string
 	env               map[string]string // server config environmemt variables
 }{
 	pageMaxSize:       100,
+	isSingleUser:      false,
+	homeDir:           "",
 	runHistoryMaxSize: runHistoryDefaultSize,
 	doubleFmt:         "%.15g",
 	env:               map[string]string{},
@@ -153,6 +169,8 @@ func mainBody(args []string) error {
 	_ = flag.String(rootDirArgKey, "", "root directory, default: current directory")
 	_ = flag.String(modelDirArgKey, "models/bin", "models directory, if relative then must be relative to root directory")
 	_ = flag.String(modelLogDirArgKey, "models/log", "models log directory, if relative then must be relative to root directory")
+	_ = flag.String(homeDirArgKey, "", "user personal home directory, if relative then must be relative to root directory")
+	_ = flag.String(homeRootDirArgKey, "", "this option is currently disabled")
 	_ = flag.String(listenArgKey, "localhost:4040", "address to listen")
 	_ = flag.String(listenShortKey, "localhost:4040", "address to listen (short form of "+listenArgKey+")")
 	_ = flag.Bool(logRequestArgKey, false, "if true then log HTTP requests")
@@ -228,7 +246,18 @@ func mainBody(args []string) error {
 	}
 	omppLog.Log("Model directory: ", modelDir)
 
-	if err := theCatalog.RefreshSqlite(modelDir, modelLogDir); err != nil {
+	// check if it is single user run mode and use of home directory enabled
+	if theCfg.homeDir = runOpts.String(homeDirArgKey); theCfg.homeDir != "" {
+		if err := isDirExist(theCfg.homeDir); err != nil {
+			return err
+		}
+		theCfg.isSingleUser = true
+	}
+	if runOpts.String(homeRootDirArgKey) != "" {
+		return errors.New("Error: this option is currently disabled: " + homeRootDirArgKey)
+	}
+
+	if err := theCatalog.refreshSqlite(modelDir, modelLogDir); err != nil {
 		return err
 	}
 
@@ -238,7 +267,7 @@ func mainBody(args []string) error {
 	}
 
 	// refresh run state catalog and start scanning model log files
-	if err := theRunCatalog.RefreshCatalog(etcDir); err != nil {
+	if err := theRunCatalog.refreshCatalog(etcDir); err != nil {
 		return err
 	}
 
@@ -292,7 +321,7 @@ func mainBody(args []string) error {
 
 		// close models catalog
 		omppLog.Log("Shutdown server...")
-		if err := theCatalog.Close(); err != nil {
+		if err := theCatalog.close(); err != nil {
 			omppLog.Log(err)
 		}
 		srv.Shutdown(context.Background())

@@ -85,7 +85,9 @@ func GetTaskListText(dbConn *sql.DB, modelId int, langCode string) ([]TaskRow, [
 	q += " ORDER BY 1, 2"
 
 	txtRs, err := getTaskText(dbConn, q)
-
+	if err != nil {
+		return nil, nil, err
+	}
 	return taskRs, txtRs, nil
 }
 
@@ -644,6 +646,9 @@ func GetTaskFull(dbConn *sql.DB, taskRow *TaskRow, langCode string) (*TaskMeta, 
 		" ORDER BY 1, 2"
 
 	txtRs, err := getTaskText(dbConn, q)
+	if err != nil {
+		return nil, err
+	}
 	meta.Txt = txtRs
 
 	// get list of set ids for the task
@@ -741,6 +746,9 @@ func GetTaskFullList(dbConn *sql.DB, modelId int, isSuccess bool, langCode strin
 		" ORDER BY 1, 2"
 
 	txtRs, err := getTaskText(dbConn, q)
+	if err != nil {
+		return nil, err
+	}
 
 	// get list of set ids for each task
 	q = "SELECT M.task_id, M.set_id" +

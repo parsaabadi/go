@@ -411,11 +411,11 @@ func CheckOpenmppSchemaVersion(dbConn *sql.DB) error {
 	nv, err := OpenmppSchemaVersion(dbConn)
 	switch {
 	case err != nil || err == nil && nv <= 0:
-		return errors.New("Error: invalid database, likely not an openM++ database")
+		return errors.New("error: invalid database, likely not an openM++ database")
 	case nv < MinSchemaVersion:
-		return errors.New("Error: incompatible, old version of database: " + strconv.Itoa(nv) + ", please use earlier version of openM++ tools")
+		return errors.New("error: incompatible, old version of database: " + strconv.Itoa(nv) + ", please use earlier version of openM++ tools")
 	case nv > MaxSchemaVersion:
-		return errors.New("Error: incompatible, newer version of database: " + strconv.Itoa(nv) + ", please use more recent version of openM++ tools")
+		return errors.New("error: incompatible, newer version of database: " + strconv.Itoa(nv) + ", please use more recent version of openM++ tools")
 	}
 	return nil
 }

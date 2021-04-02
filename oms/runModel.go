@@ -86,6 +86,8 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 	mArgs = append(mArgs, "-OpenM.RunStamp", rStamp)
 	mArgs = append(mArgs, "-OpenM.LogToConsole", "true")
 
+	importDbLc := strings.ToLower("-ImportDb.")
+
 	// append model run options from run request
 	for krq, val := range req.Opts {
 
@@ -108,6 +110,12 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 		}
 		if strings.EqualFold(key, "-OpenM.LogToConsole") {
 			continue // skip log to console input run option
+		}
+		if strings.EqualFold(key, "-OpenM.Database") {
+			continue // database connection string not allowed as run option
+		}
+		if strings.HasPrefix(strings.ToLower(key), importDbLc) {
+			continue // import database connection string not allowed as run option
 		}
 
 		mArgs = append(mArgs, key, val) // append command line argument key and value

@@ -101,7 +101,7 @@ const defaultMpiTemplate = "mpi.ModelRun.template.txt"
 const scanSleepTimeout = 4021
 
 // RefreshCatalog reset state of most recent model run for each model.
-func (rsc *RunCatalog) RefreshCatalog(etcDir string) error {
+func (rsc *RunCatalog) refreshCatalog(etcDir string) error {
 
 	// get list of template files
 	rsc.runTemplates = []string{}

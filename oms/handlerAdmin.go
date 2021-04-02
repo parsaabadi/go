@@ -20,6 +20,7 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 		DoubleFmt         string             // format to convert float or double value to string
 		LoginUrl          string             // user login URL for UI
 		LogoutUrl         string             // user logout URL for UI
+		AllowUserConfig   bool               // if true then store user settings in home directory
 		Env               map[string]string  // server config environmemt variables
 		ModelCatalog      ModelCatalogConfig // "public" state of model catalog
 		RunCatalog        RunCatalogConfig   // "public" state of model run catalog
@@ -28,6 +29,7 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 		RowPageMaxSize:    theCfg.pageMaxSize,
 		RunHistoryMaxSize: theCfg.runHistoryMaxSize,
 		DoubleFmt:         theCfg.doubleFmt,
+		AllowUserConfig:   theCfg.isSingleUser,
 		Env:               theCfg.env,
 		ModelCatalog:      *theCatalog.toPublicConfig(),
 		RunCatalog:        *theRunCatalog.toPublicConfig(),
@@ -50,14 +52,14 @@ func allModelsRefreshHandler(w http.ResponseWriter, r *http.Request) {
 	omppLog.Log("Model directory: ", modelDir)
 
 	// refresh models catalog
-	if err := theCatalog.RefreshSqlite(modelDir, modelLogDir); err != nil {
+	if err := theCatalog.refreshSqlite(modelDir, modelLogDir); err != nil {
 		omppLog.Log(err)
 		http.Error(w, "Failed to refersh models catalog: "+modelDir, http.StatusBadRequest)
 		return
 	}
 
 	// refresh run state catalog
-	if err := theRunCatalog.RefreshCatalog(etcDir); err != nil {
+	if err := theRunCatalog.refreshCatalog(etcDir); err != nil {
 		omppLog.Log(err)
 		http.Error(w, "Failed to refersh model runs catalog", http.StatusBadRequest)
 		return
@@ -74,7 +76,7 @@ func allModelsCloseHandler(w http.ResponseWriter, r *http.Request) {
 	// close models catalog
 	modelDir, _ := theCatalog.getModelDir()
 
-	if err := theCatalog.Close(); err != nil {
+	if err := theCatalog.close(); err != nil {
 		omppLog.Log(err)
 		http.Error(w, "Failed to close models catalog: "+modelDir, http.StatusBadRequest)
 		return
