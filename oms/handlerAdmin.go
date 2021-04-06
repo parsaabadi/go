@@ -20,7 +20,7 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 		DoubleFmt         string             // format to convert float or double value to string
 		LoginUrl          string             // user login URL for UI
 		LogoutUrl         string             // user logout URL for UI
-		AllowUserConfig   bool               // if true then store user settings in home directory
+		AllowUserHome     bool               // if true then store user settings in home directory
 		Env               map[string]string  // server config environmemt variables
 		ModelCatalog      ModelCatalogConfig // "public" state of model catalog
 		RunCatalog        RunCatalogConfig   // "public" state of model run catalog
@@ -29,7 +29,7 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 		RowPageMaxSize:    theCfg.pageMaxSize,
 		RunHistoryMaxSize: theCfg.runHistoryMaxSize,
 		DoubleFmt:         theCfg.doubleFmt,
-		AllowUserConfig:   theCfg.isSingleUser,
+		AllowUserHome:     theCfg.isSingleUser,
 		Env:               theCfg.env,
 		ModelCatalog:      *theCatalog.toPublicConfig(),
 		RunCatalog:        *theRunCatalog.toPublicConfig(),

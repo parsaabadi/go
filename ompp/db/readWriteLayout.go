@@ -124,6 +124,24 @@ type ReadTableCompareLayout struct {
 	runIds          []int // run id's to compare with base run
 }
 
+// TableRunsCompareLayout describes source and size of data page to read output table values from multiple runs.
+//
+// Result is a page of data where each row contains base run value, current run value and optional difference and ratio.
+//
+// Runs to compare are selected either task_run_set table or from run_lst table.
+// Select from task_run_set table is done by task name and task run name or stamp.
+// Select from run_lst table is done by RunTags[] elements, which are run digests, or run stamps or run names.
+// Content of RunTags[] must be uniform, all elements must be of the same kind:
+// run digest or run stamp or run name, it cannot be a mix of digests, stamps, names.
+type TableRunsCompareLayout struct {
+	TableLayout ReadTableCompareLayout // output table name, page size, where filters and order by
+	RunTags     []string               // model runs to compare with base run: run digests or run stamps or run names
+	Task        struct {
+		Name   string // task name to select model runs for comparison
+		RunTag string // task run name or task run stamp to select model runs for comparison
+	}
+}
+
 // ReadPageLayout describes first row offset and size of data page to read input parameter or output table values.
 // If IsLastPage true then return non-empty last page and actual first row offset and size.
 type ReadPageLayout struct {
@@ -138,9 +156,9 @@ type FilterOp string
 // Select filter operators for dimension enum ids.
 const (
 	InAutoOpFilter  FilterOp = "IN_AUTO" // auto convert IN list filter into equal or BETWEEN if possible
-	InOpFilter               = "IN"      // dimension enum ids in: dim2 IN (11, 22, 33)
-	EqOpFilter               = "="       // dimension equal: dim1 = 12
-	BetweenOpFilter          = "BETWEEN" // dimension enum ids between: dim3 BETWEEN 44 AND 88
+	InOpFilter      FilterOp = "IN"      // dimension enum ids in: dim2 IN (11, 22, 33)
+	EqOpFilter      FilterOp = "="       // dimension equal: dim1 = 12
+	BetweenOpFilter FilterOp = "BETWEEN" // dimension enum ids between: dim3 BETWEEN 44 AND 88
 )
 
 // FilterColumn define dimension column and condition to filter enum codes to build select where

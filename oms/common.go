@@ -139,7 +139,7 @@ func setContentType(next http.Handler) http.Handler {
 	})
 }
 
-// jsonSetHeaders set response headers: Content-Type: application/json and Access-Control-Allow-Origin
+// jsonSetHeaders set jscon response headers: Content-Type: application/json and Access-Control-Allow-Origin
 func jsonSetHeaders(w http.ResponseWriter, r *http.Request) {
 
 	// if Content-Type not set then use json
@@ -157,7 +157,7 @@ func jsonSetHeaders(w http.ResponseWriter, r *http.Request) {
 	*/
 }
 
-// jsonResponse set response headers and writes src as json into w response writer.
+// jsonResponse set json response headers and writes src as json into w response writer.
 // On error it writes 500 internal server error response.
 func jsonResponse(w http.ResponseWriter, r *http.Request, src interface{}) {
 
@@ -167,6 +167,18 @@ func jsonResponse(w http.ResponseWriter, r *http.Request, src interface{}) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+// jsonResponseBytes set json response headers and writes src bytes into w response writer.
+// If src bytes empty then "{}" is written.
+func jsonResponseBytes(w http.ResponseWriter, r *http.Request, src []byte) {
+
+	jsonSetHeaders(w, r)
+
+	if len(src) <= 0 {
+		w.Write([]byte("{}"))
+	}
+	w.Write(src)
 }
 
 // jsonAppendListToResponse writes srcLst as json array into w response writer.
@@ -265,6 +277,41 @@ func jsonMultipartDecode(w http.ResponseWriter, mr *multipart.Reader, name strin
 	}
 	return true // completed OK
 }
+
+// jsonRequestToFile validate Content-Type: application/json and copy request body into output file as is.
+// If output file already exists then it is truncated.
+// On error it writes error response 400 or 500 and return false.
+func jsonRequestToFile(w http.ResponseWriter, r *http.Request, outPath string) bool {
+
+	// json body expected
+	if !strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+		http.Error(w, "Expected Content-Type: application/json", http.StatusUnsupportedMediaType)
+		return false
+	}
+
+	// create or truncate output file
+	fName := filepath.Base(outPath)
+
+	f, err := os.OpenFile(outPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	if err != nil {
+		omppLog.Log("Error: unable to create or truncate file ", outPath, err)
+		http.Error(w, "Error: unable to create or truncate file "+fName, http.StatusInternalServerError)
+		return false
+	}
+	defer f.Close()
+
+	// copy request body into the file
+	_, err = io.Copy(f, r.Body)
+	if err != nil {
+		omppLog.Log("Error: unable to write into ", outPath, err)
+		http.Error(w, "Error: unable to write into "+fName, http.StatusInternalServerError)
+		return false
+	}
+	return true // completed OK
+}
+
+// jsonResponseBytes set json response headers and writes src bytes into w response writer.
+// If src bytes empty then "{}" is written.
 
 // isDirExist return error if directory does not exist or not accessible
 func isDirExist(dirPath string) error {

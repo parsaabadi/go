@@ -303,6 +303,7 @@ func mainBody(args []string) error {
 	apiUpdateRoutes(router)   // web-service /api routes to update metadata
 	apiRunModelRoutes(router) // web-service /api routes to run the model
 	apiAdminRoutes(router)    // web-service /api routes for administrative tasks
+	apiUserRoutes(router)     // web-service /api routes for user-specific requests
 
 	// set web root handler: UI web pages or "not found" if this is web-service mode
 	if !isApiOnly {
@@ -912,4 +913,20 @@ func apiAdminRoutes(router *vestigo.Router) {
 
 	// POST /api/admin/all-models/close
 	router.Post("/api/admin/all-models/close", allModelsCloseHandler, logRequest)
+}
+
+// add web-service /api routes for user-specific request
+func apiUserRoutes(router *vestigo.Router) {
+
+	// GET /api/user/view/model/:model
+	router.Get("/api/user/view/model/:model", userViewGetHandler, logRequest)
+
+	// GET /api/user/view?model=modelNameOrDigest
+	router.Get("/api/user/view", userViewGetHandler, logRequest)
+
+	// PUT  /api/user/view/model/:model
+	router.Put("/api/user/view/model/:model", userViewPutHandler, logRequest)
+
+	// DELETE /api/user/view/model/:model
+	router.Delete("/api/user/view/model/:model", userViewDeleteHandler, logRequest)
 }
