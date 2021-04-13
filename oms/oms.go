@@ -29,7 +29,7 @@ If relative then must be relative to oms root directory.
   -oms.ModelLogDir models/log
 models log directory, default: models/log, if relative then must be relative to oms root directory.
 
-  -oms.HomeDir models
+  -oms.HomeDir models/home
 user personal home directory to store files and settings.
 If relative then must be relative to oms root directory.
 Default value is empty "" string and it is disable use of home directory.
@@ -249,9 +249,10 @@ func mainBody(args []string) error {
 	// check if it is single user run mode and use of home directory enabled
 	if theCfg.homeDir = runOpts.String(homeDirArgKey); theCfg.homeDir != "" {
 		if err := isDirExist(theCfg.homeDir); err != nil {
-			return err
+			omppLog.Log("Warning: user home directory not found: ", theCfg.homeDir)
+			theCfg.homeDir = ""
 		}
-		theCfg.isSingleUser = true
+		theCfg.isSingleUser = theCfg.homeDir != ""
 	}
 	if runOpts.String(homeRootDirArgKey) != "" {
 		return errors.New("Error: this option is currently disabled: " + homeRootDirArgKey)
@@ -318,6 +319,9 @@ func mainBody(args []string) error {
 
 	// add shutdown handler, it does not wait for requests, it does reset connections and exit
 	// PUT /api/admin/shutdown
+	ctx, cancel := context.WithCancel((context.Background()))
+	defer cancel()
+
 	adminShutdownHandler := func(w http.ResponseWriter, r *http.Request) {
 
 		// close models catalog
@@ -325,11 +329,16 @@ func mainBody(args []string) error {
 		if err := theCatalog.close(); err != nil {
 			omppLog.Log(err)
 		}
-		srv.Shutdown(context.Background())
+
+		// send response: confirm shutdown
+		srv.SetKeepAlivesEnabled(false)
+		w.Write([]byte("Shutdown completed"))
+
+		cancel() // send shutdown completed to the main
 	}
 	router.Put("/api/admin/shutdown", adminShutdownHandler, logRequest)
 
-	// initialization completed, start the server
+	// initialization completed, notify user and start the server
 	omppLog.Log("Listen at ", addr)
 	if !isApiOnly {
 		if !strings.HasPrefix(addr, ":") {
@@ -340,7 +349,25 @@ func mainBody(args []string) error {
 	}
 	omppLog.Log("To finish press Ctrl+C")
 
-	err = srv.ListenAndServe() // start the server
+	// start the server
+	go func() {
+		if err = srv.ListenAndServe(); err != nil {
+			// send completed by error to the main
+			// error may be http.ErrServerClosed by shutdown which is not an actual error
+			cancel()
+		}
+	}()
+
+	// wait for shutdown or Ctrl+C interupt signal
+	<-ctx.Done()
+	if e := srv.Shutdown(context.Background()); e != nil && e != http.ErrServerClosed {
+		omppLog.Log("Shutdown error: ", e)
+	} else {
+		// shutdown completed without error: clean main error code
+		if err == http.ErrServerClosed {
+			err = nil
+		}
+	}
 
 	doneScanC <- true
 	return err
