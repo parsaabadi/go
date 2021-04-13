@@ -86,9 +86,11 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/husobee/vestigo"
@@ -338,20 +340,28 @@ func mainBody(args []string) error {
 	}
 	router.Put("/api/admin/shutdown", adminShutdownHandler, logRequest)
 
+	// start to listen at specified TCP address
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		omppLog.Log("Error at start of TCP listen: ", addr)
+		return err
+	}
+	ta, ok := ln.Addr().(*net.TCPAddr)
+	if !ok {
+		return errors.New("Error: unable to find TCP port of: " + addr)
+	}
+	localUrl := "http://localhost:" + strconv.Itoa(ta.Port)
+
 	// initialization completed, notify user and start the server
 	omppLog.Log("Listen at ", addr)
 	if !isApiOnly {
-		if !strings.HasPrefix(addr, ":") {
-			omppLog.Log("To start open in your browser: ", addr)
-		} else {
-			omppLog.Log("To start open in your browser: ", "localhost", addr)
-		}
+		omppLog.Log("To start open in your browser: ", localUrl)
 	}
 	omppLog.Log("To finish press Ctrl+C")
 
-	// start the server
 	go func() {
-		if err = srv.ListenAndServe(); err != nil {
+		if err = srv.Serve(ln); err != nil {
+			// if err = srv.ListenAndServe(); err != nil {
 			// send completed by error to the main
 			// error may be http.ErrServerClosed by shutdown which is not an actual error
 			cancel()
