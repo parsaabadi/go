@@ -39,10 +39,15 @@ root of users home directories to store files and settings.
 If relative then must be relative to oms root directory.
 Default value is empty "" string and it is disable use of home directories.
 
--l localhost:4040
+  -l localhost:4040
   -oms.Listen localhost:4040
 address to listen, default: localhost:4040.
 Use -l :4040 if you need to access oms web-service from other computer (make sure firewall configured properly).
+
+  -oms.oms.UrlSaveTo someModel.ui.url.txt
+file path to save oms URL which can be used to open web UI in browser.
+Default: empty value, URL is not saved in a file by default.
+Example of URL file content: http://localhost:4040
 
   -oms.ApiOnly false
 if true then API only web-service, it is false by default and oms also act as http server for openM++ UI.
@@ -103,15 +108,16 @@ import (
 
 // config keys to get values from ini-file or command line arguments.
 const (
-	rootDirArgKey        = "oms.RootDir"       // oms root directory, expected subdir: html
+	rootDirArgKey        = "oms.RootDir"       // oms root directory, expected subfoldesr: html, etc, log
 	modelDirArgKey       = "oms.ModelDir"      // models executable and model.sqlite directory, if relative then must be relative to oms root directory
 	modelLogDirArgKey    = "oms.ModelLogDir"   // models log directory, if relative then must be relative to oms root directory
 	homeDirArgKey        = "oms.HomeDir"       // user personal home directory, if relative then must be relative to oms root directory
 	homeRootDirArgKey    = "oms.HomeRootDir"   // root of users home directories, if relative then must be relative to oms root directory
 	listenArgKey         = "oms.Listen"        // address to listen, default: localhost:4040
 	listenShortKey       = "l"                 // address to listen (short form)
+	urlFileArgKey        = "oms.UrlSaveTo"     // file path to save oms URL in form of: http://localhost:4040, if relative then must be relative to oms root directory
 	logRequestArgKey     = "oms.LogRequest"    // if true then log http request
-	apiOnlyArgKey        = "oms.ApiOnly"       // if true then API only web-service, no UI
+	apiOnlyArgKey        = "oms.ApiOnly"       // if true then API only web-service, no web UI
 	uiLangsArgKey        = "oms.Languages"     // list of supported languages
 	encodingArgKey       = "oms.CodePage"      // code page for converting source files, e.g. windows-1252
 	pageSizeAgrKey       = "oms.MaxRowCount"   // max number of rows to return from read parameters or output tables
@@ -120,7 +126,7 @@ const (
 )
 
 // front-end UI subdirectory with html and javascript
-const htmlSubDir = "html"
+const htmlDir = "html"
 
 // configuration subdirectory with template(s) to run model on MPI cluster
 const etcDir = "etc"
@@ -176,7 +182,8 @@ func mainBody(args []string) error {
 	_ = flag.String(listenArgKey, "localhost:4040", "address to listen")
 	_ = flag.String(listenShortKey, "localhost:4040", "address to listen (short form of "+listenArgKey+")")
 	_ = flag.Bool(logRequestArgKey, false, "if true then log HTTP requests")
-	_ = flag.Bool(apiOnlyArgKey, false, "if true then API only web-service, no UI")
+	_ = flag.String(urlFileArgKey, "", "file path to save oms URL, if relative then must be relative to root directory")
+	_ = flag.Bool(apiOnlyArgKey, false, "if true then API only web-service, no web UI")
 	_ = flag.String(uiLangsArgKey, "en", "comma-separated list of supported languages")
 	_ = flag.String(encodingArgKey, "", "code page to convert source file into utf-8, e.g.: windows-1252")
 	_ = flag.Int64(pageSizeAgrKey, theCfg.pageMaxSize, "max number of rows to return from read parameters or output tables")
@@ -219,15 +226,6 @@ func mainBody(args []string) error {
 		}
 	}
 
-	// if UI required then server root directory must have html subdir
-	if !isApiOnly {
-		htmlDir := filepath.Join(theCfg.rootDir, htmlSubDir)
-		if err := isDirExist(htmlDir); err != nil {
-			isApiOnly = true
-			omppLog.Log("Warning: serving API only because UI directory not found: ", htmlDir)
-		}
-	}
-
 	// change to root directory
 	if theCfg.rootDir != "" && theCfg.rootDir != "." {
 		if err := os.Chdir(theCfg.rootDir); err != nil {
@@ -240,13 +238,13 @@ func mainBody(args []string) error {
 		omppLog.Log("Changing directory to: ", theCfg.rootDir)
 	}
 
-	// model directory required to build initial list of model sqlite files
-	modelLogDir := runOpts.String(modelLogDirArgKey)
-	modelDir := runOpts.String(modelDirArgKey)
-	if modelDir == "" {
-		return errors.New("Error: model directory argument cannot be empty")
+	// if UI required then server root directory must have html subdir
+	if !isApiOnly {
+		if err := isDirExist(htmlDir); err != nil {
+			isApiOnly = true
+			omppLog.Log("Warning: serving API only because UI directory not found: ", filepath.Join(theCfg.rootDir, htmlDir))
+		}
 	}
-	omppLog.Log("Model directory: ", modelDir)
 
 	// check if it is single user run mode and use of home directory enabled
 	if theCfg.homeDir = runOpts.String(homeDirArgKey); theCfg.homeDir != "" {
@@ -259,6 +257,14 @@ func mainBody(args []string) error {
 	if runOpts.String(homeRootDirArgKey) != "" {
 		return errors.New("Error: this option is currently disabled: " + homeRootDirArgKey)
 	}
+
+	// model directory required to build initial list of model sqlite files
+	modelLogDir := runOpts.String(modelLogDirArgKey)
+	modelDir := runOpts.String(modelDirArgKey)
+	if modelDir == "" {
+		return errors.New("Error: model directory argument cannot be empty")
+	}
+	omppLog.Log("Model directory: ", modelDir)
 
 	if err := theCatalog.refreshSqlite(modelDir, modelLogDir); err != nil {
 		return err
@@ -352,6 +358,14 @@ func mainBody(args []string) error {
 	}
 	localUrl := "http://localhost:" + strconv.Itoa(ta.Port)
 
+	// if url file path specified then write oms url into that url file
+	if urlFile := runOpts.String(urlFileArgKey); urlFile != "" {
+		if err = os.WriteFile(urlFile, []byte(localUrl), 0644); err != nil {
+			omppLog.Log("Error at writing into: ", urlFile)
+			return err
+		}
+	}
+
 	// initialization completed, notify user and start the server
 	omppLog.Log("Listen at ", addr)
 	if !isApiOnly {
@@ -403,7 +417,7 @@ func exitOnPanic() {
 // homeHandler is static pages handler for front-end UI served on web / root.
 // Only GET requests expected.
 func homeHandler(w http.ResponseWriter, r *http.Request) {
-	setContentType(http.FileServer(http.Dir(htmlSubDir))).ServeHTTP(w, r)
+	setContentType(http.FileServer(http.Dir(htmlDir))).ServeHTTP(w, r)
 }
 
 // add http GET web-service /api routes to get metadata

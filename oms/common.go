@@ -310,9 +310,6 @@ func jsonRequestToFile(w http.ResponseWriter, r *http.Request, outPath string) b
 	return true // completed OK
 }
 
-// jsonResponseBytes set json response headers and writes src bytes into w response writer.
-// If src bytes empty then "{}" is written.
-
 // isDirExist return error if directory does not exist or not accessible
 func isDirExist(dirPath string) error {
 	stat, err := os.Stat(dirPath)
