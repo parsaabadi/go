@@ -44,7 +44,7 @@ Default value is empty "" string and it is disable use of home directories.
 address to listen, default: localhost:4040.
 Use -l :4040 if you need to access oms web-service from other computer (make sure firewall configured properly).
 
-  -oms.oms.UrlSaveTo someModel.ui.url.txt
+  -oms.UrlSaveTo someModel.ui.url.txt
 file path to save oms URL which can be used to open web UI in browser.
 Default: empty value, URL is not saved in a file by default.
 Example of URL file content: http://localhost:4040
