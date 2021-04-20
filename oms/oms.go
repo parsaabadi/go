@@ -75,7 +75,7 @@ It is used only for compatibility with old Windows files.
   -oms.MaxRunHistory 100
 max number of model runs to keep in run list history, default: 100.
 
-Also oms support OpenM++ standard log settings (described in wiki at http://www.openmpp.org/wiki/):
+Also oms support OpenM++ standard log settings (described in openM++ wiki):
   -OpenM.LogToConsole:     if true then log to standard output, default: true
   -v:                      short form of: -OpenM.LogToConsole
   -OpenM.LogToFile:        if true then log to file
@@ -311,8 +311,8 @@ func mainBody(args []string) error {
 	apiReadCsvRoutes(router)  // web-service /api routes to read values into csv stream
 	apiUpdateRoutes(router)   // web-service /api routes to update metadata
 	apiRunModelRoutes(router) // web-service /api routes to run the model
-	apiAdminRoutes(router)    // web-service /api routes for administrative tasks
 	apiUserRoutes(router)     // web-service /api routes for user-specific requests
+	apiAdminRoutes(router)    // web-service /api routes for administrative tasks
 
 	// set web root handler: UI web pages or "not found" if this is web-service mode
 	if !isApiOnly {
@@ -950,6 +950,19 @@ func apiRunModelRoutes(router *vestigo.Router) {
 	router.Get("/api/run/log/model/:model/stamp/:stamp/start/:start/count/", http.NotFound)
 }
 
+// add web-service /api routes for user-specific request
+func apiUserRoutes(router *vestigo.Router) {
+
+	// GET /api/user/view/model/:model
+	router.Get("/api/user/view/model/:model", userViewGetHandler, logRequest)
+
+	// PUT  /api/user/view/model/:model
+	router.Put("/api/user/view/model/:model", userViewPutHandler, logRequest)
+
+	// DELETE /api/user/view/model/:model
+	router.Delete("/api/user/view/model/:model", userViewDeleteHandler, logRequest)
+}
+
 // add web-service /api routes for administrative tasks
 func apiAdminRoutes(router *vestigo.Router) {
 
@@ -964,20 +977,4 @@ func apiAdminRoutes(router *vestigo.Router) {
 
 	// POST /api/admin/all-models/close
 	router.Post("/api/admin/all-models/close", allModelsCloseHandler, logRequest)
-}
-
-// add web-service /api routes for user-specific request
-func apiUserRoutes(router *vestigo.Router) {
-
-	// GET /api/user/view/model/:model
-	router.Get("/api/user/view/model/:model", userViewGetHandler, logRequest)
-
-	// GET /api/user/view?model=modelNameOrDigest
-	router.Get("/api/user/view", userViewGetHandler, logRequest)
-
-	// PUT  /api/user/view/model/:model
-	router.Put("/api/user/view/model/:model", userViewPutHandler, logRequest)
-
-	// DELETE /api/user/view/model/:model
-	router.Delete("/api/user/view/model/:model", userViewDeleteHandler, logRequest)
 }

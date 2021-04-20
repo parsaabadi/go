@@ -168,7 +168,7 @@ Other supported database drivers are "sqlite3" and "odbc":
 
 ODBC dbcopy tested with MySQL (MariaDB), PostgreSQL, Microsoft SQL, Oracle and DB2.
 
-Also dbcopy support OpenM++ standard log settings (described in wiki at http://www.openmpp.org/wiki/):
+Also dbcopy support OpenM++ standard log settings (described in openM++ wiki):
   -OpenM.LogToConsole: if true then log to standard output, default: true
   -v:                  short form of: -OpenM.LogToConsole
   -OpenM.LogToFile:    if true then log to file

@@ -13,7 +13,6 @@ import (
 
 // userViewGetHandler return user views by model name or digest:
 // GET /api/user/view/model/:model
-// GET /api/user/view?model=modelNameOrDigest
 // If multiple models with same name exist only one is returned.
 // If no model view file in user home directory then response is 200 OK with is empty {} json payload
 func userViewGetHandler(w http.ResponseWriter, r *http.Request) {
