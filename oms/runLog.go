@@ -24,7 +24,7 @@ func (rsc *RunCatalog) readModelRunLog(digest, runStamp string, start, count int
 		return lrp, nil // model run not found in catalog
 	}
 	if !lrp.isHistory {
-		return lrp, nil // found model run
+		return lrp, nil // found model run in the oms run list
 	}
 	// else found model run in run history
 

@@ -18,7 +18,7 @@ import (
 // RunCatalog is a most recent state of model run for each model.
 type RunCatalog struct {
 	rscLock      sync.Mutex                     // mutex to lock for model list operations
-	models       map[string]modelRunBasic       // model digest map to model basic info
+	models       map[string]modelRunBasic       // map model digest to basic info to run the model and manege log files
 	etcDir       string                         // model run templates directory, if relative then must be relative to oms root directory
 	runTemplates []string                       // list of model run templates
 	mpiTemplates []string                       // list of model MPI run templates
@@ -28,7 +28,7 @@ type RunCatalog struct {
 
 var theRunCatalog RunCatalog // list of most recent state of model run for each model.
 
-// modelRunBasic is basic model info to run model and obtain model logs
+// modelRunBasic is basic info to run model and obtain model logs
 type modelRunBasic struct {
 	name      string // model name
 	binDir    string // database and .exe directory: directory part of models/bin/model.sqlite
@@ -73,7 +73,7 @@ type RunState struct {
 	IsLog          bool   // if true then use run log file
 	LogFileName    string // log file name
 	logPath        string // log file path: log/dir/modelName.RunStamp.console.log
-	isHistory      bool   // if true then it is model run history or run doen by outside of oms service
+	isHistory      bool   // if true then it is model run history or run done outside of oms service
 }
 
 // runStateLog is model run state and log file lines.
@@ -247,7 +247,6 @@ func scanModelLogDirs(doneC <-chan bool) {
 		runName     string // model run name
 		isCompleted bool   // if true then run completed
 		updateDt    string // last update date-time
-		path        string // log file path
 	}
 
 	for {
