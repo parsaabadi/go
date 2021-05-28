@@ -1,7 +1,6 @@
 {{/*
 oms web-service:
-
-Template to run Win32 Debug modelNameD.exe on Windows
+  Template to run Win32 Debug modelNameD.exe on Windows
 
 Rename this file into:
   run.Win32.Debug.template.txt

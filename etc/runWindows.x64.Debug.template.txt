@@ -1,7 +1,6 @@
 {{/*
 oms web-service:
-
-Template to run 64-bit Debug modelName64D.exe on Windows
+  Template to run 64-bit Debug modelName64D.exe on Windows
 
 Rename this file into:
   run.x64.Debug.template.txt

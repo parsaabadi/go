@@ -1,7 +1,6 @@
 {{/*
 oms web-service:
-
-Template to run modelName_mpi executable on Linux using OpenMPI 4.x
+  Template to run modelName_mpi executable on Linux using OpenMPI 4.x
 
 Use this template if you experiencing CPU binding problems, which may be common on CentOS 8 clusters
 

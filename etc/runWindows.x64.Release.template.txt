@@ -1,7 +1,6 @@
 {{/*
 oms web-service:
-
-Template to run 64-bit Release modelName64.exe on Windows
+  Template to run 64-bit Release modelName64.exe on Windows
 
 Rename this file into:
   run.x64.Release.template.txt

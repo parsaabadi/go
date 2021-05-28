@@ -1,7 +1,6 @@
 {{/*
 oms web-service:
-
-Template to run modelName_mpi executable on Linux using OpenMPI
+  Template to run modelName_mpi executable on Linux using OpenMPI
 
 Rename this file into:
   mpi.ModelRun.template.txt

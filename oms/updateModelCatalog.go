@@ -74,7 +74,7 @@ func (mc *ModelCatalog) refreshSqlite(modelDir, modelLogDir string) error {
 			omppLog.Log("Error: invalid database, likely not an openM++ database", fp)
 			dbc.Close()
 		}
-		d := filepath.Dir(fp)
+		dbDir := filepath.Dir(fp)
 
 		// read list of models: model_dic rows
 		dicLst, err := db.GetModelList(dbc)
@@ -120,7 +120,7 @@ func (mc *ModelCatalog) refreshSqlite(modelDir, modelLogDir string) error {
 			// append to model list
 			mLst = append(mLst, modelDef{
 				dbConn:     dbc,
-				binDir:     d,
+				binDir:     dbDir,
 				logDir:     modelLogDir,
 				isLogDir:   isLogDir,
 				isMetaFull: false,
