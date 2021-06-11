@@ -1,0 +1,38 @@
+{{/*
+oms web-service:
+  Template to run OzProj.exe on Windows
+
+Rename this file into:
+  run.OzProj.template.txt
+to make it visible to oms web-service an UI
+
+Oms web-service process this template as:
+  - skip empty lines
+  - use first non-empty line as executable to run
+  - substitute template arguments
+  - combine result into single line
+after template processing oms run it as: exec.Cmd.Start()
+
+Arguments of template:
+struct {
+  ModelName string            // model name
+  ExeStem   string            // base part of model exe name, usually modelName
+  Dir       string            // work directory to run the model
+  BinDir    string            // bin directory where model exe is located
+  MpiNp     int               // number of MPI processes
+  Args      []string          // model command line arguments
+  Env       map[string]string // environment variables to run the model
+}
+
+Example of result:
+  cmd /C (set OM_T_MODEL_NAME=OzProj) && (set OM_T_EXE_STEM=OzProj) && (set OM_T_WORK_DIR=models/bin) && (set OM_T_BIN_DIR=.) && oms-OzProj-run.bat -ini OzProj.ini
+
+*/}}
+
+cmd 
+/C
+(set OM_T_MODEL_NAME={{.ModelName}}) && (set OM_T_EXE_STEM={{.ExeStem}}) && (set OM_T_WORK_DIR={{.Dir}}) && (set OM_T_BIN_DIR={{.BinDir}}) &&
+oms-OzProj-run.bat
+{{range .Args}}
+{{.}}
+{{end}}
