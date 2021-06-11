@@ -7,13 +7,11 @@ Rename this file into:
 to make it visible to oms web-service an UI
 
 Oms web-service process this template as:
-  - substitute $arguments
-  - combine result into single line
   - skip empty lines
-Result of template processing is a command line to run model.exe
-
-Example of result:
-  .\modelNameD -OpenM.LogToFile true
+  - use first non-empty line as executable to run
+  - substitute template arguments
+  - combine result into single line
+after template processing oms run it as: exec.Cmd.Start()
 
 Arguments of template:
 struct {
@@ -26,18 +24,8 @@ struct {
   Env       map[string]string // environment variables to run the model
 }
 
-Additional example of customized model run template:
-
-cmd
-/C
-(dir /w) && (set MODEL_FILES="/ab/cd") &&
-{{.ExeStem}}D
-{{range .Args}}
-{{.}}
-{{end}}
-
-Example of result from customized template above:
-  cmd /C (dir /w) && (set MODEL_FILES="/ab/cd") && modelNameD -OpenM.LogToFile true
+Example of result:
+  .\modelNameD -OpenM.LogToFile true
 
 */}}
 
