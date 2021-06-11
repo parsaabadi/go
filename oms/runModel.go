@@ -205,13 +205,26 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 
 // makeCommand return command to run the model.
 // If template file name specified then template processing results used to create command line.
-// If this is MPI model run then tempalate is requred and by default "mpi.ModelRun.template.txt" being used.
+// If this is MPI model run then tempalate is requred
+// MPI run template can be model specific: "mpi.ModelName.template.txt" or default: "mpi.ModelRun.template.txt".
 func (rsc *RunCatalog) makeCommand(mExe, binDir, workDir string, mArgs []string, req *RunRequest) (*exec.Cmd, error) {
 
-	// check is it MPI or regular process model run, to run MPI model template is required
+	// check is it MPI model run, to run MPI model template is required
 	isMpi := req.Mpi.Np != 0
 	if isMpi && req.Template == "" {
-		req.Template = defaultMpiTemplate // use default template to run MPI model
+
+		// search for model-specific MPI template
+		mtn := "mpi." + req.ModelName + ".template.txt"
+
+		for _, tn := range theRunCatalog.mpiTemplates {
+			if tn == mtn {
+				req.Template = mtn
+			}
+		}
+		// if model-specific MPI template not found then use default MPI template to run the model
+		if req.Template == "" {
+			req.Template = defaultMpiTemplate
+		}
 	}
 	isTmpl := req.Template != ""
 
@@ -291,7 +304,9 @@ func (rsc *RunCatalog) makeCommand(mExe, binDir, workDir string, mArgs []string,
 		cmd = exec.Command(cExe, cArgs...)
 	}
 
-	// if this is not MPI run then set work directory and append to environment variables
+	// if this is not MPI run then:
+	// 	set work directory
+	// 	append request environment variables to model environment
 	if !isMpi {
 
 		cmd.Dir = workDir
