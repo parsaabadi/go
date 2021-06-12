@@ -1,0 +1,39 @@
+{{/*
+oms web-service:
+  Template to run OzProj executable on Linux or MacOS
+
+Rename this file into:
+  run.OzProj.template.txt
+to make it visible to oms web-service an UI
+
+Oms web-service process this template as:
+  - skip empty lines
+  - use first non-empty line as executable to run
+  - substitute template arguments
+  - combine result into single line
+after template processing oms run it as: exec.Cmd.Start()
+
+Arguments of template:
+struct {
+  ModelName string            // model name
+  ExeStem   string            // base part of model exe name, usually modelName
+  Dir       string            // work directory to run the model
+  BinDir    string            // bin directory where model exe is located
+  MpiNp     int               // number of MPI processes
+  Args      []string          // model command line arguments
+  Env       map[string]string // environment variables to run the model
+}
+
+Example of result:
+  ../../etc/scripts/oms-OzProj-run.sh OzProj OzProj models/bin . -ini OzProj.ini
+
+*/}}
+
+../../etc/scripts/oms-OzProj-run.sh
+{{.ModelName}}
+{{.ExeStem}}
+{{.Dir}}
+{{.BinDir}}
+{{range .Args}}
+{{.}}
+{{end}}
