@@ -4,19 +4,16 @@ oms web-service:
 
 Use this template if you experiencing CPU binding problems, which may be common on CentOS 8 clusters
 
-Rename this file into:
+To use this template rename it into:
   mpi.ModelRun.template.txt
-to use it by default to run models on MPI cluster.
 
-Oms web-service process this template as:
+Oms web-service using template for exec.Command(exeName, Args...):
   - skip empty lines
-  - use first non-empty line as executable to run
   - substitute template arguments
-  - combine result into single line
-after template processing oms run it as: exec.Cmd.Start()
+  - first non-empty line is a name of executable to run
+  - each other line is a command line argument for executable
 
 Arguments of template:
-struct {
   ModelName string            // model name
   ExeStem   string            // base part of model exe name, usually modelName
   Dir       string            // work directory to run the model
@@ -24,7 +21,6 @@ struct {
   MpiNp     int               // number of MPI processes
   Args      []string          // model command line arguments
   Env       map[string]string // environment variables to run the model
-}
 
 Example of result:
   mpirun -n 16 --bind-to none -wdir models/bin -x key=value ./modelName_mpi -OpenM.LogToFile true
