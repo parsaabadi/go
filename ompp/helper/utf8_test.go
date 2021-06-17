@@ -22,37 +22,37 @@ func TestFileToUtf8(t *testing.T) {
 	}
 
 	// test: read file content to UTF-8 string
-	s, err := FileToUtf8("test_files/tst_utf8_no_bom.txt", "")
+	s, err := FileToUtf8("testdata/tst_utf8_no_bom.txt", "")
 	if err != nil {
 		t.Errorf(err.Error())
 	}
 	checkString("UTF-8 auto detect: tst_utf8_no_bom.txt", s, expectedUtf8Test)
 
-	s, err = FileToUtf8("test_files/tst_utf8_bom.txt", "")
+	s, err = FileToUtf8("testdata/tst_utf8_bom.txt", "")
 	if err != nil {
 		t.Errorf(err.Error())
 	}
 	checkString("UTF-8 BOM: tst_utf8_bom.txt", s, expectedUtf8Test)
 
-	s, err = FileToUtf8("test_files/tst_utf16_LE.txt", "")
+	s, err = FileToUtf8("testdata/tst_utf16_LE.txt", "")
 	if err != nil {
 		t.Errorf(err.Error())
 	}
 	checkString("UTF-16LE: tst_utf16_LE.txt", s, expectedUtf8Test)
 
-	s, err = FileToUtf8("test_files/tst_utf16_BE.txt", "")
+	s, err = FileToUtf8("testdata/tst_utf16_BE.txt", "")
 	if err != nil {
 		t.Errorf(err.Error())
 	}
 	checkString("UTF-16BE: tst_utf16_BE.txt", s, expectedUtf8Test)
 
-	s, err = FileToUtf8("test_files/tst_utf32_LE.txt", "")
+	s, err = FileToUtf8("testdata/tst_utf32_LE.txt", "")
 	if err != nil {
 		t.Errorf(err.Error())
 	}
 	checkString("UTF-32LE: tst_utf32_LE.txt", s, expectedUtf8Test)
 
-	s, err = FileToUtf8("test_files/tst_utf32_BE.txt", "")
+	s, err = FileToUtf8("testdata/tst_utf32_BE.txt", "")
 	if err != nil {
 		t.Errorf(err.Error())
 	}
@@ -69,7 +69,7 @@ func TestUtf8Reader(t *testing.T) {
 	}
 
 	// test: reader to UTF-8
-	f1, err := os.Open("test_files/tst_win1252.txt")
+	f1, err := os.Open("testdata/tst_win1252.txt")
 	if err != nil {
 		t.Errorf(err.Error())
 	}
@@ -83,7 +83,7 @@ func TestUtf8Reader(t *testing.T) {
 	buf.ReadFrom(rd1)
 	buf.WriteString("\r\n")
 
-	f2, err := os.Open("test_files/tst_win1251.txt")
+	f2, err := os.Open("testdata/tst_win1251.txt")
 	if err != nil {
 		t.Errorf(err.Error())
 	}
