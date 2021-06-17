@@ -86,62 +86,6 @@ type ReadTableLayout struct {
 	IsAllAccum bool   // if true then select from all accumulators view else from accumulators table
 }
 
-// ReadTableCompareLayout describes source and size of data page to read output table values from multiple runs.
-//
-// Result is a page of data where each row contains base run value, current run value and optional difference and ratio.
-// Columns list depending on output table or parameter query:
-//
-// output table expressions from multiple runs:
-//   SELECT
-//     M.run_id, C.run_id, M.expr_id, M.dim0, M.dim1,
-//     M.expr_value,
-//     C.expr_value,
-//     C.expr_value - M.expr_value AS "diff",
-//     C.expr_value / CASE WHEN ABS(M.expr_value) > 1.0e-37 THEN M.expr_value ELSE NULL END AS "ratio"
-//   FROM outputTable M
-//   INNER JOIN outputTable C ON (M.expr_id = C.expr_id AND M.dim0 = C.dim0 AND M.dim1 = C.dim1)
-//   WHERE M.run_id = 123 AND C.run_id = 456
-//   AND ....filter by dimensions....
-//   ORDER BY...
-//
-// output table accumulators from multiple runs:
-//   SELECT
-//     M.run_id, C.run_id, M.acc_id, M.sub_id, M.dim0, M.dim1,
-//     M.acc_value,
-//     C.acc_value,
-//     C.acc_value - M.acc_value AS "diff",
-//     C.acc_value / CASE WHEN ABS(M.acc_value) > 1.0e-37 THEN M.acc_value ELSE NULL END AS "ratio"
-//   FROM outputTable M
-//   INNER JOIN outputTable C ON (M.acc_id = C.acc_id AND M.sub_id = C.sub_id AND M.dim0 = C.dim0 AND M.dim1 = C.dim1)
-//   WHERE M.run_id = 123 AND C.run_id = 456
-//   AND ....filter by dimensions....
-//   ORDER BY...
-//
-type ReadTableCompareLayout struct {
-	ReadTableLayout       // output table name, page size of rows to select, where filters and order by
-	IsDiff          bool  // if true then also select difference: current run value - base run value
-	IsRatio         bool  // if true then also select ratio: current run value / base run value
-	runIds          []int // run id's to compare with base run
-}
-
-// TableRunsCompareLayout describes source and size of data page to read output table values from multiple runs.
-//
-// Result is a page of data where each row contains base run value, current run value and optional difference and ratio.
-//
-// Runs to compare are selected either task_run_set table or from run_lst table.
-// Select from task_run_set table is done by task name and task run name or stamp.
-// Select from run_lst table is done by RunTags[] elements, which are run digests, or run stamps or run names.
-// Content of RunTags[] must be uniform, all elements must be of the same kind:
-// run digest or run stamp or run name, it cannot be a mix of digests, stamps, names.
-type TableRunsCompareLayout struct {
-	TableLayout ReadTableCompareLayout // output table name, page size, where filters and order by
-	RunTags     []string               // model runs to compare with base run: run digests or run stamps or run names
-	Task        struct {
-		Name   string // task name to select model runs for comparison
-		RunTag string // task run name or task run stamp to select model runs for comparison
-	}
-}
-
 // ReadPageLayout describes first row offset and size of data page to read input parameter or output table values.
 // If IsLastPage true then return non-empty last page and actual first row offset and size.
 type ReadPageLayout struct {
