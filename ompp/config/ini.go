@@ -13,13 +13,14 @@ import (
 
 /*
 NewIni read ini-file content into  map of (section.key)=>value.
+
 It is very light and able to parse:
   dsn = "DSN='server'; UID='user'; PWD='pas#word';"   ; comments are # here
 
 Section and key are trimed and cannot contain comments ; or # chars inside.
 Key and values trimed and "unquoted".
-Multi-line values not supported.
 Key or value escaped with "double" or 'single' quotes can include spaces or ; or # chars
+Multi-line values are NOT supported, no line continuation.
 
 Example:
   ; comments can start from ; or
