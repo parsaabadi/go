@@ -311,5 +311,36 @@ func toWorksetCsv(
 		firstUse[idx] = true
 	}
 
+	// write each workset parameter value notes into parameterName.LANG.md file
+	if !isAllInOne {
+		for j := range meta.Param {
+
+			paramName := ""
+			for i := range meta.Param[j].Txt {
+
+				if meta.Param[j].Txt[i].LangCode != "" && meta.Param[j].Txt[i].Note != "" {
+
+					// find parameter by name if this is a first note for that parameter
+					if paramName == "" {
+						k, ok := modelDef.ParamByHid(meta.Param[j].ParamHid)
+						if !ok {
+							return errors.New("parameter not found by Hid: " + strconv.Itoa(meta.Param[j].ParamHid))
+						}
+						paramName = modelDef.Param[k].Name
+					}
+
+					// write notes into parameterName.LANG.md file
+					err = toMdFile(
+						csvDir,
+						paramName+"."+meta.Param[j].Txt[i].LangCode,
+						isWriteUtf8bom, meta.Param[j].Txt[i].Note)
+					if err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
+
 	return nil
 }

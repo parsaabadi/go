@@ -226,3 +226,30 @@ func toCsvCellFile(
 	wr.Flush()
 	return wr.Error()
 }
+
+// toMdFile write parameter value notes or output table values notes into Md file, for example into csvDir/ageSex.FR.md file.
+func toMdFile(
+	csvDir string,
+	name string,
+	isWriteUtf8bom bool,
+	text string) error {
+
+	f, err := os.OpenFile(filepath.Join(csvDir, name+".md"), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	// if required then write utf-8 bom
+	if isWriteUtf8bom {
+		if _, err = f.Write(helper.Utf8bom); err != nil {
+			return err
+		}
+	}
+
+	// write file content
+	if _, err = f.WriteString(text); err != nil {
+		return err
+	}
+	return f.Sync()
+}
