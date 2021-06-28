@@ -44,11 +44,6 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 	// re-base it to model work directory
 	binRoot, _ := theCatalog.getModelDir()
 
-	wDir := req.Dir
-	if wDir == "" || wDir == "." || wDir == "./" {
-		wDir = binRoot
-	}
-
 	mb, ok := theCatalog.modelBasicByDigest(req.ModelDigest)
 	if !ok {
 		err := errors.New("Model run error, model not found: " + req.ModelName + ": " + req.ModelDigest)
@@ -56,11 +51,10 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 		rs.IsFinal = true
 		return rs, err // exit with error: model failed to start
 	}
-
 	binDir := mb.binDir
-	if mb.binDir == "" || binDir == "." || binDir == "./" {
-		binDir = binRoot
-	}
+
+	wDir := filepath.Join(binRoot, req.Dir)
+
 	binDir, err := filepath.Rel(wDir, binDir)
 	if err != nil {
 		binDir = binRoot
