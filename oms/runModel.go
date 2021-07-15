@@ -79,6 +79,7 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 	mArgs := []string{}
 	mArgs = append(mArgs, "-OpenM.RunStamp", rStamp)
 	mArgs = append(mArgs, "-OpenM.LogToConsole", "true")
+	mArgs = append(mArgs, "-OpenM.LogToFile", "false")
 
 	importDbLc := strings.ToLower("-ImportDb.")
 
@@ -103,7 +104,13 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 			rs.TaskRunName = val
 		}
 		if strings.EqualFold(key, "-OpenM.LogToConsole") {
-			continue // skip log to console input run option
+			continue // skip log to console input run option: it is already on
+		}
+		if strings.EqualFold(key, "-OpenM.LogToFile") {
+			continue // skip log to file input run option: replaced by console output
+		}
+		if strings.EqualFold(key, "-OpenM.LogFilePath") {
+			continue // skip log file path input run option: replaced by console output
 		}
 		if strings.EqualFold(key, "-OpenM.Database") {
 			continue // database connection string not allowed as run option
