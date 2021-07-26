@@ -28,6 +28,7 @@ Example of result:
 mpirun
 -n
 {{ .MpiNp}}
+--bind-to none
 {{with .Dir}}
 -wdir
 {{.}}
