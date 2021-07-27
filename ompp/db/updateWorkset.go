@@ -17,7 +17,7 @@ func UpdateWorksetReadonly(dbConn *sql.DB, setId int, isReadonly bool) error {
 
 	return Update(dbConn,
 		"UPDATE workset_lst"+
-			" SET is_readonly = "+toBoolSqlConst(isReadonly)+", "+" update_dt = "+toQuoted(helper.MakeDateTime(time.Now()))+
+			" SET is_readonly = "+toBoolSqlConst(isReadonly)+", "+" update_dt = "+ToQuoted(helper.MakeDateTime(time.Now()))+
 			" WHERE set_id ="+strconv.Itoa(setId))
 }
 
@@ -26,11 +26,11 @@ func UpdateWorksetReadonlyByName(dbConn *sql.DB, modelId int, name string, isRea
 
 	return Update(dbConn,
 		"UPDATE workset_lst"+
-			" SET is_readonly = "+toBoolSqlConst(isReadonly)+", "+" update_dt = "+toQuoted(helper.MakeDateTime(time.Now()))+
+			" SET is_readonly = "+toBoolSqlConst(isReadonly)+", "+" update_dt = "+ToQuoted(helper.MakeDateTime(time.Now()))+
 			" WHERE set_id = ("+
 			" SELECT MIN(W.set_id) FROM workset_lst W"+
 			" WHERE W.model_id = "+strconv.Itoa(modelId)+
-			" AND set_name = "+toQuoted(name)+
+			" AND set_name = "+ToQuoted(name)+
 			")")
 }
 
@@ -103,7 +103,7 @@ func doRenameWorkset(trx *sql.Tx, setId int, newSetName string, isAnyReadonly bo
 
 	// check if new name is unique
 	err = TrxSelectFirst(trx,
-		"SELECT COUNT(*) FROM workset_lst WHERE set_id <> "+sId+" AND set_name = "+toQuoted(newSetName),
+		"SELECT COUNT(*) FROM workset_lst WHERE set_id <> "+sId+" AND set_name = "+ToQuoted(newSetName),
 		func(row *sql.Row) error {
 			nCnt := 0
 			if err := row.Scan(&nCnt); err != nil {
@@ -124,7 +124,7 @@ func doRenameWorkset(trx *sql.Tx, setId int, newSetName string, isAnyReadonly bo
 		"UPDATE workset_lst"+
 			" SET set_name = "+toQuotedMax(newSetName, nameDbMax)+", "+
 			" is_readonly = is_readonly - 1,"+
-			" update_dt = "+toQuoted(helper.MakeDateTime(time.Now()))+
+			" update_dt = "+ToQuoted(helper.MakeDateTime(time.Now()))+
 			" WHERE set_id ="+sId)
 	if err != nil {
 		return false, err
@@ -209,7 +209,7 @@ func doUpdateWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, isRepl
 			" CASE"+
 			" WHEN 0 ="+
 			" (SELECT COUNT(*) FROM workset_lst"+
-			" WHERE model_id = "+smId+" AND set_name = "+toQuoted(meta.Set.Name)+
+			" WHERE model_id = "+smId+" AND set_name = "+ToQuoted(meta.Set.Name)+
 			" )"+
 			" THEN id_value + 1"+
 			" ELSE id_value"+
@@ -223,7 +223,7 @@ func doUpdateWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, isRepl
 	setId := 0
 	isReadonly := false
 	err = TrxSelectFirst(trx,
-		"SELECT set_id, is_readonly FROM workset_lst WHERE model_id = "+smId+" AND set_name = "+toQuoted(meta.Set.Name),
+		"SELECT set_id, is_readonly FROM workset_lst WHERE model_id = "+smId+" AND set_name = "+ToQuoted(meta.Set.Name),
 		func(row *sql.Row) error {
 			nReadonly := 0
 			if err := row.Scan(&setId, &nReadonly); err != nil {
@@ -333,7 +333,7 @@ func doInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, langDe
 			strconv.Itoa(modelDef.Model.ModelId)+", "+
 			toQuotedMax(meta.Set.Name, nameDbMax)+", "+
 			toBoolSqlConst(meta.Set.IsReadonly)+", "+
-			toQuoted(meta.Set.UpdateDateTime)+")")
+			ToQuoted(meta.Set.UpdateDateTime)+")")
 	if err != nil {
 		return err
 	}
@@ -372,7 +372,7 @@ func doReplaceWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, langD
 		"UPDATE workset_lst"+
 			" SET is_readonly = "+toBoolSqlConst(meta.Set.IsReadonly)+", "+
 			" base_run_id = "+sbId+", "+
-			" update_dt = "+toQuoted(meta.Set.UpdateDateTime)+
+			" update_dt = "+ToQuoted(meta.Set.UpdateDateTime)+
 			" WHERE set_id ="+sId)
 	if err != nil {
 		return err
@@ -469,7 +469,7 @@ func doMergeWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, langDef
 		sl += " is_readonly = 1, "
 	}
 	meta.Set.UpdateDateTime = helper.MakeDateTime(time.Now())
-	sl += " update_dt = " + toQuoted(meta.Set.UpdateDateTime)
+	sl += " update_dt = " + ToQuoted(meta.Set.UpdateDateTime)
 
 	err := TrxUpdate(trx, "UPDATE workset_lst SET "+sl+" WHERE set_id ="+sId)
 	if err != nil {

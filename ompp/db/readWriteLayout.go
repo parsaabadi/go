@@ -168,7 +168,7 @@ func makeOrderBy(rank int, orderBy []OrderByColumn, extraIdColumns int) string {
 
 // makeDimFilter convert dimension enum codes to enum ids and return filter condition, eg: dim1 IN (1, 2, 3, 4)
 func makeDimFilter(
-	modelDef *ModelMeta, flt *FilterColumn, dimName string, typeOf *TypeMeta, isTotalEnabled bool, msgName string,
+	modelDef *ModelMeta, flt *FilterColumn, alias string, dimName string, typeOf *TypeMeta, isTotalEnabled bool, msgName string,
 ) (string, error) {
 
 	// convert enum codes to ids
@@ -190,13 +190,13 @@ func makeDimFilter(
 	}
 
 	// return filter condition
-	return makeDimIdFilter(modelDef, &fltId, dimName, typeOf, msgName)
+	return makeDimIdFilter(modelDef, &fltId, alias, dimName, typeOf, msgName)
 }
 
 // makeDimIdFilter return dimension filter condition for enum ids, eg: dim1 IN (1, 2, 3, 4)
 // It is also can be equal or BETWEEN fitler.
 func makeDimIdFilter(
-	modelDef *ModelMeta, flt *FilterIdColumn, dimName string, typeOf *TypeMeta, msgName string) (string, error) {
+	modelDef *ModelMeta, flt *FilterIdColumn, alias string, dimName string, typeOf *TypeMeta, msgName string) (string, error) {
 
 	// validate number of enum ids in enum list
 	if len(flt.EnumIds) <= 0 || flt.Op == EqOpFilter && len(flt.EnumIds) != 1 || flt.Op == BetweenOpFilter && len(flt.EnumIds) != 2 {
@@ -268,7 +268,11 @@ func makeDimIdFilter(
 	}
 
 	// make dimension filter
-	q := dimName
+	q := ""
+	if alias != "" {
+		q += alias + "."
+	}
+	q += dimName
 	switch op {
 	case EqOpFilter: // AND dim1 = 2
 		q += " = " + strconv.Itoa(flt.EnumIds[0])

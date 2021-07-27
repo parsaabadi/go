@@ -146,7 +146,7 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayout)
 		}
 
 		f, err := makeDimFilter(
-			modelDef, &layout.Filter[k], param.Dim[dix].Name, param.Dim[dix].typeOf, false, "parameter "+param.Name)
+			modelDef, &layout.Filter[k], "", param.Dim[dix].Name, param.Dim[dix].typeOf, false, "parameter "+param.Name)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -170,7 +170,7 @@ func ReadParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayout)
 		}
 
 		f, err := makeDimIdFilter(
-			modelDef, &layout.FilterById[k], param.Dim[dix].Name, param.Dim[dix].typeOf, "parameter "+param.Name)
+			modelDef, &layout.FilterById[k], "", param.Dim[dix].Name, param.Dim[dix].typeOf, "parameter "+param.Name)
 		if err != nil {
 			return nil, nil, err
 		}

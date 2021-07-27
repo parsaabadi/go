@@ -26,7 +26,7 @@ func RenameTask(dbConn *sql.DB, taskId int, newTaskName string) (bool, error) {
 
 	// check if new name is unique
 	err := SelectFirst(dbConn,
-		"SELECT COUNT(*) FROM task_lst WHERE task_id <> "+strconv.Itoa(taskId)+" AND task_name = "+toQuoted(newTaskName),
+		"SELECT COUNT(*) FROM task_lst WHERE task_id <> "+strconv.Itoa(taskId)+" AND task_name = "+ToQuoted(newTaskName),
 		func(row *sql.Row) error {
 			nCnt := 0
 			if err := row.Scan(&nCnt); err != nil {
@@ -212,9 +212,9 @@ func doInsertTaskBody(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta, langDef 
 				stId+", "+
 				toQuotedMax(meta.TaskRun[k].Name, nameDbMax)+", "+
 				strconv.Itoa(meta.TaskRun[k].SubCount)+", "+
-				toQuoted(meta.TaskRun[k].CreateDateTime)+", "+
-				toQuoted(meta.TaskRun[k].Status)+", "+
-				toQuoted(meta.TaskRun[k].UpdateDateTime)+", "+
+				ToQuoted(meta.TaskRun[k].CreateDateTime)+", "+
+				ToQuoted(meta.TaskRun[k].Status)+", "+
+				ToQuoted(meta.TaskRun[k].UpdateDateTime)+", "+
 				toQuotedMax(meta.TaskRun[k].RunStamp, codeDbMax)+")")
 		if err != nil {
 			return err
@@ -399,7 +399,7 @@ func doCreateTaskRow(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta) (bool, er
 			" CASE"+
 			" WHEN 0 ="+
 			" (SELECT COUNT(*) FROM task_lst"+
-			" WHERE model_id = "+smId+" AND task_name = "+toQuoted(meta.Task.Name)+
+			" WHERE model_id = "+smId+" AND task_name = "+ToQuoted(meta.Task.Name)+
 			" )"+
 			" THEN id_value + 1"+
 			" ELSE id_value"+
@@ -412,7 +412,7 @@ func doCreateTaskRow(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta) (bool, er
 	// check if this task already exist
 	taskId := 0
 	err = TrxSelectFirst(trx,
-		"SELECT task_id FROM task_lst WHERE model_id = "+smId+" AND task_name = "+toQuoted(meta.Task.Name),
+		"SELECT task_id FROM task_lst WHERE model_id = "+smId+" AND task_name = "+ToQuoted(meta.Task.Name),
 		func(row *sql.Row) error {
 			return row.Scan(&taskId)
 		})
@@ -452,7 +452,7 @@ func doCreateTaskRow(trx *sql.Tx, modelDef *ModelMeta, meta *TaskMeta) (bool, er
 		// UPDATE task_lst SET task_name = 'task_88_2014-08-17 16:57:04.0123' WHERE task_id = 88
 		err := TrxUpdate(trx,
 			"UPDATE task_lst"+
-				" SET task_name = "+toQuoted("task_"+strconv.Itoa(taskId)+"_"+helper.MakeDateTime(time.Now()))+
+				" SET task_name = "+ToQuoted("task_"+strconv.Itoa(taskId)+"_"+helper.MakeDateTime(time.Now()))+
 				" WHERE task_id = "+strconv.Itoa(taskId))
 		if err != nil {
 			return false, err

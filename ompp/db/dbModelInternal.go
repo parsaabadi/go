@@ -270,7 +270,7 @@ func (meta *ModelMeta) updateInternals() error {
 				}
 			}
 
-			meta.Table[idx].Digest = fmt.Sprintf("%x", hMd5.Sum(nil)) // set ouput table digest string
+			meta.Table[idx].Digest = fmt.Sprintf("%x", hMd5.Sum(nil)) // set output table digest string
 			isDigestUpdated = true
 		}
 	}

@@ -83,7 +83,7 @@ func doUpdateLanguage(trx *sql.Tx, langDef *LangMeta) error {
 		// check if this language already exist
 		langDef.Lang[idx].langId = -1
 		err := TrxSelectFirst(trx,
-			"SELECT lang_id FROM lang_lst WHERE lang_code = "+toQuoted(langDef.Lang[idx].LangCode),
+			"SELECT lang_id FROM lang_lst WHERE lang_code = "+ToQuoted(langDef.Lang[idx].LangCode),
 			func(row *sql.Row) error {
 				return row.Scan(&langDef.Lang[idx].langId)
 			})
@@ -167,7 +167,7 @@ func doUpdateWord(trx *sql.Tx, langId int, wordRs map[string]string) error {
 		err := TrxSelectFirst(trx,
 			"SELECT COUNT(*) FROM lang_word"+
 				" WHERE lang_id = "+strconv.Itoa(langId)+
-				" AND word_code = "+toQuoted(code),
+				" AND word_code = "+ToQuoted(code),
 			func(row *sql.Row) error {
 				return row.Scan(&cnt)
 			})
@@ -183,7 +183,7 @@ func doUpdateWord(trx *sql.Tx, langId int, wordRs map[string]string) error {
 				"UPDATE lang_word"+
 					" SET word_value = "+toQuotedMax(val, wordDbMax)+
 					" WHERE lang_id = "+strconv.Itoa(langId)+
-					" AND word_code = "+toQuoted(code))
+					" AND word_code = "+ToQuoted(code))
 			if err != nil {
 				return err
 			}

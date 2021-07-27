@@ -10,7 +10,7 @@ import (
 	"strconv"
 )
 
-// ReadOutputTable read ouput table page (dimensions and values) from model run results.
+// ReadOutputTable read output table page (dimensions and values) from model run results.
 //
 // If layout.IsAccum true then select accumulator(s) else output expression value(s)
 // If layout.ValueName not empty then select only that expression (accumulator) else all expressions (accumulators)
@@ -24,7 +24,7 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLayou
 		return nil, nil, errors.New("invalid (empty) page layout")
 	}
 	if layout.Name == "" {
-		return nil, nil, errors.New("invalid (empty) ouput table name")
+		return nil, nil, errors.New("invalid (empty) output table name")
 	}
 
 	// find output table id by name
@@ -179,7 +179,7 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLayou
 		}
 
 		f, err := makeDimFilter(
-			modelDef, &layout.Filter[k], table.Dim[dix].Name, table.Dim[dix].typeOf, table.Dim[dix].IsTotal, "output table "+table.Name)
+			modelDef, &layout.Filter[k], "", table.Dim[dix].Name, table.Dim[dix].typeOf, table.Dim[dix].IsTotal, "output table "+table.Name)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -203,7 +203,7 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLayou
 		}
 
 		f, err := makeDimIdFilter(
-			modelDef, &layout.FilterById[k], table.Dim[dix].Name, table.Dim[dix].typeOf, "output table "+table.Name)
+			modelDef, &layout.FilterById[k], "", table.Dim[dix].Name, table.Dim[dix].typeOf, "output table "+table.Name)
 		if err != nil {
 			return nil, nil, err
 		}

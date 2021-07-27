@@ -68,7 +68,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 	// find default model language id by code
 	var dlId int
 	err := TrxSelectFirst(trx,
-		"SELECT lang_id FROM lang_lst WHERE lang_code = "+toQuoted(modelDef.Model.DefaultLangCode),
+		"SELECT lang_id FROM lang_lst WHERE lang_code = "+ToQuoted(modelDef.Model.DefaultLangCode),
 		func(row *sql.Row) error {
 			return row.Scan(&dlId)
 		})
@@ -137,7 +137,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 		err = TrxUpdate(trx,
 			"UPDATE id_lst SET id_value ="+
 				" CASE"+
-				" WHEN 0 = (SELECT COUNT(*) FROM type_dic WHERE type_digest = "+toQuoted(modelDef.Type[idx].Digest)+")"+
+				" WHEN 0 = (SELECT COUNT(*) FROM type_dic WHERE type_digest = "+ToQuoted(modelDef.Type[idx].Digest)+")"+
 				" THEN id_value + 1"+
 				" ELSE id_value"+
 				" END"+
@@ -149,7 +149,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 		// check if this type already exist
 		modelDef.Type[idx].TypeHid = 0
 		err = TrxSelectFirst(trx,
-			"SELECT type_hid FROM type_dic WHERE type_digest = "+toQuoted(modelDef.Type[idx].Digest),
+			"SELECT type_hid FROM type_dic WHERE type_digest = "+ToQuoted(modelDef.Type[idx].Digest),
 			func(row *sql.Row) error {
 				return row.Scan(&modelDef.Type[idx].TypeHid)
 			})
@@ -222,7 +222,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 				strconv.Itoa(modelDef.Type[idx].TypeId)+", "+
 				" D.type_hid"+
 				" FROM type_dic D"+
-				" WHERE D.type_digest = "+toQuoted(modelDef.Type[idx].Digest)+
+				" WHERE D.type_digest = "+ToQuoted(modelDef.Type[idx].Digest)+
 				" AND NOT EXISTS"+
 				" (SELECT * FROM model_type_dic E"+
 				" WHERE E.model_id = "+smId+
@@ -254,7 +254,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 		err = TrxUpdate(trx,
 			"UPDATE id_lst SET id_value ="+
 				" CASE"+
-				" WHEN 0 = (SELECT COUNT(*) FROM parameter_dic WHERE parameter_digest = "+toQuoted(modelDef.Param[idx].Digest)+")"+
+				" WHEN 0 = (SELECT COUNT(*) FROM parameter_dic WHERE parameter_digest = "+ToQuoted(modelDef.Param[idx].Digest)+")"+
 				" THEN id_value + 1"+
 				" ELSE id_value"+
 				" END"+
@@ -266,7 +266,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 		// check if this parameter already exist
 		modelDef.Param[idx].ParamHid = 0
 		err = TrxSelectFirst(trx,
-			"SELECT parameter_hid FROM parameter_dic WHERE parameter_digest = "+toQuoted(modelDef.Param[idx].Digest),
+			"SELECT parameter_hid FROM parameter_dic WHERE parameter_digest = "+ToQuoted(modelDef.Param[idx].Digest),
 			func(row *sql.Row) error {
 				return row.Scan(&modelDef.Param[idx].ParamHid)
 			})
@@ -317,8 +317,8 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 					strconv.Itoa(modelDef.Param[idx].ParamHid)+", "+
 					toQuotedMax(modelDef.Param[idx].Name, nameDbMax)+", "+
 					toQuotedMax(modelDef.Param[idx].Digest, codeDbMax)+", "+
-					toQuoted(modelDef.Param[idx].DbRunTable)+", "+
-					toQuoted(modelDef.Param[idx].DbSetTable)+", "+
+					ToQuoted(modelDef.Param[idx].DbRunTable)+", "+
+					ToQuoted(modelDef.Param[idx].DbSetTable)+", "+
 					strconv.Itoa(modelDef.Param[idx].Rank)+", "+
 					strconv.Itoa(modelDef.Param[idx].typeOf.TypeHid)+", "+
 					toBoolSqlConst(modelDef.Param[idx].IsExtendable)+", "+
@@ -338,7 +338,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 					"INSERT INTO parameter_dims (parameter_hid, dim_id, dim_name, type_hid) VALUES ("+
 						strconv.Itoa(modelDef.Param[idx].ParamHid)+", "+
 						strconv.Itoa(modelDef.Param[idx].Dim[j].DimId)+", "+
-						toQuoted(modelDef.Param[idx].Dim[j].Name)+", "+
+						ToQuoted(modelDef.Param[idx].Dim[j].Name)+", "+
 						strconv.Itoa(modelDef.Param[idx].Dim[j].typeOf.TypeHid)+")")
 				if err != nil {
 					return err
@@ -378,7 +378,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 				" D.parameter_hid, "+
 				toBoolSqlConst(modelDef.Param[idx].IsHidden)+
 				" FROM parameter_dic D"+
-				" WHERE D.parameter_digest = "+toQuoted(modelDef.Param[idx].Digest)+
+				" WHERE D.parameter_digest = "+ToQuoted(modelDef.Param[idx].Digest)+
 				" AND NOT EXISTS"+
 				" (SELECT * FROM model_parameter_dic E"+
 				" WHERE E.model_id = "+smId+
@@ -401,8 +401,8 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 					" VALUES ("+
 					smId+", "+
 					strconv.Itoa(modelDef.Param[idx].ParamId)+", "+
-					toQuoted(modelDef.Param[idx].Import[j].FromName)+", "+
-					toQuoted(modelDef.Param[idx].Import[j].FromModel)+", "+
+					ToQuoted(modelDef.Param[idx].Import[j].FromName)+", "+
+					ToQuoted(modelDef.Param[idx].Import[j].FromModel)+", "+
 					toBoolSqlConst(modelDef.Param[idx].Import[j].IsSampleDim)+")")
 			if err != nil {
 				return err
@@ -431,7 +431,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 		err = TrxUpdate(trx,
 			"UPDATE id_lst SET id_value ="+
 				" CASE"+
-				" WHEN 0 = (SELECT COUNT(*) FROM table_dic WHERE table_digest = "+toQuoted(modelDef.Table[idx].Digest)+")"+
+				" WHEN 0 = (SELECT COUNT(*) FROM table_dic WHERE table_digest = "+ToQuoted(modelDef.Table[idx].Digest)+")"+
 				" THEN id_value + 1"+
 				" ELSE id_value"+
 				" END"+
@@ -443,7 +443,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 		// check if this output table already exist
 		modelDef.Table[idx].TableHid = 0
 		err = TrxSelectFirst(trx,
-			"SELECT table_hid FROM table_dic WHERE table_digest = "+toQuoted(modelDef.Table[idx].Digest),
+			"SELECT table_hid FROM table_dic WHERE table_digest = "+ToQuoted(modelDef.Table[idx].Digest),
 			func(row *sql.Row) error {
 				return row.Scan(&modelDef.Table[idx].TableHid)
 			})
@@ -498,9 +498,9 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 					toQuotedMax(modelDef.Table[idx].Digest, codeDbMax)+", "+
 					strconv.Itoa(modelDef.Table[idx].Rank)+", "+
 					toBoolSqlConst(modelDef.Table[idx].IsSparse)+", "+
-					toQuoted(modelDef.Table[idx].DbExprTable)+", "+
-					toQuoted(modelDef.Table[idx].DbAccTable)+", "+
-					toQuoted(modelDef.Table[idx].DbAccAllView)+", "+
+					ToQuoted(modelDef.Table[idx].DbExprTable)+", "+
+					ToQuoted(modelDef.Table[idx].DbAccTable)+", "+
+					ToQuoted(modelDef.Table[idx].DbAccAllView)+", "+
 					toQuotedMax(modelDef.Table[idx].ImportDigest, codeDbMax)+
 					")")
 			if err != nil {
@@ -520,7 +520,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 						" VALUES ("+
 						strconv.Itoa(modelDef.Table[idx].TableHid)+", "+
 						strconv.Itoa(modelDef.Table[idx].Dim[j].DimId)+", "+
-						toQuoted(modelDef.Table[idx].Dim[j].Name)+", "+
+						ToQuoted(modelDef.Table[idx].Dim[j].Name)+", "+
 						strconv.Itoa(modelDef.Table[idx].Dim[j].typeOf.TypeHid)+", "+
 						toBoolSqlConst(modelDef.Table[idx].Dim[j].IsTotal)+", "+
 						strconv.Itoa(modelDef.Table[idx].Dim[j].DimSize)+")")
@@ -540,10 +540,10 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 						" VALUES ("+
 						strconv.Itoa(modelDef.Table[idx].TableHid)+", "+
 						strconv.Itoa(modelDef.Table[idx].Acc[j].AccId)+", "+
-						toQuoted(modelDef.Table[idx].Acc[j].Name)+", "+
+						ToQuoted(modelDef.Table[idx].Acc[j].Name)+", "+
 						toBoolSqlConst(modelDef.Table[idx].Acc[j].IsDerived)+", "+
-						toQuoted(modelDef.Table[idx].Acc[j].SrcAcc)+", "+
-						toQuoted(modelDef.Table[idx].Acc[j].AccSql)+")")
+						ToQuoted(modelDef.Table[idx].Acc[j].SrcAcc)+", "+
+						ToQuoted(modelDef.Table[idx].Acc[j].AccSql)+")")
 				if err != nil {
 					return err
 				}
@@ -562,10 +562,10 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 						" VALUES ("+
 						strconv.Itoa(modelDef.Table[idx].TableHid)+", "+
 						strconv.Itoa(modelDef.Table[idx].Expr[j].ExprId)+", "+
-						toQuoted(modelDef.Table[idx].Expr[j].Name)+", "+
+						ToQuoted(modelDef.Table[idx].Expr[j].Name)+", "+
 						strconv.Itoa(modelDef.Table[idx].Expr[j].Decimals)+", "+
-						toQuoted(modelDef.Table[idx].Expr[j].SrcExpr)+", "+
-						toQuoted(modelDef.Table[idx].Expr[j].ExprSql)+")")
+						ToQuoted(modelDef.Table[idx].Expr[j].SrcExpr)+", "+
+						ToQuoted(modelDef.Table[idx].Expr[j].ExprSql)+")")
 				if err != nil {
 					return err
 				}
@@ -616,7 +616,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 				strconv.Itoa(modelDef.Table[idx].ExprPos)+", "+
 				toBoolSqlConst(modelDef.Table[idx].IsHidden)+
 				" FROM table_dic D"+
-				" WHERE D.table_digest = "+toQuoted(modelDef.Table[idx].Digest)+
+				" WHERE D.table_digest = "+ToQuoted(modelDef.Table[idx].Digest)+
 				" AND NOT EXISTS"+
 				" (SELECT * FROM model_table_dic E"+
 				" WHERE E.model_id = "+smId+

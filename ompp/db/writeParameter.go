@@ -101,7 +101,7 @@ func doWriteRunParameter(
 	// start run update
 	srId := strconv.Itoa(runId)
 	err := TrxUpdate(trx,
-		"UPDATE run_lst SET update_dt = "+toQuoted(helper.MakeDateTime(time.Now()))+" WHERE run_id = "+srId)
+		"UPDATE run_lst SET update_dt = "+ToQuoted(helper.MakeDateTime(time.Now()))+" WHERE run_id = "+srId)
 	if err != nil {
 		return err
 	}
@@ -155,7 +155,7 @@ func doWriteRunParameter(
 	err = TrxUpdate(trx,
 		"INSERT INTO run_parameter (run_id, parameter_hid, base_run_id, sub_count, value_digest)"+
 			" VALUES ("+
-			srId+", "+sHid+", "+srId+", "+strconv.Itoa(subCount)+", "+toQuoted(digest)+")")
+			srId+", "+sHid+", "+srId+", "+strconv.Itoa(subCount)+", "+ToQuoted(digest)+")")
 	if err != nil {
 		return err
 	}
@@ -165,7 +165,7 @@ func doWriteRunParameter(
 	err = TrxSelectFirst(trx,
 		"SELECT MIN(run_id) FROM run_parameter"+
 			" WHERE parameter_hid = "+sHid+
-			" AND value_digest = "+toQuoted(digest),
+			" AND value_digest = "+ToQuoted(digest),
 		func(row *sql.Row) error {
 			if err := row.Scan(&nBase); err != nil {
 				return err
@@ -238,7 +238,7 @@ func doWriteSetParameter(trx *sql.Tx, param *ParamMeta, setId int, subCount int,
 	sId := strconv.Itoa(setId)
 	err := TrxUpdate(trx,
 		"UPDATE workset_lst"+
-			" SET is_readonly = is_readonly + 1, update_dt = "+toQuoted(helper.MakeDateTime(time.Now()))+
+			" SET is_readonly = is_readonly + 1, update_dt = "+ToQuoted(helper.MakeDateTime(time.Now()))+
 			" WHERE set_id = "+sId)
 	if err != nil {
 		return err

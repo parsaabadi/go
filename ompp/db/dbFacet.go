@@ -86,7 +86,7 @@ func (facet Facet) createTableIfNotExist(tableName string, bodySql string) strin
 		return "CREATE TABLE IF NOT EXISTS " + tableName + " " + bodySql
 	case MsSqlFacet:
 		return "IF NOT EXISTS" +
-			" (SELECT * FROM INFORMATION_SCHEMA.TABLES T WHERE T.TABLE_NAME = " + toQuoted(tableName) + ") " +
+			" (SELECT * FROM INFORMATION_SCHEMA.TABLES T WHERE T.TABLE_NAME = " + ToQuoted(tableName) + ") " +
 			" CREATE TABLE " + tableName + " " + bodySql
 	}
 	return "CREATE TABLE " + tableName + " " + bodySql

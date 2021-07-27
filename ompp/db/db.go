@@ -428,20 +428,33 @@ func toBoolSqlConst(isValue bool) string {
 	return "0"
 }
 
-// make sql quoted string, ie: 'O''Brien'.
-// TODO: it is not clear for MSSQL + ODBC + utf-8:
-// MSSQL silently replace following utf-16 chars with 'single' quote
+// return true if character is can be interpreted as sql ' quote
+// MSSQL silently replace following utf-16 chars with 'single' quote:
 /*
-   &#x2b9;    697  Modifier Letter Prime
-   &#x2bc;    700  Modifier Letter Apostrophe
-   &#x2c8;    712  Modifier Letter Vertical Line
-   &#x2032;  8242  Prime
-   &#xff07; 65287  Fullwidth Apostrophe
+  &#x2b9;    697  Modifier Letter Prime
+  &#x2bc;    700  Modifier Letter Apostrophe
+  &#x2c8;    712  Modifier Letter Vertical Line
+  &#x2032;  8242  Prime
+  &#xff07; 65287  Fullwidth Apostrophe
 */
-func toQuoted(src string) string {
+func IsUnsafeQuote(c rune) bool {
+	return c == 0x2b9 || c == 0x2bc || c == 0x2c8 || c == 0x2032 || c == 0xff07
+}
+
+// make sql quoted string, ie: 'O''Brien'.
+func ToQuoted(src string) string {
+
 	var sb strings.Builder
 	sb.WriteRune('\'')
-	sb.WriteString(strings.Replace(src, "'", "''", -1))
+
+	for _, c := range src {
+		if c == '\'' || IsUnsafeQuote(c) {
+			sb.WriteString("''")
+		} else {
+			sb.WriteRune(c)
+		}
+	}
+
 	sb.WriteRune('\'')
 	return sb.String()
 }
@@ -451,13 +464,13 @@ func toQuotedOrNull(src string) string {
 	if src == "" {
 		return "NULL"
 	}
-	return toQuoted(src)
+	return ToQuoted(src)
 }
 
 // make sql quoted string, ie: 'O''Brien'.
 // Trim spaces and return up to maxLen bytes from src string.
 func toQuotedMax(src string, maxLen int) string {
-	return toQuoted(leftMax(src, maxLen))
+	return ToQuoted(leftMax(src, maxLen))
 }
 
 // return "NULL" if string '' empty or return sql quoted string, ie: 'O''Brien'

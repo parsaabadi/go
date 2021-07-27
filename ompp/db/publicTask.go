@@ -250,7 +250,7 @@ func (pub *TaskPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskMeta, 
 		"SELECT R.run_id, R.run_digest"+
 			" FROM run_lst R"+
 			" WHERE R.model_id = "+strconv.Itoa(modelDef.Model.ModelId)+
-			" AND R.status IN ("+toQuoted(DoneRunStatus)+", "+toQuoted(ErrorRunStatus)+", "+toQuoted(ExitRunStatus)+")"+
+			" AND R.status IN ("+ToQuoted(DoneRunStatus)+", "+ToQuoted(ErrorRunStatus)+", "+ToQuoted(ExitRunStatus)+")"+
 			" ORDER BY 1",
 		func(rows *sql.Rows) error {
 

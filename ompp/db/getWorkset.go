@@ -42,7 +42,7 @@ func GetWorksetByName(dbConn *sql.DB, modelId int, name string) (*WorksetRow, er
 			" ("+
 			" SELECT MIN(M.set_id) FROM workset_lst M"+
 			" WHERE M.model_id = "+strconv.Itoa(modelId)+
-			" AND M.set_name = "+toQuoted(name)+
+			" AND M.set_name = "+ToQuoted(name)+
 			" )")
 }
 
@@ -104,7 +104,7 @@ func GetWorksetListText(dbConn *sql.DB, modelId int, langCode string) ([]Workset
 		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)" +
 		" WHERE H.model_id = " + strconv.Itoa(modelId)
 	if langCode != "" {
-		q += " AND L.lang_code = " + toQuoted(langCode)
+		q += " AND L.lang_code = " + ToQuoted(langCode)
 	}
 	q += " ORDER BY 1, 2"
 
@@ -184,7 +184,7 @@ func GetWorksetText(dbConn *sql.DB, setId int, langCode string) ([]WorksetTxtRow
 		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)" +
 		" WHERE M.set_id = " + strconv.Itoa(setId)
 	if langCode != "" {
-		q += " AND L.lang_code = " + toQuoted(langCode)
+		q += " AND L.lang_code = " + ToQuoted(langCode)
 	}
 	q += " ORDER BY 1, 2"
 
@@ -230,9 +230,9 @@ func GetWorksetRunIds(dbConn *sql.DB, setId int) ([]int, error) {
 		"SELECT RL.run_id"+
 			" FROM run_lst RL"+
 			" INNER JOIN run_option RO ON (RO.run_id = RL.run_id)"+
-			" WHERE RL.status = "+toQuoted(DoneRunStatus)+
+			" WHERE RL.status = "+ToQuoted(DoneRunStatus)+
 			" AND RO.option_key = 'OpenM.SetId'"+
-			" AND RO.option_value = "+toQuoted(strconv.Itoa(setId))+
+			" AND RO.option_value = "+ToQuoted(strconv.Itoa(setId))+
 			" ORDER BY 1",
 		func(rows *sql.Rows) error {
 			var rId int
@@ -303,7 +303,7 @@ func GetWorksetParamText(dbConn *sql.DB, setId int, paramHid int, langCode strin
 		" WHERE M.set_id = " + strconv.Itoa(setId) +
 		" AND M.parameter_hid = " + strconv.Itoa(paramHid)
 	if langCode != "" {
-		q += " AND L.lang_code = " + toQuoted(langCode)
+		q += " AND L.lang_code = " + ToQuoted(langCode)
 	}
 	q += " ORDER BY 1, 2, 3"
 
@@ -320,7 +320,7 @@ func GetWorksetAllParamText(dbConn *sql.DB, setId int, langCode string) ([]Works
 		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)" +
 		" WHERE M.set_id = " + strconv.Itoa(setId)
 	if langCode != "" {
-		q += " AND L.lang_code = " + toQuoted(langCode)
+		q += " AND L.lang_code = " + ToQuoted(langCode)
 	}
 	q += " ORDER BY 1, 2, 3"
 
@@ -368,7 +368,7 @@ func GetWorksetFull(dbConn *sql.DB, setRow *WorksetRow, langCode string) (*Works
 	// where filters
 	var langFilter string
 	if langCode != "" {
-		langFilter = " AND L.lang_code = " + toQuoted(langCode)
+		langFilter = " AND L.lang_code = " + ToQuoted(langCode)
 	}
 
 	// workset header: workset_lst row, model name and digest
@@ -452,7 +452,7 @@ func GetWorksetFullList(dbConn *sql.DB, modelId int, isReadonly bool, langCode s
 
 	var langFilter string
 	if langCode != "" {
-		langFilter = " AND L.lang_code = " + toQuoted(langCode)
+		langFilter = " AND L.lang_code = " + ToQuoted(langCode)
 	}
 
 	// workset_lst rows

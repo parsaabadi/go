@@ -113,7 +113,7 @@ func doUpdateWorksetParameterMeta(
 	err := TrxUpdate(trx,
 		"UPDATE workset_lst"+
 			" SET is_readonly = is_readonly + 1"+
-			" WHERE model_id = "+strconv.Itoa(modelDef.Model.ModelId)+" AND set_name = "+toQuoted(wm.Set.Name))
+			" WHERE model_id = "+strconv.Itoa(modelDef.Model.ModelId)+" AND set_name = "+ToQuoted(wm.Set.Name))
 	if err != nil {
 		return 0, err
 	}
@@ -122,7 +122,7 @@ func doUpdateWorksetParameterMeta(
 	var setId, nRd int
 	err = TrxSelectFirst(trx,
 		"SELECT set_id, is_readonly FROM workset_lst"+
-			" WHERE model_id = "+strconv.Itoa(modelDef.Model.ModelId)+" AND set_name = "+toQuoted(wm.Set.Name),
+			" WHERE model_id = "+strconv.Itoa(modelDef.Model.ModelId)+" AND set_name = "+ToQuoted(wm.Set.Name),
 		func(row *sql.Row) error {
 			if err := row.Scan(&setId, &nRd); err != nil {
 				return err
@@ -242,7 +242,7 @@ func doUpdateWorksetParameterMeta(
 	err = TrxUpdate(trx,
 		"UPDATE workset_lst"+
 			" SET is_readonly = 0,"+
-			" update_dt = "+toQuoted(wm.Set.UpdateDateTime)+
+			" update_dt = "+ToQuoted(wm.Set.UpdateDateTime)+
 			" WHERE set_id = "+strconv.Itoa(setId))
 	if err != nil {
 		return 0, err

@@ -78,7 +78,7 @@ func GetModelWord(dbConn *sql.DB, modelId int, langCode string) (*ModelWordMeta,
 	// WHERE M.model_id = 1234 AND L.lang_code = 'EN'
 	where := " WHERE M.model_id = " + strconv.Itoa(modelId)
 	if langCode != "" {
-		where += " AND L.lang_code = " + toQuoted(langCode)
+		where += " AND L.lang_code = " + ToQuoted(langCode)
 	}
 
 	// select db rows from model_word

@@ -107,7 +107,7 @@ func dbCopyParameterFromRun(trx *sql.Tx, wst *WorksetRow, pm *ParamMeta, rst *Ru
 	err := TrxUpdate(trx,
 		"UPDATE workset_lst"+
 			" SET is_readonly = is_readonly + 1"+
-			" WHERE model_id = "+mId+" AND set_name = "+toQuoted(wst.Name))
+			" WHERE model_id = "+mId+" AND set_name = "+ToQuoted(wst.Name))
 	if err != nil {
 		return err
 	}
@@ -115,7 +115,7 @@ func dbCopyParameterFromRun(trx *sql.Tx, wst *WorksetRow, pm *ParamMeta, rst *Ru
 	// check if workset exist and not readonly
 	var setId, nRd int
 	err = TrxSelectFirst(trx,
-		"SELECT set_id, is_readonly FROM workset_lst WHERE model_id = "+mId+" AND set_name = "+toQuoted(wst.Name),
+		"SELECT set_id, is_readonly FROM workset_lst WHERE model_id = "+mId+" AND set_name = "+ToQuoted(wst.Name),
 		func(row *sql.Row) error {
 			if err := row.Scan(&setId, &nRd); err != nil {
 				return err
@@ -219,7 +219,7 @@ func dbCopyParameterFromRun(trx *sql.Tx, wst *WorksetRow, pm *ParamMeta, rst *Ru
 	err = TrxUpdate(trx,
 		"UPDATE workset_lst"+
 			" SET is_readonly = 0,"+
-			" update_dt = "+toQuoted(helper.MakeDateTime(time.Now()))+
+			" update_dt = "+ToQuoted(helper.MakeDateTime(time.Now()))+
 			" WHERE set_id = "+sDstId)
 	if err != nil {
 		return err
@@ -238,7 +238,7 @@ func dbCopyParameterFromWorkset(trx *sql.Tx, srcWs *WorksetRow, pm *ParamMeta, d
 	err := TrxUpdate(trx,
 		"UPDATE workset_lst"+
 			" SET is_readonly = is_readonly + 1"+
-			" WHERE model_id = "+mId+" AND set_name = "+toQuoted(dstWs.Name))
+			" WHERE model_id = "+mId+" AND set_name = "+ToQuoted(dstWs.Name))
 	if err != nil {
 		return err
 	}
@@ -246,7 +246,7 @@ func dbCopyParameterFromWorkset(trx *sql.Tx, srcWs *WorksetRow, pm *ParamMeta, d
 	// check if workset exist and not readonly
 	var setId, nRd int
 	err = TrxSelectFirst(trx,
-		"SELECT set_id, is_readonly FROM workset_lst WHERE model_id = "+mId+" AND set_name = "+toQuoted(dstWs.Name),
+		"SELECT set_id, is_readonly FROM workset_lst WHERE model_id = "+mId+" AND set_name = "+ToQuoted(dstWs.Name),
 		func(row *sql.Row) error {
 			if err := row.Scan(&setId, &nRd); err != nil {
 				return err
@@ -293,7 +293,7 @@ func dbCopyParameterFromWorkset(trx *sql.Tx, srcWs *WorksetRow, pm *ParamMeta, d
 	err = TrxUpdate(trx,
 		"UPDATE workset_lst"+
 			" SET is_readonly = is_readonly + 1"+
-			" WHERE model_id = "+mId+" AND set_name = "+toQuoted(srcWs.Name))
+			" WHERE model_id = "+mId+" AND set_name = "+ToQuoted(srcWs.Name))
 	if err != nil {
 		return err
 	}
@@ -301,7 +301,7 @@ func dbCopyParameterFromWorkset(trx *sql.Tx, srcWs *WorksetRow, pm *ParamMeta, d
 	// check if source workset exist and is readonly
 	srcBaseId := 0
 	err = TrxSelectFirst(trx,
-		"SELECT set_id, base_run_id, is_readonly FROM workset_lst WHERE model_id = "+mId+" AND set_name = "+toQuoted(srcWs.Name),
+		"SELECT set_id, base_run_id, is_readonly FROM workset_lst WHERE model_id = "+mId+" AND set_name = "+ToQuoted(srcWs.Name),
 		func(row *sql.Row) error {
 			var rId sql.NullInt64
 			if err := row.Scan(&setId, &rId, &nRd); err != nil {
@@ -422,7 +422,7 @@ func dbCopyParameterFromWorkset(trx *sql.Tx, srcWs *WorksetRow, pm *ParamMeta, d
 	err = TrxUpdate(trx,
 		"UPDATE workset_lst"+
 			" SET is_readonly = 0,"+
-			" update_dt = "+toQuoted(helper.MakeDateTime(time.Now()))+
+			" update_dt = "+ToQuoted(helper.MakeDateTime(time.Now()))+
 			" WHERE set_id = "+sDstId)
 
 	return err // return last error, if any

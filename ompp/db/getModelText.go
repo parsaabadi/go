@@ -23,7 +23,7 @@ func GetModelTextById(dbConn *sql.DB, modelId int, langCode string) ([]ModelTxtR
 		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)" +
 		" WHERE M.model_id = " + strconv.Itoa(modelId)
 	if langCode != "" {
-		q += " AND L.lang_code = " + toQuoted(langCode)
+		q += " AND L.lang_code = " + ToQuoted(langCode)
 	}
 	q += " ORDER BY 1, 2"
 
@@ -81,7 +81,7 @@ func GetModelText(dbConn *sql.DB, modelId int, langCode string) (*ModelTxtMeta, 
 	// WHERE M.model_id = 1234 AND L.lang_code = 'EN'
 	where := " WHERE M.model_id = " + strconv.Itoa(modelId)
 	if langCode != "" {
-		where += " AND L.lang_code = " + toQuoted(langCode)
+		where += " AND L.lang_code = " + ToQuoted(langCode)
 	}
 
 	// select db rows from model_dic_txt

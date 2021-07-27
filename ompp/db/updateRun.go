@@ -98,7 +98,7 @@ func (meta *RunMeta) UpdateRun(dbConn *sql.DB, modelDef *ModelMeta, langDef *Lan
 		"SELECT MIN(R.run_id)"+
 			" FROM run_lst R"+
 			" WHERE R.model_id = "+strconv.Itoa(modelDef.Model.ModelId)+
-			" AND R.run_digest = "+toQuoted(meta.Run.RunDigest),
+			" AND R.run_digest = "+ToQuoted(meta.Run.RunDigest),
 		func(row *sql.Row) error {
 			var rId sql.NullInt64
 			if err := row.Scan(&rId); err != nil {
@@ -228,7 +228,7 @@ func doUpdateRunMetaDigest(trx *sql.Tx, runId int) (string, error) {
 	dg := fmt.Sprintf("%x", hMd5.Sum(nil))
 
 	err = TrxUpdate(trx,
-		"UPDATE run_lst SET run_digest = "+toQuoted(dg)+" WHERE run_id = "+strconv.Itoa(runId))
+		"UPDATE run_lst SET run_digest = "+ToQuoted(dg)+" WHERE run_id = "+strconv.Itoa(runId))
 	if err != nil {
 		return "", err
 	}
@@ -349,7 +349,7 @@ func doUpdateRunValueDigest(trx *sql.Tx, runId int) (string, error) {
 	dg := fmt.Sprintf("%x", hMd5.Sum(nil))
 
 	err = TrxUpdate(trx,
-		"UPDATE run_lst SET value_digest = "+toQuoted(dg)+" WHERE run_id = "+strconv.Itoa(runId))
+		"UPDATE run_lst SET value_digest = "+ToQuoted(dg)+" WHERE run_id = "+strconv.Itoa(runId))
 	if err != nil {
 		return "", err
 	}
@@ -426,11 +426,11 @@ func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, meta *RunMeta, langDef *LangM
 			strconv.Itoa(meta.Run.SubStarted)+", "+
 			strconv.Itoa(meta.Run.SubCompleted)+", "+
 			"0, "+
-			toQuoted(meta.Run.CreateDateTime)+", "+
-			toQuoted(meta.Run.Status)+", "+
-			toQuoted(meta.Run.UpdateDateTime)+", "+
-			toQuoted(meta.Run.RunDigest)+", "+
-			toQuoted(svd)+", "+
+			ToQuoted(meta.Run.CreateDateTime)+", "+
+			ToQuoted(meta.Run.Status)+", "+
+			ToQuoted(meta.Run.UpdateDateTime)+", "+
+			ToQuoted(meta.Run.RunDigest)+", "+
+			ToQuoted(svd)+", "+
 			toQuotedMax(meta.Run.RunStamp, codeDbMax)+")")
 	if err != nil {
 		return err
@@ -510,9 +510,9 @@ func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, meta *RunMeta, langDef *LangM
 				" VALUES ("+
 				srId+", "+
 				strconv.Itoa(meta.Progress[k].SubId)+", "+
-				toQuoted(meta.Progress[k].CreateDateTime)+", "+
-				toQuoted(meta.Progress[k].Status)+", "+
-				toQuoted(meta.Progress[k].UpdateDateTime)+", "+
+				ToQuoted(meta.Progress[k].CreateDateTime)+", "+
+				ToQuoted(meta.Progress[k].Status)+", "+
+				ToQuoted(meta.Progress[k].UpdateDateTime)+", "+
 				strconv.Itoa(meta.Progress[k].Count)+", "+
 				sVal+")")
 		if err != nil {

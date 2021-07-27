@@ -56,7 +56,7 @@ func DeleteProfile(dbConn *sql.DB, name string) error {
 func doDeleteProfile(trx *sql.Tx, name string) error {
 
 	// delete existing profile
-	qn := toQuoted(name)
+	qn := ToQuoted(name)
 
 	err := TrxUpdate(trx, "DELETE FROM profile_option WHERE profile_name = "+qn)
 	if err != nil {
@@ -130,7 +130,7 @@ func DeleteProfileOption(dbConn *sql.DB, name, key string) error {
 		return err
 	}
 	if err = TrxUpdate(trx,
-		"DELETE FROM profile_option WHERE profile_name = "+toQuoted(name)+" AND option_key = "+toQuoted(key)); err != nil {
+		"DELETE FROM profile_option WHERE profile_name = "+ToQuoted(name)+" AND option_key = "+ToQuoted(key)); err != nil {
 		trx.Rollback()
 		return err
 	}
@@ -158,7 +158,7 @@ func doUpdateProfileOption(trx *sql.Tx, name, key, val string) error {
 	}
 
 	// delete existing profile_option row and insert new option
-	err = TrxUpdate(trx, "DELETE FROM profile_option WHERE profile_name = "+qn+" AND option_key = "+toQuoted(key))
+	err = TrxUpdate(trx, "DELETE FROM profile_option WHERE profile_name = "+qn+" AND option_key = "+ToQuoted(key))
 	if err != nil {
 		return err
 	}

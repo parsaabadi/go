@@ -81,15 +81,15 @@ func GetModelId(dbConn *sql.DB, name, digest string) (bool, int, error) {
 	// if digest is empty then first model with min(model_id) is used
 	q := "SELECT M.model_id FROM model_dic M"
 	if name != "" && digest != "" {
-		q += " WHERE M.model_name = " + toQuoted(name) +
-			" AND M.model_digest = " + toQuoted(digest)
+		q += " WHERE M.model_name = " + ToQuoted(name) +
+			" AND M.model_digest = " + ToQuoted(digest)
 	}
 	if name == "" && digest != "" {
-		q += " WHERE M.model_digest = " + toQuoted(digest)
+		q += " WHERE M.model_digest = " + ToQuoted(digest)
 	}
 	if name != "" && digest == "" {
-		q += " WHERE M.model_name = " + toQuoted(name) +
-			" AND M.model_id = (SELECT MIN(MMD.model_id) FROM model_dic MMD WHERE MMD.model_name = " + toQuoted(name) + ")"
+		q += " WHERE M.model_name = " + ToQuoted(name) +
+			" AND M.model_id = (SELECT MIN(MMD.model_id) FROM model_dic MMD WHERE MMD.model_name = " + ToQuoted(name) + ")"
 	}
 	q += " ORDER BY 1"
 

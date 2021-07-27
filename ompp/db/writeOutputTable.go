@@ -74,7 +74,7 @@ func doWriteOutputTable(
 	// start run update
 	srId := strconv.Itoa(runId)
 	err := TrxUpdate(trx,
-		"UPDATE run_lst SET update_dt = "+toQuoted(helper.MakeDateTime(time.Now()))+" WHERE run_id = "+srId)
+		"UPDATE run_lst SET update_dt = "+ToQuoted(helper.MakeDateTime(time.Now()))+" WHERE run_id = "+srId)
 	if err != nil {
 		return err
 	}
@@ -128,7 +128,7 @@ func doWriteOutputTable(
 	err = TrxUpdate(trx,
 		"INSERT INTO run_table (run_id, table_hid, base_run_id, value_digest)"+
 			" VALUES ("+
-			srId+", "+sHid+", "+srId+", "+toQuoted(digest)+")")
+			srId+", "+sHid+", "+srId+", "+ToQuoted(digest)+")")
 	if err != nil {
 		return err
 	}
@@ -138,7 +138,7 @@ func doWriteOutputTable(
 	err = TrxSelectFirst(trx,
 		"SELECT MIN(run_id) FROM run_table"+
 			" WHERE table_hid = "+sHid+
-			" AND value_digest = "+toQuoted(digest),
+			" AND value_digest = "+ToQuoted(digest),
 		func(row *sql.Row) error {
 			if err := row.Scan(&nBase); err != nil {
 				return err

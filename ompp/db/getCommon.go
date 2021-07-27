@@ -42,7 +42,7 @@ func GetProfile(dbConn *sql.DB, name string) (*ProfileMeta, error) {
 	meta := ProfileMeta{Name: name}
 
 	kv, err := getOpts(dbConn,
-		"SELECT option_key, option_value FROM profile_option WHERE profile_name = "+toQuoted(name))
+		"SELECT option_key, option_value FROM profile_option WHERE profile_name = "+ToQuoted(name))
 	if err != nil {
 		return nil, err
 	}

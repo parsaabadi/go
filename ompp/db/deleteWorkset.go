@@ -166,7 +166,7 @@ func dbDeleteWorksetAllParameters(trx *sql.Tx, setId int) error {
 	err = TrxUpdate(trx,
 		"UPDATE workset_lst"+
 			" SET is_readonly = 0,"+
-			" update_dt = "+toQuoted(helper.MakeDateTime(time.Now()))+
+			" update_dt = "+ToQuoted(helper.MakeDateTime(time.Now()))+
 			" WHERE set_id = "+sId)
 	if err != nil {
 		return err
@@ -214,7 +214,7 @@ func dbDeleteWorksetParameter(trx *sql.Tx, modelId int, setName, paramName strin
 	err := TrxUpdate(trx,
 		"UPDATE workset_lst"+
 			" SET is_readonly = is_readonly + 1"+
-			" WHERE model_id = "+strconv.Itoa(modelId)+" AND set_name = "+toQuoted(setName))
+			" WHERE model_id = "+strconv.Itoa(modelId)+" AND set_name = "+ToQuoted(setName))
 	if err != nil {
 		return 0, err
 	}
@@ -224,7 +224,7 @@ func dbDeleteWorksetParameter(trx *sql.Tx, modelId int, setName, paramName strin
 	nRd := 0
 	err = TrxSelectFirst(trx,
 		"SELECT set_id, is_readonly FROM workset_lst"+
-			" WHERE model_id = "+strconv.Itoa(modelId)+" AND set_name = "+toQuoted(setName),
+			" WHERE model_id = "+strconv.Itoa(modelId)+" AND set_name = "+ToQuoted(setName),
 		func(row *sql.Row) error {
 			if err := row.Scan(&setId, &nRd); err != nil {
 				return err
@@ -249,7 +249,7 @@ func dbDeleteWorksetParameter(trx *sql.Tx, modelId int, setName, paramName strin
 			" FROM workset_parameter W"+
 			" INNER JOIN parameter_dic P ON (P.parameter_hid = W.parameter_hid)"+
 			" WHERE W.set_id = "+sId+
-			" AND P.parameter_name = "+toQuoted(paramName),
+			" AND P.parameter_name = "+ToQuoted(paramName),
 		func(row *sql.Row) error {
 			if err := row.Scan(&paramHid, &tblName); err != nil {
 				return err
@@ -290,7 +290,7 @@ func dbDeleteWorksetParameter(trx *sql.Tx, modelId int, setName, paramName strin
 	err = TrxUpdate(trx,
 		"UPDATE workset_lst"+
 			" SET is_readonly = 0,"+
-			" update_dt = "+toQuoted(helper.MakeDateTime(time.Now()))+
+			" update_dt = "+ToQuoted(helper.MakeDateTime(time.Now()))+
 			" WHERE set_id = "+strconv.Itoa(setId))
 	if err != nil {
 		return 0, err

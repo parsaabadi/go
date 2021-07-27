@@ -23,7 +23,7 @@ func GetTaskByName(dbConn *sql.DB, modelId int, name string) (*TaskRow, error) {
 			" WHERE K.task_id = "+
 			" ("+
 			" SELECT MIN(M.task_id) FROM task_lst M"+
-			" WHERE M.model_id = "+strconv.Itoa(modelId)+" AND M.task_name ="+toQuoted(name)+
+			" WHERE M.model_id = "+strconv.Itoa(modelId)+" AND M.task_name ="+ToQuoted(name)+
 			" )")
 }
 
@@ -80,7 +80,7 @@ func GetTaskListText(dbConn *sql.DB, modelId int, langCode string) ([]TaskRow, [
 		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)" +
 		" WHERE K.model_id = " + strconv.Itoa(modelId)
 	if langCode != "" {
-		q += " AND L.lang_code = " + toQuoted(langCode)
+		q += " AND L.lang_code = " + ToQuoted(langCode)
 	}
 	q += " ORDER BY 1, 2"
 
@@ -197,7 +197,7 @@ func GetTaskRunSetText(dbConn *sql.DB, taskId int, langCode string) (*TaskRunSet
 		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)" +
 		" WHERE TS.task_id = " + strconv.Itoa(taskId)
 	if langCode != "" {
-		q += " AND L.lang_code = " + toQuoted(langCode)
+		q += " AND L.lang_code = " + ToQuoted(langCode)
 	}
 	q += " ORDER BY 1, 2"
 
@@ -244,9 +244,9 @@ func GetTaskRunSetText(dbConn *sql.DB, taskId int, langCode string) (*TaskRunSet
 		" INNER JOIN workset_txt M ON (M.set_id = WS.set_id)" +
 		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)" +
 		" WHERE TRL.task_id = " + strconv.Itoa(taskId) +
-		" AND RL.status IN (" + toQuoted(DoneRunStatus) + ", " + toQuoted(ErrorRunStatus) + ", " + toQuoted(ExitRunStatus) + ")"
+		" AND RL.status IN (" + ToQuoted(DoneRunStatus) + ", " + ToQuoted(ErrorRunStatus) + ", " + ToQuoted(ExitRunStatus) + ")"
 	if langCode != "" {
-		q += " AND L.lang_code = " + toQuoted(langCode)
+		q += " AND L.lang_code = " + ToQuoted(langCode)
 	}
 	q += " ORDER BY 1, 2"
 
@@ -292,9 +292,9 @@ func GetTaskRunSetText(dbConn *sql.DB, taskId int, langCode string) (*TaskRunSet
 		" INNER JOIN run_txt M ON (M.run_id = RL.run_id)" +
 		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)" +
 		" WHERE TRL.task_id = " + strconv.Itoa(taskId) +
-		" AND RL.status IN (" + toQuoted(DoneRunStatus) + ", " + toQuoted(ErrorRunStatus) + ", " + toQuoted(ExitRunStatus) + ")"
+		" AND RL.status IN (" + ToQuoted(DoneRunStatus) + ", " + ToQuoted(ErrorRunStatus) + ", " + ToQuoted(ExitRunStatus) + ")"
 	if langCode != "" {
-		q += " AND L.lang_code = " + toQuoted(langCode)
+		q += " AND L.lang_code = " + ToQuoted(langCode)
 	}
 	q += " ORDER BY 1, 2"
 
@@ -382,7 +382,7 @@ func GetTaskRunByStamp(dbConn *sql.DB, taskId int, stamp string) (*TaskRunRow, e
 			" ("+
 			" SELECT MIN(M.task_run_id) FROM task_run_lst M"+
 			" WHERE M.task_id = "+strconv.Itoa(taskId)+
-			" AND M.run_stamp = "+toQuoted(stamp)+
+			" AND M.run_stamp = "+ToQuoted(stamp)+
 			")")
 }
 
@@ -396,7 +396,7 @@ func GetTaskRunByName(dbConn *sql.DB, taskId int, name string) (*TaskRunRow, err
 			" ("+
 			" SELECT MIN(M.task_run_id) FROM task_run_lst M"+
 			" WHERE M.task_id = "+strconv.Itoa(taskId)+
-			" AND M.run_name = "+toQuoted(name)+
+			" AND M.run_name = "+ToQuoted(name)+
 			")")
 }
 
@@ -423,7 +423,7 @@ func GetTaskRunListByStampOrName(dbConn *sql.DB, taskId int, trsn string) ([]Tas
 		"SELECT R.task_run_id, R.task_id, R.run_name, R.sub_count, R.create_dt, R.status, R.update_dt, R.run_stamp"+
 			" FROM task_run_lst R"+
 			" WHERE R.task_id = "+strconv.Itoa(taskId)+
-			" AND R.run_stamp = "+toQuoted(trsn)+
+			" AND R.run_stamp = "+ToQuoted(trsn)+
 			" ORDER BY 1")
 
 	if err == nil && len(runRs) <= 0 {
@@ -431,7 +431,7 @@ func GetTaskRunListByStampOrName(dbConn *sql.DB, taskId int, trsn string) ([]Tas
 			"SELECT R.task_run_id, R.task_id, R.run_name, R.sub_count, R.create_dt, R.status, R.update_dt, R.run_stamp"+
 				" FROM task_run_lst R"+
 				" WHERE R.task_id = "+strconv.Itoa(taskId)+
-				" AND R.run_name = "+toQuoted(trsn)+
+				" AND R.run_name = "+ToQuoted(trsn)+
 				" ORDER BY 1")
 	}
 	return runRs, err
@@ -447,7 +447,7 @@ func GetTaskRunSetRows(dbConn *sql.DB, taskRunId int) ([]TaskRunSetRow, error) {
 			" FROM task_run_lst M"+
 			" INNER JOIN task_run_set TRS ON (TRS.task_run_id = M.task_run_id)"+
 			" WHERE M.task_run_id = "+strconv.Itoa(taskRunId)+
-			" AND M.status IN ("+toQuoted(DoneRunStatus)+", "+toQuoted(ErrorRunStatus)+", "+toQuoted(ExitRunStatus)+")"+
+			" AND M.status IN ("+ToQuoted(DoneRunStatus)+", "+ToQuoted(ErrorRunStatus)+", "+ToQuoted(ExitRunStatus)+")"+
 			" ORDER BY 1, 2")
 }
 
@@ -483,7 +483,7 @@ func GetTaskLastCompletedRun(dbConn *sql.DB, taskId int) (*TaskRunRow, error) {
 			" ("+
 			" SELECT MAX(M.task_run_id) FROM task_run_lst M"+
 			" WHERE M.task_id = "+strconv.Itoa(taskId)+
-			" AND M.status IN ("+toQuoted(DoneRunStatus)+", "+toQuoted(ErrorRunStatus)+", "+toQuoted(ExitRunStatus)+")"+
+			" AND M.status IN ("+ToQuoted(DoneRunStatus)+", "+ToQuoted(ErrorRunStatus)+", "+ToQuoted(ExitRunStatus)+")"+
 			" )")
 }
 
@@ -510,7 +510,7 @@ func GetTaskRunList(dbConn *sql.DB, taskRow *TaskRow) (*TaskMeta, error) {
 		"SELECT M.task_run_id, M.task_id, M.run_name, M.sub_count, M.create_dt, M.status, M.update_dt, M.run_stamp"+
 			" FROM task_run_lst M"+
 			" WHERE M.task_id = "+strconv.Itoa(taskRow.TaskId)+
-			" AND M.status IN ("+toQuoted(DoneRunStatus)+", "+toQuoted(ErrorRunStatus)+", "+toQuoted(ExitRunStatus)+")"+
+			" AND M.status IN ("+ToQuoted(DoneRunStatus)+", "+ToQuoted(ErrorRunStatus)+", "+ToQuoted(ExitRunStatus)+")"+
 			" ORDER BY 1")
 	if err != nil {
 		return nil, err
@@ -530,7 +530,7 @@ func GetTaskRunList(dbConn *sql.DB, taskRow *TaskRow) (*TaskMeta, error) {
 			" FROM task_run_lst M"+
 			" INNER JOIN task_run_set TRS ON (TRS.task_run_id = M.task_run_id)"+
 			" WHERE M.task_id = "+strconv.Itoa(taskRow.TaskId)+
-			" AND M.status IN ("+toQuoted(DoneRunStatus)+", "+toQuoted(ErrorRunStatus)+", "+toQuoted(ExitRunStatus)+")"+
+			" AND M.status IN ("+ToQuoted(DoneRunStatus)+", "+ToQuoted(ErrorRunStatus)+", "+ToQuoted(ExitRunStatus)+")"+
 			" ORDER BY 1, 2")
 	if err != nil {
 		return nil, err
@@ -626,11 +626,11 @@ func GetTaskFull(dbConn *sql.DB, taskRow *TaskRow, langCode string) (*TaskMeta, 
 	taskWhere := " WHERE K.task_id = " + strconv.Itoa(taskRow.TaskId)
 
 	statusFilter := " AND H.status IN (" +
-		toQuoted(DoneRunStatus) + ", " + toQuoted(ErrorRunStatus) + ", " + toQuoted(ExitRunStatus) + ")"
+		ToQuoted(DoneRunStatus) + ", " + ToQuoted(ErrorRunStatus) + ", " + ToQuoted(ExitRunStatus) + ")"
 
 	var langFilter string
 	if langCode != "" {
-		langFilter = " AND L.lang_code = " + toQuoted(langCode)
+		langFilter = " AND L.lang_code = " + ToQuoted(langCode)
 	}
 
 	// task meta header: task_lst master row
@@ -713,15 +713,15 @@ func GetTaskFullList(dbConn *sql.DB, modelId int, isSuccess bool, langCode strin
 	// where filters
 	var statusFilter string
 	if isSuccess {
-		statusFilter = " AND H.status = " + toQuoted(DoneRunStatus)
+		statusFilter = " AND H.status = " + ToQuoted(DoneRunStatus)
 	} else {
 		statusFilter = " AND H.status IN (" +
-			toQuoted(DoneRunStatus) + ", " + toQuoted(ErrorRunStatus) + ", " + toQuoted(ExitRunStatus) + ")"
+			ToQuoted(DoneRunStatus) + ", " + ToQuoted(ErrorRunStatus) + ", " + ToQuoted(ExitRunStatus) + ")"
 	}
 
 	var langFilter string
 	if langCode != "" {
-		langFilter = " AND L.lang_code = " + toQuoted(langCode)
+		langFilter = " AND L.lang_code = " + ToQuoted(langCode)
 	}
 
 	// get list of modeling task for that model id
