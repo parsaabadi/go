@@ -24,7 +24,7 @@ Arguments of template:
   Env       map[string]string // environment variables to run the model
 
 Example of result:
-  ./modelNameD -OpenM.LogToFile true
+  ./modelNameD -OpenM.LogToFile false
 
 */}}
 

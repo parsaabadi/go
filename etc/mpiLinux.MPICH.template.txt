@@ -21,7 +21,7 @@ Arguments of template:
   Env       map[string]string // environment variables to run the model
 
 Example of result:
-  mpirun -n 16 -wdir models/bin -env key value ./modelName_mpi -OpenM.LogToFile true
+  mpirun -n 16 -wdir models/bin -env key value ./modelName_mpi -OpenM.LogToFile false
 
 */}}
 

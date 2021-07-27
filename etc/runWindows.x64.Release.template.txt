@@ -21,7 +21,7 @@ Arguments of template:
   Env       map[string]string // environment variables to run the model
 
 Example of result:
-  .\modelName64 -OpenM.LogToFile true
+  .\modelName64 -OpenM.LogToFile false
 
 */}}
 
