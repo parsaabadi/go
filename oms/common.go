@@ -312,15 +312,46 @@ func jsonRequestToFile(w http.ResponseWriter, r *http.Request, outPath string) b
 
 // isDirExist return error if directory does not exist or not accessible
 func isDirExist(dirPath string) error {
-	stat, err := os.Stat(dirPath)
+	fi, err := os.Stat(dirPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errors.New("Error: directory not exist: " + dirPath)
 		}
 		return errors.New("Error: unable to access directory: " + dirPath + " : " + err.Error())
 	}
-	if !stat.IsDir() {
+	if !fi.IsDir() {
 		return errors.New("Error: directory expected: " + dirPath)
 	}
 	return nil
+}
+
+// isFileExist return error if file, or not accessible or it is not a regular file
+func isFileExist(filePath string) error {
+	fi, err := os.Stat(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errors.New("Error: file not exist: " + filePath)
+		}
+		return errors.New("Error: unable to access file: " + filePath + " : " + err.Error())
+	}
+	if fi.IsDir() || !fi.Mode().IsRegular() {
+		return errors.New("Error: it is not a regilar file: " + filePath)
+	}
+	return nil
+}
+
+// dbcopyPath return path to dbcopy.exe, it is expected to be in the same directory as oms.exe
+func dbcopyPath(omsPath string) string {
+
+	if p, e := filepath.Abs(filepath.Join(filepath.Dir(omsPath), "dbcopy.exe")); e == nil {
+		if e = isFileExist(p); e == nil {
+			return p
+		}
+	}
+	if p, e := filepath.Abs(filepath.Join(filepath.Dir(omsPath), "dbcopy")); e == nil {
+		if e = isFileExist(p); e == nil {
+			return p
+		}
+	}
+	return "" // dbcopy not found or not accessible or not regular file
 }

@@ -33,7 +33,7 @@ Copy to "db": read from metadata .json and .csv values and insert or update data
   dbcopy -m modelOne -dbcopy.To db
 
 Copy to "db2db": direct copy between two databases:
-  dbcopy -m modelOne -dbcopy.To db2db -dbcopy.ToDatabase "Database=dst.sqlite;OpenMode=ReadWrite"
+  dbcopy -m modelOne -dbcopy.To db2db -dbcopy.ToSqlite modelOne.sqlite
 
 Copy to "csv": read entire model from database and save .csv files:
   dbcopy -m modelOne -dbcopy.To csv
@@ -78,7 +78,7 @@ It may be a problem on Linux if current directory already contains executable "m
 To specify output or input directory for text files:
   dbcopy -m modelOne -dbcopy.OutputDir one
   dbcopy -m redModel -dbcopy.OutputDir red -s Default
-  dbcopy -m redModel -dbcopy.InputDir red -dbcopy.To db -dbcopy.ToDatabase "Database=dst.sqlite;OpenMode=ReadWrite"
+  dbcopy -m redModel -dbcopy.InputDir red -dbcopy.To db -dbcopy.ToSqlite redModel.sqlite
   dbcopy -m redModel -dbcopy.OutputDir red -s Default
 
 If you are using InputDir or OutputDir result path combined with
@@ -90,7 +90,7 @@ will place "Default" input set of parameters into directory red/redModel.set.Def
 If neccesary you can specify exact directory for input parameters by using "-dbcopy.ParamDir" or "-p":
   dbcopy -m modelOne -dbcopy.SetId 2 -dbcopy.ParamDir two
   dbcopy -m modelOne -dbcopy.SetId 2 -p two
-  dbcopy -m redModel -s Default -p 101 -dbcopy.To db -dbcopy.ToDatabase "Database=dst.sqlite;OpenMode=ReadWrite"
+  dbcopy -m redModel -s Default -p 101 -dbcopy.To db  -dbcopy.ToSqlite redModel.sqlite
 
 Dbcopy create output directories (and json files) for model data by combining model name and run name or input set name.
 By default names may be combined with run id (set id) to make it unique.
@@ -147,20 +147,24 @@ To rename model run results, input set of parameters or modeling task:
 OpenM++ using hash digest to compare models, input parameters and output values.
 By default float and double values converted into text with "%.15g" format.
 It is possible to specify other format for float values digest calculation:
-  dbcopy -m redModel -dbcopy.DoubleFormat "%.7G" -dbcopy.To db -dbcopy.ToDatabase "Database=dst.sqlite;OpenMode=ReadWrite"
+  dbcopy -m redModel -dbcopy.DoubleFormat "%.7G" -dbcopy.To db -dbcopy.FromSqlite red.sqlite
 
 By default dbcopy using SQLite database connection:
   dbcopy -m modelOne
 is equivalent of:
-  dbcopy -m modelOne -dbcopy.DatabaseDriver SQLite -dbcopy.Database "Database=modelOne.sqlite; Timeout=86400; OpenMode=ReadWrite;"
+  dbcopy -m modelOne -dbcopy.FromSqlite modelOne.sqlite
+  dbcopy -m modelOne -dbcopy.Database "Database=modelOne.sqlite; Timeout=86400; OpenMode=ReadOnly;"
+  dbcopy -m modelOne -dbcopy.Database "Database=modelOne.sqlite; Timeout=86400; OpenMode=ReadOnly;" -dbcopy.DatabaseDriver SQLite
 
 Output database connection settings by default are the same as input database,
 which may not be suitable because you don't want to overwrite input database.
 
 To specify output database connection string and driver:
-  dbcopy -m modelOne -dbcopy.To db -dbcopy.ToDatabaseDriver SQLite -dbcopy.ToDatabase "Database=dst.sqlite; Timeout=86400; OpenMode=ReadWrite;"
-or skip default database driver name "SQLite":
-  dbcopy -m modelOne -dbcopy.To db -dbcopy.ToDatabase "Database=dst.sqlite; Timeout=86400; OpenMode=ReadWrite;"
+  dbcopy -m modelOne -dbcopy.To db -dbcopy.ToDatabase "Database=modelOne.sqlite; Timeout=86400; OpenMode=ReadWrite;" -dbcopy.ToDatabaseDriver SQLite
+Or skip default database driver name "SQLite":
+  dbcopy -m modelOne -dbcopy.To db -dbcopy.ToDatabase "Database=modelOne.sqlite; Timeout=86400; OpenMode=ReadWrite;"
+Or specify only path/to/model.sqlite file:
+  dbcopy -m modelOne -dbcopy.To db -dbcopy.ToSqlite modelOne.sqlite
 
 Other supported database drivers are "sqlite3" and "odbc":
   dbcopy -m modelOne -dbcopy.To db -dbcopy.ToDatabaseDriver odbc -dbcopy.ToDatabase "DSN=bigSql"
@@ -213,8 +217,10 @@ const (
 	taskNameArgKey     = "dbcopy.TaskName"         // modeling task name
 	taskNewNameArgKey  = "dbcopy.ToTaskName"       // new task name, to rename task
 	taskIdArgKey       = "dbcopy.TaskId"           // modeling task id
+	fromSqliteArgKey   = "dbcopy.FromSqlite"       // input db is SQLite file
 	dbConnStrArgKey    = "dbcopy.Database"         // db connection string
 	dbDriverArgKey     = "dbcopy.DatabaseDriver"   // db driver name, ie: SQLite, odbc, sqlite3
+	toSqliteArgKey     = "dbcopy.ToSqlite"         // output db is SQLite file
 	toDbConnStrArgKey  = "dbcopy.ToDatabase"       // output db connection string
 	toDbDriverArgKey   = "dbcopy.ToDatabaseDriver" // output db driver name, ie: SQLite, odbc, sqlite3
 	inputDirArgKey     = "dbcopy.InputDir"         // input dir to read model .json and .csv files
@@ -271,8 +277,10 @@ func mainBody(args []string) error {
 	_ = flag.String(taskNameArgKey, "", "modeling task name, if specified then copy only this modeling task data")
 	_ = flag.String(taskNewNameArgKey, "", "rename modeling task to that new name")
 	_ = flag.Int(taskIdArgKey, 0, "modeling task id, if specified then copy only this run modeling task data")
+	_ = flag.String(fromSqliteArgKey, "", "input database SQLite file path")
 	_ = flag.String(dbConnStrArgKey, "", "input database connection string")
 	_ = flag.String(dbDriverArgKey, db.SQLiteDbDriver, "input database driver name: SQLite, odbc, sqlite3")
+	_ = flag.String(toSqliteArgKey, "", "output database SQLite file path")
 	_ = flag.String(toDbConnStrArgKey, "", "output database connection string")
 	_ = flag.String(toDbDriverArgKey, db.SQLiteDbDriver, "output database driver name: SQLite, odbc, sqlite3")
 	_ = flag.String(inputDirArgKey, "", "input directory to read model .json and .csv files")
@@ -288,9 +296,9 @@ func mainBody(args []string) error {
 
 	// pairs of full and short argument names to map short name to full name
 	var optFs = []config.FullShort{
-		config.FullShort{Full: modelNameArgKey, Short: modelNameShortKey},
-		config.FullShort{Full: setNameArgKey, Short: setNameShortKey},
-		config.FullShort{Full: paramDirArgKey, Short: paramDirShortKey},
+		{Full: modelNameArgKey, Short: modelNameShortKey},
+		{Full: setNameArgKey, Short: setNameShortKey},
+		{Full: paramDirArgKey, Short: paramDirShortKey},
 	}
 
 	// parse command line arguments and ini-file
@@ -324,7 +332,7 @@ func mainBody(args []string) error {
 	}
 	// to-database can be used only with "db" or "db2db"
 	if copyToArg != "db" && copyToArg != "db2db" &&
-		(runOpts.IsExist(toDbConnStrArgKey) || runOpts.IsExist(toDbDriverArgKey)) {
+		(runOpts.IsExist(toDbConnStrArgKey) || runOpts.IsExist(toDbDriverArgKey) || runOpts.IsExist(toSqliteArgKey)) {
 		return errors.New("dbcopy invalid arguments: output database can be specified only if " + copyToArgKey + "=db or =db2db")
 	}
 	// id csv is only for output

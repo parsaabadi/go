@@ -15,18 +15,15 @@ import (
 func dbToDb(modelName string, modelDigest string, runOpts *config.RunOptions) error {
 
 	// validate source and destination
-	inpConnStr := runOpts.String(dbConnStrArgKey)
-	inpDriver := runOpts.String(dbDriverArgKey)
-	outConnStr := runOpts.String(toDbConnStrArgKey)
-	outDriver := runOpts.String(toDbDriverArgKey)
+	csInp, dnInp := db.IfEmptyMakeDefaultReadOnly(modelName, runOpts.String(fromSqliteArgKey), runOpts.String(dbConnStrArgKey), runOpts.String(dbDriverArgKey))
+	csOut, dnOut := db.IfEmptyMakeDefault(modelName, runOpts.String(toSqliteArgKey), runOpts.String(toDbConnStrArgKey), runOpts.String(toDbDriverArgKey))
 
-	if inpConnStr == outConnStr && inpDriver == outDriver {
+	if csInp == csOut && dnInp == dnOut {
 		return errors.New("source same as destination: cannot overwrite model in database")
 	}
 
 	// open source database connection and check is it valid
-	cs, dn := db.IfEmptyMakeDefault(modelName, inpConnStr, inpDriver)
-	srcDb, _, err := db.Open(cs, dn, false)
+	srcDb, _, err := db.Open(csInp, dnInp, false)
 	if err != nil {
 		return err
 	}
@@ -37,8 +34,7 @@ func dbToDb(modelName string, modelDigest string, runOpts *config.RunOptions) er
 	}
 
 	// open destination database and check is it valid
-	cs, dn = db.IfEmptyMakeDefault(modelName, outConnStr, outDriver)
-	dstDb, dbFacet, err := db.Open(cs, dn, true)
+	dstDb, dbFacet, err := db.Open(csOut, dnOut, true)
 	if err != nil {
 		return err
 	}

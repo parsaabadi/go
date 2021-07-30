@@ -307,7 +307,7 @@ func doInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, langDe
 
 	// workset parameters list must be empty in order to create new workset
 	if len(meta.Param) > 0 {
-		return errors.New("Error: cannot create new workset with non-empty list of parameters " + meta.Set.Name)
+		return errors.New("error: cannot create new workset with non-empty list of parameters " + meta.Set.Name)
 	}
 
 	// if workset based on existing run then base run id must be positive

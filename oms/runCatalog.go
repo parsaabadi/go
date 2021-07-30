@@ -203,7 +203,7 @@ func (rsc *RunCatalog) toPublicConfig() *RunCatalogConfig {
 	return &rcp
 }
 
-// allModels return basic info about all models.
+// allModels return basic info from catalog about all models.
 func (rsc *RunCatalog) allModels() map[string]modelRunBasic {
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()

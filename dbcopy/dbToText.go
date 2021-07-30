@@ -20,7 +20,8 @@ import (
 func dbToText(modelName string, modelDigest string, runOpts *config.RunOptions) error {
 
 	// open source database connection and check is it valid
-	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(dbConnStrArgKey), runOpts.String(dbDriverArgKey))
+	cs, dn := db.IfEmptyMakeDefaultReadOnly(modelName, runOpts.String(fromSqliteArgKey), runOpts.String(dbConnStrArgKey), runOpts.String(dbDriverArgKey))
+
 	srcDb, _, err := db.Open(cs, dn, false)
 	if err != nil {
 		return err

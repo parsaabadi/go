@@ -98,12 +98,32 @@ func Open(dbConnStr, dbDriver string, isFacetRequired bool) (*sql.DB, Facet, err
 
 // IfEmptyMakeDefault return SQLite connection string and driver name based on model name:
 //   Database=modelName.sqlite; Timeout=86400; OpenMode=ReadWrite;
-func IfEmptyMakeDefault(modelName, dbConnStr, dbDriver string) (string, string) {
+func IfEmptyMakeDefault(modelName, modelSqlitePath, dbConnStr, dbDriver string) (string, string) {
 	if dbDriver == "" {
 		dbDriver = SQLiteDbDriver
 	}
-	if dbDriver == SQLiteDbDriver && (dbConnStr == "" && modelName != "") {
-		dbConnStr = MakeSqliteDefault(modelName + ".sqlite")
+	if dbDriver == SQLiteDbDriver && dbConnStr == "" {
+		p := modelSqlitePath
+		if p == "" && modelName != "" {
+			p = modelName + ".sqlite"
+		}
+		dbConnStr = MakeSqliteDefault(p)
+	}
+	return dbConnStr, dbDriver
+}
+
+// IfEmptyMakeDefaultReadOnly return read-only SQLite connection string and driver name based on model name:
+//   Database=modelName.sqlite; Timeout=86400; OpenMode=ReadWrite;
+func IfEmptyMakeDefaultReadOnly(modelName, modelSqlitePath, dbConnStr, dbDriver string) (string, string) {
+	if dbDriver == "" {
+		dbDriver = SQLiteDbDriver
+	}
+	if dbDriver == SQLiteDbDriver && dbConnStr == "" {
+		p := modelSqlitePath
+		if p == "" && modelName != "" {
+			p = modelName + ".sqlite"
+		}
+		dbConnStr = MakeSqliteDefaultReadOnly(p)
 	}
 	return dbConnStr, dbDriver
 }
@@ -112,6 +132,12 @@ func IfEmptyMakeDefault(modelName, dbConnStr, dbDriver string) (string, string) 
 //   Database=model.sqlite; Timeout=86400; OpenMode=ReadWrite;
 func MakeSqliteDefault(modelSqlitePath string) string {
 	return "Database=" + modelSqlitePath + "; Timeout=" + strconv.Itoa(SQLiteTimeout) + "; OpenMode=ReadWrite;"
+}
+
+// MakeSqliteDefaultReadOnly return default read-only SQLite connection string based on model.sqlite file path:
+//   Database=model.sqlite; Timeout=86400; OpenMode=ReadOnly;
+func MakeSqliteDefaultReadOnly(modelSqlitePath string) string {
+	return "Database=" + modelSqlitePath + "; Timeout=" + strconv.Itoa(SQLiteTimeout) + "; OpenMode=ReadOnly;"
 }
 
 // Convert SQLite connection string into "sqlite3" format and delete existing db.slite file if required.

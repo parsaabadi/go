@@ -142,17 +142,13 @@ func textToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 		return errors.New("no workset metadata json file and no csv directory, workset: " + strconv.Itoa(setId) + " " + setName)
 	}
 
-	// get connection string and driver name
-	cs := runOpts.String(toDbConnStrArgKey)
-
+	// open source database connection and check is it valid
 	dn := runOpts.String(toDbDriverArgKey)
 	if dn == "" && runOpts.IsExist(dbDriverArgKey) {
 		dn = runOpts.String(dbDriverArgKey)
 	}
+	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(toSqliteArgKey), runOpts.String(toDbConnStrArgKey), dn)
 
-	cs, dn = db.IfEmptyMakeDefault(modelName, cs, dn)
-
-	// open destination database and check is it valid
 	dstDb, _, err := db.Open(cs, dn, true)
 	if err != nil {
 		return err

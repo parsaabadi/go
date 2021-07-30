@@ -76,12 +76,28 @@ func (mc *ModelCatalog) allModelDigests() []string {
 	return ds
 }
 
-// binDirectoryByDigest return model bin directory where model.exe expected to be located.
+// modelBasicByDigest return basic info from catalog about model by digest.
 func (mc *ModelCatalog) modelBasicByDigest(digest string) (modelBasic, bool) {
+	return mc.findModelBasic(true, digest)
+}
+
+// modelBasicByDigest return basic info from catalog about model by digest.
+func (mc *ModelCatalog) modelBasicByDigestOrName(dn string) (modelBasic, bool) {
+	return mc.findModelBasic(false, dn)
+}
+
+// modelBasicByDigest return basic info from catalog about model by digest.
+func (mc *ModelCatalog) findModelBasic(isByDigestOnly bool, dn string) (modelBasic, bool) {
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	idx, ok := mc.indexByDigest(digest)
+	idx := 0
+	ok := false
+	if isByDigestOnly {
+		idx, ok = mc.indexByDigest(dn)
+	} else {
+		idx, ok = mc.indexByDigestOrName(dn)
+	}
 	if !ok {
 		return modelBasic{}, false // model not found, empty result
 	}
@@ -95,7 +111,7 @@ func (mc *ModelCatalog) modelBasicByDigest(digest string) (modelBasic, bool) {
 		true
 }
 
-// allModels return basic info about all models: name, digest, files location.
+// allModels return basic info from catalog about all models: name, digest, files location.
 func (mc *ModelCatalog) allModels() []modelBasic {
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
