@@ -872,17 +872,26 @@ func apiReadCsvRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/table/:name/all-acc/csv-id-bom", runTableAllAccIdCsvBomGetHandler, logRequest)
 }
 
-// add http POST web-service /api routes to download files from home/out/download folder
+// add http GET and POST web-service /api routes to download files from home/out/download folder
 func apiDownloadRoutes(router *vestigo.Router) {
 
-	// POST /api/model/:model/download
-	router.Post("/api/model/:model/download", modelDownloadPostHandler, logRequest)
+	// GET /api/download/log/all
+	router.Get("/api/download/log/all", allLogDownloadGetHandler, logRequest)
 
-	// POST /api/model/:model/download/run/:run
-	router.Post("/api/model/:model/download/run/:run", runDownloadPostHandler, logRequest)
+	// GET /api/download/log/model/:model
+	router.Get("/api/download/log/model/:model", modelLogDownloadGetHandler, logRequest)
 
-	// POST /api/model/:model/download/workset/:set
-	router.Post("/api/model/:model/download/workset/:set", worksetDownloadPostHandler, logRequest)
+	// GET /api/download/log/file/:name
+	router.Get("/api/download/log/file/:name", fileLogDownloadGetHandler, logRequest)
+
+	// POST /api/download/model/:model
+	router.Post("/api/download/model/:model", modelDownloadPostHandler, logRequest)
+
+	// POST /api/download/model/:model/run/:run
+	router.Post("/api/download/model/:model/run/:run", runDownloadPostHandler, logRequest)
+
+	// POST /api/download/model/:model/workset/:set
+	router.Post("/api/download/model/:model/workset/:set", worksetDownloadPostHandler, logRequest)
 }
 
 // add web-service /api routes to update metadata

@@ -18,6 +18,20 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
+// DownloadStatusLog contains download status info and content of log file
+type DownloadStatusLog struct {
+	Status      string   // if not empty then one of: progress ready error
+	Kind        string   // if not empty then one of: model run workset
+	Folder      string   // content of Folder:
+	ModelDigest string   // content of Model Digest:
+	RunDigest   string   // content of Run  Digest:
+	WorksetName string   // contenet of Scenario Name:
+	IsFolder    bool     // if true then download folder exist
+	IsZip       bool     // if true then download zip exist
+	LogFileName string   // log file name
+	Lines       []string // file content
+}
+
 // make dbcopy command to prepare full model download
 func makeModelDownloadCommand(baseName string, mb modelBasic, logPath string) (*exec.Cmd, string) {
 
@@ -87,16 +101,16 @@ func makeWorksetDownloadCommand(baseName string, mb modelBasic, setName string, 
 // makeDownload invoke dbcopy to create model download directory and .zip file:
 // 1. delete existing: previous download log file, model.xyz.zip, model.xyz directory.
 // 2. start dbcopy to do actual download.
-// 3. if dbcopy done OK then rename log file into model......download.ready.log else into model......download.error.log
+// 3. if dbcopy done OK then rename log file into model......ready.download.log else into model......error.download.log
 func makeDownload(baseName string, cmd *exec.Cmd, cmdMsg string, logPath string) {
 
 	// delete existing (previous copy) of download data
 	basePath := filepath.Join(theCfg.downloadDir, baseName)
 
-	if !removeDownloadFile(basePath+".download.ready.log", logPath, "delete: "+baseName+".download.ready.log") {
+	if !removeDownloadFile(basePath+".ready.download.log", logPath, "delete: "+baseName+".ready.download.log") {
 		return
 	}
-	if !removeDownloadFile(basePath+".download.error.log", logPath, "delete: "+baseName+".download.error.log") {
+	if !removeDownloadFile(basePath+".error.download.log", logPath, "delete: "+baseName+".error.download.log") {
 		return
 	}
 	if !removeDownloadFile(basePath+".zip", logPath, "delete: "+baseName+".zip") {
@@ -175,6 +189,7 @@ func makeDownload(baseName string, cmd *exec.Cmd, cmdMsg string, logPath string)
 	e := cmd.Wait()
 	if e != nil {
 		omppLog.Log(e)
+		omppLog.Log("Error at: ", cmd.Args)
 		appendToDownloadLog(logPath, true, e.Error())
 		renameToDownloadErrorLog(logPath, "Error at: "+cmdMsg)
 		return
@@ -184,11 +199,11 @@ func makeDownload(baseName string, cmd *exec.Cmd, cmdMsg string, logPath string)
 		omppLog.Log("Warning: dbcopy log output may incomplete")
 	}
 
-	// all done, rename log file on success: model......download.progress.log into model......download.ready.log
-	os.Rename(logPath, strings.TrimSuffix(logPath, ".progress.log")+".ready.log")
+	// all done, rename log file on success: model......progress.download.log into model......ready.download.log
+	os.Rename(logPath, strings.TrimSuffix(logPath, ".progress.download.log")+".ready.download.log")
 }
 
-// remove download file and append log message, on error do rename log file into model......download.error.log and return false
+// remove download file and append log message, on error do rename log file into model......error.download.log and return false
 func removeDownloadFile(path string, logPath string, msg string) bool {
 
 	if !appendToDownloadLog(logPath, true, msg) {
@@ -203,7 +218,7 @@ func removeDownloadFile(path string, logPath string, msg string) bool {
 	return true
 }
 
-// remove download directory and append log message, on error do rename log file into model......download.error.log and return false
+// remove download directory and append log message, on error do rename log file into model......error.download.log and return false
 func removeDownloadDir(path string, logPath string, msg string) bool {
 
 	if !appendToDownloadLog(logPath, true, msg) {
@@ -229,12 +244,12 @@ func createDownloadLog(logPath string) (string, bool) {
 	return logPath, true
 }
 
-// rename log file on error: model......download.progress.log into model......download.error.log
+// rename log file on error: model......progress.download.log into model......error.download.log
 func renameToDownloadErrorLog(logPath string, errMsg string) {
 	if errMsg != "" {
 		appendToDownloadLog(logPath, true, errMsg)
 	}
-	os.Rename(logPath, strings.TrimSuffix(logPath, ".progress.log")+".error.log")
+	os.Rename(logPath, strings.TrimSuffix(logPath, ".progress.download.log")+".error.download.log")
 }
 
 // appendToDownloadLog append to mesaeg into download log file
@@ -267,4 +282,99 @@ func appendToDownloadLog(logPath string, isDoTimestamp bool, msg ...string) bool
 		}
 	}
 	return err == nil // disable log on error
+}
+
+// parse log file content to get folder name, log file kind and keys
+// kind and keys are:
+//   model:   model digest
+//   run:     model digest, run digest
+//   workset: model digest, workset name
+func parseDownloadLog(fileName, fileContent string) DownloadStatusLog {
+
+	dl := DownloadStatusLog{LogFileName: fileName}
+
+	// set download status by .download.log file extension
+	baseName := ""
+	if dl.Status == "" && strings.HasSuffix(fileName, ".ready.download.log") {
+		dl.Status = "ready"
+		baseName = strings.TrimSuffix(fileName, ".ready.download.log")
+	}
+	if dl.Status == "" && strings.HasSuffix(fileName, ".progress.download.log") {
+		dl.Status = "progress"
+		baseName = strings.TrimSuffix(fileName, ".progress.download.log")
+	}
+	if dl.Status == "" && strings.HasSuffix(fileName, ".error.download.log") {
+		dl.Status = "error"
+		baseName = strings.TrimSuffix(fileName, ".error.download.log")
+	}
+
+	// check if download zip or download folder exist
+	dl.IsFolder = isDirExist(filepath.Join(theCfg.downloadDir, baseName)) == nil
+	dl.IsZip = dl.Status == "ready" && isFileExist(filepath.Join(theCfg.downloadDir, baseName+".zip")) == nil
+
+	// split log lines
+	dl.Lines = strings.Split(strings.ReplaceAll(fileContent, "\r", "\x20"), "\n")
+	if len(dl.Lines) <= 0 {
+		return dl // empty log file
+	}
+
+	// header is between -------- lines, at least 8 dashes expected
+	firstHdr := 0
+	endHdr := 0
+	for k := 0; k < len(dl.Lines); k++ {
+		if strings.HasPrefix(dl.Lines[k], "--------") {
+			if firstHdr <= 0 {
+				firstHdr = k + 1
+			} else {
+				endHdr = k
+				break
+			}
+		}
+	}
+	// header must have at least two lines: model digest and folder
+	if firstHdr <= 1 || endHdr < firstHdr+2 || endHdr >= len(dl.Lines) {
+		return dl
+	}
+
+	// parse header lines to find keys and folder
+	for _, h := range dl.Lines[firstHdr:endHdr] {
+
+		if strings.HasPrefix(h, "Folder") {
+			if n := strings.IndexByte(h, ':'); n > 1 && n+1 < len(h) {
+				dl.Folder = strings.TrimSpace(h[n+1:])
+			}
+			continue
+		}
+		if strings.HasPrefix(h, "Model Digest") {
+			if n := strings.IndexByte(h, ':'); n > 1 && n+1 < len(h) {
+				dl.ModelDigest = strings.TrimSpace(h[n+1:])
+			}
+			continue
+		}
+		if strings.HasPrefix(h, "Run Digest") {
+			if n := strings.IndexByte(h, ':'); n > 1 && n+1 < len(h) {
+				dl.RunDigest = strings.TrimSpace(h[n+1:])
+			}
+			continue
+		}
+		if strings.HasPrefix(h, "Scenario Name") {
+			if n := strings.IndexByte(h, ':'); n > 1 && n+1 < len(h) {
+				dl.WorksetName = strings.TrimSpace(h[n+1:])
+			}
+			continue
+		}
+	}
+
+	// check kind of the log: model, model run or workset
+	if dl.Kind == "" && dl.ModelDigest != "" && dl.RunDigest != "" {
+		dl.Kind = "run"
+	}
+	if dl.Kind == "" && dl.ModelDigest != "" && dl.WorksetName != "" {
+		dl.Kind = "workset"
+	}
+	if dl.Kind == "" && dl.ModelDigest != "" {
+		dl.Kind = "model"
+	}
+
+	return dl
 }
