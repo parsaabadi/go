@@ -6,7 +6,6 @@ package helper
 import (
 	"errors"
 	"io"
-	"io/ioutil"
 	"os"
 	"runtime"
 	"unicode/utf8"
@@ -50,7 +49,7 @@ func FileToUtf8(filePath string, encodingName string) (string, error) {
 	}
 
 	// read and convert into utf-8
-	bt, err := ioutil.ReadAll(rd)
+	bt, err := io.ReadAll(rd)
 	if err != nil {
 		return "", errors.New("read to utf-8 error: " + err.Error())
 	}
