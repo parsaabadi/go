@@ -22,13 +22,15 @@ import (
 type DownloadStatusLog struct {
 	Status      string   // if not empty then one of: progress ready error
 	Kind        string   // if not empty then one of: model run workset
-	Folder      string   // content of Folder:
 	ModelDigest string   // content of Model Digest:
 	RunDigest   string   // content of Run  Digest:
 	WorksetName string   // contenet of Scenario Name:
+	Folder      string   // content of Folder:
 	IsFolder    bool     // if true then download folder exist
+	ZipFileName string   // zip file name
 	IsZip       bool     // if true then download zip exist
 	LogFileName string   // log file name
+	LogModTime  int64    // log file modification time in nanseconds since epoch
 	Lines       []string // file content
 }
 
@@ -284,6 +286,24 @@ func appendToDownloadLog(logPath string, isDoTimestamp bool, msg ...string) bool
 	return err == nil // disable log on error
 }
 
+// update file status of download files:
+// check if zip exist, if folder exist and set log file modification time in nanoseconds since epoch
+func updateStatDownloadLog(logPath string, dl *DownloadStatusLog) {
+
+	// check if download zip or download folder exist
+	if dl.Folder != "" {
+		dl.IsFolder = isDirExist(filepath.Join(theCfg.downloadDir, dl.Folder)) == nil
+		dl.ZipFileName = dl.Folder + ".zip"
+		dl.IsZip = dl.Status == "ready" && isFileExist(filepath.Join(theCfg.downloadDir, dl.ZipFileName)) == nil
+	}
+
+	// retrive log file modification time
+	fi, err := os.Stat(filepath.Join(theCfg.downloadDir, logPath))
+	if err == nil {
+		dl.LogModTime = fi.ModTime().Sub(time.Unix(0, 0)).Nanoseconds()
+	}
+}
+
 // parse log file content to get folder name, log file kind and keys
 // kind and keys are:
 //   model:   model digest
@@ -294,23 +314,15 @@ func parseDownloadLog(fileName, fileContent string) DownloadStatusLog {
 	dl := DownloadStatusLog{LogFileName: fileName}
 
 	// set download status by .download.log file extension
-	baseName := ""
 	if dl.Status == "" && strings.HasSuffix(fileName, ".ready.download.log") {
 		dl.Status = "ready"
-		baseName = strings.TrimSuffix(fileName, ".ready.download.log")
 	}
 	if dl.Status == "" && strings.HasSuffix(fileName, ".progress.download.log") {
 		dl.Status = "progress"
-		baseName = strings.TrimSuffix(fileName, ".progress.download.log")
 	}
 	if dl.Status == "" && strings.HasSuffix(fileName, ".error.download.log") {
 		dl.Status = "error"
-		baseName = strings.TrimSuffix(fileName, ".error.download.log")
 	}
-
-	// check if download zip or download folder exist
-	dl.IsFolder = isDirExist(filepath.Join(theCfg.downloadDir, baseName)) == nil
-	dl.IsZip = dl.Status == "ready" && isFileExist(filepath.Join(theCfg.downloadDir, baseName+".zip")) == nil
 
 	// split log lines
 	dl.Lines = strings.Split(strings.ReplaceAll(fileContent, "\r", "\x20"), "\n")

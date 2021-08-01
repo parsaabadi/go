@@ -47,6 +47,7 @@ func fileLogDownloadGetHandler(w http.ResponseWriter, r *http.Request) {
 
 	// parse log file content to get folder name, log file kind and keys
 	dl := parseDownloadLog(fileName, fc)
+	updateStatDownloadLog(filePath, &dl)
 
 	jsonResponse(w, r, dl) // return log file content and status
 }
@@ -121,7 +122,10 @@ func parseDownloadLogFileList(preffix string, dirEntryLst []fs.DirEntry) []Downl
 		fc := string(bt)
 
 		// parse log file content to get folder name, log file kind and keys
-		dlLst = append(dlLst, parseDownloadLog(f.Name(), fc))
+		dl := parseDownloadLog(f.Name(), fc)
+		updateStatDownloadLog(f.Name(), &dl)
+
+		dlLst = append(dlLst, dl)
 	}
 
 	return dlLst
