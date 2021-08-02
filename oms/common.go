@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -354,4 +355,17 @@ func dbcopyPath(omsPath string) string {
 		}
 	}
 	return "" // dbcopy not found or not accessible or not regular file
+}
+
+// return file Stat if this is a regular file
+func fileStat(filePath string) (fs.FileInfo, error) {
+
+	fi, err := os.Stat(filepath.Join(filePath))
+	if err != nil {
+		return fi, err
+	}
+	if fi.IsDir() || !fi.Mode().IsRegular() {
+		return fi, errors.New("Error: it is not a regilar file: " + filePath)
+	}
+	return fi, nil
 }

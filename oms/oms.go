@@ -884,6 +884,9 @@ func apiDownloadRoutes(router *vestigo.Router) {
 	// GET /api/download/log/file/:name
 	router.Get("/api/download/log/file/:name", fileLogDownloadGetHandler, logRequest)
 
+	// GET /api/download/file-tree/:folder
+	router.Get("/api/download/file-tree/:folder", fileTreeDownloadGetHandler, logRequest)
+
 	// POST /api/download/model/:model
 	router.Post("/api/download/model/:model", modelDownloadPostHandler, logRequest)
 

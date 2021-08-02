@@ -25,13 +25,23 @@ type DownloadStatusLog struct {
 	ModelDigest string   // content of Model Digest:
 	RunDigest   string   // content of Run  Digest:
 	WorksetName string   // contenet of Scenario Name:
-	Folder      string   // content of Folder:
 	IsFolder    bool     // if true then download folder exist
-	ZipFileName string   // zip file name
+	Folder      string   // content of Folder:
 	IsZip       bool     // if true then download zip exist
+	ZipFileName string   // zip file name
+	ZipModTime  int64    // zip modification time in milliseconds since epoch
+	ZipSize     int64    // zip file size
 	LogFileName string   // log file name
-	LogModTime  int64    // log file modification time in nanseconds since epoch
+	LogNsTime   int64    // log file modification time in nanoseconds since epoch
 	Lines       []string // file content
+}
+
+// PathItem contain basic file info after tree walk: relative path, size and modification time
+type PathItem struct {
+	Path    string // file path in / slash form
+	IsDir   bool   // if true then it is a directory
+	Size    int64  // file size (may be zero for directories)
+	ModTime int64  // file modification time in milliseconds since epoch
 }
 
 // make dbcopy command to prepare full model download
@@ -293,14 +303,22 @@ func updateStatDownloadLog(logPath string, dl *DownloadStatusLog) {
 	// check if download zip or download folder exist
 	if dl.Folder != "" {
 		dl.IsFolder = isDirExist(filepath.Join(theCfg.downloadDir, dl.Folder)) == nil
-		dl.ZipFileName = dl.Folder + ".zip"
-		dl.IsZip = dl.Status == "ready" && isFileExist(filepath.Join(theCfg.downloadDir, dl.ZipFileName)) == nil
+
+		if dl.Status == "ready" {
+			fi, e := fileStat(filepath.Join(theCfg.downloadDir, dl.Folder+".zip"))
+			dl.IsZip = e == nil
+			if dl.IsZip {
+				dl.ZipFileName = dl.Folder + ".zip"
+				dl.ZipSize = fi.Size()
+				dl.ZipModTime = fi.ModTime().UnixNano() / 1000000
+			}
+		}
 	}
 
 	// retrive log file modification time
 	fi, err := os.Stat(filepath.Join(theCfg.downloadDir, logPath))
 	if err == nil {
-		dl.LogModTime = fi.ModTime().Sub(time.Unix(0, 0)).Nanoseconds()
+		dl.LogNsTime = fi.ModTime().UnixNano()
 	}
 }
 

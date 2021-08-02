@@ -131,6 +131,53 @@ func parseDownloadLogFileList(preffix string, dirEntryLst []fs.DirEntry) []Downl
 	return dlLst
 }
 
+// fileTreeDownloadGetHandler return file tree (file path, size, modification time) by folder name.
+// GET /api/download/file-tree/:folder
+func fileTreeDownloadGetHandler(w http.ResponseWriter, r *http.Request) {
+
+	// url or query parameters
+	folder := getRequestParam(r, "folder")
+	if folder == "" || folder != filepath.Base(helper.CleanPath(folder)) {
+		http.Error(w, "Folder name invalid (or empty): "+folder, http.StatusBadRequest)
+		return
+	}
+
+	folderPath := filepath.Join(theCfg.downloadDir, folder)
+	if isDirExist(folderPath) != nil {
+		http.Error(w, "Folder not found: "+folder, http.StatusBadRequest)
+		return
+	}
+	dp := filepath.ToSlash(theCfg.downloadDir) + "/"
+
+	// get list of files under download/folder
+	treeLst := []PathItem{}
+	err := filepath.WalkDir(folderPath, func(path string, de fs.DirEntry, err error) error {
+		if err != nil {
+			omppLog.Log("Error at directory walk: ", path, " : ", err.Error())
+			return err
+		}
+		fi, e := de.Info()
+		if e != nil {
+			return nil // ignore directory entry where file removed after readdir()
+		}
+		p := strings.TrimPrefix(filepath.ToSlash(path), dp)
+		treeLst = append(treeLst, PathItem{
+			Path:    filepath.ToSlash(p),
+			IsDir:   de.IsDir(),
+			Size:    fi.Size(),
+			ModTime: fi.ModTime().UnixNano() / 1000000,
+		})
+		return nil
+	})
+	if err != nil {
+		omppLog.Log("Error at directory walk: ", err.Error())
+		http.Error(w, "Error at folder scan: "+folder, http.StatusBadRequest)
+		return
+	}
+
+	jsonResponse(w, r, treeLst)
+}
+
 // modelDownloadPostHandler initate creation of model zip archive in home/out/download folder.
 // POST /api/download/model/:model
 // Zip archive is the same as created by dbcopy command line utilty.
