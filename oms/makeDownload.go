@@ -316,8 +316,7 @@ func updateStatDownloadLog(logPath string, dl *DownloadStatusLog) {
 	}
 
 	// retrive log file modification time
-	fi, err := os.Stat(filepath.Join(theCfg.downloadDir, logPath))
-	if err == nil {
+	if fi, err := os.Stat(filepath.Join(logPath)); err == nil {
 		dl.LogNsTime = fi.ModTime().UnixNano()
 	}
 }
