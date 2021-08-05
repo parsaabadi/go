@@ -93,7 +93,7 @@ func modelLogDownloadGetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// parse all files
-	dlLst := parseDownloadLogFileList(mName, fLst)
+	dlLst := parseDownloadLogFileList(mName+".", fLst)
 
 	jsonResponse(w, r, dlLst)
 }
