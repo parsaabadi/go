@@ -4,6 +4,7 @@
 package main
 
 import (
+	"errors"
 	"io/fs"
 	"net/http"
 	"os"
@@ -389,16 +390,50 @@ func worksetDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Location", "/api/download/model/"+dn+"/workset/"+wsn+"/"+baseName)
 }
 
-// downloadDeleteHandler starts download delete by folder name.
+// downloadDeleteHandler starts deleting of download files by folder name.
 // DELETE /api/download/delete/:folder
 // Delete started on separate thread and does delete of folder, .zip file and .download.log files
 func downloadDeleteHandler(w http.ResponseWriter, r *http.Request) {
 
 	// url or query parameters
 	folder := getRequestParam(r, "folder")
-	if folder == "" || folder != filepath.Base(helper.CleanPath(folder)) {
-		http.Error(w, "Folder name invalid (or empty): "+folder, http.StatusBadRequest)
+
+	// delete files on separate thread
+	err := deleteDownload(folder, true)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+
+	// report to the client results location
+	w.Header().Set("Content-Location", "/api/download/delete/"+folder)
+}
+
+// downloadSyncDeleteHandler delete download files by folder name.
+// DELETE /api/download/sync/delete/:folder
+// Delete of folder, .zip file and .download.log files
+func downloadSyncDeleteHandler(w http.ResponseWriter, r *http.Request) {
+
+	// url or query parameters
+	folder := getRequestParam(r, "folder")
+
+	// delete files
+	err := deleteDownload(folder, false)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// report to the client results location
+	w.Header().Set("Content-Location", "/api/download/sync/delete/"+folder)
+}
+
+// delete download files by folder name.
+// if isAsync is true then start delete on separate thread
+func deleteDownload(folder string, isAsync bool) error {
+
+	if folder == "" || folder != filepath.Base(helper.CleanPath(folder)) {
+		return errors.New("Folder name invalid (or empty): " + folder)
 	}
 	omppLog.Log("Delete download: ", folder)
 
@@ -408,8 +443,7 @@ func downloadDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	logPath, isLog := createDownloadLog(logPath)
 	if !isLog {
 		omppLog.Log("Failed to create download delete log file: " + folder + ".progress.download.log")
-		http.Error(w, "Delete of download failed: "+folder, http.StatusBadRequest)
-		return
+		return errors.New("Delete of download failed: " + folder)
 	}
 	hdrMsg := []string{
 		"---------------",
@@ -420,18 +454,16 @@ func downloadDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	if !appendToDownloadLog(logPath, true, "Delete download of: "+folder) {
 		renameToDownloadErrorLog(logPath, "")
 		omppLog.Log("Failed to write into download log file: " + folder + ".progress.download.log")
-		http.Error(w, "Delete of download failed: "+folder, http.StatusBadRequest)
-		return
+		return errors.New("Delete of download failed: " + folder)
 	}
 	if !appendToDownloadLog(logPath, false, hdrMsg...) {
 		renameToDownloadErrorLog(logPath, "")
 		omppLog.Log("Failed to write into download delete log file: " + folder + ".progress.download.log")
-		http.Error(w, "Delete of download failed: "+folder, http.StatusBadRequest)
-		return
+		return errors.New("Delete of download failed: " + folder)
 	}
 
 	// delete download files on separate thread
-	go func(baseName, logPath string) {
+	doDelete := func(baseName, logPath string) {
 
 		// remove download results
 		basePath := filepath.Join(theCfg.downloadDir, baseName)
@@ -452,8 +484,12 @@ func downloadDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		if e := os.Remove(basePath + ".progress.download.log"); e != nil && !os.IsNotExist(e) {
 			omppLog.Log(e)
 		}
-	}(folder, logPath)
+	}
 
-	// report to the client results location
-	w.Header().Set("Content-Location", "/api/download/delete/"+folder)
+	if isAsync {
+		go doDelete(folder, logPath)
+	} else {
+		doDelete(folder, logPath)
+	}
+	return nil
 }
