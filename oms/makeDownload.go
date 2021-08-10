@@ -6,6 +6,7 @@ package main
 import (
 	"bufio"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,12 +22,12 @@ import (
 // DownloadStatusLog contains download status info and content of log file
 type DownloadStatusLog struct {
 	Status      string   // if not empty then one of: progress ready error
-	Kind        string   // if not empty then one of: model run workset
-	ModelDigest string   // content of Model Digest:
-	RunDigest   string   // content of Run  Digest:
-	WorksetName string   // contenet of Scenario Name:
+	Kind        string   // if not empty then one of: model, run, workset or delete
+	ModelDigest string   // content of "Model Digest:"
+	RunDigest   string   // content of "Run  Digest:"
+	WorksetName string   // content of "Scenario Name:"
 	IsFolder    bool     // if true then download folder exist
-	Folder      string   // content of Folder:
+	Folder      string   // content of "Folder:"
 	IsZip       bool     // if true then download zip exist
 	ZipFileName string   // zip file name
 	ZipModTime  int64    // zip modification time in milliseconds since epoch
@@ -321,11 +322,45 @@ func updateStatDownloadLog(logPath string, dl *DownloadStatusLog) {
 	}
 }
 
+// parseDownloadLogFileList for each download directory entry check is it a .download.log file and parse content
+func parseDownloadLogFileList(preffix string, dirEntryLst []fs.DirEntry) []DownloadStatusLog {
+
+	dlLst := []DownloadStatusLog{}
+
+	for _, f := range dirEntryLst {
+
+		// skip if this is not a .download.log file or does not have modelName. prefix
+		if f.IsDir() || !strings.HasSuffix(f.Name(), ".download.log") {
+			continue
+		}
+		if preffix != "" && !strings.HasPrefix(f.Name(), preffix) {
+			continue
+		}
+
+		// read log file, skip on error
+		bt, err := os.ReadFile(filepath.Join(theCfg.downloadDir, f.Name()))
+		if err != nil {
+			omppLog.Log("Failed to read log file: ", f.Name())
+			continue // skip log file on read error
+		}
+		fc := string(bt)
+
+		// parse log file content to get folder name, log file kind and keys
+		dl := parseDownloadLog(f.Name(), fc)
+		updateStatDownloadLog(f.Name(), &dl)
+
+		dlLst = append(dlLst, dl)
+	}
+
+	return dlLst
+}
+
 // parse log file content to get folder name, log file kind and keys
 // kind and keys are:
 //   model:   model digest
 //   run:     model digest, run digest
 //   workset: model digest, workset name
+//   delete:  folder
 func parseDownloadLog(fileName, fileContent string) DownloadStatusLog {
 
 	dl := DownloadStatusLog{LogFileName: fileName}
@@ -360,7 +395,7 @@ func parseDownloadLog(fileName, fileContent string) DownloadStatusLog {
 			}
 		}
 	}
-	// header must have at least two lines: model digest and folder
+	// header must have at least two lines: folder and model digest or delete
 	if firstHdr <= 1 || endHdr < firstHdr+2 || endHdr >= len(dl.Lines) {
 		return dl
 	}
@@ -392,9 +427,16 @@ func parseDownloadLog(fileName, fileContent string) DownloadStatusLog {
 			}
 			continue
 		}
+		if strings.HasPrefix(h, "Delete") {
+			if n := strings.IndexByte(h, ':'); n > 1 && n+1 < len(h) {
+				dl.Kind = "delete"
+				dl.Folder = strings.TrimSpace(h[n+1:])
+			}
+			continue
+		}
 	}
 
-	// check kind of the log: model, model run or workset
+	// check kind of the log: model, model run, workset or delete
 	if dl.Kind == "" && dl.ModelDigest != "" && dl.RunDigest != "" {
 		dl.Kind = "run"
 	}

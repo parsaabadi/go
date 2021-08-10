@@ -895,6 +895,9 @@ func apiDownloadRoutes(router *vestigo.Router) {
 
 	// POST /api/download/model/:model/workset/:set
 	router.Post("/api/download/model/:model/workset/:set", worksetDownloadPostHandler, logRequest)
+
+	// DELETE /api/download/delete/:folder
+	router.Delete("/api/download/delete/:folder", downloadDeleteHandler, logRequest)
 }
 
 // add web-service /api routes to update metadata

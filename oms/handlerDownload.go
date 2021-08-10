@@ -98,39 +98,6 @@ func modelLogDownloadGetHandler(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, r, dlLst)
 }
 
-// parseDownloadLogFileList for each download directory entry check is it a .download.log file and parse content
-func parseDownloadLogFileList(preffix string, dirEntryLst []fs.DirEntry) []DownloadStatusLog {
-
-	dlLst := []DownloadStatusLog{}
-
-	for _, f := range dirEntryLst {
-
-		// skip if this is not a .download.log file or does not have modelName. prefix
-		if f.IsDir() || !strings.HasSuffix(f.Name(), ".download.log") {
-			continue
-		}
-		if preffix != "" && !strings.HasPrefix(f.Name(), preffix) {
-			continue
-		}
-
-		// read log file, skip on error
-		bt, err := os.ReadFile(filepath.Join(theCfg.downloadDir, f.Name()))
-		if err != nil {
-			omppLog.Log("Failed to read log file: ", f.Name())
-			continue // skip log file on read error
-		}
-		fc := string(bt)
-
-		// parse log file content to get folder name, log file kind and keys
-		dl := parseDownloadLog(f.Name(), fc)
-		updateStatDownloadLog(f.Name(), &dl)
-
-		dlLst = append(dlLst, dl)
-	}
-
-	return dlLst
-}
-
 // fileTreeDownloadGetHandler return file tree (file path, size, modification time) by folder name.
 // GET /api/download/file-tree/:folder
 func fileTreeDownloadGetHandler(w http.ResponseWriter, r *http.Request) {
@@ -245,7 +212,7 @@ func modelDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 	go makeDownload(baseName, cmd, cmdMsg, logPath)
 
 	// report to the client results location
-	w.Header().Set("Content-Location", "/api/model/"+dn+"/download/"+baseName)
+	w.Header().Set("Content-Location", "/api/download/model/"+dn+"/"+baseName)
 }
 
 // runDownloadPostHandler initate creation of model run zip archive in home/out/download folder.
@@ -335,7 +302,7 @@ func runDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 	go makeDownload(baseName, cmd, cmdMsg, logPath)
 
 	// report to the client results location
-	w.Header().Set("Content-Location", "/api/model/"+dn+"/download/run/"+rdsn+"/"+baseName)
+	w.Header().Set("Content-Location", "/api/download/model/"+dn+"/run/"+rdsn+"/"+baseName)
 }
 
 // worksetDownloadPostHandler initate creation of model workset zip archive in home/out/download folder.
@@ -419,5 +386,74 @@ func worksetDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 	go makeDownload(baseName, cmd, cmdMsg, logPath)
 
 	// report to the client results location
-	w.Header().Set("Content-Location", "/api/model/"+dn+"/download/workset/"+wsn+"/"+baseName)
+	w.Header().Set("Content-Location", "/api/download/model/"+dn+"/workset/"+wsn+"/"+baseName)
+}
+
+// downloadDeleteHandler starts download delete by folder name.
+// DELETE /api/download/delete/:folder
+// Delete started on separate thread and does delete of folder, .zip file and .download.log files
+func downloadDeleteHandler(w http.ResponseWriter, r *http.Request) {
+
+	// url or query parameters
+	folder := getRequestParam(r, "folder")
+	if folder == "" || folder != filepath.Base(helper.CleanPath(folder)) {
+		http.Error(w, "Folder name invalid (or empty): "+folder, http.StatusBadRequest)
+		return
+	}
+	omppLog.Log("Delete download: ", folder)
+
+	// create new download.progress.log file and write delete header
+	logPath := filepath.Join(theCfg.downloadDir, folder+".progress.download.log")
+
+	logPath, isLog := createDownloadLog(logPath)
+	if !isLog {
+		omppLog.Log("Failed to create download delete log file: " + folder + ".progress.download.log")
+		http.Error(w, "Delete of download failed: "+folder, http.StatusBadRequest)
+		return
+	}
+	hdrMsg := []string{
+		"---------------",
+		"Delete        : " + folder,
+		"Folder        : " + folder,
+		"---------------",
+	}
+	if !appendToDownloadLog(logPath, true, "Delete download of: "+folder) {
+		renameToDownloadErrorLog(logPath, "")
+		omppLog.Log("Failed to write into download log file: " + folder + ".progress.download.log")
+		http.Error(w, "Delete of download failed: "+folder, http.StatusBadRequest)
+		return
+	}
+	if !appendToDownloadLog(logPath, false, hdrMsg...) {
+		renameToDownloadErrorLog(logPath, "")
+		omppLog.Log("Failed to write into download delete log file: " + folder + ".progress.download.log")
+		http.Error(w, "Delete of download failed: "+folder, http.StatusBadRequest)
+		return
+	}
+
+	// delete download files on separate thread
+	go func(baseName, logPath string) {
+
+		// remove download results
+		basePath := filepath.Join(theCfg.downloadDir, baseName)
+
+		if !removeDownloadFile(basePath+".ready.download.log", logPath, "delete: "+baseName+".ready.download.log") {
+			return
+		}
+		if !removeDownloadFile(basePath+".error.download.log", logPath, "delete: "+baseName+".error.download.log") {
+			return
+		}
+		if !removeDownloadFile(basePath+".zip", logPath, "delete: "+baseName+".zip") {
+			return
+		}
+		if !removeDownloadDir(basePath, logPath, "delete: "+baseName) {
+			return
+		}
+		// last step: remove delete progress log file
+		if e := os.Remove(basePath + ".progress.download.log"); e != nil && !os.IsNotExist(e) {
+			omppLog.Log(e)
+		}
+	}(folder, logPath)
+
+	// report to the client results location
+	w.Header().Set("Content-Location", "/api/download/delete/"+folder)
 }
