@@ -872,37 +872,6 @@ func apiReadCsvRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/table/:name/all-acc/csv-id-bom", runTableAllAccIdCsvBomGetHandler, logRequest)
 }
 
-// add http GET and POST web-service /api routes to download files from home/out/download folder
-func apiDownloadRoutes(router *vestigo.Router) {
-
-	// GET /api/download/log/all
-	router.Get("/api/download/log/all", allLogDownloadGetHandler, logRequest)
-
-	// GET /api/download/log/model/:model
-	router.Get("/api/download/log/model/:model", modelLogDownloadGetHandler, logRequest)
-
-	// GET /api/download/log/file/:name
-	router.Get("/api/download/log/file/:name", fileLogDownloadGetHandler, logRequest)
-
-	// GET /api/download/file-tree/:folder
-	router.Get("/api/download/file-tree/:folder", fileTreeDownloadGetHandler, logRequest)
-
-	// POST /api/download/model/:model
-	router.Post("/api/download/model/:model", modelDownloadPostHandler, logRequest)
-
-	// POST /api/download/model/:model/run/:run
-	router.Post("/api/download/model/:model/run/:run", runDownloadPostHandler, logRequest)
-
-	// POST /api/download/model/:model/workset/:set
-	router.Post("/api/download/model/:model/workset/:set", worksetDownloadPostHandler, logRequest)
-
-	// DELETE /api/download/delete/:folder
-	router.Delete("/api/download/delete/:folder", downloadDeleteHandler, logRequest)
-
-	// DELETE /api/download/sync/delete/:folder
-	router.Delete("/api/download/sync/delete/:folder", downloadSyncDeleteHandler, logRequest)
-}
-
 // add web-service /api routes to update metadata
 func apiUpdateRoutes(router *vestigo.Router) {
 
@@ -1023,6 +992,37 @@ func apiRunModelRoutes(router *vestigo.Router) {
 	router.Get("/api/run/log/model/:model/stamp/", http.NotFound)
 	router.Get("/api/run/log/model/:model/stamp/:stamp/start/", http.NotFound)
 	router.Get("/api/run/log/model/:model/stamp/:stamp/start/:start/count/", http.NotFound)
+}
+
+// add http GET and POST web-service /api routes to download files from home/out/download folder
+func apiDownloadRoutes(router *vestigo.Router) {
+
+	// GET /api/download/log/all
+	router.Get("/api/download/log/all", allLogDownloadGetHandler, logRequest)
+
+	// GET /api/download/log/model/:model
+	router.Get("/api/download/log/model/:model", modelLogDownloadGetHandler, logRequest)
+
+	// GET /api/download/log/file/:name
+	router.Get("/api/download/log/file/:name", fileLogDownloadGetHandler, logRequest)
+
+	// GET /api/download/file-tree/:folder
+	router.Get("/api/download/file-tree/:folder", fileTreeDownloadGetHandler, logRequest)
+
+	// POST /api/download/model/:model
+	router.Post("/api/download/model/:model", modelDownloadPostHandler, logRequest)
+
+	// POST /api/download/model/:model/run/:run
+	router.Post("/api/download/model/:model/run/:run", runDownloadPostHandler, logRequest)
+
+	// POST /api/download/model/:model/workset/:set
+	router.Post("/api/download/model/:model/workset/:set", worksetDownloadPostHandler, logRequest)
+
+	// DELETE /api/download/delete/:folder
+	router.Delete("/api/download/delete/:folder", downloadDeleteHandler, logRequest)
+
+	// DELETE /api/download/sync/delete/:folder
+	router.Delete("/api/download/sync/delete/:folder", downloadSyncDeleteHandler, logRequest)
 }
 
 // add web-service /api routes for user-specific request
