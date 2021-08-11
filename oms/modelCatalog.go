@@ -38,6 +38,7 @@ type ModelCatalogConfig struct {
 type modelDef struct {
 	dbConn        *sql.DB           // database connection
 	binDir        string            // database and .exe directory: directory part of models/bin/model.sqlite
+	dbPath        string            // absolute path to sqlite database file: models/bin/model.sqlite
 	logDir        string            // model log directory
 	isLogDir      bool              // if true then use model log directory for model run logs
 	isMetaFull    bool              // if true then ModelMeta fully loaded else only ModelDicRow
@@ -57,6 +58,7 @@ type modelBasic struct {
 	binDir   string // database and .exe directory: directory part of models/bin/model.sqlite
 	logDir   string // model log directory
 	isLogDir bool   // if true then use model log directory for model run logs
+	dbPath   string // absolute path to sqlite database file: models/bin/model.sqlite
 }
 
 // ModelMetaFull is full model metadata: language-neutral db rows

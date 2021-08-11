@@ -125,7 +125,7 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 	// assume model exe name is the same as model name
 	mExe := helper.CleanPath(req.ModelName)
 
-	cmd, err := rsc.makeCommand(mExe, binDir, wDir, mArgs, req)
+	cmd, err := rsc.makeCommand(mExe, binDir, wDir, mb.dbPath, mArgs, req)
 	if err != nil {
 		omppLog.Log("Error at starting run model ", req.ModelName, ": ", err.Error())
 		return rs, err
@@ -208,7 +208,7 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 // If template file name specified then template processing results used to create command line.
 // If this is MPI model run then tempalate is requred
 // MPI run template can be model specific: "mpi.ModelName.template.txt" or default: "mpi.ModelRun.template.txt".
-func (rsc *RunCatalog) makeCommand(mExe, binDir, workDir string, mArgs []string, req *RunRequest) (*exec.Cmd, error) {
+func (rsc *RunCatalog) makeCommand(mExe, binDir, workDir, dbPath string, mArgs []string, req *RunRequest) (*exec.Cmd, error) {
 
 	// check is it MPI model run, to run MPI model template is required
 	isMpi := req.Mpi.Np != 0
@@ -257,6 +257,7 @@ func (rsc *RunCatalog) makeCommand(mExe, binDir, workDir string, mArgs []string,
 			ExeStem   string            // base part of model exe name, usually modelName
 			Dir       string            // work directory to run the model
 			BinDir    string            // bin directory where model.exe is located
+			DbPath    string            // absolute path to sqlite database file: models/bin/model.sqlite
 			MpiNp     int               // number of MPI processes
 			Args      []string          // model command line arguments
 			Env       map[string]string // environment variables to run the model
@@ -265,6 +266,7 @@ func (rsc *RunCatalog) makeCommand(mExe, binDir, workDir string, mArgs []string,
 			ExeStem:   mExe,
 			Dir:       workDir,
 			BinDir:    binDir,
+			DbPath:    dbPath,
 			MpiNp:     req.Mpi.Np,
 			Args:      mArgs,
 			Env:       req.Env,

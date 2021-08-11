@@ -107,6 +107,7 @@ func (mc *ModelCatalog) findModelBasic(isByDigestOnly bool, dn string) (modelBas
 			binDir:   mc.modelLst[idx].binDir,
 			logDir:   mc.modelLst[idx].logDir,
 			isLogDir: mc.modelLst[idx].isLogDir,
+			dbPath:   mc.modelLst[idx].dbPath,
 		},
 		true
 }
@@ -124,6 +125,7 @@ func (mc *ModelCatalog) allModels() []modelBasic {
 			binDir:   mc.modelLst[idx].binDir,
 			logDir:   mc.modelLst[idx].logDir,
 			isLogDir: mc.modelLst[idx].isLogDir,
+			dbPath:   mc.modelLst[idx].dbPath,
 		}
 	}
 	return mbs

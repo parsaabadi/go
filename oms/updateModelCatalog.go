@@ -76,6 +76,12 @@ func (mc *ModelCatalog) refreshSqlite(modelDir, modelLogDir string) error {
 		}
 		dbDir := filepath.Dir(fp)
 
+		dbPath, err := filepath.Abs(fp)
+		if err != nil {
+			omppLog.Log("Error: ", fp, " : ", err.Error())
+			continue
+		}
+
 		// read list of models: model_dic rows
 		dicLst, err := db.GetModelList(dbc)
 		if err != nil || len(dicLst) <= 0 {
@@ -121,6 +127,7 @@ func (mc *ModelCatalog) refreshSqlite(modelDir, modelLogDir string) error {
 			mLst = append(mLst, modelDef{
 				dbConn:     dbc,
 				binDir:     dbDir,
+				dbPath:     dbPath,
 				logDir:     modelLogDir,
 				isLogDir:   isLogDir,
 				isMetaFull: false,
