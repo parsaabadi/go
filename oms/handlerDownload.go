@@ -390,29 +390,10 @@ func worksetDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Location", "/api/download/model/"+dn+"/workset/"+wsn+"/"+baseName)
 }
 
-// downloadDeleteHandler starts deleting of download files by folder name.
+// downloadDeleteHandler delete download files by folder name.
 // DELETE /api/download/delete/:folder
-// Delete started on separate thread and does delete of folder, .zip file and .download.log files
-func downloadDeleteHandler(w http.ResponseWriter, r *http.Request) {
-
-	// url or query parameters
-	folder := getRequestParam(r, "folder")
-
-	// delete files on separate thread
-	err := deleteDownload(folder, true)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	// report to the client results location
-	w.Header().Set("Content-Location", "/api/download/delete/"+folder)
-}
-
-// downloadSyncDeleteHandler delete download files by folder name.
-// DELETE /api/download/sync/delete/:folder
 // Delete of folder, .zip file and .download.log files
-func downloadSyncDeleteHandler(w http.ResponseWriter, r *http.Request) {
+func downloadDeleteHandler(w http.ResponseWriter, r *http.Request) {
 
 	// url or query parameters
 	folder := getRequestParam(r, "folder")
@@ -425,7 +406,26 @@ func downloadSyncDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// report to the client results location
-	w.Header().Set("Content-Location", "/api/download/sync/delete/"+folder)
+	w.Header().Set("Content-Location", "/api/download/delete/"+folder)
+}
+
+// downloadAsyncDeleteHandler starts deleting of download files by folder name.
+// DELETE /api/download/start/delete/:folder
+// Delete started on separate thread and does delete of folder, .zip file and .download.log files
+func downloadAsyncDeleteHandler(w http.ResponseWriter, r *http.Request) {
+
+	// url or query parameters
+	folder := getRequestParam(r, "folder")
+
+	// delete files on separate thread
+	err := deleteDownload(folder, true)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// report to the client results location
+	w.Header().Set("Content-Location", "/api/download/start/delete/"+folder)
 }
 
 // delete download files by folder name.

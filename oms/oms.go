@@ -1021,8 +1021,8 @@ func apiDownloadRoutes(router *vestigo.Router) {
 	// DELETE /api/download/delete/:folder
 	router.Delete("/api/download/delete/:folder", downloadDeleteHandler, logRequest)
 
-	// DELETE /api/download/sync/delete/:folder
-	router.Delete("/api/download/sync/delete/:folder", downloadSyncDeleteHandler, logRequest)
+	// DELETE /api/download/start/delete/:folder
+	router.Delete("/api/download/start/delete/:folder", downloadAsyncDeleteHandler, logRequest)
 }
 
 // add web-service /api routes for user-specific request
