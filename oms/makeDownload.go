@@ -60,7 +60,7 @@ func makeModelDownloadCommand(baseName string, mb modelBasic, logPath string) (*
 
 	// make dbcopy command
 	cmd := exec.Command(
-		theCfg.dbcopyPath, "-m", mb.name, "-dbcopy.Zip", "-dbcopy.OutputDir", absDownDir,
+		theCfg.dbcopyPath, "-m", mb.name, "-dbcopy.Zip", "-dbcopy.OutputDir", absDownDir, "-dbcopy.FromSqlite", mb.dbPath,
 	)
 	cmd.Dir = mb.binDir // dbcopy work directory is a model bin directory
 
@@ -82,7 +82,7 @@ func makeRunDownloadCommand(baseName string, mb modelBasic, runId int, logPath s
 
 	// make dbcopy command
 	cmd := exec.Command(
-		theCfg.dbcopyPath, "-m", mb.name, "-dbcopy.RunId", strconv.Itoa(runId), "-dbcopy.Zip", "-dbcopy.OutputDir", absDownDir,
+		theCfg.dbcopyPath, "-m", mb.name, "-dbcopy.RunId", strconv.Itoa(runId), "-dbcopy.Zip", "-dbcopy.OutputDir", absDownDir, "-dbcopy.FromSqlite", mb.dbPath,
 	)
 	cmd.Dir = mb.binDir // dbcopy work directory is a model bin directory
 
@@ -104,7 +104,7 @@ func makeWorksetDownloadCommand(baseName string, mb modelBasic, setName string, 
 
 	// make dbcopy command
 	cmd := exec.Command(
-		theCfg.dbcopyPath, "-m", mb.name, "-dbcopy.SetName", setName, "-dbcopy.Zip", "-dbcopy.OutputDir", absDownDir,
+		theCfg.dbcopyPath, "-m", mb.name, "-dbcopy.SetName", setName, "-dbcopy.Zip", "-dbcopy.OutputDir", absDownDir, "-dbcopy.FromSqlite", mb.dbPath,
 	)
 	cmd.Dir = mb.binDir // dbcopy work directory is a model bin directory
 
