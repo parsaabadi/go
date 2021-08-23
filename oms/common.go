@@ -313,32 +313,45 @@ func jsonRequestToFile(w http.ResponseWriter, r *http.Request, outPath string) b
 
 // isDirExist return error if directory does not exist or not accessible
 func isDirExist(dirPath string) error {
+	_, err := dirStat(dirPath)
+	return err
+}
+
+// return file Stat if this is a directory
+func dirStat(dirPath string) (fs.FileInfo, error) {
 	fi, err := os.Stat(dirPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return errors.New("Error: directory not exist: " + dirPath)
+			return fi, errors.New("Error: directory not exist: " + dirPath)
 		}
-		return errors.New("Error: unable to access directory: " + dirPath + " : " + err.Error())
+		return fi, errors.New("Error: unable to access directory: " + dirPath + " : " + err.Error())
 	}
 	if !fi.IsDir() {
-		return errors.New("Error: directory expected: " + dirPath)
+		return fi, errors.New("Error: directory expected: " + dirPath)
 	}
-	return nil
+	return fi, nil
 }
 
 // isFileExist return error if file, or not accessible or it is not a regular file
 func isFileExist(filePath string) error {
+	_, err := fileStat(filePath)
+	return err
+}
+
+// return file Stat if this is a regular file
+func fileStat(filePath string) (fs.FileInfo, error) {
+
 	fi, err := os.Stat(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return errors.New("Error: file not exist: " + filePath)
+			return fi, errors.New("Error: file not exist: " + filePath)
 		}
-		return errors.New("Error: unable to access file: " + filePath + " : " + err.Error())
+		return fi, errors.New("Error: unable to access file: " + filePath + " : " + err.Error())
 	}
 	if fi.IsDir() || !fi.Mode().IsRegular() {
-		return errors.New("Error: it is not a regilar file: " + filePath)
+		return fi, errors.New("Error: it is not a regilar file: " + filePath)
 	}
-	return nil
+	return fi, nil
 }
 
 // dbcopyPath return path to dbcopy.exe, it is expected to be in the same directory as oms.exe
@@ -355,17 +368,4 @@ func dbcopyPath(omsPath string) string {
 		}
 	}
 	return "" // dbcopy not found or not accessible or not regular file
-}
-
-// return file Stat if this is a regular file
-func fileStat(filePath string) (fs.FileInfo, error) {
-
-	fi, err := os.Stat(filepath.Join(filePath))
-	if err != nil {
-		return fi, err
-	}
-	if fi.IsDir() || !fi.Mode().IsRegular() {
-		return fi, errors.New("Error: it is not a regilar file: " + filePath)
-	}
-	return fi, nil
 }

@@ -21,20 +21,21 @@ import (
 
 // DownloadStatusLog contains download status info and content of log file
 type DownloadStatusLog struct {
-	Status      string   // if not empty then one of: progress ready error
-	Kind        string   // if not empty then one of: model, run, workset or delete
-	ModelDigest string   // content of "Model Digest:"
-	RunDigest   string   // content of "Run  Digest:"
-	WorksetName string   // content of "Scenario Name:"
-	IsFolder    bool     // if true then download folder exist
-	Folder      string   // content of "Folder:"
-	IsZip       bool     // if true then download zip exist
-	ZipFileName string   // zip file name
-	ZipModTime  int64    // zip modification time in milliseconds since epoch
-	ZipSize     int64    // zip file size
-	LogFileName string   // log file name
-	LogNsTime   int64    // log file modification time in nanoseconds since epoch
-	Lines       []string // file content
+	Status        string   // if not empty then one of: progress ready error
+	Kind          string   // if not empty then one of: model, run, workset or delete
+	ModelDigest   string   // content of "Model Digest:"
+	RunDigest     string   // content of "Run  Digest:"
+	WorksetName   string   // content of "Scenario Name:"
+	IsFolder      bool     // if true then download folder exist
+	Folder        string   // content of "Folder:"
+	FolderModTime int64    // folder modification time in milliseconds since epoch
+	IsZip         bool     // if true then download zip exist
+	ZipFileName   string   // zip file name
+	ZipModTime    int64    // zip modification time in milliseconds since epoch
+	ZipSize       int64    // zip file size
+	LogFileName   string   // log file name
+	LogModTime    int64    // log file modification time in milliseconds since epoch
+	Lines         []string // file content
 }
 
 // PathItem contain basic file info after tree walk: relative path, size and modification time
@@ -298,27 +299,32 @@ func appendToDownloadLog(logPath string, isDoTimestamp bool, msg ...string) bool
 }
 
 // update file status of download files:
-// check if zip exist, if folder exist and set log file modification time in nanoseconds since epoch
-func updateStatDownloadLog(logPath string, dl *DownloadStatusLog) {
+// check if zip exist, if folder exist and retirve file modification time in milliseconds since epoch
+func updateStatDownloadLog(logName string, dl *DownloadStatusLog) {
 
 	// check if download zip or download folder exist
 	if dl.Folder != "" {
-		dl.IsFolder = isDirExist(filepath.Join(theCfg.downloadDir, dl.Folder)) == nil
+
+		fi, e := dirStat(filepath.Join(theCfg.downloadDir, dl.Folder))
+		dl.IsFolder = e == nil
+		if dl.IsFolder {
+			dl.FolderModTime = fi.ModTime().UnixNano() / int64(time.Millisecond)
+		}
 
 		if dl.Status == "ready" {
-			fi, e := fileStat(filepath.Join(theCfg.downloadDir, dl.Folder+".zip"))
+			fi, e = fileStat(filepath.Join(theCfg.downloadDir, dl.Folder+".zip"))
 			dl.IsZip = e == nil
 			if dl.IsZip {
 				dl.ZipFileName = dl.Folder + ".zip"
 				dl.ZipSize = fi.Size()
-				dl.ZipModTime = fi.ModTime().UnixNano() / 1000000
+				dl.ZipModTime = fi.ModTime().UnixNano() / int64(time.Millisecond)
 			}
 		}
 	}
 
 	// retrive log file modification time
-	if fi, err := os.Stat(filepath.Join(logPath)); err == nil {
-		dl.LogNsTime = fi.ModTime().UnixNano()
+	if fi, err := os.Stat(filepath.Join(theCfg.downloadDir, logName)); err == nil {
+		dl.LogModTime = fi.ModTime().UnixNano() / int64(time.Millisecond)
 	}
 }
 

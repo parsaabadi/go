@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/openmpp/go/ompp/db"
 	"github.com/openmpp/go/ompp/helper"
@@ -48,7 +49,7 @@ func fileLogDownloadGetHandler(w http.ResponseWriter, r *http.Request) {
 
 	// parse log file content to get folder name, log file kind and keys
 	dl := parseDownloadLog(fileName, fc)
-	updateStatDownloadLog(filePath, &dl)
+	updateStatDownloadLog(fileName, &dl)
 
 	jsonResponse(w, r, dl) // return log file content and status
 }
@@ -133,7 +134,7 @@ func fileTreeDownloadGetHandler(w http.ResponseWriter, r *http.Request) {
 			Path:    filepath.ToSlash(p),
 			IsDir:   de.IsDir(),
 			Size:    fi.Size(),
-			ModTime: fi.ModTime().UnixNano() / 1000000,
+			ModTime: fi.ModTime().UnixNano() / int64(time.Millisecond),
 		})
 		return nil
 	})
@@ -173,7 +174,7 @@ func modelDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 
 	// if download.progress.log file exist the retun error: download in progress
 	logPath := filepath.Join(theCfg.downloadDir, baseName+".progress.download.log")
-	if e := isFileExist(logPath); e == nil {
+	if isFileExist(logPath) == nil {
 		omppLog.Log("Error: download already in progress: ", logPath)
 		http.Error(w, "Model download already in progress: "+baseName, http.StatusBadRequest)
 		return
@@ -260,7 +261,7 @@ func runDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 
 	// if download.progress.log file exist the retun error: download in progress
 	logPath := filepath.Join(theCfg.downloadDir, baseName+".progress.download.log")
-	if e := isFileExist(logPath); e == nil {
+	if isFileExist(logPath) == nil {
 		omppLog.Log("Error: download already in progress: ", logPath)
 		http.Error(w, "Model run download already in progress: "+baseName, http.StatusBadRequest)
 		return
@@ -345,7 +346,7 @@ func worksetDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 
 	// if download.progress.log file exist the retun error: download in progress
 	logPath := filepath.Join(theCfg.downloadDir, baseName+".progress.download.log")
-	if e := isFileExist(logPath); e == nil {
+	if isFileExist(logPath) == nil {
 		omppLog.Log("Error: download already in progress: ", logPath)
 		http.Error(w, "Model scenario download already in progress: "+baseName, http.StatusBadRequest)
 		return
