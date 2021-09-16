@@ -172,10 +172,11 @@ func textToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 	}
 
 	// read from metadata json and csv files and update target database
-	encName := runOpts.String(encodingArgKey)
 	dstSetName := runOpts.String(setNewNameArgKey)
+	dblFmt := runOpts.String(doubleFormatArgKey)
+	encName := runOpts.String(encodingArgKey)
 
-	dstId, err := fromWorksetTextToDb(dstDb, modelDef, langDef, setName, dstSetName, metaPath, csvDir, encName)
+	dstId, err := fromWorksetTextToDb(dstDb, modelDef, langDef, setName, dstSetName, metaPath, csvDir, dblFmt, encName)
 	if err != nil {
 		return err
 	}
@@ -190,7 +191,7 @@ func textToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 // convert it to db cells and insert into database
 // update set id's and base run id's with actual id in database
 func fromWorksetTextListToDb(
-	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, inpDir string, encodingName string,
+	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, inpDir string, doubleFmt string, encodingName string,
 ) error {
 
 	// get list of workset json files
@@ -221,7 +222,7 @@ func fromWorksetTextListToDb(
 		}
 
 		// update or insert workset metadata and parameters from csv if csv directory exist
-		_, err := fromWorksetTextToDb(dbConn, modelDef, langDef, "", "", fl[k], csvDir, encodingName)
+		_, err := fromWorksetTextToDb(dbConn, modelDef, langDef, "", "", fl[k], csvDir, doubleFmt, encodingName)
 		if err != nil {
 			return err
 		}
@@ -235,7 +236,15 @@ func fromWorksetTextListToDb(
 // update set id's and base run id's with actual id in destination database
 // it return source workset id (set id from metadata json file) and destination set id
 func fromWorksetTextToDb(
-	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, srcSetName string, dstSetName string, metaPath string, csvDir string, encodingName string,
+	dbConn *sql.DB,
+	modelDef *db.ModelMeta,
+	langDef *db.LangMeta,
+	srcSetName string,
+	dstSetName string,
+	metaPath string,
+	csvDir string,
+	doubleFmt string,
+	encodingName string,
 ) (int, error) {
 
 	// if no metadata file and no csv directory then exit: nothing to do
@@ -345,8 +354,8 @@ func fromWorksetTextToDb(
 	for j := range paramLst {
 
 		// read parameter values from csv file
-		var cell db.CellParam
-		cLst, err := fromCsvFile(csvDir, modelDef, paramLst[j].Name, paramLst[j].SubCount, &cell, encodingName)
+		cvtParam := db.CellParamConverter{DoubleFmt: doubleFmt}
+		cLst, err := fromCsvFile(csvDir, modelDef, paramLst[j].Name, paramLst[j].SubCount, cvtParam, encodingName)
 		if err != nil {
 			return 0, err
 		}

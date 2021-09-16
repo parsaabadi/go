@@ -53,7 +53,10 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 	}
 	binDir := mb.binDir
 
-	wDir := filepath.Join(binRoot, req.Dir)
+	wDir := binDir
+	if req.Dir != "" {
+		wDir = filepath.Join(binRoot, req.Dir)
+	}
 
 	binDir, err := filepath.Rel(wDir, binDir)
 	if err != nil {

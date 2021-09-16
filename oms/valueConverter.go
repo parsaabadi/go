@@ -44,15 +44,14 @@ func (mc *ModelCatalog) ParameterCellConverter(
 	}
 
 	// create converter
+	csvCvt := db.CellParamConverter{DoubleFmt: theCfg.doubleFmt}
 	var cvt func(interface{}) (interface{}, error)
 	var err error
 
 	if isToId {
-		var cell db.CellCodeParam
-		cvt, err = cell.CodeToIdCell(mc.modelLst[idx].meta, name)
+		cvt, err = csvCvt.CodeToIdCell(mc.modelLst[idx].meta, name)
 	} else {
-		var cell db.CellParam
-		cvt, err = cell.IdToCodeCell(mc.modelLst[idx].meta, name)
+		cvt, err = csvCvt.IdToCodeCell(mc.modelLst[idx].meta, name)
 	}
 	if err != nil {
 		omppLog.Log("Failed to create parameter cell value converter: ", name, ": ", err.Error())
@@ -63,11 +62,7 @@ func (mc *ModelCatalog) ParameterCellConverter(
 }
 
 // TableToCodeCellConverter return output table value converter from id's cell into code cell.
-func (mc *ModelCatalog) TableToCodeCellConverter(
-	dn string, name string, isAcc, isAllAcc bool,
-) (
-	func(interface{}) (interface{}, error), bool,
-) {
+func (mc *ModelCatalog) TableToCodeCellConverter(dn string, name string, isAcc, isAllAcc bool) (func(interface{}) (interface{}, error), bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
@@ -102,14 +97,14 @@ func (mc *ModelCatalog) TableToCodeCellConverter(
 
 	switch {
 	case isAllAcc:
-		var cell db.CellAllAcc
-		cvt, err = cell.IdToCodeCell(mc.modelLst[idx].meta, name)
+		csvCvt := db.CellAllAccConverter{DoubleFmt: theCfg.doubleFmt, ValueName: ""}
+		cvt, err = csvCvt.IdToCodeCell(mc.modelLst[idx].meta, name)
 	case isAcc:
-		var cell db.CellAcc
-		cvt, err = cell.IdToCodeCell(mc.modelLst[idx].meta, name)
+		csvCvt := db.CellAccConverter{DoubleFmt: theCfg.doubleFmt, IsIdHeader: false}
+		cvt, err = csvCvt.IdToCodeCell(mc.modelLst[idx].meta, name)
 	default:
-		var cell db.CellExpr
-		cvt, err = cell.IdToCodeCell(mc.modelLst[idx].meta, name)
+		csvCvt := db.CellExprConverter{DoubleFmt: theCfg.doubleFmt, IsIdHeader: false}
+		cvt, err = csvCvt.IdToCodeCell(mc.modelLst[idx].meta, name)
 	}
 	if err != nil {
 		omppLog.Log("Failed to create output table cell id's to code converter: ", name, ": ", err.Error())
@@ -120,11 +115,7 @@ func (mc *ModelCatalog) TableToCodeCellConverter(
 }
 
 // ParameterToCsvConverter return parameter csv converter and csv header as string array.
-func (mc *ModelCatalog) ParameterToCsvConverter(
-	dn string, isCode bool, name string,
-) (
-	[]string, func(interface{}, []string) error, bool,
-) {
+func (mc *ModelCatalog) ParameterToCsvConverter(dn string, isCode bool, name string) ([]string, func(interface{}, []string) error, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
@@ -154,9 +145,9 @@ func (mc *ModelCatalog) ParameterToCsvConverter(
 	}
 
 	// make csv header
-	var cell db.CellParam
+	csvCvt := db.CellParamConverter{DoubleFmt: theCfg.doubleFmt}
 
-	hdr, err := cell.CsvHeader(mc.modelLst[idx].meta, name, !isCode, "")
+	hdr, err := csvCvt.CsvHeader(mc.modelLst[idx].meta, name)
 	if err != nil {
 		omppLog.Log("Failed  to make parameter csv header: ", dn, ": ", name, ": ", err.Error())
 		return []string{}, nil, false
@@ -166,9 +157,9 @@ func (mc *ModelCatalog) ParameterToCsvConverter(
 	var cvt func(interface{}, []string) error
 
 	if isCode {
-		cvt, err = cell.CsvToRow(mc.modelLst[idx].meta, name, theCfg.doubleFmt, "")
+		cvt, err = csvCvt.CsvToRow(mc.modelLst[idx].meta, name)
 	} else {
-		cvt, err = cell.CsvToIdRow(mc.modelLst[idx].meta, name, theCfg.doubleFmt, "")
+		cvt, err = csvCvt.CsvToIdRow(mc.modelLst[idx].meta, name)
 	}
 	if err != nil {
 		omppLog.Log("Failed to create parameter converter to csv: ", dn, ": ", name, ": ", err.Error())
@@ -179,11 +170,7 @@ func (mc *ModelCatalog) ParameterToCsvConverter(
 }
 
 // TableToCsvConverter return output table cell to csv converter and csv header as staring array.
-func (mc *ModelCatalog) TableToCsvConverter(
-	dn string, isCode bool, name string, isAcc, isAllAcc bool,
-) (
-	[]string, func(interface{}, []string) error, bool,
-) {
+func (mc *ModelCatalog) TableToCsvConverter(dn string, isCode bool, name string, isAcc, isAllAcc bool) ([]string, func(interface{}, []string) error, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
@@ -213,22 +200,19 @@ func (mc *ModelCatalog) TableToCsvConverter(
 	}
 
 	// set cell conveter to csv
-	var cell db.CsvConverter
-	var ec db.CellExpr
-	var ac db.CellAcc
-	var alc db.CellAllAcc
+	var csvCvt db.CsvConverter
 	if !isAcc {
-		cell = ec
+		csvCvt = db.CellExprConverter{DoubleFmt: theCfg.doubleFmt, IsIdHeader: !isCode}
 	} else {
 		if !isAllAcc {
-			cell = ac
+			csvCvt = db.CellAccConverter{DoubleFmt: theCfg.doubleFmt, IsIdHeader: !isCode}
 		} else {
-			cell = alc
+			csvCvt = db.CellAllAccConverter{ValueName: "", DoubleFmt: theCfg.doubleFmt}
 		}
 	}
 
 	// make csv header
-	hdr, err := cell.CsvHeader(mc.modelLst[idx].meta, name, !isCode, "")
+	hdr, err := csvCvt.CsvHeader(mc.modelLst[idx].meta, name)
 	if err != nil {
 		omppLog.Log("Failed  to make output table csv header: ", dn, ": ", name, ": ", err.Error())
 		return []string{}, nil, false
@@ -238,9 +222,9 @@ func (mc *ModelCatalog) TableToCsvConverter(
 	var cvt func(interface{}, []string) error
 
 	if isCode {
-		cvt, err = cell.CsvToRow(mc.modelLst[idx].meta, name, theCfg.doubleFmt, "")
+		cvt, err = csvCvt.CsvToRow(mc.modelLst[idx].meta, name)
 	} else {
-		cvt, err = cell.CsvToIdRow(mc.modelLst[idx].meta, name, theCfg.doubleFmt, "")
+		cvt, err = csvCvt.CsvToIdRow(mc.modelLst[idx].meta, name)
 	}
 	if err != nil {
 		omppLog.Log("Failed to create output table converter to csv: ", dn, ": ", name, ": ", err.Error())

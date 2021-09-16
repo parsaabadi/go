@@ -206,7 +206,6 @@ func doWriteRunParameter(
 }
 
 // digestParameter retrun digest of parameter values.
-// Double format is used for float model types digest calculation, if non-empty format supplied
 func digestParameter(modelDef *ModelMeta, param *ParamMeta, cellLst *list.List, doubleFmt string) (string, error) {
 
 	// start from name and metadata digest
@@ -220,9 +219,9 @@ func digestParameter(modelDef *ModelMeta, param *ParamMeta, cellLst *list.List, 
 		return "", err
 	}
 
-	// append digest of accumulator(s) cells
-	var pc CellParam
-	if err = digestCells(hMd5, modelDef, param.Name, pc, cellLst, doubleFmt); err != nil {
+	// append digest of parameter cells
+	cvtParam := CellParamConverter{DoubleFmt: doubleFmt}
+	if err = digestCells(hMd5, modelDef, param.Name, cvtParam, cellLst); err != nil {
 		return "", err
 	}
 

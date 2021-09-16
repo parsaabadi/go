@@ -12,11 +12,10 @@ import (
 // It is a hash of text values identical to csv file hash, for example:
 //   acc_id,sub_id,dim0,dim1,acc_value\n
 //   0,1,0,0,1234.5678\n
-// Double format is used for float model types digest calculation, if non-empty format supplied
-func digestCells(hSum hash.Hash, modelDef *ModelMeta, name string, cell CsvConverter, cellLst *list.List, doubleFmt string) error {
+func digestCells(hSum hash.Hash, modelDef *ModelMeta, name string, csvCvt CsvConverter, cellLst *list.List) error {
 
 	// append header, like: acc_id,sub_id,dim0,dim1,acc_value\n
-	cs, err := cell.CsvHeader(modelDef, name, true, "")
+	cs, err := csvCvt.CsvHeader(modelDef, name)
 	if err != nil {
 		return err
 	}
@@ -35,7 +34,7 @@ func digestCells(hSum hash.Hash, modelDef *ModelMeta, name string, cell CsvConve
 	}
 
 	// append dimensions and value to digest
-	cvt, err := cell.CsvToIdRow(modelDef, name, doubleFmt, "") // converter from cell id's to csv row []string
+	cvt, err := csvCvt.CsvToIdRow(modelDef, name) // converter from cell id's to csv row []string
 	if err != nil {
 		return err
 	}

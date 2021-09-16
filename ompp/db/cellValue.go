@@ -34,21 +34,18 @@ type CsvConverter interface {
 	// retrun first line of csv file with column names: expr_name,dim0,dim1,expr_value.
 	// if isIdHeader is true: expr_id,dim0,dim1,expr_value
 	// if isAllAcc is true: sub_id,dim0,dim1,acc0,acc1,acc2
-	CsvHeader(modelDef *ModelMeta, name string, isIdHeader bool, valueName string) ([]string, error)
+	CsvHeader(modelDef *ModelMeta, name string) ([]string, error)
 
 	// return converter from cell (dimensions and value) of parameter or output table to csv row []string.
 	// it simply sprint() dimension id's and value into []string.
-	CsvToIdRow(modelDef *ModelMeta, name string, doubleFmt string, valueName string) (
-		func(interface{}, []string) error, error)
+	CsvToIdRow(modelDef *ModelMeta, name string) (func(interface{}, []string) error, error)
 
 	// return converter from cell (dimensions and value) of parameter or output table to csv row []string.
 	// it does convert from enum id to code for all dimensions and enum-based parameter value.
-	CsvToRow(modelDef *ModelMeta, name string, doubleFmt string, valueName string) (
-		func(interface{}, []string) error, error)
+	CsvToRow(modelDef *ModelMeta, name string) (func(interface{}, []string) error, error)
 
 	// return converter from csv row []string to parameter or output table cell (dimensions and value)
-	CsvToCell(modelDef *ModelMeta, name string, subCount int, valueName string) (
-		func(row []string) (interface{}, error), error)
+	CsvToCell(modelDef *ModelMeta, name string, subCount int) (func(row []string) (interface{}, error), error)
 }
 
 // CellToCodeConverter provide methods to convert parameters or output table row from enum id to enum code.
@@ -60,8 +57,7 @@ type CellToCodeConverter interface {
 	// IdToCodeCell return converter from id cell to code cell.
 	// Cell is dimensions and value of parameter or output table.
 	// It does convert from enum id to code for all dimensions and enum-based parameter value.
-	IdToCodeCell(modelDef *ModelMeta, name string) (
-		func(interface{}) (interface{}, error), error)
+	IdToCodeCell(modelDef *ModelMeta, name string) (func(interface{}) (interface{}, error), error)
 }
 
 // CellToIdConverter provide methods to convert parameters or output table row from enum code to enum id.
@@ -73,8 +69,7 @@ type CellToIdConverter interface {
 	// CodeToIdCell return converter from code cell to id cell.
 	// Cell is dimensions and value of parameter or output table.
 	// It does convert from enum code to id for all dimensions and enum-based parameter value.
-	CodeToIdCell(modelDef *ModelMeta, name string) (
-		func(interface{}) (interface{}, error), error)
+	CodeToIdCell(modelDef *ModelMeta, name string) (func(interface{}) (interface{}, error), error)
 }
 
 // cvtItemCodeToId return converter from dimension item code to id.
@@ -82,10 +77,8 @@ type CellToIdConverter interface {
 // If dimension is enum-based then from enum code to enum id or to the total enum id;
 // If dimension is simple integer type then parse integer;
 // If dimension is boolean then false=>0, true=>1
-func cvtItemCodeToId(msgName string, typeOf *TypeMeta, isTotalEnabled bool,
-) (
-	func(src string) (int, error), error,
-) {
+func cvtItemCodeToId(msgName string, typeOf *TypeMeta, isTotalEnabled bool) (func(src string) (int, error), error) {
+
 	var cvt func(src string) (int, error)
 
 	switch {
@@ -142,10 +135,8 @@ func cvtItemCodeToId(msgName string, typeOf *TypeMeta, isTotalEnabled bool,
 // If dimension is enum-based then from enum id to enum code or to the "all" total enum code;
 // If dimension is simple integer type then use Itoa(integer id) as code;
 // If dimension is boolean then 0=>false, (1 or -1)=>true else error
-func cvtItemIdToCode(msgName string, typeOf *TypeMeta, isTotalEnabled bool,
-) (
-	func(itemId int) (string, error), error,
-) {
+func cvtItemIdToCode(msgName string, typeOf *TypeMeta, isTotalEnabled bool) (func(itemId int) (string, error), error) {
+
 	var cvt func(itemId int) (string, error)
 
 	switch {

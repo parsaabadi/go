@@ -176,6 +176,7 @@ func toRunText(
 	}
 
 	paramLt := &db.ReadParamLayout{ReadLayout: db.ReadLayout{FromId: runId}}
+	cvtParam := db.CellParamConverter{DoubleFmt: doubleFmt}
 
 	// write all parameters into csv file
 	for j := range modelDef.Param {
@@ -190,9 +191,8 @@ func toRunText(
 			return errors.New("missing run parameter values " + paramLt.Name + " run id: " + strconv.Itoa(paramLt.FromId))
 		}
 
-		var pc db.CellParam
 		err = toCsvCellFile(
-			csvDir, modelDef, paramLt.Name, false, pc, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom, "", "")
+			csvDir, modelDef, paramLt.Name, false, cvtParam, cLst, isIdCsv, isWriteUtf8bom, "", "")
 		if err != nil {
 			return err
 		}
@@ -200,6 +200,9 @@ func toRunText(
 
 	// write output tables into csv file, if the table included in run results
 	tblLt := &db.ReadTableLayout{ReadLayout: db.ReadLayout{FromId: runId}}
+	cvtExpr := db.CellExprConverter{DoubleFmt: doubleFmt, IsIdHeader: isIdCsv}
+	cvtAcc := db.CellAccConverter{DoubleFmt: doubleFmt, IsIdHeader: isIdCsv}
+	cvtAll := db.CellAllAccConverter{DoubleFmt: doubleFmt, ValueName: ""}
 
 	for j := range modelDef.Table {
 
@@ -225,9 +228,8 @@ func toRunText(
 			return err
 		}
 
-		var ec db.CellExpr
 		err = toCsvCellFile(
-			csvDir, modelDef, tblLt.Name, false, ec, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom, "", "")
+			csvDir, modelDef, tblLt.Name, false, cvtExpr, cLst, isIdCsv, isWriteUtf8bom, "", "")
 		if err != nil {
 			return err
 		}
@@ -241,9 +243,8 @@ func toRunText(
 			return err
 		}
 
-		var ac db.CellAcc
 		err = toCsvCellFile(
-			csvDir, modelDef, tblLt.Name, false, ac, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom, "", "")
+			csvDir, modelDef, tblLt.Name, false, cvtAcc, cLst, isIdCsv, isWriteUtf8bom, "", "")
 		if err != nil {
 			return err
 		}
@@ -257,9 +258,8 @@ func toRunText(
 			return err
 		}
 
-		var al db.CellAllAcc
 		err = toCsvCellFile(
-			csvDir, modelDef, tblLt.Name, false, al, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom, "", "")
+			csvDir, modelDef, tblLt.Name, false, cvtAll, cLst, isIdCsv, isWriteUtf8bom, "", "")
 		if err != nil {
 			return err
 		}

@@ -205,7 +205,7 @@ func (mc *ModelCatalog) RunRowList(digest string, rdsn string) ([]db.RunRow, boo
 
 // RunRowAfterList return list of run_lst db rows by model digest, sorted by run_id.
 // If afterRunId > 0 then return only runs where run_id > afterRunId.
-func (mc *ModelCatalog) RunRowAfterList(digest string, afterRunId int) ([]db.RunRow, bool) {
+func (mc *ModelCatalog) RunRowListByModelDigest(digest string) ([]db.RunRow, bool) {
 
 	// if model digest is empty then return empty results
 	if digest == "" {
@@ -224,7 +224,7 @@ func (mc *ModelCatalog) RunRowAfterList(digest string, afterRunId int) ([]db.Run
 	}
 
 	// get run list
-	rl, err := db.GetRunList(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, afterRunId)
+	rl, err := db.GetRunList(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId)
 	if err != nil {
 		omppLog.Log("Error at get run list: ", digest, ": ", err.Error())
 		return []db.RunRow{}, false // return empty result: run select error
@@ -232,9 +232,9 @@ func (mc *ModelCatalog) RunRowAfterList(digest string, afterRunId int) ([]db.Run
 	return rl, true
 }
 
-// RunList return list of run_lst db rows by model digest-or-name.
+// RunPubList return list of run_lst db rows in "public" format by model digest-or-name.
 // No text info returned (no description and notes).
-func (mc *ModelCatalog) RunList(dn string) ([]db.RunPub, bool) {
+func (mc *ModelCatalog) RunPubList(dn string) ([]db.RunPub, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
@@ -258,7 +258,7 @@ func (mc *ModelCatalog) RunList(dn string) ([]db.RunPub, bool) {
 		return []db.RunPub{}, false // return empty result: model not found or error
 	}
 
-	rl, err := db.GetRunList(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, 0)
+	rl, err := db.GetRunList(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId)
 	if err != nil {
 		omppLog.Log("Error at get run list: ", dn, ": ", err.Error())
 		return []db.RunPub{}, false // return empty result: run select error

@@ -26,8 +26,14 @@ type CellCodeAllAcc struct {
 	Value  []float64 // accumulator value(s)
 }
 
+// CellAllAccConverter is a converter for multiple output table accumulators to implement CsvConverter interface.
+type CellAllAccConverter struct {
+	DoubleFmt string // if not empty then format string is used to sprintf if value type is float, double, long double
+	ValueName string // If ValueName is "" empty then all accumulators use for csv else one
+}
+
 // CsvFileName return file name of csv file to store all accumulators rows
-func (CellAllAcc) CsvFileName(modelDef *ModelMeta, name string, isIdCsv bool) (string, error) {
+func (cellCvt CellAllAccConverter) CsvFileName(modelDef *ModelMeta, name string, isIdCsv bool) (string, error) {
 
 	// validate parameters
 	if modelDef == nil {
@@ -50,9 +56,9 @@ func (CellAllAcc) CsvFileName(modelDef *ModelMeta, name string, isIdCsv bool) (s
 }
 
 // CsvHeader retrun first line for csv file: column names.
-// It is like: sub_id,dim0,dim1,acc0,acc1,acc2
-// If valueName is "" empty then all accumulators use for csv else one
-func (CellAllAcc) CsvHeader(modelDef *ModelMeta, name string, isIdHeader bool, valueName string) ([]string, error) {
+// Column names can be like: sub_id,dim0,dim1,acc0,acc1,acc2
+// If ValueName is "" empty then use all accumulators for csv else only one where accumulator name is ValueName
+func (cellCvt CellAllAccConverter) CsvHeader(modelDef *ModelMeta, name string) ([]string, error) {
 
 	// validate parameters
 	if modelDef == nil {
@@ -72,7 +78,7 @@ func (CellAllAcc) CsvHeader(modelDef *ModelMeta, name string, isIdHeader bool, v
 	// make first line columns:
 	// if accumulator name specified then only one column else all accumlators
 	nAcc := 1
-	if valueName == "" {
+	if cellCvt.ValueName == "" {
 		nAcc = len(table.Acc)
 	}
 	h := make([]string, 1+table.Rank+nAcc)
@@ -81,8 +87,8 @@ func (CellAllAcc) CsvHeader(modelDef *ModelMeta, name string, isIdHeader bool, v
 	for k := range table.Dim {
 		h[k+1] = table.Dim[k].Name
 	}
-	if valueName != "" {
-		h[table.Rank+1] = valueName
+	if cellCvt.ValueName != "" {
+		h[table.Rank+1] = cellCvt.ValueName
 	} else {
 		for k := range table.Acc {
 			h[table.Rank+1+k] = table.Acc[k].Name
@@ -97,11 +103,8 @@ func (CellAllAcc) CsvHeader(modelDef *ModelMeta, name string, isIdHeader bool, v
 // Converter simply does Sprint() for each dimension item id, subvalue number and value(s).
 // Converter will retrun error if len(row) not equal to number of fields in csv record.
 // Double format string is used if parameter type is float, double, long double
-// If valueName is "" empty then all accumulators converted else one
-func (CellAllAcc) CsvToIdRow(
-	modelDef *ModelMeta, name string, doubleFmt string, valueName string,
-) (
-	func(interface{}, []string) error, error) {
+// If ValueName is "" empty then all accumulators converted else one
+func (cellCvt CellAllAccConverter) CsvToIdRow(modelDef *ModelMeta, name string) (func(interface{}, []string) error, error) {
 
 	// validate parameters
 	if modelDef == nil {
@@ -120,7 +123,7 @@ func (CellAllAcc) CsvToIdRow(
 
 	// number of dimensions and number of accumulators to be converted
 	nAcc := 1
-	if valueName == "" {
+	if cellCvt.ValueName == "" {
 		nAcc = len(table.Acc)
 	}
 	nRank := table.Rank
@@ -149,8 +152,8 @@ func (CellAllAcc) CsvToIdRow(
 			if cell.IsNull[k] {
 				row[1+nRank+k] = "null"
 			} else {
-				if doubleFmt != "" {
-					row[1+nRank+k] = fmt.Sprintf(doubleFmt, cell.Value[k])
+				if cellCvt.DoubleFmt != "" {
+					row[1+nRank+k] = fmt.Sprintf(cellCvt.DoubleFmt, cell.Value[k])
 				} else {
 					row[1+nRank+k] = fmt.Sprint(cell.Value[k])
 				}
@@ -168,11 +171,8 @@ func (CellAllAcc) CsvToIdRow(
 // Converter will retrun error if len(row) not equal to number of fields in csv record.
 // Double format string is used if parameter type is float, double, long double
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
-// If valueName is "" empty then all accumulators converted else one
-func (CellAllAcc) CsvToRow(
-	modelDef *ModelMeta, name string, doubleFmt string, valueName string,
-) (
-	func(interface{}, []string) error, error) {
+// If ValueName is "" empty then all accumulators converted else one
+func (cellCvt CellAllAccConverter) CsvToRow(modelDef *ModelMeta, name string) (func(interface{}, []string) error, error) {
 
 	// validate parameters
 	if modelDef == nil {
@@ -191,7 +191,7 @@ func (CellAllAcc) CsvToRow(
 
 	// number of dimensions and number of accumulators to be converted
 	nAcc := 1
-	if valueName == "" {
+	if cellCvt.ValueName == "" {
 		nAcc = len(table.Acc)
 	}
 	nRank := table.Rank
@@ -235,8 +235,8 @@ func (CellAllAcc) CsvToRow(
 			if cell.IsNull[k] {
 				row[1+nRank+k] = "null"
 			} else {
-				if doubleFmt != "" {
-					row[1+nRank+k] = fmt.Sprintf(doubleFmt, cell.Value[k])
+				if cellCvt.DoubleFmt != "" {
+					row[1+nRank+k] = fmt.Sprintf(cellCvt.DoubleFmt, cell.Value[k])
 				} else {
 					row[1+nRank+k] = fmt.Sprint(cell.Value[k])
 				}
@@ -251,11 +251,8 @@ func (CellAllAcc) CsvToRow(
 // CsvToCell return closure to convert csv row []string to output table accumulator cell (dimensions and value).
 //
 // It does retrun error if len(row) not equal to number of fields in cell db-record.
-// If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
-func (CellAllAcc) CsvToCell(
-	modelDef *ModelMeta, name string, subCount int, valueName string,
-) (
-	func(row []string) (interface{}, error), error) {
+// If dimension type is enum based then csv row is enum code and it is converted into cell.DimIds (into dimension type type enum ids).
+func (cellCvt CellAllAccConverter) CsvToCell(modelDef *ModelMeta, name string, subCount int) (func(row []string) (interface{}, error), error) {
 
 	// validate parameters
 	if modelDef == nil {
@@ -274,7 +271,7 @@ func (CellAllAcc) CsvToCell(
 
 	// number of dimensions and number of accumulators to be converted
 	nAcc := 1
-	if valueName == "" {
+	if cellCvt.ValueName == "" {
 		nAcc = len(table.Acc)
 	}
 	nRank := table.Rank
@@ -350,10 +347,7 @@ func (CellAllAcc) CsvToCell(
 //
 // If dimension type is enum based then dimensions enum ids can be converted to enum code.
 // If dimension type is simple (bool or int) then dimension value converted to string.
-func (CellAllAcc) IdToCodeCell(
-	modelDef *ModelMeta, name string,
-) (
-	func(interface{}) (interface{}, error), error) {
+func (cellCvt CellAllAccConverter) IdToCodeCell(modelDef *ModelMeta, name string) (func(interface{}) (interface{}, error), error) {
 
 	// validate parameters
 	if modelDef == nil {

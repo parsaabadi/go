@@ -94,6 +94,18 @@ type ReadPageLayout struct {
 	IsLastPage bool  // if true then return non-empty last page
 }
 
+// CompareLayout describes source and size of data page to read and compare parameters or output table values from multiple model runs.
+type CompareLayout struct {
+	Comparison string // comparison expression, ex.: Expr0[base] - Expr0[variant]
+	ReadLayout        // parameter or output table name, page size, where filters and order by
+}
+
+// CompareTableLayout describes source and size of data page to read and compare output table values from multiple model runs.
+type CompareTableLayout struct {
+	CompareLayout      // output table name, page size, where filters and order by
+	IsAccum       bool // if true then select output table accumulator else expression
+}
+
 // FilterOp is enum type for filter operators in select where conditions
 type FilterOp string
 

@@ -232,19 +232,11 @@ func getRunLst(dbConn *sql.DB, query string) ([]RunRow, error) {
 }
 
 // GetRunList return list of model runs by model_id: run_lst rows.
-//
-// If afterRunId > 0 then return only runs where run_id > afterRunId
-func GetRunList(dbConn *sql.DB, modelId int, afterRunId int) ([]RunRow, error) {
+func GetRunList(dbConn *sql.DB, modelId int) ([]RunRow, error) {
 
 	// model not found: model id must be positive
 	if modelId <= 0 {
 		return nil, nil
-	}
-
-	// run id filter
-	runFlt := ""
-	if afterRunId > 0 {
-		runFlt = " AND H.run_id > " + strconv.Itoa(afterRunId)
 	}
 
 	// get list of runs for that model id
@@ -254,7 +246,6 @@ func GetRunList(dbConn *sql.DB, modelId int, afterRunId int) ([]RunRow, error) {
 		" H.update_dt, H.run_digest, H.value_digest, H.run_stamp" +
 		" FROM run_lst H" +
 		" WHERE H.model_id = " + strconv.Itoa(modelId) +
-		runFlt +
 		" ORDER BY 1"
 
 	runRs, err := getRunLst(dbConn, q)

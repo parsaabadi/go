@@ -283,7 +283,7 @@ func textToDbTask(modelName string, modelDigest string, runOpts *config.RunOptio
 		}
 
 		// write workset metadata into json and parameter values into csv files
-		dstId, err := fromWorksetTextToDb(dbConn, modelDef, langDef, setName, "", jsonPath, csvDir, encName)
+		dstId, err := fromWorksetTextToDb(dbConn, modelDef, langDef, setName, "", jsonPath, csvDir, dblFmt, encName)
 		if err != nil {
 			return err
 		}

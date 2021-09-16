@@ -141,11 +141,9 @@ func toCsvCellFile(
 	modelDef *db.ModelMeta,
 	name string,
 	isAppend bool,
-	cell db.CsvConverter,
+	csvCvt db.CsvConverter,
 	cellLst *list.List,
-	doubleFmt string,
 	isIdCsv bool,
-	valueName string,
 	isWriteUtf8bom bool,
 	extraFirstName string,
 	extraFirstValue string) error {
@@ -154,17 +152,16 @@ func toCsvCellFile(
 	var cvt func(interface{}, []string) error
 	var err error
 	if !isIdCsv {
-		cvt, err = cell.CsvToRow(modelDef, name, doubleFmt, valueName)
+		cvt, err = csvCvt.CsvToRow(modelDef, name)
 	} else {
-		cvt, err = cell.CsvToIdRow(modelDef, name, doubleFmt, valueName)
-
+		cvt, err = csvCvt.CsvToIdRow(modelDef, name)
 	}
 	if err != nil {
 		return err
 	}
 
 	// create csv file or open existing for append
-	fn, err := cell.CsvFileName(modelDef, name, isIdCsv)
+	fn, err := csvCvt.CsvFileName(modelDef, name, isIdCsv)
 	if err != nil {
 		return err
 	}
@@ -189,7 +186,7 @@ func toCsvCellFile(
 	wr := csv.NewWriter(f)
 
 	// if not append to already existing csv file then write header line: column names
-	cs, err := cell.CsvHeader(modelDef, name, isIdCsv, valueName)
+	cs, err := csvCvt.CsvHeader(modelDef, name)
 	if err != nil {
 		return err
 	}

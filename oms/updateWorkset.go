@@ -241,8 +241,8 @@ func (mc *ModelCatalog) UpdateWorksetParameter(
 	}
 
 	// convert cell from emun codes to enum id's
-	var cell db.CellCodeParam
-	cvt, e := cell.CodeToIdCell(mc.modelLst[idx].meta, param.Name)
+	csvCvt := db.CellParamConverter{DoubleFmt: theCfg.doubleFmt}
+	cvt, e := csvCvt.CodeToIdCell(mc.modelLst[idx].meta, param.Name)
 	if e != nil {
 		return false, errors.New("Failed to create parameter cell value converter: " + param.Name + " : " + e.Error())
 	}
@@ -318,8 +318,8 @@ func (mc *ModelCatalog) UpdateWorksetParameterCsv(
 	if csvRd != nil {
 
 		// converter from csv row []string to db cell
-		var cell db.CellParam
-		cvt, err := cell.CsvToCell(mc.modelLst[idx].meta, param.Name, param.SubCount, "")
+		csvCvt := db.CellParamConverter{DoubleFmt: theCfg.doubleFmt}
+		cvt, err := csvCvt.CsvToCell(mc.modelLst[idx].meta, param.Name, param.SubCount)
 		if err != nil {
 			return false, errors.New("invalid converter from csv row: " + err.Error())
 		}

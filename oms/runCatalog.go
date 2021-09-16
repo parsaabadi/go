@@ -30,11 +30,10 @@ var theRunCatalog RunCatalog // list of most recent state of model run for each 
 
 // modelRunBasic is basic info to run model and obtain model logs
 type modelRunBasic struct {
-	name      string // model name
-	binDir    string // database and .exe directory: directory part of models/bin/model.sqlite
-	logDir    string // model log directory
-	isLogDir  bool   // if true then use model log directory for model run logs
-	lastRunId int    // most recent model run id
+	name     string // model name
+	binDir   string // database and .exe directory: directory part of models/bin/model.sqlite
+	logDir   string // model log directory
+	isLogDir bool   // if true then use model log directory for model run logs
 }
 
 // RunCatalogConfig is "public" state of model run catalog for json import-export
@@ -215,18 +214,11 @@ func (rsc *RunCatalog) allModels() map[string]modelRunBasic {
 	return rbs
 }
 
-// add new log file names to model log list and update most recent run id
+// add new log file names to model log list
 // if run stamp already exist in model run history then replace run state with more recent data
-func (rsc *RunCatalog) addModelLogs(digest string, lastRunId int, runStateLst []RunState) {
+func (rsc *RunCatalog) addModelLogs(digest string, runStateLst []RunState) {
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
-
-	// 2020-03-17: it seems performance is not impacted if we updating all runs
-	//
-	// update most recent run id for the model
-	// rb := rsc.models[digest]
-	// rb.lastRunId = lastRunId
-	// rsc.models[digest] = rb
 
 	// add new runs to model run history
 	for _, r := range runStateLst {
@@ -272,12 +264,11 @@ func scanModelLogDirs(doneC <-chan bool) {
 			}
 			it.logDir = filepath.ToSlash(it.logDir) // use / path separator
 
-			// get list of new model runs since last scan
-			rl, ok := theCatalog.RunRowAfterList(d, it.lastRunId)
+			// get list of model runs
+			rl, ok := theCatalog.RunRowListByModelDigest(d)
 			if !ok || len(rl) <= 0 {
-				continue // no new runs since last scan (or ignore get runs error)
+				continue // no model runs (or ignore get runs error)
 			}
-			it.lastRunId = rl[len(rl)-1].RunId // for next scan run id must be after last id of current scan
 
 			// append new runs to model run list
 			logLst := make([]logItem, len(rl))
@@ -342,7 +333,7 @@ func scanModelLogDirs(doneC <-chan bool) {
 			}
 
 			// add new log file names to model log list and update most recent run id for that model
-			theRunCatalog.addModelLogs(d, it.lastRunId, rsLst)
+			theRunCatalog.addModelLogs(d, rsLst)
 		}
 
 		// wait for doneC or or sleep

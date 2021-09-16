@@ -24,8 +24,14 @@ type CellCodeAcc struct {
 	SubId         int // output table subvalue id
 }
 
+// CellAccConverter is a converter for output table accumulator to implement CsvConverter interface.
+type CellAccConverter struct {
+	DoubleFmt  string // if not empty then format string is used to sprintf if value type is float, double, long double
+	IsIdHeader bool   // if isIdHeader is true then column names: acc_id,sub_id,dim0,dim1,acc_value else: acc_name,sub_id,dim0,dim1,acc_value
+}
+
 // CsvFileName return file name of csv file to store output table accumulator rows
-func (CellAcc) CsvFileName(modelDef *ModelMeta, name string, isIdCsv bool) (string, error) {
+func (cellCvt CellAccConverter) CsvFileName(modelDef *ModelMeta, name string, isIdCsv bool) (string, error) {
 
 	// validate parameters
 	if modelDef == nil {
@@ -48,9 +54,9 @@ func (CellAcc) CsvFileName(modelDef *ModelMeta, name string, isIdCsv bool) (stri
 }
 
 // CsvHeader retrun first line for csv file: column names.
-// It is like: acc_name,sub_id,dim0,dim1,acc_value
-// or if isIdHeader is true: acc_id,sub_id,dim0,dim1,acc_value
-func (CellAcc) CsvHeader(modelDef *ModelMeta, name string, isIdHeader bool, valueName string) ([]string, error) {
+// Column names can be like: acc_name,sub_id,dim0,dim1,acc_value
+// or if isIdHeader is true then: acc_id,sub_id,dim0,dim1,acc_value
+func (cellCvt CellAccConverter) CsvHeader(modelDef *ModelMeta, name string) ([]string, error) {
 
 	// validate parameters
 	if modelDef == nil {
@@ -70,7 +76,7 @@ func (CellAcc) CsvHeader(modelDef *ModelMeta, name string, isIdHeader bool, valu
 	// make first line columns
 	h := make([]string, table.Rank+3)
 
-	if isIdHeader {
+	if cellCvt.IsIdHeader {
 		h[0] = "acc_id"
 	} else {
 		h[0] = "acc_name"
@@ -89,11 +95,7 @@ func (CellAcc) CsvHeader(modelDef *ModelMeta, name string, isIdHeader bool, valu
 //
 // Converter simply does Sprint() for each dimension item id, accumulator id, subvalue number and value.
 // Converter will retrun error if len(row) not equal to number of fields in csv record.
-// Double format string is used if parameter type is float, double, long double
-func (CellAcc) CsvToIdRow(
-	modelDef *ModelMeta, name string, doubleFmt string, valueName string,
-) (
-	func(interface{}, []string) error, error) {
+func (cellCvt CellAccConverter) CsvToIdRow(modelDef *ModelMeta, name string) (func(interface{}, []string) error, error) {
 
 	cvt := func(src interface{}, row []string) error {
 
@@ -118,8 +120,8 @@ func (CellAcc) CsvToIdRow(
 		if cell.IsNull {
 			row[n+2] = "null"
 		} else {
-			if doubleFmt != "" {
-				row[n+2] = fmt.Sprintf(doubleFmt, cell.Value)
+			if cellCvt.DoubleFmt != "" {
+				row[n+2] = fmt.Sprintf(cellCvt.DoubleFmt, cell.Value)
 			} else {
 				row[n+2] = fmt.Sprint(cell.Value)
 			}
@@ -134,12 +136,8 @@ func (CellAcc) CsvToIdRow(
 // to csv row []string (acc_name, sub_id, dimensions, value).
 //
 // Converter will retrun error if len(row) not equal to number of fields in csv record.
-// Double format string is used if parameter type is float, double, long double
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
-func (CellAcc) CsvToRow(
-	modelDef *ModelMeta, name string, doubleFmt string, valueName string,
-) (
-	func(interface{}, []string) error, error) {
+func (cellCvt CellAccConverter) CsvToRow(modelDef *ModelMeta, name string) (func(interface{}, []string) error, error) {
 
 	// validate parameters
 	if modelDef == nil {
@@ -195,8 +193,8 @@ func (CellAcc) CsvToRow(
 		if cell.IsNull {
 			row[n+2] = "null"
 		} else {
-			if doubleFmt != "" {
-				row[n+2] = fmt.Sprintf(doubleFmt, cell.Value)
+			if cellCvt.DoubleFmt != "" {
+				row[n+2] = fmt.Sprintf(cellCvt.DoubleFmt, cell.Value)
 			} else {
 				row[n+2] = fmt.Sprint(cell.Value)
 			}
@@ -210,11 +208,8 @@ func (CellAcc) CsvToRow(
 // CsvToCell return closure to convert csv row []string to output table accumulator cell (dimensions and value).
 //
 // It does retrun error if len(row) not equal to number of fields in cell db-record.
-// If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
-func (CellAcc) CsvToCell(
-	modelDef *ModelMeta, name string, subCount int, valueName string,
-) (
-	func(row []string) (interface{}, error), error) {
+// If dimension type is enum based then csv row is enum code and it is converted into cell.DimIds (into dimension type type enum ids).
+func (cellCvt CellAccConverter) CsvToCell(modelDef *ModelMeta, name string, subCount int) (func(row []string) (interface{}, error), error) {
 
 	// validate parameters
 	if modelDef == nil {
@@ -309,10 +304,7 @@ func (CellAcc) CsvToCell(
 //
 // If dimension type is enum based then dimensions enum ids can be converted to enum code.
 // If dimension type is simple (bool or int) then dimension value converted to string.
-func (CellAcc) IdToCodeCell(
-	modelDef *ModelMeta, name string,
-) (
-	func(interface{}) (interface{}, error), error) {
+func (cellCvt CellAccConverter) IdToCodeCell(modelDef *ModelMeta, name string) (func(interface{}) (interface{}, error), error) {
 
 	// validate parameters
 	if modelDef == nil {

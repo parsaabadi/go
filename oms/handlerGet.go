@@ -167,7 +167,7 @@ func runListHandler(w http.ResponseWriter, r *http.Request) {
 
 	dn := getRequestParam(r, "model")
 
-	rpl, _ := theCatalog.RunList(dn)
+	rpl, _ := theCatalog.RunPubList(dn)
 	jsonResponse(w, r, rpl)
 }
 
@@ -269,7 +269,7 @@ func runFullHandler(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, r, rp)
 }
 
-// runTextHandler return full run metadata: run_lst, run_options, run_progress, run_parameter db rows 
+// runTextHandler return full run metadata: run_lst, run_options, run_progress, run_parameter db rows
 // and corresponding text db rows from run_txt and run_parameter_txt tables
 // by model digest-or-name and digest-or-stamp-or-name and language:
 // GET /api/model/:model/run/:run/text
@@ -290,7 +290,7 @@ func runTextHandler(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, r, rp)
 }
 
-// runAllTextHandler return full run metadata: run_lst, run_options, run_progress, run_parameter db rows 
+// runAllTextHandler return full run metadata: run_lst, run_options, run_progress, run_parameter db rows
 // and corresponding text db rows from run_txt and run_parameter_txt tables
 // by model digest-or-name and digest-or-stamp-or-name:
 // GET /api/model/:model/run/:run/text/all

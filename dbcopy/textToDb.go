@@ -72,14 +72,15 @@ func textToDb(modelName string, runOpts *config.RunOptions) error {
 
 	// insert model runs data from csv into database:
 	// parameters, output expressions and accumulators
+	dblFmt := runOpts.String(doubleFormatArgKey)
 	encName := runOpts.String(encodingArgKey)
 
-	if err = fromRunTextListToDb(dstDb, modelDef, langDef, inpDir, runOpts.String(doubleFormatArgKey), encName); err != nil {
+	if err = fromRunTextListToDb(dstDb, modelDef, langDef, inpDir, dblFmt, encName); err != nil {
 		return err
 	}
 
 	// insert model workset data from csv into database: input parameters
-	if err = fromWorksetTextListToDb(dstDb, modelDef, langDef, inpDir, encName); err != nil {
+	if err = fromWorksetTextListToDb(dstDb, modelDef, langDef, inpDir, dblFmt, encName); err != nil {
 		return err
 	}
 
@@ -186,17 +187,17 @@ func fromLangTextJsonToDb(dbConn *sql.DB, modelDef *db.ModelMeta, inpDir string)
 
 // fromCsvFile read parameter or output table csv file and convert it to list of db cells.
 func fromCsvFile(
-	csvDir string, modelDef *db.ModelMeta, name string, subCount int, cell db.CsvConverter, encodingName string) (*list.List, error) {
+	csvDir string, modelDef *db.ModelMeta, name string, subCount int, csvCvt db.CsvConverter, encodingName string) (*list.List, error) {
 
 	// converter from csv row []string to db cell
-	cvt, err := cell.CsvToCell(modelDef, name, subCount, "")
+	cvt, err := csvCvt.CsvToCell(modelDef, name, subCount)
 	if err != nil {
 		return nil, errors.New("invalid converter from csv row: " + err.Error())
 	}
 
 	// open csv file, convert to utf-8 and parse csv into db cells
 	// reading from .id.csv files not supported by converteres
-	fn, err := cell.CsvFileName(modelDef, name, false)
+	fn, err := csvCvt.CsvFileName(modelDef, name, false)
 	if err != nil {
 		return nil, errors.New("invalid csv file name: " + err.Error())
 	}

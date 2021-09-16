@@ -505,15 +505,14 @@ func toQuotedOrNullMax(src string, maxLen int) string {
 	return toQuotedOrNull(leftMax(src, maxLen))
 }
 
-// Trim spaces and return up to maxLen bytes from src string.
+// Return up to maxLen bytes from src string.
 // It is return bytes (not runes) and last utf-8 rune may be incorrect in result.
 func leftMax(src string, maxLen int) string {
-	if maxLen < 0 {
+	if maxLen <= 0 {
 		return ""
 	}
-	s := strings.TrimSpace(src)
-	if len(s) > maxLen {
-		return s[:maxLen-1]
+	if len(src) > maxLen {
+		return src[:maxLen-1]
 	}
-	return s
+	return src
 }

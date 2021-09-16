@@ -203,14 +203,14 @@ func digestOutputTable(
 	}
 
 	// append digest of accumulator(s) cells
-	var ac CellAcc
-	if err = digestCells(hMd5, modelDef, meta.Name, ac, accCellLst, doubleFmt); err != nil {
+	cvtAcc := CellAccConverter{DoubleFmt: doubleFmt, IsIdHeader: true}
+	if err = digestCells(hMd5, modelDef, meta.Name, cvtAcc, accCellLst); err != nil {
 		return "", err
 	}
 
 	// append digest of expression(s) cells
-	var ec CellExpr
-	if err = digestCells(hMd5, modelDef, meta.Name, ec, exprCellLst, doubleFmt); err != nil {
+	cvtExpr := CellExprConverter{DoubleFmt: doubleFmt, IsIdHeader: true}
+	if err = digestCells(hMd5, modelDef, meta.Name, cvtExpr, exprCellLst); err != nil {
 		return "", err
 	}
 

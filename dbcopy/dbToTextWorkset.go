@@ -188,6 +188,7 @@ func toWorksetText(
 	}
 
 	paramLt := &db.ReadParamLayout{ReadLayout: db.ReadLayout{FromId: setId}, IsFromSet: true}
+	cvtParam := db.CellParamConverter{DoubleFmt: doubleFmt}
 
 	// write parameter into csv file
 	for j := range pub.Param {
@@ -202,9 +203,8 @@ func toWorksetText(
 			return errors.New("missing workset parameter values " + paramLt.Name + " set id: " + strconv.Itoa(paramLt.FromId))
 		}
 
-		var pc db.CellParam
 		err = toCsvCellFile(
-			csvDir, modelDef, paramLt.Name, false, pc, cLst, doubleFmt, isIdCsv, "", isWriteUtf8bom, "", "")
+			csvDir, modelDef, paramLt.Name, false, cvtParam, cLst, isIdCsv, isWriteUtf8bom, "", "")
 		if err != nil {
 			return err
 		}

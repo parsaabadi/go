@@ -22,8 +22,13 @@ type CellCodeParam struct {
 	SubId         int // parameter subvalue id
 }
 
+// CellParamConverter is a converter for input parameter to implement CsvConverter interface.
+type CellParamConverter struct {
+	DoubleFmt string // if not empty then format string is used to sprintf if value type is float, double, long double
+}
+
 // CsvFileName return file name of csv file to store parameter rows
-func (CellParam) CsvFileName(modelDef *ModelMeta, name string, isIdCsv bool) (string, error) {
+func (cellCvt CellParamConverter) CsvFileName(modelDef *ModelMeta, name string, isIdCsv bool) (string, error) {
 
 	// validate parameters
 	if modelDef == nil {
@@ -46,7 +51,7 @@ func (CellParam) CsvFileName(modelDef *ModelMeta, name string, isIdCsv bool) (st
 }
 
 // CsvHeader retrun first line for csv file: column names, it's look like: sub_id,dim0,dim1,param_value.
-func (CellParam) CsvHeader(modelDef *ModelMeta, name string, isIdHeader bool, valueName string) ([]string, error) {
+func (cellCvt CellParamConverter) CsvHeader(modelDef *ModelMeta, name string) ([]string, error) {
 
 	// validate parameters
 	if modelDef == nil {
@@ -79,11 +84,7 @@ func (CellParam) CsvHeader(modelDef *ModelMeta, name string, isIdHeader bool, va
 //
 // Converter simply does Sprint() for each sub-value id, dimension item id and value.
 // Converter will retrun error if len(row) not equal to number of fields in csv record.
-// Double format string is used if parameter type is float, double, long double
-func (CellParam) CsvToIdRow(
-	modelDef *ModelMeta, name string, doubleFmt string, valueName string,
-) (
-	func(interface{}, []string) error, error) {
+func (cellCvt CellParamConverter) CsvToIdRow(modelDef *ModelMeta, name string) (func(interface{}, []string) error, error) {
 
 	// validate parameters
 	if modelDef == nil {
@@ -101,7 +102,7 @@ func (CellParam) CsvToIdRow(
 	param := &modelDef.Param[k]
 
 	// for float model types use format if specified
-	isUseFmt := param.typeOf.IsFloat() && doubleFmt != ""
+	isUseFmt := param.typeOf.IsFloat() && cellCvt.DoubleFmt != ""
 
 	cvt := func(src interface{}, row []string) error {
 
@@ -126,7 +127,7 @@ func (CellParam) CsvToIdRow(
 			row[n+1] = "null"
 		} else {
 			if isUseFmt {
-				row[n+1] = fmt.Sprintf(doubleFmt, cell.Value)
+				row[n+1] = fmt.Sprintf(cellCvt.DoubleFmt, cell.Value)
 			} else {
 				row[n+1] = fmt.Sprint(cell.Value)
 			}
@@ -139,13 +140,9 @@ func (CellParam) CsvToIdRow(
 // CsvToRow return converter from parameter cell (sub id, dimensions, value) to csv row []string.
 //
 // Converter will retrun error if len(row) not equal to number of fields in csv record.
-// Double format string is used if parameter type is float, double, long double
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
 // If parameter type is enum based then csv row value is enum code and cell value is enum id.
-func (CellParam) CsvToRow(
-	modelDef *ModelMeta, name string, doubleFmt string, valueName string,
-) (
-	func(interface{}, []string) error, error) {
+func (cellCvt CellParamConverter) CsvToRow(modelDef *ModelMeta, name string) (func(interface{}, []string) error, error) {
 
 	// validate parameters
 	if modelDef == nil {
@@ -174,7 +171,7 @@ func (CellParam) CsvToRow(
 	}
 
 	// if parameter value type is float then use format, if not empty
-	isUseFmt := param.typeOf.IsFloat() && doubleFmt != ""
+	isUseFmt := param.typeOf.IsFloat() && cellCvt.DoubleFmt != ""
 
 	// if parameter value type is enum-based then convert from enum id to code
 	isUseEnum := !param.typeOf.IsBuiltIn()
@@ -219,7 +216,7 @@ func (CellParam) CsvToRow(
 			row[n+1] = "null"
 
 		case isUseFmt:
-			row[n+1] = fmt.Sprintf(doubleFmt, cell.Value)
+			row[n+1] = fmt.Sprintf(cellCvt.DoubleFmt, cell.Value)
 
 		case isUseEnum:
 			// depending on sql + driver it can be different type
@@ -272,12 +269,9 @@ func (CellParam) CsvToRow(
 // CsvToCell return closure to convert csv row []string to parameter cell (sub id, dimensions, value).
 //
 // It does retrun error if len(row) not equal to number of fields in cell db-record.
-// If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
-// If parameter type is enum based then csv row value is enum code and cell value is enum id.
-func (CellParam) CsvToCell(
-	modelDef *ModelMeta, name string, subCount int, valueName string,
-) (
-	func(row []string) (interface{}, error), error) {
+// If dimension type is enum based then csv row is enum code and it is converted into cell.DimIds (into dimension type type enum ids).
+// If parameter type is enum based then csv row value is enum code and it is converted into value enum id.
+func (cellCvt CellParamConverter) CsvToCell(modelDef *ModelMeta, name string, subCount int) (func(row []string) (interface{}, error), error) {
 
 	// validate parameters
 	if modelDef == nil {
@@ -409,9 +403,7 @@ func (CellParam) CsvToCell(
 // If dimension type is enum based then dimensions enum ids can be converted to enum code.
 // If dimension type is simple (bool or int) then dimension value converted to string.
 // If parameter type is enum based then cell value enum id converted to enum code.
-func (CellParam) IdToCodeCell(modelDef *ModelMeta, name string,
-) (
-	func(interface{}) (interface{}, error), error) {
+func (cellCvt CellParamConverter) IdToCodeCell(modelDef *ModelMeta, name string) (func(interface{}) (interface{}, error), error) {
 
 	// validate parameters
 	if modelDef == nil {
@@ -535,9 +527,7 @@ func (CellParam) IdToCodeCell(modelDef *ModelMeta, name string,
 // If dimension type is enum based then dimensions enum codes converted to enum ids.
 // If dimension type is simple (bool or int) then dimension code converted from string to dimension type.
 // If parameter type is enum based then cell value enum code converted to enum id.
-func (CellCodeParam) CodeToIdCell(modelDef *ModelMeta, name string,
-) (
-	func(interface{}) (interface{}, error), error) {
+func (cellCvt CellParamConverter) CodeToIdCell(modelDef *ModelMeta, name string) (func(interface{}) (interface{}, error), error) {
 
 	// validate parameters
 	if modelDef == nil {

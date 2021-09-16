@@ -408,6 +408,7 @@ func toRunCsv(
 
 	// write all parameters into csv file
 	paramLt := &db.ReadParamLayout{ReadLayout: db.ReadLayout{FromId: runId}}
+	cvtParam := db.CellParamConverter{DoubleFmt: doubleFmt}
 
 	for j := range modelDef.Param {
 
@@ -421,17 +422,14 @@ func toRunCsv(
 			return errors.New("missing run parameter values " + paramLt.Name + " run id: " + strconv.Itoa(paramLt.FromId))
 		}
 
-		var pc db.CellParam
 		err = toCsvCellFile(
 			csvDir,
 			modelDef,
 			paramLt.Name,
 			isNextRun && isAllInOne,
-			pc,
+			cvtParam,
 			cLst,
-			doubleFmt,
 			isIdCsv,
-			"",
 			isWriteUtf8bom,
 			firstCol,
 			firstVal)
@@ -473,6 +471,9 @@ func toRunCsv(
 
 	// write output tables into csv file, if the table included in run results
 	tblLt := &db.ReadTableLayout{ReadLayout: db.ReadLayout{FromId: runId}}
+	cvtExpr := db.CellExprConverter{DoubleFmt: doubleFmt, IsIdHeader: isIdCsv}
+	cvtAcc := db.CellAccConverter{DoubleFmt: doubleFmt, IsIdHeader: isIdCsv}
+	cvtAll := db.CellAllAccConverter{DoubleFmt: doubleFmt, ValueName: ""}
 
 	for j := range modelDef.Table {
 
@@ -498,17 +499,14 @@ func toRunCsv(
 			return err
 		}
 
-		var ec db.CellExpr
 		err = toCsvCellFile(
 			csvDir,
 			modelDef,
 			tblLt.Name,
 			isNextRun && isAllInOne,
-			ec,
+			cvtExpr,
 			cLst,
-			doubleFmt,
 			isIdCsv,
-			"",
 			isWriteUtf8bom,
 			firstCol,
 			firstVal)
@@ -525,17 +523,14 @@ func toRunCsv(
 			return err
 		}
 
-		var ac db.CellAcc
 		err = toCsvCellFile(
 			csvDir,
 			modelDef,
 			tblLt.Name,
 			isNextRun && isAllInOne,
-			ac,
+			cvtAcc,
 			cLst,
-			doubleFmt,
 			isIdCsv,
-			"",
 			isWriteUtf8bom,
 			firstCol,
 			firstVal)
@@ -552,17 +547,14 @@ func toRunCsv(
 			return err
 		}
 
-		var al db.CellAllAcc
 		err = toCsvCellFile(
 			csvDir,
 			modelDef,
 			tblLt.Name,
 			isNextRun && isAllInOne,
-			al,
+			cvtAll,
 			cLst,
-			doubleFmt,
 			isIdCsv,
-			"",
 			isWriteUtf8bom,
 			firstCol,
 			firstVal)
