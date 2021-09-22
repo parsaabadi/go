@@ -46,8 +46,8 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 
 	mb, ok := theCatalog.modelBasicByDigest(req.ModelDigest)
 	if !ok {
-		err := errors.New("Model run error, model not found: " + req.ModelName + ": " + req.ModelDigest)
-		rsc.updateRunState(req.ModelDigest, rs.RunStamp, true, err.Error())
+		err := errors.New("Model not found: " + req.ModelName + ": " + req.ModelDigest)
+		omppLog.Log("Model run error: ", err)
 		rs.IsFinal = true
 		return rs, err // exit with error: model failed to start
 	}
@@ -125,23 +125,53 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 		mArgs = append(mArgs, key, val) // append command line argument key and value
 	}
 
+	// save run notes into the file(s) and append file path(s) to the model run options
+	for _, rn := range req.RunNotes {
+		if rn.Note == "" {
+			continue
+		}
+		if !rs.IsLog {
+			e := errors.New("Unable to save run notes: " + req.ModelName + ": " + req.ModelDigest)
+			omppLog.Log("Model run error: ", e)
+			rs.IsFinal = true
+			return rs, e
+		}
+
+		p, e := filepath.Abs(filepath.Join(mb.logDir, rs.RunStamp+".run_notes."+rn.LangCode+".md"))
+		if e == nil {
+			e = os.WriteFile(p, []byte(rn.Note), 0644)
+		}
+		if e != nil {
+			omppLog.Log("Model run error: ", e)
+			rs.IsFinal = true
+			return rs, e
+		}
+
+		mArgs = append(mArgs, "-"+rn.LangCode+".RunNotesPath", p) // append run notes file path to command line arguments
+	}
+
 	// assume model exe name is the same as model name
 	mExe := helper.CleanPath(req.ModelName)
 
 	cmd, err := rsc.makeCommand(mExe, binDir, wDir, mb.dbPath, mArgs, req)
 	if err != nil {
-		omppLog.Log("Error at starting run model ", req.ModelName, ": ", err.Error())
-		return rs, err
+		omppLog.Log("Error at starting model: ", err)
+		rs.IsFinal = true
+		return rs, errors.New("Error at starting model " + req.ModelName + ": " + err.Error())
 	}
 
 	// connect console output to log line array
 	outPipe, err := cmd.StdoutPipe()
 	if err != nil {
-		return rs, err
+		omppLog.Log("Error at starting model: ", err)
+		rs.IsFinal = true
+		return rs, errors.New("Error at starting model " + req.ModelName + ": " + err.Error())
 	}
 	errPipe, err := cmd.StderrPipe()
 	if err != nil {
-		return rs, err
+		omppLog.Log("Error at starting model: ", err)
+		rs.IsFinal = true
+		return rs, errors.New("Error at starting model " + req.ModelName + ": " + err.Error())
 	}
 	outDoneC := make(chan bool, 1)
 	errDoneC := make(chan bool, 1)
@@ -399,7 +429,7 @@ func (rsc *RunCatalog) updateRunState(digest, runStamp string, isFinal bool, msg
 	// write into model console log file
 	if rs.IsLog {
 
-		f, err := os.OpenFile(rs.logPath, os.O_APPEND|os.O_WRONLY, 0666)
+		f, err := os.OpenFile(rs.logPath, os.O_APPEND|os.O_WRONLY, 0644)
 		if err != nil {
 			rs.IsLog = false
 			return

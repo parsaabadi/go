@@ -57,6 +57,10 @@ type RunRequest struct {
 		Np int // if non-zero then number of MPI processes
 	}
 	Template string // template file name to make run model command line
+	RunNotes []struct {
+		LangCode string // model language code
+		Note     string // run notes
+	}
 }
 
 // RunState is model run state.

@@ -126,7 +126,7 @@ func createLogFile(nowTime time.Time) bool {
 // write message to log file, return false on errors to disable file log
 func writeToLogFile(msg string) bool {
 
-	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0666)
+	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		return false
 	}

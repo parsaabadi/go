@@ -266,10 +266,10 @@ func renameToDownloadErrorLog(logPath string, errMsg string) {
 	os.Rename(logPath, strings.TrimSuffix(logPath, ".progress.download.log")+".error.download.log")
 }
 
-// appendToDownloadLog append to mesaeg into download log file
+// appendToDownloadLog append to message into download log file
 func appendToDownloadLog(logPath string, isDoTimestamp bool, msg ...string) bool {
 
-	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0666)
+	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		return false // disable log on error
 	}
