@@ -62,7 +62,6 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 // runModelLogPageHandler return model run status and log by model digest-or-name and run stamp.
 // GET /api/run/log/model/:model/stamp/:stamp
 // GET /api/run/log/model/:model/stamp/:stamp/start/:start/count/:count
-// GET /api/run-log?model=modelNameOrDigest&stamp=runStamp&start=0&count=0
 // If multiple models with same name exist then result is undefined.
 // Model run log is same as console output and include stdout and stderr.
 // Run log can be returned by page defined by zero-based "start" line and line count.
