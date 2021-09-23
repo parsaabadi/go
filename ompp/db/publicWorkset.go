@@ -98,6 +98,7 @@ func (pub *WorksetPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*Workset
 	ws := WorksetMeta{
 		Set: WorksetRow{
 			SetId:          0, // set id is undefined
+			BaseRunId:      0, // if base run id <= 0 then workset is not based on run
 			Name:           pub.Name,
 			ModelId:        modelDef.Model.ModelId,
 			IsReadonly:     pub.IsReadonly,

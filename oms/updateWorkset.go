@@ -127,6 +127,12 @@ func (mc *ModelCatalog) UpdateWorkset(isReplace bool, wp *db.WorksetPub) (bool, 
 		return false, isEraseParam, nil, err
 	}
 
+	// check if base run exist
+	if wp.BaseRunDigest != "" && wm.Set.BaseRunId <= 0 {
+		omppLog.Log("Error at update workset, base run not found: ", dn, ": ", wp.Name, ": ", wp.BaseRunDigest)
+		return false, isEraseParam, nil, errors.New("Failed to update workset, base run not found: " + dn + ": " + wp.Name + ": " + wp.BaseRunDigest)
+	}
+
 	// update workset metadata
 	err = wm.UpdateWorkset(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, isReplace, mc.modelLst[idx].langMeta)
 	if err != nil {
