@@ -126,7 +126,7 @@ func worksetCreateHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // worksetReplaceHandler replace workset and all parameters from multipart-form:
-// PUT /api/workset-new
+// PUT /api/workset-replace
 // Expected multipart form parts:
 // first workset part with workset metadata in json
 // and multiple parts file-csv=parameterName.csv.
@@ -143,7 +143,7 @@ func worksetReplaceHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // worksetMergeHandler merge workset metadata and parameters metadata and values from multipart-form:
-// PATCH /api/workset
+// PATCH /api/workset-merge
 // Expected multipart form parts:
 // first workset part with workset metadata in json
 // and optional multiple parts file-csv=parameterName.csv.

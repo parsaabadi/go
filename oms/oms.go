@@ -801,11 +801,11 @@ func apiUpdateRoutes(router *vestigo.Router) {
 	// PUT  /api/workset-create
 	router.Put("/api/workset-create", worksetCreateHandler, logRequest)
 
-	// PUT  /api/workset-new
-	router.Put("/api/workset-new", worksetReplaceHandler, logRequest)
+	// PUT  /api/workset-replace
+	router.Put("/api/workset-replace", worksetReplaceHandler, logRequest)
 
-	// PATCH /api/workset
-	router.Patch("/api/workset", worksetMergeHandler, logRequest)
+	// PATCH /api/workset-merge
+	router.Patch("/api/workset-merge", worksetMergeHandler, logRequest)
 
 	// DELETE /api/model/:model/workset/:set
 	router.Delete("/api/model/:model/workset/:set", worksetDeleteHandler, logRequest)
