@@ -50,13 +50,14 @@ func worksetReadonlyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 // Json content: workset "public" metadata and optioanl parameters list.
 // Workset and parameters "public" metadata expected to be same as return of GET /api/model/:model/workset/:set/text/all
 // Each parameter (if present) must contain "public" metadata and parameter values.
-// Parameter values json must include all values
-// and expected to be identical to output of read parameter "page": POST /api/model/:model/workset/:set/parameter/value
+// Parameter values json must include all values and can be either:
+// cell values, identical to output of read parameter "page": POST /api/model/:model/workset/:set/parameter/value
+// or copy directions, for example run digest to copy value from.
 // Dimension(s) and enum-based parameters expected to be enum codes, not enum id's.
 func worksetCreateHandler(w http.ResponseWriter, r *http.Request) {
 
 	// decode json workset "public" metadata
-	var wp db.WorksetValuePub
+	var wp db.WorksetCreatePub
 	if !jsonRequestDecode(w, r, &wp) {
 		return // error at json decode, response done with http error
 	}
@@ -111,6 +112,25 @@ func worksetCreateHandler(w http.ResponseWriter, r *http.Request) {
 
 	// append parameters metadata and values, each parameter will be inserted in separate transaction
 	for k := range wp.Param {
+		switch wp.Param[k].Kind {
+		case "run":
+			if e := theCatalog.CopyParameterToWsFromRun(dn, wsn, wp.Param[k].Name, wp.Param[k].From); e != nil {
+				http.Error(w, "Failed to copy parameter from model run"+wsn+" : "+wp.Param[k].Name+": "+wp.Param[k].From+" : "+e.Error(), http.StatusBadRequest)
+				return
+			}
+			continue
+		case "set":
+			if e := theCatalog.CopyParameterBetweenWs(dn, wsn, wp.Param[k].Name, wp.Param[k].From); e != nil {
+				http.Error(w, "Failed to copy parameter from workset "+wsn+" : "+wp.Param[k].Name+": "+wp.Param[k].From+" : "+e.Error(), http.StatusBadRequest)
+				return
+			}
+			continue
+		}
+		// default case: source of parameter must be a "value" or empty
+		if wp.Param[k].Kind != "" && wp.Param[k].Kind != "value" || len(wp.Param[k].Value) <= 0 {
+			http.Error(w, "Invalid (or empty) workset parameter values "+wsn+" : "+wp.Param[k].Name, http.StatusBadRequest)
+			return
+		}
 		if _, e := theCatalog.UpdateWorksetParameter(true, &newWp, &wp.Param[k].ParamRunSetPub, wp.Param[k].Value); e != nil {
 			http.Error(w, "Failed update workset parameter "+wsn+" : "+wp.Param[k].Name+" : "+e.Error(), http.StatusBadRequest)
 			return

@@ -62,6 +62,8 @@ type ParamRunSetPub struct {
 // ParamValuePub is "public" run or workset parameter metadata and values for json import-export.
 type ParamValuePub struct {
 	ParamRunSetPub                 // parameter metadata
+	Kind           string          // where to get parameter from: "value", "run", "set" or empty "" which is "value" by default
+	From           string          // run digest (or name or stamp) or workset name to copy parameter from
 	Value          []CellCodeParam // parameter value(s)
 }
 
@@ -177,8 +179,10 @@ type WorksetPub struct {
 	Param []ParamRunSetPub // workset parameters: name and text (value notes by language)
 }
 
-// WorksetValuePub is "public" workset metadata, parameter metadata and values for json import-export
-type WorksetValuePub struct {
+// WorksetCreatePub is "public" workset metadata and parameters list for json import-export.
+// Each parameter must have metadata: name, subvalues count, optinal notes and value(s).
+// Values can be either literal cell values or copy direction, for example run digest to copy from.
+type WorksetCreatePub struct {
 	WorksetHdrPub
 	Param []ParamValuePub // workset parameters: name, text (value notes by language) and value
 }
