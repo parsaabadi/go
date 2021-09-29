@@ -50,8 +50,8 @@ func worksetReadonlyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 // Json content: workset "public" metadata and optioanl parameters list.
 // Workset and parameters "public" metadata expected to be same as return of GET /api/model/:model/workset/:set/text/all
 // Each parameter (if present) must contain "public" metadata and parameter values.
-// Parameter values json must include all values and can be either:
-// cell values, identical to output of read parameter "page": POST /api/model/:model/workset/:set/parameter/value
+// Parameter values must include all values and can be either:
+// JSON cell values, identical to output of read parameter "page": POST /api/model/:model/workset/:set/parameter/value
 // or copy directions, for example run digest to copy value from.
 // Dimension(s) and enum-based parameters expected to be enum codes, not enum id's.
 func worksetCreateHandler(w http.ResponseWriter, r *http.Request) {
