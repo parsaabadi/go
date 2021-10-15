@@ -286,7 +286,7 @@ func (mc *ModelCatalog) RunPubList(dn string) ([]db.RunPub, bool) {
 }
 
 // RunListText return list of run_lst and run_txt db rows by model digest-or-name.
-// Text (description and notes) are in preferred language or if text in such language exists.
+// Text (description and notes) are in preferred language if text in such language exists.
 func (mc *ModelCatalog) RunListText(dn string, preferredLang []language.Tag) ([]db.RunPub, bool) {
 
 	// if model digest-or-name is empty then return empty results

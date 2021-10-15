@@ -337,7 +337,7 @@ func GetTaskRunSetText(dbConn *sql.DB, taskId int, langCode string) (*TaskRunSet
 	return &tp, nil
 }
 
-// getRunText return modeling task description and notes: task_txt table rows.
+// getTaskText return modeling task description and notes: task_txt table rows.
 func getTaskText(dbConn *sql.DB, query string) ([]TaskTxtRow, error) {
 
 	// select db rows from task_txt

@@ -63,7 +63,7 @@ func (mc *ModelCatalog) TaskList(dn string) ([]db.TaskPub, bool) {
 }
 
 // TaskListText return list of task_lst and task_txt db rows by model digest-or-name.
-// Text (description and notes) are in preferred language or if text in such language exists.
+// Text (description and notes) are in preferred language if text in such language exists.
 func (mc *ModelCatalog) TaskListText(dn string, preferredLang []language.Tag) ([]db.TaskPub, bool) {
 
 	// if model digest-or-name is empty then return empty results

@@ -133,6 +133,22 @@ func (mc *ModelCatalog) UpdateWorkset(isReplace bool, wp *db.WorksetPub) (bool, 
 		return false, isEraseParam, nil, errors.New("Failed to update workset, base run not found: " + dn + ": " + wp.Name + ": " + wp.BaseRunDigest)
 	}
 
+	// match languages from request into model languages
+	for k := range wm.Txt {
+		lc := mc.languageMatch(idx, wm.Txt[k].LangCode)
+		if lc != "" {
+			wm.Txt[k].LangCode = lc
+		}
+	}
+	for k := range wm.Param {
+		for j := range wm.Param[k].Txt {
+			lc := mc.languageMatch(idx, wm.Param[k].Txt[j].LangCode)
+			if lc != "" {
+				wm.Param[k].Txt[j].LangCode = lc
+			}
+		}
+	}
+
 	// update workset metadata
 	err = wm.UpdateWorkset(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, isReplace, mc.modelLst[idx].langMeta)
 	if err != nil {
@@ -246,6 +262,14 @@ func (mc *ModelCatalog) UpdateWorksetParameter(
 		return false, err
 	}
 
+	// match languages from request into model languages
+	for j := range param.Txt {
+		lc := mc.languageMatch(idx, param.Txt[j].LangCode)
+		if lc != "" {
+			param.Txt[j].LangCode = lc
+		}
+	}
+
 	// convert cell from emun codes to enum id's
 	csvCvt := db.CellParamConverter{DoubleFmt: theCfg.doubleFmt}
 	cvt, e := csvCvt.CodeToIdCell(mc.modelLst[idx].meta, param.Name)
@@ -316,6 +340,14 @@ func (mc *ModelCatalog) UpdateWorksetParameterCsv(
 	if err != nil {
 		omppLog.Log("Error at workset json conversion: ", dn, ": ", wp.Name, ": ", err.Error())
 		return false, err
+	}
+
+	// match languages from request into model languages
+	for j := range param.Txt {
+		lc := mc.languageMatch(idx, param.Txt[j].LangCode)
+		if lc != "" {
+			param.Txt[j].LangCode = lc
+		}
 	}
 
 	// if csv file exist then read csv file and convert and append lines into cell list

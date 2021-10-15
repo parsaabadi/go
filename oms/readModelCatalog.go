@@ -3,6 +3,10 @@
 
 package main
 
+import (
+	"golang.org/x/text/language"
+)
+
 // get "public" configuration of model catalog
 func (mc *ModelCatalog) toPublicConfig() *ModelCatalogConfig {
 
@@ -62,6 +66,22 @@ func (mc *ModelCatalog) indexByDigestOrName(dn string) (int, bool) {
 		return n, true // return: name found
 	}
 	return 0, false // not found
+}
+
+// languageMatch return model language matched to request language, e.g. EN from en-CA.
+// if there is no such match then return is empty "" language code.
+// It can be used only inside of lock.
+func (mc *ModelCatalog) languageMatch(modelIdx int, langCode string) string {
+
+	if modelIdx >= 0 && modelIdx < len(mc.modelLst) && langCode != "" {
+
+		_, np, _ := mc.modelLst[modelIdx].matcher.Match(language.Make(langCode))
+
+		if np >= 0 && np < len(mc.modelLst[modelIdx].langCodes) {
+			return mc.modelLst[modelIdx].langCodes[np]
+		}
+	}
+	return ""
 }
 
 // allModelDigests return digests for all models.

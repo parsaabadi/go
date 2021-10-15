@@ -129,6 +129,22 @@ func (mc *ModelCatalog) UpdateRunText(rp *db.RunPub) (bool, string, string, erro
 		return false, dn, rdsn, err
 	}
 
+	// match languages from request into model languages
+	for k := range rm.Txt {
+		lc := mc.languageMatch(idx, rm.Txt[k].LangCode)
+		if lc != "" {
+			rm.Txt[k].LangCode = lc
+		}
+	}
+	for k := range rm.Param {
+		for j := range rm.Param[k].Txt {
+			lc := mc.languageMatch(idx, rm.Param[k].Txt[j].LangCode)
+			if lc != "" {
+				rm.Param[k].Txt[j].LangCode = lc
+			}
+		}
+	}
+
 	// update model run text and run parameter notes
 	err = rm.UpdateRunText(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, r.RunId, mc.modelLst[idx].langMeta)
 	if err != nil {

@@ -133,7 +133,7 @@ func (mc *ModelCatalog) WorksetList(dn string) ([]db.WorksetPub, bool) {
 }
 
 // WorksetListText return list of workset_lst and workset_txt db rows by model digest-or-name.
-// Text (description and notes) are in preferred language or if text in such language exists.
+// Text (description and notes) are in preferred language if text in such language exists.
 func (mc *ModelCatalog) WorksetListText(dn string, preferredLang []language.Tag) ([]db.WorksetPub, bool) {
 
 	// if model digest-or-name is empty then return empty results

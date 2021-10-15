@@ -65,6 +65,14 @@ func (mc *ModelCatalog) UpdateTaskDef(isReplace bool, tpd *db.TaskDefPub) (bool,
 		return false, dn, tn, err
 	}
 
+	// match languages from request into model languages
+	for k := range tm.Txt {
+		lc := mc.languageMatch(idx, tm.Txt[k].LangCode)
+		if lc != "" {
+			tm.Txt[k].LangCode = lc
+		}
+	}
+
 	// replace or merge task text and task input worksets into database task_lst, task_txt, task_set tables
 	if isReplace {
 		err = tm.ReplaceTaskDef(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, mc.modelLst[idx].langMeta)
