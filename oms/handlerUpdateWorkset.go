@@ -497,3 +497,36 @@ func worksetParameterCopyFromWsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+dstWsName+"/parameter/"+name)
 	w.Header().Set("Content-Type", "text/plain")
 }
+
+// worksetParameterTextMergeHandler do merge (insert or update) workset parameter(s) value notes, array of parameters expected.
+// PATCH /api/model/:model/workset/:set/parameter-text
+// Model can be identified by digest or name and model run also identified by run digest-or-stamp-or-name.
+// If multiple models with same name exist then result is undefined.
+// If workset does not exist or is not in read-write state then return error.
+// If parameter not exist in workset then return error.
+// Input json must be array of ParamRunSetTxtPub,
+// if parameters text array is empty then nothing updated, it is empty operation return is success
+func worksetParameterTextMergeHandler(w http.ResponseWriter, r *http.Request) {
+
+	// url or query parameters
+	dn := getRequestParam(r, "model") // model digest-or-name
+	wsn := getRequestParam(r, "set")  // workset name
+
+	// decode json parameter value notes
+	var pvtLst []db.ParamRunSetTxtPub
+	if !jsonRequestDecode(w, r, &pvtLst) {
+		return // error at json decode, response done with http error
+	}
+
+	// update workset parameter value notes in model catalog
+	ok, err := theCatalog.UpdateWorksetParameterText(dn, wsn, pvtLst)
+	if err != nil {
+		omppLog.Log(err.Error())
+		http.Error(w, "Workset parameter(s) value notes update failed "+dn+": "+wsn+": "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if ok {
+		w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+wsn+"/parameter-text")
+		w.Header().Set("Content-Type", "text/plain")
+	}
+}

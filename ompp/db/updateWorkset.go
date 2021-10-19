@@ -297,6 +297,7 @@ pLoop:
 	if isReplace {
 		return doReplaceWorkset(trx, modelDef, meta, langDef)
 	}
+	// else
 	return doMergeWorkset(trx, modelDef, meta, langDef)
 }
 

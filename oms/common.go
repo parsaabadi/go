@@ -237,6 +237,7 @@ func jsonRequestDecode(w http.ResponseWriter, r *http.Request, dst interface{}) 
 			http.Error(w, "Invalid (empty) json at "+r.URL.String(), http.StatusBadRequest)
 			return false
 		}
+		omppLog.Log("Json decode error at " + r.URL.String() + ": " + err.Error())
 		http.Error(w, "Json decode error at "+r.URL.String(), http.StatusBadRequest)
 		return false
 	}

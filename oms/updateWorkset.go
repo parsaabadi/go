@@ -8,6 +8,7 @@ import (
 	"encoding/csv"
 	"errors"
 	"io"
+	"sort"
 
 	"github.com/openmpp/go/ompp/db"
 	"github.com/openmpp/go/ompp/omppLog"
@@ -297,6 +298,81 @@ func (mc *ModelCatalog) UpdateWorksetParameter(
 		return false, err
 	}
 	return hId > 0, nil // return success and true if parameter was found
+}
+
+// UpdateWorksetParameterText do merge (insert or update) parameters value notes.
+func (mc *ModelCatalog) UpdateWorksetParameterText(dn, wsn string, pvtLst []db.ParamRunSetTxtPub) (bool, error) {
+
+	// validate parameters
+	if pvtLst == nil || len(pvtLst) <= 0 {
+		omppLog.Log("Warning: empty list of run parameters to update value notes")
+		return false, nil
+	}
+	if dn == "" {
+		return false, errors.New("Error: invalid (empty) model digest or name")
+	}
+	if wsn == "" {
+		return false, errors.New("Error: invalid (empty) workset name")
+	}
+
+	// if model metadata not loaded then read it from database
+	if _, ok := mc.loadModelMeta(dn); !ok {
+		return false, errors.New("Error: model digest or name not found: " + dn)
+	}
+
+	// lock catalog and update workset
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		return false, errors.New("Error: model digest or name not found: " + dn)
+	}
+
+	// find workset in database: it must be read-write if exists
+	w, err := db.GetWorksetByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, wsn)
+	if err != nil {
+		return false, errors.New("Workset not found: " + dn + ": " + wsn + ": " + err.Error())
+	}
+	if w == nil {
+		return false, errors.New("Workset not found: " + dn + ": " + wsn)
+	}
+	if w.IsReadonly {
+		return false, errors.New("Failed to update read-only workset: " + dn + ": " + wsn)
+	}
+
+	// get workset parameters list
+	hIds, _, _, err := db.GetWorksetParamList(mc.modelLst[idx].dbConn, w.SetId)
+
+	// check: parameter must in workset parametrs list
+	// match languages from request into model languages
+	for j := range pvtLst {
+
+		np, ok := mc.modelLst[idx].meta.ParamByName(pvtLst[j].Name)
+		if !ok {
+			return false, errors.New("Model parameter not found: " + dn + ": " + pvtLst[j].Name)
+		}
+
+		i := sort.SearchInts(hIds, mc.modelLst[idx].meta.Param[np].ParamHid)
+		if i < 0 || i >= len(hIds) || hIds[i] != mc.modelLst[idx].meta.Param[np].ParamHid {
+			return false, errors.New("Workset parameter not found: " + dn + ": " + wsn + ": " + pvtLst[j].Name)
+		}
+
+		for k := range pvtLst[j].Txt {
+			lc := mc.languageMatch(idx, pvtLst[j].Txt[k].LangCode)
+			if lc != "" {
+				pvtLst[j].Txt[k].LangCode = lc
+			}
+		}
+	}
+
+	// update workset parameter notes
+	err = db.UpdateWorksetParameterText(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, wsn, pvtLst, mc.modelLst[idx].langMeta)
+	if err != nil {
+		return false, errors.New("Error at update workset parameter notes: " + dn + ": " + wsn + ": " + err.Error())
+	}
+
+	return true, nil
 }
 
 // UpdateWorksetParameterCsv replace or merge parameter metadata into workset and replace parameter values from csv reader.

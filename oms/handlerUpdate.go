@@ -149,6 +149,39 @@ func runTextMergeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// runParameterTextMergeHandler do merge (insert or update) run parameter(s) value notes, array of parameters expected.
+// PATCH /api/model/:model/run/:run/parameter-text
+// Model can be identified by digest or name and model run also identified by run digest-or-stamp-or-name.
+// If multiple models with same name exist then result is undefined.
+// If multiple runs with same stamp or name exist then result is undefined.
+// If model run does not exist then return error.
+// Input json must be array of ParamRunSetTxtPub,
+// if parameters text array is empty then nothing updated, it is empty operation return is success
+func runParameterTextMergeHandler(w http.ResponseWriter, r *http.Request) {
+
+	// url or query parameters
+	dn := getRequestParam(r, "model") // model digest-or-name
+	rdsn := getRequestParam(r, "run") // run digest-or-stamp-or-name
+
+	// decode json parameter value notes
+	var pvtLst []db.ParamRunSetTxtPub
+	if !jsonRequestDecode(w, r, &pvtLst) {
+		return // error at json decode, response done with http error
+	}
+
+	// update run parameter(s) value notes in model catalog
+	ok, err := theCatalog.UpdateRunParameterText(dn, rdsn, pvtLst)
+	if err != nil {
+		omppLog.Log(err.Error())
+		http.Error(w, "Run parameter(s) value notes update failed "+dn+": "+rdsn+": "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if ok {
+		w.Header().Set("Content-Location", "/api/model/"+dn+"/run/"+rdsn+"/parameter-text")
+		w.Header().Set("Content-Type", "text/plain")
+	}
+}
+
 // taskDeleteHandler do delete modeling task, task run history from database.
 // DELETE /api/model/:model/task/:task
 // Task run history deleted only from task_run_lst and task_run_set tables,

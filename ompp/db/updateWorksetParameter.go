@@ -85,6 +85,63 @@ func (meta *WorksetMeta) UpdateWorksetParameter(
 	return paramHid, nil
 }
 
+// UpdateWorksetParameterText merge parameter value notes into workset_parameter_txt table.
+//
+// Set name is used to find workset and set id updated with actual database value.
+// Workset must exist and must be read-write for replace or merge.
+//
+// Parameter must exist exist in the model otherwise it is an error.
+// If parameter not exist in workset then function does nothing (it is empty operation).
+// If input array of ParamRunSetTxtPub is empty then it is empty operation and return is success.
+func UpdateWorksetParameterText(dbConn *sql.DB, modelDef *ModelMeta, setName string, paramTxtPub []ParamRunSetTxtPub, langDef *LangMeta) error {
+
+	// validate parameters
+	if len(paramTxtPub) <= 0 {
+		return nil // nothing to be updated: return success
+	}
+	if modelDef == nil {
+		return errors.New("invalid (empty) model metadata")
+	}
+	if langDef == nil {
+		return errors.New("invalid (empty) language list")
+	}
+	if setName == "" {
+		return errors.New("invalid (empty) workset name")
+	}
+
+	// convert from public to internal array of parameter value notes
+	// and check: parameter name must exist in the model
+	paramLst := make([]worksetParam, len(paramTxtPub))
+	for k := range paramTxtPub {
+		np, ok := modelDef.ParamByName(paramTxtPub[k].Name)
+		if !ok {
+			return errors.New("model parameter not found: " + paramTxtPub[k].Name)
+		}
+		paramLst[k].ParamHid = modelDef.Param[np].ParamHid
+		paramLst[k].Txt = make([]WorksetParamTxtRow, len(paramTxtPub[k].Txt))
+
+		for j := range paramTxtPub[k].Txt {
+			paramLst[k].Txt[j].ParamHid = paramLst[k].ParamHid
+			paramLst[k].Txt[j].LangCode = paramTxtPub[k].Txt[j].LangCode
+			paramLst[k].Txt[j].Note = paramTxtPub[k].Txt[j].Note
+		}
+	}
+
+	// do update in transaction scope
+	trx, err := dbConn.Begin()
+	if err != nil {
+		return err
+	}
+	err = doUpdateWorksetParameterText(trx, modelDef, setName, paramLst, langDef)
+	if err != nil {
+		trx.Rollback()
+		return err
+	}
+	trx.Commit()
+
+	return nil
+}
+
 // doUpdateWorksetParameter insert new or update existing workset parameter metadata.
 // It does update as part of transaction.
 //
@@ -249,4 +306,89 @@ func doUpdateWorksetParameterMeta(
 	}
 
 	return paramHid, nil
+}
+
+// doUpdateWorksetParameterText merge workset parameters value notes.
+// It does update as part of transaction.
+//
+// Set name is used to find workset and set id updated with actual database value.
+// Workset must exist and must be read-write for replace or merge.
+//
+// If parameter not exist in workset then function does nothing (it is empty operation).
+func doUpdateWorksetParameterText(trx *sql.Tx, modelDef *ModelMeta, setName string, paramLst []worksetParam, langDef *LangMeta) error {
+
+	// "lock" workset to prevent update or use by the model
+	err := TrxUpdate(trx,
+		"UPDATE workset_lst"+
+			" SET is_readonly = is_readonly + 1"+
+			" WHERE model_id = "+strconv.Itoa(modelDef.Model.ModelId)+" AND set_name = "+ToQuoted(setName))
+	if err != nil {
+		return err
+	}
+
+	// check if workset exist and not readonly
+	var setId, nRd int
+	err = TrxSelectFirst(trx,
+		"SELECT set_id, is_readonly FROM workset_lst"+
+			" WHERE model_id = "+strconv.Itoa(modelDef.Model.ModelId)+" AND set_name = "+ToQuoted(setName),
+		func(row *sql.Row) error {
+			if err := row.Scan(&setId, &nRd); err != nil {
+				return err
+			}
+			return nil
+		})
+	switch {
+	case err == sql.ErrNoRows:
+		return errors.New("failed to update: workset not found: " + setName)
+	case err != nil:
+		return err
+	case nRd != 1:
+		return errors.New("failed to update: workset is read-only: " + setName)
+	}
+	sId := strconv.Itoa(setId)
+
+	// merge parameter(s) value notes
+	for k := range paramLst {
+
+		spHid := strconv.Itoa(paramLst[k].ParamHid)
+
+		for j := range paramLst[k].Txt {
+
+			if lId, ok := langDef.IdByCode(paramLst[k].Txt[j].LangCode); ok { // if language code valid
+
+				slId := strconv.Itoa(lId)
+
+				err = TrxUpdate(trx,
+					"DELETE FROM workset_parameter_txt"+
+						" WHERE set_id = "+sId+
+						" AND parameter_hid = "+spHid+
+						" AND lang_id = "+slId)
+				if err != nil {
+					return err
+				}
+				err = TrxUpdate(trx,
+					"INSERT INTO workset_parameter_txt (set_id, parameter_hid, lang_id, note)"+
+						" SELECT "+
+						sId+", "+" parameter_hid, "+slId+", "+toQuotedOrNullMax(paramLst[k].Txt[j].Note, noteDbMax)+
+						" FROM workset_parameter"+
+						" WHERE set_id = "+sId+
+						" AND parameter_hid = "+spHid)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	// "unlock" workset for parameter values write: restore original value of is_readonly=0
+	err = TrxUpdate(trx,
+		"UPDATE workset_lst"+
+			" SET is_readonly = 0,"+
+			" update_dt = "+ToQuoted(helper.MakeDateTime(time.Now()))+
+			" WHERE set_id = "+sId)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

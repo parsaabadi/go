@@ -52,11 +52,16 @@ type RunPub struct {
 }
 
 // ParamRunSetPub is "public" run or workset parameter metadata for json import-export
+type ParamRunSetTxtPub struct {
+	Name string     // parameter name
+	Txt  []LangNote // parameter value notes by language
+}
+
+// ParamRunSetPub is "public" run or workset parameter metadata for json import-export
 type ParamRunSetPub struct {
-	Name         string     // parameter name
-	SubCount     int        // number of parameter sub-values
-	DefaultSubId int        // default sub-value id for that parameter workset
-	Txt          []LangNote // parameter value notes by language
+	ParamRunSetTxtPub
+	SubCount     int // number of parameter sub-values
+	DefaultSubId int // default sub-value id for that parameter workset
 }
 
 // ParamValuePub is "public" run or workset parameter metadata and values for json import-export.

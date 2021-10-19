@@ -569,7 +569,12 @@ func (meta *RunMeta) UpdateRunText(dbConn *sql.DB, modelDef *ModelMeta, runId in
 	if err != nil {
 		return err
 	}
-	err = doMergeRunText(trx, runId, meta, langDef)
+	err = doMergeRunHdrText(trx, runId, meta, langDef)
+	if err != nil {
+		trx.Rollback()
+		return err
+	}
+	err = doMergeRunParameterText(trx, runId, meta.Param, langDef)
 	if err != nil {
 		trx.Rollback()
 		return err
@@ -579,10 +584,83 @@ func (meta *RunMeta) UpdateRunText(dbConn *sql.DB, modelDef *ModelMeta, runId in
 	return nil
 }
 
-// doMergeRunText merge run text and run parameter notes into run_txt and run_parameter_txt tables by run_id.
+// UpdateRunParameterText merge (insert or update) run parameter value notes into run_parameter_txt table.
+//
+// New parameter notes merged with existing db rows by update or insert if rows not exist db tables.
+// If run does not exist then function does nothing.
+// Run status must be completed (success, exit or error) otherwise error returned.
+// If input array of ParamRunSetTxtPub is empty then it is empty operation and return is success.
+func UpdateRunParameterText(dbConn *sql.DB, modelDef *ModelMeta, runId int, paramTxtPub []ParamRunSetTxtPub, langDef *LangMeta) error {
+
+	// validate parameters
+	if len(paramTxtPub) <= 0 {
+		return nil // nothing to be updated: return success
+	}
+	if modelDef == nil {
+		return errors.New("invalid (empty) model metadata")
+	}
+	if langDef == nil {
+		return errors.New("invalid (empty) language list")
+	}
+
+	// convert from public to internal array of parameter value notes
+	// and check: parameter name must exist in the model
+	paramLst := make([]runParam, len(paramTxtPub))
+	for k := range paramTxtPub {
+		np, ok := modelDef.ParamByName(paramTxtPub[k].Name)
+		if !ok {
+			return errors.New("model parameter not found: " + paramTxtPub[k].Name)
+		}
+		paramLst[k].ParamHid = modelDef.Param[np].ParamHid
+		paramLst[k].Txt = make([]RunParamTxtRow, len(paramTxtPub[k].Txt))
+
+		for j := range paramTxtPub[k].Txt {
+			paramLst[k].Txt[j].ParamHid = paramLst[k].ParamHid
+			paramLst[k].Txt[j].LangCode = paramTxtPub[k].Txt[j].LangCode
+			paramLst[k].Txt[j].Note = paramTxtPub[k].Txt[j].Note
+		}
+	}
+
+	// check run status: if not completed then exit
+	var st string
+
+	err := SelectFirst(dbConn,
+		"SELECT status FROM run_lst WHERE run_id = "+strconv.Itoa(runId),
+		func(row *sql.Row) error {
+			err := row.Scan(&st)
+			return err
+		})
+	switch {
+	case err == sql.ErrNoRows:
+		return nil // model run not found: nothing to do
+	case err != nil:
+		return err
+	}
+
+	// if run run not completed then exit
+	if !IsRunCompleted(st) {
+		return errors.New("model run not completed: " + strconv.Itoa(runId))
+	}
+
+	// do update in transaction scope
+	trx, err := dbConn.Begin()
+	if err != nil {
+		return err
+	}
+	err = doMergeRunParameterText(trx, runId, paramLst, langDef)
+	if err != nil {
+		trx.Rollback()
+		return err
+	}
+	trx.Commit()
+
+	return nil
+}
+
+// doMergeRunHdrText merge run text (description and notes) into run_txt by run_id.
 // It does update as part of transaction.
-// Run id of the input runTxt and paramTxt db rows updated with runId value.
-func doMergeRunText(trx *sql.Tx, runId int, meta *RunMeta, langDef *LangMeta) error {
+// Run id of the input runTxt db rows updated with runId value.
+func doMergeRunHdrText(trx *sql.Tx, runId int, meta *RunMeta, langDef *LangMeta) error {
 
 	// update existing or insert new run_txt db rows
 	srId := strconv.Itoa(runId)
@@ -611,20 +689,30 @@ func doMergeRunText(trx *sql.Tx, runId int, meta *RunMeta, langDef *LangMeta) er
 			}
 		}
 	}
+	return nil
+}
+
+// doMergeRunParameterText merge run parameter notes into run_parameter_txt tables by run_id.
+// It does update as part of transaction.
+// Run id of the input paramLst db rows updated with runId value.
+// If run does not exist or parameter not exist in the run then function does nothing.
+func doMergeRunParameterText(trx *sql.Tx, runId int, paramLst []runParam, langDef *LangMeta) error {
 
 	// update existing or insert new run_parameter_txt db rows
-	for k := range meta.Param {
-		for j := range meta.Param[k].Txt {
+	srId := strconv.Itoa(runId)
 
-			meta.Param[k].Txt[j].RunId = runId // update run id
+	for k := range paramLst {
+		for j := range paramLst[k].Txt {
+
+			paramLst[k].Txt[j].RunId = runId // update run id
 
 			// if language code valid then insert new run_txt db rows
-			if lId, ok := langDef.IdByCode(meta.Param[k].Txt[j].LangCode); ok {
+			if lId, ok := langDef.IdByCode(paramLst[k].Txt[j].LangCode); ok {
 
 				err := TrxUpdate(trx,
 					"DELETE FROM run_parameter_txt"+
 						" WHERE run_id = "+srId+
-						" AND parameter_hid = "+strconv.Itoa(meta.Param[k].Txt[j].ParamHid)+
+						" AND parameter_hid = "+strconv.Itoa(paramLst[k].Txt[j].ParamHid)+
 						" AND lang_id = "+strconv.Itoa(lId))
 				if err != nil {
 					return err
@@ -632,9 +720,9 @@ func doMergeRunText(trx *sql.Tx, runId int, meta *RunMeta, langDef *LangMeta) er
 				err = TrxUpdate(trx,
 					"INSERT INTO run_parameter_txt (run_id, parameter_hid, lang_id, note) VALUES ("+
 						srId+", "+
-						strconv.Itoa(meta.Param[k].Txt[j].ParamHid)+", "+
+						strconv.Itoa(paramLst[k].Txt[j].ParamHid)+", "+
 						strconv.Itoa(lId)+", "+
-						toQuotedOrNullMax(meta.Param[k].Txt[j].Note, noteDbMax)+")")
+						toQuotedOrNullMax(paramLst[k].Txt[j].Note, noteDbMax)+")")
 				if err != nil {
 					return err
 				}

@@ -154,3 +154,72 @@ func (mc *ModelCatalog) UpdateRunText(rp *db.RunPub) (bool, string, string, erro
 
 	return true, dn, rdsn, nil
 }
+
+// UpdateRunParameterText do merge (insert or update) parameters run value notes.
+func (mc *ModelCatalog) UpdateRunParameterText(dn, rdsn string, pvtLst []db.ParamRunSetTxtPub) (bool, error) {
+
+	// validate parameters
+	if pvtLst == nil || len(pvtLst) <= 0 {
+		omppLog.Log("Warning: empty list of run parameters to update value notes")
+		return false, nil
+	}
+	if dn == "" {
+		return false, errors.New("Error: invalid (empty) model digest or name")
+	}
+	if rdsn == "" {
+		return false, errors.New("Error: invalid (empty) model run digest or stamp or name")
+	}
+
+	// if model metadata not loaded then read it from database
+	if _, ok := mc.loadModelMeta(dn); !ok {
+		return false, errors.New("Error: model digest or name not found: " + dn)
+	}
+
+	// lock catalog and update model run
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		return false, errors.New("Error: model digest or name not found: " + dn)
+	}
+
+	// validate parameters by name: it must be model parameter
+	for k := range pvtLst {
+		if _, ok = mc.modelLst[idx].meta.ParamByName(pvtLst[k].Name); !ok {
+			return false, errors.New("Model parameter not found: " + dn + ": " + pvtLst[k].Name)
+		}
+	}
+
+	// find model run by digest, stamp or run name
+	r, err := db.GetRunByDigestOrStampOrName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, rdsn)
+	if err != nil {
+		return false, errors.New("Model run not found: " + dn + ": " + rdsn + ": " + err.Error())
+	}
+	if r == nil {
+		return false, errors.New("Model run not found: " + dn + ": " + rdsn)
+	}
+
+	// validate: model run must be completed
+	if !db.IsRunCompleted(r.Status) {
+		return false, errors.New("Failed to update model run, it is not completed: " + dn + ": " + rdsn)
+	}
+
+	// match languages from request into model languages
+	for j := range pvtLst {
+		for k := range pvtLst[j].Txt {
+			lc := mc.languageMatch(idx, pvtLst[j].Txt[k].LangCode)
+			if lc != "" {
+				pvtLst[j].Txt[k].LangCode = lc
+			}
+		}
+	}
+
+	// update run parameter notes
+	err = db.UpdateRunParameterText(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, r.RunId, pvtLst, mc.modelLst[idx].langMeta)
+	if err != nil {
+		return false, errors.New("Error at update run parameter notes: " + dn + ": " + rdsn + ": " + err.Error())
+	}
+
+	return true, nil
+}
