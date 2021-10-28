@@ -452,22 +452,25 @@ func doInsertWorksetBody(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, la
 // doMergeWorkset merge workset metadata in database.
 // It does update as part of transaction.
 // Workset master row updated with non-empty values:
-// base run id updated if new value is positive,
 // read-only status if new read-only value is true.
 // Only parameter text is merged, not sub-value count.
 func doMergeWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, langDef *LangMeta) error {
 
 	// UPDATE workset_lst
-	// SET set_name = 'mySet', is_readonly = 0, base_run_id = 1234, update_dt = '2012-08-17 16:05:59.123'
+	// SET is_readonly = 1, base_run_id = 1234, update_dt = '2012-08-17 16:05:59.123'
 	// WHERE set_id = 22
 	//
 	sId := strconv.Itoa(meta.Set.SetId)
 	sl := ""
-	if meta.Set.BaseRunId > 0 {
-		sl += " base_run_id = " + strconv.Itoa(meta.Set.BaseRunId) + ", "
-	}
 	if meta.Set.IsReadonly {
 		sl += " is_readonly = 1, "
+	}
+	if meta.Set.BaseRunId > 0 {
+		sl += " base_run_id = " + strconv.Itoa(meta.Set.BaseRunId) + ", "
+	} else {
+		if meta.Set.isNullBaseRun {
+			sl += " base_run_id = NULL, "
+		}
 	}
 	meta.Set.UpdateDateTime = helper.MakeDateTime(time.Now())
 	sl += " update_dt = " + ToQuoted(meta.Set.UpdateDateTime)

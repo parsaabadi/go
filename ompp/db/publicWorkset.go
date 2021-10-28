@@ -105,6 +105,7 @@ func (pub *WorksetPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*Workset
 			ModelId:        modelDef.Model.ModelId,
 			IsReadonly:     pub.IsReadonly,
 			UpdateDateTime: pub.UpdateDateTime,
+			isNullBaseRun:  pub.IsCleanBaseRun,
 		},
 		Txt:   make([]WorksetTxtRow, len(pub.Txt)),
 		Param: make([]worksetParam, len(pub.Param)),

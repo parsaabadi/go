@@ -175,6 +175,7 @@ type WorksetHdrPub struct {
 	BaseRunDigest  string      // if not empty then digest of the base run
 	IsReadonly     bool        // readonly flag
 	UpdateDateTime string      // last update date-time
+	IsCleanBaseRun bool        // if true then update set base run digest to NULL
 	Txt            []DescrNote // workset text: description and notes by language
 }
 
@@ -200,6 +201,7 @@ type WorksetRow struct {
 	Name           string // set_name     VARCHAR(255) NOT NULL
 	IsReadonly     bool   // is_readonly  SMALLINT     NOT NULL
 	UpdateDateTime string // update_dt    VARCHAR(32)  NOT NULL, -- last update date-time
+	isNullBaseRun  bool   // if true then update set base run digest to NULL
 }
 
 // WorksetParam is a holder for workset parameter Hid, sub-value count and workset_parameter_txt rows
