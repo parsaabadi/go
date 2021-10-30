@@ -14,26 +14,27 @@ import (
 
 // CopyParameterFromRun copy parameter metadata and parameter values into workset from model run.
 //
-// If parameter already exist in destination workset then error returned.
+// If isReplace is true and parameter already exist in destination workset then error returned.
+// If isReplace is false then delete existing metadata and new insert new from model run.
 // Destination workset must be in read-write state.
 // Source model run must be completed, run status one of: s=success, x=exit, e=error.
-func CopyParameterFromRun(dbConn *sql.DB, modelDef *ModelMeta, wst *WorksetRow, paramName string, rst *RunRow) error {
+func CopyParameterFromRun(dbConn *sql.DB, modelDef *ModelMeta, ws *WorksetRow, paramName string, isReplace bool, rs *RunRow) error {
 
 	// validate parameters
 	if modelDef == nil {
 		return errors.New("invalid (empty) model metadata")
 	}
-	if wst == nil || wst.SetId <= 0 {
+	if ws == nil || ws.SetId <= 0 {
 		return errors.New("invalid (empty) destination workset")
 	}
 	if paramName == "" {
 		return errors.New("invalid (empty) parameter name")
 	}
-	if rst == nil || rst.RunId <= 0 {
+	if rs == nil || rs.RunId <= 0 {
 		return errors.New("invalid (empty) model run")
 	}
-	if !IsRunCompleted(rst.Status) {
-		return errors.New("error: model run is not completed: " + modelDef.Model.Name + ": " + rst.Name + ": " + rst.Status)
+	if !IsRunCompleted(rs.Status) {
+		return errors.New("error: model run is not completed: " + modelDef.Model.Name + ": " + rs.Name + ": " + rs.Status)
 	}
 
 	// find model parameter hId by name
@@ -48,7 +49,7 @@ func CopyParameterFromRun(dbConn *sql.DB, modelDef *ModelMeta, wst *WorksetRow, 
 	if err != nil {
 		return err
 	}
-	if err = dbCopyParameterFromRun(trx, wst, &pm, rst); err != nil {
+	if err = dbCopyParameterFromRun(trx, ws, &pm, isReplace, rs); err != nil {
 		trx.Rollback()
 		return err
 	}
@@ -58,9 +59,10 @@ func CopyParameterFromRun(dbConn *sql.DB, modelDef *ModelMeta, wst *WorksetRow, 
 
 // CopyParameterFromWorkset copy parameter metadata and parameter values from one workset to another.
 //
-// If parameter already exist in destination workset then error returned.
+// If isReplace is true and parameter already exist in destination workset then error returned.
+// If isReplace is false then delete existing metadata and new insert new from source workset.
 // Destination workset must be in read-write state, source workset must be read-only.
-func CopyParameterFromWorkset(dbConn *sql.DB, modelDef *ModelMeta, dstWs *WorksetRow, paramName string, srcWs *WorksetRow) error {
+func CopyParameterFromWorkset(dbConn *sql.DB, modelDef *ModelMeta, dstWs *WorksetRow, paramName string, isReplace bool, srcWs *WorksetRow) error {
 
 	// validate parameters
 	if modelDef == nil {
@@ -88,7 +90,7 @@ func CopyParameterFromWorkset(dbConn *sql.DB, modelDef *ModelMeta, dstWs *Workse
 	if err != nil {
 		return err
 	}
-	if err = dbCopyParameterFromWorkset(trx, srcWs, &pm, dstWs); err != nil {
+	if err = dbCopyParameterFromWorkset(trx, dstWs, &pm, isReplace, srcWs); err != nil {
 		trx.Rollback()
 		return err
 	}
@@ -98,68 +100,52 @@ func CopyParameterFromWorkset(dbConn *sql.DB, modelDef *ModelMeta, dstWs *Workse
 
 // dbCopyParameterFromRun copy workset parameter metadata and values into destination workset from model run.
 // It does copy as part of transaction.
-// If parameter already exist in destination workset then error returned.
-func dbCopyParameterFromRun(trx *sql.Tx, wst *WorksetRow, pm *ParamMeta, rst *RunRow) error {
+// If isReplace is true and parameter already exist in destination workset then error returned.
+// If isReplace is false then delete existing metadata and new insert new from model run.
+func dbCopyParameterFromRun(trx *sql.Tx, ws *WorksetRow, pm *ParamMeta, isReplace bool, rs *RunRow) error {
 
 	// "lock" workset to prevent update or use by the model
-	mId := strconv.Itoa(wst.ModelId)
+	mId := strconv.Itoa(ws.ModelId)
 
 	err := TrxUpdate(trx,
 		"UPDATE workset_lst"+
 			" SET is_readonly = is_readonly + 1"+
-			" WHERE model_id = "+mId+" AND set_name = "+ToQuoted(wst.Name))
+			" WHERE model_id = "+mId+" AND set_name = "+ToQuoted(ws.Name))
 	if err != nil {
 		return err
 	}
 
 	// check if workset exist and not readonly
-	var setId, nRd int
+	var dstSetId, nRd int
 	err = TrxSelectFirst(trx,
-		"SELECT set_id, is_readonly FROM workset_lst WHERE model_id = "+mId+" AND set_name = "+ToQuoted(wst.Name),
+		"SELECT set_id, is_readonly FROM workset_lst WHERE model_id = "+mId+" AND set_name = "+ToQuoted(ws.Name),
 		func(row *sql.Row) error {
-			if err := row.Scan(&setId, &nRd); err != nil {
+			if err := row.Scan(&dstSetId, &nRd); err != nil {
 				return err
 			}
 			return nil
 		})
 	switch {
 	case err == sql.ErrNoRows:
-		return errors.New("failed to copy: destination workset not found: " + wst.Name)
+		return errors.New("failed to copy: destination workset not found: " + ws.Name)
 	case err != nil:
 		return err
 	case nRd != 1:
-		return errors.New("failed to copy: destination workset is read-only: " + wst.Name)
+		return errors.New("failed to copy: destination workset is read-only: " + ws.Name)
 	}
+	ws.SetId = dstSetId
 
-	// return error if parameter already exist in workset_parameter
-	sDstId := strconv.Itoa(setId)
-	sHid := strconv.Itoa(pm.ParamHid)
-
-	err = TrxUpdate(trx, "UPDATE workset_parameter"+
-		" SET parameter_hid = "+sHid+
-		" WHERE set_id = "+sDstId+" AND parameter_hid = "+sHid)
+	// check if parameter already exist in destination workset
+	// delete if it is merge or return error if if it is insert new
+	err = prepareWorksetForParameterInsert(trx, ws, pm, isReplace)
 	if err != nil {
 		return err
 	}
 
-	err = TrxSelectFirst(trx,
-		"SELECT parameter_hid FROM workset_parameter WHERE set_id = "+sDstId+" AND parameter_hid = "+sHid,
-		func(row *sql.Row) error {
-			var n int
-			if err := row.Scan(&n); err != nil {
-				return err
-			}
-			return nil
-		})
-	switch {
-	case err != nil && err != sql.ErrNoRows:
-		return err
-	case err != sql.ErrNoRows: // must be sql.ErrNoRows
-		return errors.New("failed to copy, destination workset already contains parameter: " + wst.Name + ": " + pm.Name)
-	}
-
 	// get base run id of source run
-	srId := strconv.Itoa(rst.RunId)
+	sDstId := strconv.Itoa(dstSetId)
+	sHid := strconv.Itoa(pm.ParamHid)
+	srId := strconv.Itoa(rs.RunId)
 
 	var baseRunId int
 	err = TrxSelectFirst(trx,
@@ -172,11 +158,11 @@ func dbCopyParameterFromRun(trx *sql.Tx, wst *WorksetRow, pm *ParamMeta, rst *Ru
 		})
 	switch {
 	case err == sql.ErrNoRows:
-		return errors.New("failed to copy, model run not found or does not contain parameter: " + rst.Name + ": " + pm.Name)
+		return errors.New("failed to copy, model run not found or does not contain parameter: " + rs.Name + ": " + pm.Name)
 	case err != nil:
 		return err
 	case baseRunId <= 0:
-		return errors.New("failed to copy, model run not found or invalid base run id: " + rst.Name + ": " + pm.Name)
+		return errors.New("failed to copy, model run not found or invalid base run id: " + rs.Name + ": " + pm.Name)
 	}
 
 	// add parameter to the list of workset parameters, run parameters default_sub_id always =0
@@ -229,8 +215,9 @@ func dbCopyParameterFromRun(trx *sql.Tx, wst *WorksetRow, pm *ParamMeta, rst *Ru
 
 // dbCopyParameterFromWorkset copy workset parameter metadata and values from one workset to another.
 // It does copy as part of transaction.
-// If parameter already exist in destination workset then error returned.
-func dbCopyParameterFromWorkset(trx *sql.Tx, srcWs *WorksetRow, pm *ParamMeta, dstWs *WorksetRow) error {
+// If isReplace is true and parameter already exist in destination workset then error returned.
+// If isReplace is false then delete existing metadata and new insert new from source workset.
+func dbCopyParameterFromWorkset(trx *sql.Tx, dstWs *WorksetRow, pm *ParamMeta, isReplace bool, srcWs *WorksetRow) error {
 
 	// "lock" destination workset to prevent update or use by the model
 	mId := strconv.Itoa(dstWs.ModelId)
@@ -244,11 +231,11 @@ func dbCopyParameterFromWorkset(trx *sql.Tx, srcWs *WorksetRow, pm *ParamMeta, d
 	}
 
 	// check if workset exist and not readonly
-	var setId, nRd int
+	var dstSetId, nRd int
 	err = TrxSelectFirst(trx,
 		"SELECT set_id, is_readonly FROM workset_lst WHERE model_id = "+mId+" AND set_name = "+ToQuoted(dstWs.Name),
 		func(row *sql.Row) error {
-			if err := row.Scan(&setId, &nRd); err != nil {
+			if err := row.Scan(&dstSetId, &nRd); err != nil {
 				return err
 			}
 			return nil
@@ -261,32 +248,13 @@ func dbCopyParameterFromWorkset(trx *sql.Tx, srcWs *WorksetRow, pm *ParamMeta, d
 	case nRd != 1:
 		return errors.New("failed to copy: destination workset is read-only: " + dstWs.Name)
 	}
-	sDstId := strconv.Itoa(setId)
+	dstWs.SetId = dstSetId
 
-	// return error if parameter already exist in workset_parameter
-	sHid := strconv.Itoa(pm.ParamHid)
-
-	err = TrxUpdate(trx, "UPDATE workset_parameter"+
-		" SET parameter_hid = "+sHid+
-		" WHERE set_id = "+sDstId+" AND parameter_hid = "+sHid)
+	// check if parameter already exist in destination workset
+	// delete if it is merge or return error if if it is insert new
+	err = prepareWorksetForParameterInsert(trx, dstWs, pm, isReplace)
 	if err != nil {
 		return err
-	}
-
-	err = TrxSelectFirst(trx,
-		"SELECT parameter_hid FROM workset_parameter WHERE set_id = "+sDstId+" AND parameter_hid = "+sHid,
-		func(row *sql.Row) error {
-			var n int
-			if err := row.Scan(&n); err != nil {
-				return err
-			}
-			return nil
-		})
-	switch {
-	case err != nil && err != sql.ErrNoRows:
-		return err
-	case err != sql.ErrNoRows: // must be sql.ErrNoRows
-		return errors.New("failed to copy, destination workset already contains parameter: " + dstWs.Name + ": " + pm.Name)
 	}
 
 	// "lock" source workset to prevent update or use by the model
@@ -299,12 +267,12 @@ func dbCopyParameterFromWorkset(trx *sql.Tx, srcWs *WorksetRow, pm *ParamMeta, d
 	}
 
 	// check if source workset exist and is readonly
-	srcBaseId := 0
+	var srcSetId, srcBaseId int
 	err = TrxSelectFirst(trx,
 		"SELECT set_id, base_run_id, is_readonly FROM workset_lst WHERE model_id = "+mId+" AND set_name = "+ToQuoted(srcWs.Name),
 		func(row *sql.Row) error {
 			var rId sql.NullInt64
-			if err := row.Scan(&setId, &rId, &nRd); err != nil {
+			if err := row.Scan(&srcSetId, &rId, &nRd); err != nil {
 				return err
 			}
 			if rId.Valid {
@@ -320,8 +288,10 @@ func dbCopyParameterFromWorkset(trx *sql.Tx, srcWs *WorksetRow, pm *ParamMeta, d
 	case nRd <= 1:
 		return errors.New("failed to copy: source workset is not read-only: " + srcWs.Name)
 	}
-	sSrcId := strconv.Itoa(setId)
+	sSrcId := strconv.Itoa(srcSetId)
 	sBaseId := strconv.Itoa(srcBaseId)
+	sDstId := strconv.Itoa(dstSetId)
+	sHid := strconv.Itoa(pm.ParamHid)
 
 	// find is parameter in source workset or in a base run of source workset
 	isFromRun := false
@@ -426,4 +396,60 @@ func dbCopyParameterFromWorkset(trx *sql.Tx, srcWs *WorksetRow, pm *ParamMeta, d
 			" WHERE set_id = "+sDstId)
 
 	return err // return last error, if any
+}
+
+// Check if parameter exist in destination workset and:
+//  - if isReplace is true then error returned.
+//  - if isReplace is false then delete existing metadata and new insert new from model run.
+func prepareWorksetForParameterInsert(trx *sql.Tx, dstWs *WorksetRow, pm *ParamMeta, isReplace bool) error {
+
+	// check if parameter already exist in destination workset
+	sDstId := strconv.Itoa(dstWs.SetId)
+	sHid := strconv.Itoa(pm.ParamHid)
+
+	err := TrxUpdate(trx, "UPDATE workset_parameter"+
+		" SET parameter_hid = "+sHid+
+		" WHERE set_id = "+sDstId+" AND parameter_hid = "+sHid)
+	if err != nil {
+		return err
+	}
+
+	// if not merge then return error if parameter already exist in workset_parameter
+	err = TrxSelectFirst(trx,
+		"SELECT parameter_hid FROM workset_parameter WHERE set_id = "+sDstId+" AND parameter_hid = "+sHid,
+		func(row *sql.Row) error {
+			var n int
+			if err := row.Scan(&n); err != nil {
+				return err
+			}
+			return nil
+		})
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+
+	// check if parameter exist in destination workset
+	isExist := err != sql.ErrNoRows
+	if !isExist {
+		return nil // parameter does not exist
+	}
+	// else parameter is exist: error if it is not a merge
+	if !isReplace {
+		return errors.New("failed to copy, destination workset already contains parameter: " + dstWs.Name + ": " + pm.Name)
+	}
+	// else it is a merge: delete existing parameter from destination workset
+
+	err = TrxUpdate(trx, "DELETE FROM "+pm.DbSetTable+" WHERE set_id = "+sDstId)
+	if err != nil {
+		return err
+	}
+	err = TrxUpdate(trx, "DELETE FROM workset_parameter_txt WHERE set_id = "+sDstId+" AND parameter_hid = "+sHid)
+	if err != nil {
+		return err
+	}
+	err = TrxUpdate(trx, "DELETE FROM workset_parameter WHERE set_id = "+sDstId+" AND parameter_hid = "+sHid)
+	if err != nil {
+		return err
+	}
+	return nil // parameter does not exist and destination workset id ready for insert
 }

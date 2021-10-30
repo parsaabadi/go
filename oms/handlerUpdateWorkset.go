@@ -114,13 +114,13 @@ func worksetCreateHandler(w http.ResponseWriter, r *http.Request) {
 	for k := range wp.Param {
 		switch wp.Param[k].Kind {
 		case "run":
-			if e := theCatalog.CopyParameterToWsFromRun(dn, wsn, wp.Param[k].Name, wp.Param[k].From); e != nil {
+			if e := theCatalog.CopyParameterToWsFromRun(dn, wsn, wp.Param[k].Name, false, wp.Param[k].From); e != nil {
 				http.Error(w, "Failed to copy parameter from model run"+wsn+" : "+wp.Param[k].Name+": "+wp.Param[k].From+" : "+e.Error(), http.StatusBadRequest)
 				return
 			}
 			continue
 		case "set":
-			if e := theCatalog.CopyParameterBetweenWs(dn, wsn, wp.Param[k].Name, wp.Param[k].From); e != nil {
+			if e := theCatalog.CopyParameterBetweenWs(dn, wsn, wp.Param[k].Name, false, wp.Param[k].From); e != nil {
 				http.Error(w, "Failed to copy parameter from workset "+wsn+" : "+wp.Param[k].Name+": "+wp.Param[k].From+" : "+e.Error(), http.StatusBadRequest)
 				return
 			}
@@ -449,13 +449,30 @@ func worksetParameterDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// worksetParameterRunCopyHandler copy parameter into workset from model run:
+// worksetParameterRunCopyHandler do copy (insert new) parameter into workset from model run:
 // PUT /api/model/:model/workset/:set/copy/parameter/:name/from-run/:run
 // If multiple models with same name exist then result is undefined.
 // If such parameter already exist in destination workset then return error.
 // Destination workset must be in read-write state.
 // Run must be completed, run status one of: s=success, x=exit, e=error.
 func worksetParameterRunCopyHandler(w http.ResponseWriter, r *http.Request) {
+	worksetParameterRunCopy(false, w, r)
+}
+
+// worksetParameterRunMergeHandler do merge (insert or update) parameter into workset from model run:
+// PATCH  /api/model/:model/workset/:set/merge/parameter/:name/from-run/:run
+// If multiple models with same name exist then result is undefined.
+// If such parameter already exist in destination workset
+// then it is updated by delete old and insert new values and metadata.
+// Destination workset must be in read-write state.
+// Run must be completed, run status one of: s=success, x=exit, e=error.
+func worksetParameterRunMergeHandler(w http.ResponseWriter, r *http.Request) {
+	worksetParameterRunCopy(true, w, r)
+}
+
+// worksetParameterRunCopy do copy parameter from model run into workset.
+// if isReplace is true then it insert new else merge: insert new or update existing.
+func worksetParameterRunCopy(isReplace bool, w http.ResponseWriter, r *http.Request) {
 
 	// url or query parameters
 	dn := getRequestParam(r, "model")  // model digest-or-name
@@ -464,7 +481,7 @@ func worksetParameterRunCopyHandler(w http.ResponseWriter, r *http.Request) {
 	rdsn := getRequestParam(r, "run")  // source run digest or stamp or name
 
 	// copy workset parameter from model run
-	err := theCatalog.CopyParameterToWsFromRun(dn, wsn, name, rdsn)
+	err := theCatalog.CopyParameterToWsFromRun(dn, wsn, name, isReplace, rdsn)
 	if err != nil {
 		omppLog.Log(err.Error())
 		http.Error(w, "Workset parameter copy failed "+wsn+": "+name+" from run: "+rdsn, http.StatusBadRequest)
@@ -474,12 +491,28 @@ func worksetParameterRunCopyHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 }
 
-// worksetParameterCopyFromWsHandler copy parameter from one workset to another:
+// worksetParameterCopyFromWsHandler do copy (insert new) parameter from one workset to another:
 // PUT /api/model/:model/workset/:set/copy/parameter/:name/from-workset/:from-set
 // If multiple models with same name exist then result is undefined.
 // If such parameter already exist in destination workset then return error.
 // Destination workset must be in read-write state, source workset must be read-only.
 func worksetParameterCopyFromWsHandler(w http.ResponseWriter, r *http.Request) {
+	worksetParameterCopyFromWs(false, w, r)
+}
+
+// worksetParameterMergeFromWsHandler do merge (insert or update) parameter from one workset to another:
+// PATCH /api/model/:model/workset/:set/merge/parameter/:name/from-workset/:from-set
+// If multiple models with same name exist then result is undefined.
+// If such parameter already exist in destination workset
+// then it is updated by delete old and insert new values and metadata.
+// Destination workset must be in read-write state, source workset must be read-only.
+func worksetParameterMergeFromWsHandler(w http.ResponseWriter, r *http.Request) {
+	worksetParameterCopyFromWs(true, w, r)
+}
+
+// worksetParameterCopyFromWs does copy parameter from one workset to another.
+// if isReplace is true then it does insert new else merge: insert new or update existing.
+func worksetParameterCopyFromWs(isReplace bool, w http.ResponseWriter, r *http.Request) {
 
 	// url or query parameters
 	dn := getRequestParam(r, "model")           // model digest-or-name
@@ -488,7 +521,7 @@ func worksetParameterCopyFromWsHandler(w http.ResponseWriter, r *http.Request) {
 	srcWsName := getRequestParam(r, "from-set") // source run digest or name
 
 	// copy workset parameter from other workset
-	err := theCatalog.CopyParameterBetweenWs(dn, dstWsName, name, srcWsName)
+	err := theCatalog.CopyParameterBetweenWs(dn, dstWsName, name, isReplace, srcWsName)
 	if err != nil {
 		omppLog.Log(err.Error())
 		http.Error(w, "Workset parameter copy failed "+dstWsName+": "+name+" from run: "+srcWsName, http.StatusBadRequest)

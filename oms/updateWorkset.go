@@ -582,10 +582,11 @@ func (mc *ModelCatalog) DeleteWorksetParameter(dn, wsn, name string) (bool, erro
 }
 
 // CopyParameterToWsFromRun copy parameter metadata and values into workset from model run.
-// If parameter already exist in destination workset then error returned.
+// If isReplace is true and parameter already exist in destination workset then error returned
+// If isReplace is false then existing parameter values and metadata deleted and new inserted from model run.
 // Destination workset must be in read-write state.
 // Source model run must be completed, run status one of: s=success, x=exit, e=error.
-func (mc *ModelCatalog) CopyParameterToWsFromRun(dn, wsn, name, rdsn string) error {
+func (mc *ModelCatalog) CopyParameterToWsFromRun(dn, wsn, name string, isReplace bool, rdsn string) error {
 
 	// validate parameters
 	if dn == "" {
@@ -624,31 +625,33 @@ func (mc *ModelCatalog) CopyParameterToWsFromRun(dn, wsn, name, rdsn string) err
 	}
 
 	// find workset by name: it must be read-write
-	wst, ok := mc.loadWorksetByName(idx, wsn)
-	if !ok || wst == nil {
+	ws, ok := mc.loadWorksetByName(idx, wsn)
+	if !ok || ws == nil {
 		return errors.New("Workset not found or error at get workset status: " + dn + ": " + wsn)
 	}
-	if wst.IsReadonly {
+	if ws.IsReadonly {
 		return errors.New("Parameter copy failed, destination workset is read-only: " + wsn + ": " + name)
 	}
 
-	// if parameter already in the workset then return error
-	nSub, _, err := db.GetWorksetParam(mc.modelLst[idx].dbConn, wst.SetId, pHid)
-	if err != nil {
-		return errors.New("Error at getting workset parameters list: " + wsn + ": " + err.Error())
-	}
-	if nSub > 0 {
-		return errors.New("Parameter copy failed, workset already contains parameter: " + wsn + ": " + name)
+	// if it is not merge and parameter already then return error
+	if !isReplace {
+		nSub, _, e := db.GetWorksetParam(mc.modelLst[idx].dbConn, ws.SetId, pHid)
+		if e != nil {
+			return errors.New("Error at getting workset parameters list: " + wsn + ": " + e.Error())
+		}
+		if nSub > 0 {
+			return errors.New("Parameter copy failed, workset already contains parameter: " + wsn + ": " + name)
+		}
 	}
 
 	// find run by digest or stamp or name: it must be completed
-	rst, ok := mc.loadCompletedRunByDigestOrStampOrName(idx, rdsn)
-	if !ok || rst == nil {
+	rs, ok := mc.loadCompletedRunByDigestOrStampOrName(idx, rdsn)
+	if !ok || rs == nil {
 		return errors.New("Model not found or not completed: " + dn + ": " + rdsn)
 	}
 
 	// copy parameter into workset from model run
-	err = db.CopyParameterFromRun(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, wst, name, rst)
+	err := db.CopyParameterFromRun(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, ws, name, isReplace, rs)
 	if err != nil {
 		return errors.New("Parameter copy failed: " + wsn + ": " + name + ": " + err.Error())
 	}
@@ -656,10 +659,11 @@ func (mc *ModelCatalog) CopyParameterToWsFromRun(dn, wsn, name, rdsn string) err
 }
 
 // CopyParameterBetweenWs copy parameter metadata and values into workset from other workset.
-// If parameter already exist in destination workset then error returned.
-// Destination workset must be in read-write state, source workset must be read-only.
-// Source model run must be completed, run status one of: s=success, x=exit, e=error.
-func (mc *ModelCatalog) CopyParameterBetweenWs(dn, dstWsName, name, srcWsName string) error {
+// If isReplace is true and parameter already exist in destination workset then error returned
+// If isReplace is false then existing parameter values and metadata deleted and new inserted from source workset.
+// Destination workset must be in read-write state.
+// Source workset must be read-only.
+func (mc *ModelCatalog) CopyParameterBetweenWs(dn, dstWsName, name string, isReplace bool, srcWsName string) error {
 
 	// validate parameters
 	if dn == "" {
@@ -706,13 +710,15 @@ func (mc *ModelCatalog) CopyParameterBetweenWs(dn, dstWsName, name, srcWsName st
 		return errors.New("Parameter copy failed, destination workset is read-only: " + dstWsName + ": " + name)
 	}
 
-	// if parameter already in the workset then return error
-	nSub, _, err := db.GetWorksetParam(mc.modelLst[idx].dbConn, dstWs.SetId, pHid)
-	if err != nil {
-		return errors.New("Error at getting workset parameters list: " + dstWsName + ": " + err.Error())
-	}
-	if nSub > 0 {
-		return errors.New("Parameter copy failed, workset already contains parameter: " + dstWsName + ": " + name)
+	// if it is not merge and parameter already then return error
+	if !isReplace {
+		nSub, _, e := db.GetWorksetParam(mc.modelLst[idx].dbConn, dstWs.SetId, pHid)
+		if e != nil {
+			return errors.New("Error at getting workset parameters list: " + dstWsName + ": " + e.Error())
+		}
+		if nSub > 0 {
+			return errors.New("Parameter copy failed, workset already contains parameter: " + dstWsName + ": " + name)
+		}
 	}
 
 	// find source workset by name: it must be read-only
@@ -725,7 +731,7 @@ func (mc *ModelCatalog) CopyParameterBetweenWs(dn, dstWsName, name, srcWsName st
 	}
 
 	// copy parameter from one workset to another
-	err = db.CopyParameterFromWorkset(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, dstWs, name, srcWs)
+	err := db.CopyParameterFromWorkset(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, dstWs, name, isReplace, srcWs)
 	if err != nil {
 		return errors.New("Parameter copy failed: " + dstWsName + ": " + name + ": " + err.Error())
 	}

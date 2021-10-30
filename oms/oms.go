@@ -822,8 +822,14 @@ func apiUpdateRoutes(router *vestigo.Router) {
 	// PUT  /api/model/:model/workset/:set/copy/parameter/:name/from-run/:run
 	router.Put("/api/model/:model/workset/:set/copy/parameter/:name/from-run/:run", worksetParameterRunCopyHandler, logRequest)
 
+	// PATCH  /api/model/:model/workset/:set/merge/parameter/:name/from-run/:run
+	router.Patch("/api/model/:model/workset/:set/merge/parameter/:name/from-run/:run", worksetParameterRunMergeHandler, logRequest)
+
 	// PUT /api/model/:model/workset/:set/copy/parameter/:name/from-workset/:from-set
 	router.Put("/api/model/:model/workset/:set/copy/parameter/:name/from-workset/:from-set", worksetParameterCopyFromWsHandler, logRequest)
+
+	// PATCH /api/model/:model/workset/:set/merge/parameter/:name/from-workset/:from-set
+	router.Patch("/api/model/:model/workset/:set/merge/parameter/:name/from-workset/:from-set", worksetParameterMergeFromWsHandler, logRequest)
 
 	// PATCH /api/model/:model/workset/:set/parameter-text
 	router.Patch("/api/model/:model/workset/:set/parameter-text", worksetParameterTextMergeHandler, logRequest)
