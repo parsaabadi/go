@@ -416,27 +416,8 @@ func toRunCsv(
 
 		paramLt.Name = modelDef.Param[j].Name
 
-		cLst, _, err := db.ReadParameter(dbConn, modelDef, paramLt)
-		if err != nil {
-			return err
-		}
-		if cLst.Len() <= 0 { // parameter data must exist for all parameters
-			return errors.New("missing run parameter values " + paramLt.Name + " run id: " + strconv.Itoa(paramLt.FromId))
-		}
-
-		err = toCsvCellFile(
-			csvDir,
-			modelDef,
-			paramLt.Name,
-			isNextRun && isAllInOne,
-			cvtParam,
-			cLst,
-			isIdCsv,
-			isWriteUtf8bom,
-			firstCol,
-			firstVal)
-		if err != nil {
-			return err
+		if e := paramToRunCsv(dbConn, modelDef, paramLt, cvtParam, csvDir, isIdCsv, isWriteUtf8bom, isNextRun && isAllInOne, firstCol, firstVal); e != nil {
+			return e
 		}
 	}
 
@@ -496,24 +477,8 @@ func toRunCsv(
 		tblLt.IsAccum = false
 		tblLt.IsAllAccum = false
 
-		cLst, _, err := db.ReadOutputTable(dbConn, modelDef, tblLt)
-		if err != nil {
-			return err
-		}
-
-		err = toCsvCellFile(
-			csvDir,
-			modelDef,
-			tblLt.Name,
-			isNextRun && isAllInOne,
-			cvtExpr,
-			cLst,
-			isIdCsv,
-			isWriteUtf8bom,
-			firstCol,
-			firstVal)
-		if err != nil {
-			return err
+		if e := tableToRunCsv(dbConn, modelDef, tblLt, cvtExpr, csvDir, isIdCsv, isWriteUtf8bom, isNextRun && isAllInOne, firstCol, firstVal); e != nil {
+			return e
 		}
 
 		// write output table accumulators into csv file
@@ -522,51 +487,82 @@ func toRunCsv(
 			tblLt.IsAccum = true
 			tblLt.IsAllAccum = false
 
-			cLst, _, err = db.ReadOutputTable(dbConn, modelDef, tblLt)
-			if err != nil {
-				return err
-			}
-
-			err = toCsvCellFile(
-				csvDir,
-				modelDef,
-				tblLt.Name,
-				isNextRun && isAllInOne,
-				cvtAcc,
-				cLst,
-				isIdCsv,
-				isWriteUtf8bom,
-				firstCol,
-				firstVal)
-			if err != nil {
-				return err
+			if e := tableToRunCsv(dbConn, modelDef, tblLt, cvtAcc, csvDir, isIdCsv, isWriteUtf8bom, isNextRun && isAllInOne, firstCol, firstVal); e != nil {
+				return e
 			}
 
 			// write all accumulators view into csv file
 			tblLt.IsAccum = true
 			tblLt.IsAllAccum = true
 
-			cLst, _, err = db.ReadOutputTable(dbConn, modelDef, tblLt)
-			if err != nil {
-				return err
-			}
-
-			err = toCsvCellFile(
-				csvDir,
-				modelDef,
-				tblLt.Name,
-				isNextRun && isAllInOne,
-				cvtAll,
-				cLst,
-				isIdCsv,
-				isWriteUtf8bom,
-				firstCol,
-				firstVal)
-			if err != nil {
-				return err
+			if e := tableToRunCsv(dbConn, modelDef, tblLt, cvtAll, csvDir, isIdCsv, isWriteUtf8bom, isNextRun && isAllInOne, firstCol, firstVal); e != nil {
+				return e
 			}
 		}
 	}
 
 	return nil
+}
+
+// write run parameter values into csv file
+func paramToRunCsv(
+	dbConn *sql.DB,
+	modelDef *db.ModelMeta,
+	paramLt *db.ReadParamLayout,
+	csvCvt db.CsvConverter,
+	csvDir string,
+	isIdCsv bool,
+	isWriteUtf8bom bool,
+	isAppend bool,
+	firstCol string,
+	firstVal string) error {
+
+	cLst, _, err := db.ReadParameter(dbConn, modelDef, paramLt)
+	if err != nil {
+		return err
+	}
+	if cLst.Len() <= 0 { // parameter data must exist for all parameters
+		return errors.New("missing run parameter values " + paramLt.Name + " run id: " + strconv.Itoa(paramLt.FromId))
+	}
+	return toCsvCellFile(
+		csvDir,
+		modelDef,
+		paramLt.Name,
+		isAppend,
+		csvCvt,
+		cLst,
+		isIdCsv,
+		isWriteUtf8bom,
+		firstCol,
+		firstVal)
+}
+
+// write output table expression values or accumulator values into csv file
+func tableToRunCsv(
+	dbConn *sql.DB,
+	modelDef *db.ModelMeta,
+	tblLt *db.ReadTableLayout,
+	csvCvt db.CsvConverter,
+	csvDir string,
+	isIdCsv bool,
+	isWriteUtf8bom bool,
+	isAppend bool,
+	firstCol string,
+	firstVal string) error {
+
+	cLst, _, err := db.ReadOutputTable(dbConn, modelDef, tblLt)
+	if err != nil {
+		return err
+	}
+	return toCsvCellFile(
+		csvDir,
+		modelDef,
+		tblLt.Name,
+		isAppend,
+		csvCvt,
+		cLst,
+		isIdCsv,
+		isWriteUtf8bom,
+		firstCol,
+		firstVal)
 }
