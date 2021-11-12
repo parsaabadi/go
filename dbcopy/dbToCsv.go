@@ -80,6 +80,7 @@ func dbToCsv(modelName string, modelDigest string, isAllInOne bool, runOpts *con
 	// write all model run data into csv files: parameters, output expressions and accumulators
 	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
+	isWriteAccum := !runOpts.Bool(noAccumCsv)
 
 	// use of run and set id's in directory names:
 	// if true then always use id's in the names, false never use it
@@ -93,7 +94,7 @@ func dbToCsv(modelName string, modelDigest string, isAllInOne bool, runOpts *con
 		}
 	}
 
-	if err = toRunListCsv(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom, doUseIdNames, isAllInOne); err != nil {
+	if err = toRunListCsv(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom, doUseIdNames, isAllInOne, isWriteAccum); err != nil {
 		return err
 	}
 

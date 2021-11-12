@@ -25,7 +25,8 @@ func toRunListCsv(
 	isIdCsv bool,
 	isWriteUtf8bom bool,
 	doUseIdNames useIdNames,
-	isAllInOne bool) error {
+	isAllInOne bool,
+	isWriteAccum bool) error {
 
 	// get all successfully completed model runs
 	rl, err := db.GetRunFullTextList(dbConn, modelDef.Model.ModelId, true, "")
@@ -46,7 +47,7 @@ func toRunListCsv(
 		}
 
 		err = toRunCsv(
-			dbConn, modelDef, &rl[k], outDir, doubleFmt, isIdCsv, isWriteUtf8bom, isUseIdNames, k > 0, isAllInOne)
+			dbConn, modelDef, &rl[k], outDir, doubleFmt, isIdCsv, isWriteUtf8bom, isUseIdNames, k > 0, isAllInOne, isWriteAccum)
 		if err != nil {
 			return err
 		}
@@ -370,7 +371,8 @@ func toRunCsv(
 	isWriteUtf8bom bool,
 	isUseIdNames bool,
 	isNextRun bool,
-	isAllInOne bool) error {
+	isAllInOne bool,
+	isWriteAccum bool) error {
 
 	// create run subdir under model dir
 	runId := meta.Run.RunId
@@ -515,51 +517,54 @@ func toRunCsv(
 		}
 
 		// write output table accumulators into csv file
-		tblLt.IsAccum = true
-		tblLt.IsAllAccum = false
+		if isWriteAccum {
 
-		cLst, _, err = db.ReadOutputTable(dbConn, modelDef, tblLt)
-		if err != nil {
-			return err
-		}
+			tblLt.IsAccum = true
+			tblLt.IsAllAccum = false
 
-		err = toCsvCellFile(
-			csvDir,
-			modelDef,
-			tblLt.Name,
-			isNextRun && isAllInOne,
-			cvtAcc,
-			cLst,
-			isIdCsv,
-			isWriteUtf8bom,
-			firstCol,
-			firstVal)
-		if err != nil {
-			return err
-		}
+			cLst, _, err = db.ReadOutputTable(dbConn, modelDef, tblLt)
+			if err != nil {
+				return err
+			}
 
-		// write all accumulators view into csv file
-		tblLt.IsAccum = true
-		tblLt.IsAllAccum = true
+			err = toCsvCellFile(
+				csvDir,
+				modelDef,
+				tblLt.Name,
+				isNextRun && isAllInOne,
+				cvtAcc,
+				cLst,
+				isIdCsv,
+				isWriteUtf8bom,
+				firstCol,
+				firstVal)
+			if err != nil {
+				return err
+			}
 
-		cLst, _, err = db.ReadOutputTable(dbConn, modelDef, tblLt)
-		if err != nil {
-			return err
-		}
+			// write all accumulators view into csv file
+			tblLt.IsAccum = true
+			tblLt.IsAllAccum = true
 
-		err = toCsvCellFile(
-			csvDir,
-			modelDef,
-			tblLt.Name,
-			isNextRun && isAllInOne,
-			cvtAll,
-			cLst,
-			isIdCsv,
-			isWriteUtf8bom,
-			firstCol,
-			firstVal)
-		if err != nil {
-			return err
+			cLst, _, err = db.ReadOutputTable(dbConn, modelDef, tblLt)
+			if err != nil {
+				return err
+			}
+
+			err = toCsvCellFile(
+				csvDir,
+				modelDef,
+				tblLt.Name,
+				isNextRun && isAllInOne,
+				cvtAll,
+				cLst,
+				isIdCsv,
+				isWriteUtf8bom,
+				firstCol,
+				firstVal)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
