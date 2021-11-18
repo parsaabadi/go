@@ -459,6 +459,7 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // downloadHandler is static file download handler from user home/out/download folder.
+// files served from home/out directory and URL is https://domain-name/download/file.name
 // Only GET requests expected.
 func downloadHandler(w http.ResponseWriter, r *http.Request) {
 	setContentType(http.FileServer(http.Dir(theCfg.downloadOutDir))).ServeHTTP(w, r)
@@ -880,7 +881,7 @@ func apiRunModelRoutes(router *vestigo.Router) {
 	router.Get("/api/run/log/model/:model/stamp/:stamp/start/:start/count/", http.NotFound)
 }
 
-// add http GET and POST web-service /api routes to download files from home/out/download folder
+// add http web-service /api routes to download and manage files from home/out/download folder
 func apiDownloadRoutes(router *vestigo.Router) {
 
 	// GET /api/download/log/all
@@ -909,6 +910,28 @@ func apiDownloadRoutes(router *vestigo.Router) {
 
 	// DELETE /api/download/start/delete/:folder
 	router.Delete("/api/download/start/delete/:folder", downloadAsyncDeleteHandler, logRequest)
+}
+
+// add http web-service /api routes to upload, download and manage files at home/user/files folder
+func apiFilesRoutes(router *vestigo.Router) {
+
+	// GET /api/files/list/:folder
+	// router.Get("/api/files/list/:path", fileListGetHandler, logRequest)
+
+	// GET /api/files/file/:path
+	// router.Get("/api/files/file/:path", fileDownloadGetHandler, logRequest)
+
+	// POST /api/files/file/:path
+	// router.Post("/api/files/file/:path", fileUploadPostHandler, logRequest)
+
+	// DELETE /api/files/file/:path
+	// router.Delete("/api/files/file/:path", fileDeleteHandler, logRequest)
+
+	// POST /api/files/folder/:path
+	// router.Post("/api/files/folder/:path", folderCreatePostHandler, logRequest)
+
+	// DELETE /api/files/folder/:path
+	// router.Delete("/api/files/folder/:path", folderDeleteHandler, logRequest)
 }
 
 // add web-service /api routes for user-specific request

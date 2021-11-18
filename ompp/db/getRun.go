@@ -483,7 +483,7 @@ func GetRunFull(dbConn *sql.DB, runRow *RunRow) (*RunMeta, error) {
 	meta.Opts = optRs[runRow.RunId]
 
 	// append run_parameter rows: Hid and sub-value count
-	q = "SELECT M.run_id, M.parameter_hid, M.sub_count" +
+	q = "SELECT M.run_id, M.parameter_hid, M.sub_count, M.value_digest" +
 		" FROM run_parameter M" +
 		" INNER JOIN run_lst H ON (H.run_id = M.run_id)" +
 		" WHERE H.run_id = " + strconv.Itoa(runRow.RunId) +
@@ -493,7 +493,7 @@ func GetRunFull(dbConn *sql.DB, runRow *RunRow) (*RunMeta, error) {
 		func(rows *sql.Rows) error {
 			var r runParam
 			var nId int
-			if err := rows.Scan(&nId, &r.ParamHid, &r.SubCount); err != nil {
+			if err := rows.Scan(&nId, &r.ParamHid, &r.SubCount, &r.ValueDigest); err != nil {
 				return err
 			}
 			r.Txt = []RunParamTxtRow{}
@@ -505,7 +505,7 @@ func GetRunFull(dbConn *sql.DB, runRow *RunRow) (*RunMeta, error) {
 	}
 
 	// append run_table rows: table Hid
-	q = "SELECT M.run_id, M.table_hid" +
+	q = "SELECT M.run_id, M.table_hid, M.value_digest" +
 		" FROM run_table M" +
 		" INNER JOIN run_lst H ON (H.run_id = M.run_id)" +
 		" WHERE H.run_id = " + strconv.Itoa(runRow.RunId) +
@@ -515,7 +515,7 @@ func GetRunFull(dbConn *sql.DB, runRow *RunRow) (*RunMeta, error) {
 		func(rows *sql.Rows) error {
 			var r runTable
 			var nId int
-			if err := rows.Scan(&nId, &r.TableHid); err != nil {
+			if err := rows.Scan(&nId, &r.TableHid, &r.ValueDigest); err != nil {
 				return err
 			}
 			meta.Table = append(meta.Table, r)
@@ -589,7 +589,7 @@ func GetRunFullText(dbConn *sql.DB, runRow *RunRow, langCode string) (*RunMeta, 
 	meta.Opts = optRs[runRow.RunId]
 
 	// append run_parameter rows: Hid and sub-value count
-	q = "SELECT M.run_id, M.parameter_hid, M.sub_count" +
+	q = "SELECT M.run_id, M.parameter_hid, M.sub_count, M.value_digest" +
 		" FROM run_parameter M" +
 		" INNER JOIN run_lst H ON (H.run_id = M.run_id)" +
 		runWhere +
@@ -601,7 +601,7 @@ func GetRunFullText(dbConn *sql.DB, runRow *RunRow, langCode string) (*RunMeta, 
 		func(rows *sql.Rows) error {
 			var r runParam
 			var nId int
-			if err := rows.Scan(&nId, &r.ParamHid, &r.SubCount); err != nil {
+			if err := rows.Scan(&nId, &r.ParamHid, &r.SubCount, &r.ValueDigest); err != nil {
 				return err
 			}
 			i := len(meta.Param)
@@ -637,7 +637,7 @@ func GetRunFullText(dbConn *sql.DB, runRow *RunRow, langCode string) (*RunMeta, 
 	}
 
 	// append run_table rows: table Hid
-	q = "SELECT M.run_id, M.table_hid" +
+	q = "SELECT M.run_id, M.table_hid, M.value_digest" +
 		" FROM run_table M" +
 		" INNER JOIN run_lst H ON (H.run_id = M.run_id)" +
 		runWhere +
@@ -647,7 +647,7 @@ func GetRunFullText(dbConn *sql.DB, runRow *RunRow, langCode string) (*RunMeta, 
 		func(rows *sql.Rows) error {
 			var r runTable
 			var nId int
-			if err := rows.Scan(&nId, &r.TableHid); err != nil {
+			if err := rows.Scan(&nId, &r.TableHid, &r.ValueDigest); err != nil {
 				return err
 			}
 			meta.Table = append(meta.Table, r)
@@ -786,7 +786,7 @@ func GetRunFullTextList(dbConn *sql.DB, modelId int, isSuccess bool, langCode st
 	}
 
 	// append run_parameter rows: parameter Hid and sub-value count
-	q = "SELECT M.run_id, M.parameter_hid, M.sub_count" +
+	q = "SELECT M.run_id, M.parameter_hid, M.sub_count, M.value_digest" +
 		" FROM run_parameter M" +
 		" INNER JOIN run_lst H ON (H.run_id = M.run_id)" +
 		" WHERE H.model_id = " + smId +
@@ -799,7 +799,7 @@ func GetRunFullTextList(dbConn *sql.DB, modelId int, isSuccess bool, langCode st
 		func(rows *sql.Rows) error {
 			var r runParam
 			var nId int
-			if err := rows.Scan(&nId, &r.ParamHid, &r.SubCount); err != nil {
+			if err := rows.Scan(&nId, &r.ParamHid, &r.SubCount, &r.ValueDigest); err != nil {
 				return err
 			}
 
@@ -840,7 +840,7 @@ func GetRunFullTextList(dbConn *sql.DB, modelId int, isSuccess bool, langCode st
 	}
 
 	// append run_table rows: table Hid
-	q = "SELECT M.run_id, M.table_hid" +
+	q = "SELECT M.run_id, M.table_hid, M.value_digest" +
 		" FROM run_table M" +
 		" INNER JOIN run_lst H ON (H.run_id = M.run_id)" +
 		" WHERE H.model_id = " + smId +
@@ -851,7 +851,7 @@ func GetRunFullTextList(dbConn *sql.DB, modelId int, isSuccess bool, langCode st
 		func(rows *sql.Rows) error {
 			var r runTable
 			var nId int
-			if err := rows.Scan(&nId, &r.TableHid); err != nil {
+			if err := rows.Scan(&nId, &r.TableHid, &r.ValueDigest); err != nil {
 				return err
 			}
 

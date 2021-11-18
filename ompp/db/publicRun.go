@@ -65,7 +65,8 @@ func (meta *RunMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunPub, err
 				Name: modelDef.Param[idx].Name,
 				Txt:  make([]LangNote, len(meta.Param[k].Txt)),
 			},
-			SubCount: meta.Param[k].SubCount,
+			SubCount:    meta.Param[k].SubCount,
+			ValueDigest: meta.Param[k].ValueDigest,
 		}
 		for j := range meta.Param[k].Txt {
 			pub.Param[k].Txt[j] = LangNote{
@@ -83,7 +84,10 @@ func (meta *RunMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunPub, err
 		if !ok {
 			return nil, errors.New("model run: " + strconv.Itoa(meta.Run.RunId) + " " + meta.Run.Name + ", table " + strconv.Itoa(meta.Table[k].TableHid) + " not found")
 		}
-		pub.Table[k] = TableRunPub{Name: modelDef.Table[idx].Name}
+		pub.Table[k] = TableRunPub{
+			Name:        modelDef.Table[idx].Name,
+			ValueDigest: meta.Table[k].ValueDigest,
+		}
 	}
 
 	// copy run_progress rows
@@ -156,6 +160,7 @@ func (pub *RunPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunMeta, er
 		}
 		meta.Param[k].ParamHid = modelDef.Param[idx].ParamHid
 		meta.Param[k].SubCount = pub.Param[k].SubCount
+		// meta.Param[k].ValueDigest = pub.Param[k].ValueDigest // do not use input value digest
 
 		// workset parameter value notes, use set id default zero
 		if len(pub.Param[k].Txt) > 0 {
@@ -178,6 +183,7 @@ func (pub *RunPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunMeta, er
 			return nil, errors.New("model run: " + pub.Name + " output table " + pub.Param[k].Name + " not found")
 		}
 		meta.Table[k].TableHid = modelDef.Table[idx].TableHid
+		// meta.Table[k].ValueDigest = modelDef.Table[idx].ValueDigest // do not use input value digest
 	}
 
 	// copy run_progress rows

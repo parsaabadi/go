@@ -60,8 +60,9 @@ type ParamRunSetTxtPub struct {
 // ParamRunSetPub is "public" run or workset parameter metadata for json import-export
 type ParamRunSetPub struct {
 	ParamRunSetTxtPub
-	SubCount     int // number of parameter sub-values
-	DefaultSubId int // default sub-value id for that parameter workset
+	SubCount     int    // number of parameter sub-values
+	DefaultSubId int    // default sub-value id for that parameter workset
+	ValueDigest  string // value digest, not empty only as result of select from run_parameter; input from "public" value digest is ignored
 }
 
 // ParamValuePub is "public" run or workset parameter metadata and values for json import-export.
@@ -74,7 +75,8 @@ type ParamValuePub struct {
 
 // TableRunPub is "public" metadata for output tables included in model run results
 type TableRunPub struct {
-	Name string // parameter name
+	Name        string // parameter name
+	ValueDigest string // value digest, not empty only as result of select from table_parameter; input from "public" value digest is ignored
 }
 
 // RunRow is model run row: run_lst table row.
@@ -106,9 +108,10 @@ type RunTxtRow struct {
 
 // runParam is a holder for run parameter Hid, subvalue count and run_parameter_txt rows
 type runParam struct {
-	ParamHid int              // parameter_hid INT NOT NULL
-	SubCount int              // number of parameter sub-values
-	Txt      []RunParamTxtRow // run_parameter_txt table rows
+	ParamHid    int              // parameter_hid INT NOT NULL
+	SubCount    int              // number of parameter sub-values
+	ValueDigest string           // value_digest  VARCHAR(32), -- if not NULL then digest of parameter value for the run
+	Txt         []RunParamTxtRow // run_parameter_txt table rows
 }
 
 // RunParamTxtRow is db row of run_parameter_txt
@@ -121,7 +124,8 @@ type RunParamTxtRow struct {
 
 // runTable is a holder for run table Hid where row exist in run_table
 type runTable struct {
-	TableHid int // table_hid INT NOT NULL
+	TableHid    int    // table_hid INT NOT NULL
+	ValueDigest string // value_digest  VARCHAR(32), -- if not NULL then digest of table value for the run
 }
 
 // RunProgress is a "public" sub-value run_progress db row
