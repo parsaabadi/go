@@ -169,7 +169,7 @@ func (mc *ModelCatalog) ParameterToCsvConverter(dn string, isCode bool, name str
 	return hdr, cvt, true
 }
 
-// TableToCsvConverter return output table cell to csv converter and csv header as staring array.
+// TableToCsvConverter return output table cell to csv converter and csv header as starting array.
 func (mc *ModelCatalog) TableToCsvConverter(dn string, isCode bool, name string, isAcc, isAllAcc bool) ([]string, func(interface{}, []string) error, bool) {
 
 	// if model digest-or-name is empty then return empty results

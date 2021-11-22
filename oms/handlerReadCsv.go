@@ -8,9 +8,6 @@ import (
 	"encoding/csv"
 	"net/http"
 	"net/url"
-	"strconv"
-
-	"github.com/openmpp/go/ompp/omppLog"
 
 	"github.com/openmpp/go/ompp/db"
 	"github.com/openmpp/go/ompp/helper"
@@ -251,37 +248,11 @@ func doTableGetCsvHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllAc
 func writeCsvResponse(
 	w http.ResponseWriter, name, src string, isBom bool, hdr []string, cLst *list.List, cvt func(interface{}, []string) error,
 ) {
-	// calculate Content-Length: start from BOM length, if BOM required
-	nb := 0
-	if isBom {
-		nb += len(helper.Utf8bom)
-	}
-
-	// Content-Length: csv header length
-	for k := range hdr {
-		nb += len(hdr[k]) + 1
-	}
-
-	// add each csv line length: comma-separated and lf as eol
-	cs := append([]string{}, hdr...)
-
-	for c := cLst.Front(); c != nil; c = c.Next() {
-		if err := cvt(c.Value, cs); err != nil {
-			omppLog.Log("Error at convert cell to csv: ", name, ": ", err.Error())
-			http.Error(w, "Error at convert cell value of: "+src+": "+name, http.StatusBadRequest)
-			return
-		}
-		for k := range cs {
-			nb += len(cs[k]) + 1
-		}
-	}
-
-	// set response headers
+	// set response headers: no Content-Length result in Transfer-Encoding: chunked
 	// todo: ETag instead no-cache and utf-8 file names
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	w.Header().Set("Content-Disposition", "attachment; filename="+`"`+url.QueryEscape(name)+".csv"+`"`)
 	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Content-Length", strconv.Itoa(nb))
 
 	// write csv body
 	if isBom {
@@ -297,6 +268,7 @@ func writeCsvResponse(
 		http.Error(w, "Error at csv write: "+src+": "+name, http.StatusBadRequest)
 		return
 	}
+	cs := make([]string, len(hdr))
 
 	for c := cLst.Front(); c != nil; c = c.Next() {
 		if err := cvt(c.Value, cs); err != nil {
