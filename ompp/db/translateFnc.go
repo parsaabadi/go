@@ -17,9 +17,9 @@ const leftDelims = ",(+-*/%^|&~!=<>"
 const rightDelims = ")+-*/%^|&~!=<>"
 
 // non-aggregation functions
-var simpleFncLst = []string{"OM_IF", "OM_DENOM"}
+var simpleFncLst = []string{"OM_IF", "OM_DIV_BY"}
 
-// translate (substitute) all non-aggregation functions: OM_DENOM OM_IF...
+// translate (substitute) all non-aggregation functions: OM_DIV_BY OM_IF...
 func translateAllSimpleFnc(expr string) (string, error) {
 
 	// do substitution of all non-aggregation functions by sql
@@ -192,7 +192,7 @@ func findFirstNameFnc(src string, fncNameLst []string) (int, int, error) {
 
 // translate (substitute) non-aggregation function:
 //
-// OM_DENOM(acc1)
+// OM_DIV_BY(acc1)
 //   =>
 //   CASE WHEN ABS(acc1) > 1.0e-37 THEN acc1 ELSE NULL END
 //
@@ -209,7 +209,7 @@ func translateSimpleFnc(name, arg string, src string) (string, error) {
 	case "OM_IF":
 		return "CASE WHEN " + arg + " END", nil
 
-	case "OM_DENOM":
+	case "OM_DIV_BY":
 		return "CASE WHEN ABS(" + arg + ") > 1.0e-37 THEN " + arg + " ELSE NULL END", nil
 	}
 	return "", errors.New("unknown non-aggregation function: " + name + " : " + src)

@@ -19,7 +19,7 @@ func translateToExprSql(modelDef *ModelMeta, table *TableMeta, layout *CompareLa
 		return "", e
 	}
 
-	// translate (substitute) all simple functions: OM_DENOM OM_IF...
+	// translate (substitute) all simple functions: OM_DIV_BY OM_IF...
 	expr, err := translateAllSimpleFnc(expr)
 	if err != nil {
 		return "", err
@@ -61,7 +61,7 @@ func translateToExprSql(modelDef *ModelMeta, table *TableMeta, layout *CompareLa
 	// substitute each table expression name with corresponding sql column name
 	/*
 		If this is base and variant expression:
-			(Expr1[base] + Expr1[variant] + Expr0[variant]) / OM_DENOM(Expr0[base])
+			(Expr1[base] + Expr1[variant] + Expr0[variant]) / OM_DIV_BY(Expr0[base])
 				==>
 			(Expr1[base] + Expr1[variant] + Expr0[variant]) / CASE WHEN ABS(Expr0[base]) > 1.0e-37 THEN Expr0[base] ELSE NULL END
 				==>
