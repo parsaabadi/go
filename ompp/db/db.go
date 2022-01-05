@@ -39,10 +39,10 @@ const (
 )
 
 // MinSchemaVersion is a minimal compatible db schema version
-const MinSchemaVersion = 103
+const MinSchemaVersion = 102
 
 // MaxSchemaVersion is a maximum compatible db schema version
-const MaxSchemaVersion = 103
+const MaxSchemaVersion = 102
 
 // Open database connection.
 //
