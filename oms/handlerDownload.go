@@ -152,6 +152,25 @@ func fileTreeDownloadGetHandler(w http.ResponseWriter, r *http.Request) {
 // Zip archive is the same as created by dbcopy command line utilty.
 // Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
 func modelDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
+	doModelDownloadPost(w, r, false)
+}
+
+// modelDownloadPostHandler initate creation of model zip archive in home/out/download folder.
+// POST /api/download/model/:model/no-acc
+// Zip archive is the same as created by dbcopy command line utilty.
+// Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
+// Accumulators CSV files are not included in result,
+// It is significantly faster to porduce the result archive, we but cannot import it back into the model database,
+// it is only to analyze model output values CSV data using some other tools
+func modelDownloadNoAccPostHandler(w http.ResponseWriter, r *http.Request) {
+	doModelDownloadPost(w, r, true)
+}
+
+// modelDownloadPostHandler initate creation of model zip archive in home/out/download folder.
+// POST /api/download/model/:model
+// Zip archive is the same as created by dbcopy command line utilty.
+// Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
+func doModelDownloadPost(w http.ResponseWriter, r *http.Request, isNoAcc bool) {
 
 	// url or query parameters
 	dn := getRequestParam(r, "model") // model digest-or-name
@@ -209,7 +228,7 @@ func modelDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// create model download files on separate thread
-	cmd, cmdMsg := makeModelDownloadCommand(baseName, mb, logPath)
+	cmd, cmdMsg := makeModelDownloadCommand(baseName, mb, logPath, isNoAcc)
 
 	go makeDownload(baseName, cmd, cmdMsg, logPath)
 
@@ -222,6 +241,25 @@ func modelDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 // Zip archive is the same as created by dbcopy command line utilty.
 // Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
 func runDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
+	doRunDownloadPost(w, r, false)
+}
+
+// runDownloadPostHandler initate creation of model run zip archive in home/out/download folder.
+// POST /api/download/model/:model/run/:run/no-acc
+// Zip archive is the same as created by dbcopy command line utilty.
+// Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
+// Accumulators CSV files are not included in result,
+// It is significantly faster to porduce the result archive, we but cannot import it back into the model database,
+// it is only to analyze model output values CSV data using some other tools
+func runDownloadNoAccPostHandler(w http.ResponseWriter, r *http.Request) {
+	doRunDownloadPost(w, r, true)
+}
+
+// runDownloadPostHandler initate creation of model run zip archive in home/out/download folder.
+// POST /api/download/model/:model/run/:run
+// Zip archive is the same as created by dbcopy command line utilty.
+// Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
+func doRunDownloadPost(w http.ResponseWriter, r *http.Request, isNoAcc bool) {
 
 	// url or query parameters
 	dn := getRequestParam(r, "model") // model digest-or-name
@@ -299,7 +337,7 @@ func runDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// create model run download files on separate thread
-	cmd, cmdMsg := makeRunDownloadCommand(baseName, mb, r0.RunId, logPath)
+	cmd, cmdMsg := makeRunDownloadCommand(baseName, mb, r0.RunId, logPath, isNoAcc)
 
 	go makeDownload(baseName, cmd, cmdMsg, logPath)
 

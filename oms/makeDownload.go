@@ -47,10 +47,13 @@ type PathItem struct {
 }
 
 // make dbcopy command to prepare full model download
-func makeModelDownloadCommand(baseName string, mb modelBasic, logPath string) (*exec.Cmd, string) {
+func makeModelDownloadCommand(baseName string, mb modelBasic, logPath string, isNoAcc bool) (*exec.Cmd, string) {
 
 	// make dbcopy message for user log
 	cmdMsg := "dbcopy -m " + mb.name + " -dbcopy.Zip -dbcopy.OutputDir " + theCfg.downloadDir
+	if isNoAcc {
+		cmdMsg += " -dbcopy.NoAccumulatorsCsv "
+	}
 
 	// make absolute path to download directory: dbcopy work directory is a model bin directory
 	absDownDir, err := filepath.Abs(theCfg.downloadDir)
@@ -60,19 +63,25 @@ func makeModelDownloadCommand(baseName string, mb modelBasic, logPath string) (*
 	}
 
 	// make dbcopy command
-	cmd := exec.Command(
-		theCfg.dbcopyPath, "-m", mb.name, "-dbcopy.Zip", "-dbcopy.OutputDir", absDownDir, "-dbcopy.FromSqlite", mb.dbPath,
-	)
+	cArgs := []string{"-m", mb.name, "-dbcopy.Zip", "-dbcopy.OutputDir", absDownDir, "-dbcopy.FromSqlite", mb.dbPath}
+	if isNoAcc {
+		cArgs = append(cArgs, "-dbcopy.NoAccumulatorsCsv")
+	}
+
+	cmd := exec.Command(theCfg.dbcopyPath, cArgs...)
 	cmd.Dir = mb.binDir // dbcopy work directory is a model bin directory
 
 	return cmd, cmdMsg
 }
 
 // make dbcopy command to prepare model run download
-func makeRunDownloadCommand(baseName string, mb modelBasic, runId int, logPath string) (*exec.Cmd, string) {
+func makeRunDownloadCommand(baseName string, mb modelBasic, runId int, logPath string, isNoAcc bool) (*exec.Cmd, string) {
 
 	// make dbcopy message for user log
 	cmdMsg := "dbcopy -m " + mb.name + " -dbcopy.RunId " + strconv.Itoa(runId) + " -dbcopy.Zip -dbcopy.OutputDir " + theCfg.downloadDir
+	if isNoAcc {
+		cmdMsg += " -dbcopy.NoAccumulatorsCsv "
+	}
 
 	// make absolute path to download directory: dbcopy work directory is a model bin directory
 	absDownDir, err := filepath.Abs(theCfg.downloadDir)
@@ -82,9 +91,12 @@ func makeRunDownloadCommand(baseName string, mb modelBasic, runId int, logPath s
 	}
 
 	// make dbcopy command
-	cmd := exec.Command(
-		theCfg.dbcopyPath, "-m", mb.name, "-dbcopy.RunId", strconv.Itoa(runId), "-dbcopy.Zip", "-dbcopy.OutputDir", absDownDir, "-dbcopy.FromSqlite", mb.dbPath,
-	)
+	cArgs := []string{"-m", mb.name, "-dbcopy.RunId", strconv.Itoa(runId), "-dbcopy.Zip", "-dbcopy.OutputDir", absDownDir, "-dbcopy.FromSqlite", mb.dbPath}
+	if isNoAcc {
+		cArgs = append(cArgs, "-dbcopy.NoAccumulatorsCsv")
+	}
+
+	cmd := exec.Command(theCfg.dbcopyPath, cArgs...)
 	cmd.Dir = mb.binDir // dbcopy work directory is a model bin directory
 
 	return cmd, cmdMsg
