@@ -36,7 +36,9 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLayou
 	}
 
 	// find expression or accumulator id by name
+	// if this is select from all accumulators view then find db internal column name
 	valId := -1
+	valAccCol := ""
 
 	if layout.ValueName != "" {
 
@@ -45,9 +47,10 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLayou
 			for i := range table.Acc {
 				if table.Acc[i].Name == layout.ValueName {
 					valId = table.Acc[i].AccId
+					valAccCol = table.Acc[i].colName
 				}
 			}
-			if valId < 0 {
+			if valId < 0 || valAccCol == "" {
 				return nil, nil, errors.New("output table accumulator not found: " + layout.Name + " " + layout.ValueName)
 			}
 
@@ -62,7 +65,6 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLayou
 				return nil, nil, errors.New("output table expression not found: " + layout.Name + " " + layout.ValueName)
 			}
 		}
-
 	}
 
 	// number of accumulator value columns: acc_value or acc0, acc1, acc2...
@@ -109,16 +111,45 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLayou
 	//
 	// or all accumulators view:
 	//
-	//   SELECT sub_id, dim0, dim1, acc0, acc1
-	//   FROM salarySex_d2012_820
+	//   WITH va1 AS
+	//   (
+	//     SELECT
+	//       run_id, sub_id, dim0, dim1, acc_value
+	//     FROM salarySex_a_2012820
+	//     WHERE acc_id = 1
+	//   ),
+	//   v_all_acc AS
+	//   (
+	//     SELECT
+	//       A.run_id,
+	//       A.sub_id,
+	//       A.dim0,
+	//       A.dim1,
+	//       A.acc_value  AS acc0,
+	//       A1.acc_value AS acc1,
+	//       (
+	//         A.acc_value / CASE WHEN ABS(A1.acc_value) > 1.0e-37 THEN A1.acc_value ELSE NULL END
+	//       ) AS expr0
+	//     FROM salarySex_a_2012820 A
+	//     INNER JOIN va1 A1 ON (A1.run_id = A.run_id AND A1.sub_id = A.sub_id AND A1.dim0 = A.dim0 AND A1.dim1 = A.dim1)
+	//     WHERE A.acc_id = 0
+	//   )
+	//   SELECT
+	//     run_id, sub_id, dim0, dim1, acc0, acc1, expr0
+	//   FROM va_all_acc
 	//   WHERE run_id =
 	//   (
 	//     SELECT base_run_id FROM run_table WHERE run_id = 2 AND table_hid = 12345
 	//   )
 	//   AND dim1 IN (10, 20, 30, 40)
-	//   ORDER BY 1, 2, 3
+	//   ORDER BY 1, 2, 3, 4
 	//
-	q := "SELECT"
+	q := ""
+	if layout.IsAllAccum {
+		q = sqlAccAllViewAsWith(table) + " "
+	}
+
+	q += "SELECT"
 
 	if layout.IsAccum {
 		if !layout.IsAllAccum {
@@ -130,7 +161,7 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLayou
 	}
 
 	for k := range table.Dim {
-		q += ", " + table.Dim[k].Name
+		q += ", " + table.Dim[k].colName
 	}
 
 	if !layout.IsAccum {
@@ -139,14 +170,14 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLayou
 		if !layout.IsAllAccum {
 			q += ", acc_value FROM " + table.DbAccTable
 		} else {
-			if layout.ValueName != "" {
-				q += ", " + layout.ValueName
+			if valAccCol != "" {
+				q += ", " + valAccCol
 			} else {
 				for k := range table.Acc {
-					q += ", " + table.Acc[k].Name
+					q += ", " + table.Acc[k].colName
 				}
 			}
-			q += " FROM " + table.DbAccAllView
+			q += " FROM v_all_acc"
 		}
 	}
 
@@ -179,7 +210,7 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLayou
 		}
 
 		f, err := makeDimFilter(
-			modelDef, &layout.Filter[k], "", table.Dim[dix].Name, table.Dim[dix].typeOf, table.Dim[dix].IsTotal, "output table "+table.Name)
+			modelDef, &layout.Filter[k], "", table.Dim[dix].Name, table.Dim[dix].colName, table.Dim[dix].typeOf, table.Dim[dix].IsTotal, "output table "+table.Name)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -203,7 +234,7 @@ func ReadOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLayou
 		}
 
 		f, err := makeDimIdFilter(
-			modelDef, &layout.FilterById[k], "", table.Dim[dix].Name, table.Dim[dix].typeOf, "output table "+table.Name)
+			modelDef, &layout.FilterById[k], "", table.Dim[dix].Name, table.Dim[dix].colName, table.Dim[dix].typeOf, "output table "+table.Name)
 		if err != nil {
 			return nil, nil, err
 		}

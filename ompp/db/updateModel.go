@@ -346,7 +346,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 			}
 
 			// create parameter tables: parameter run values and parameter workset values
-			rSql, wSql, err := paramCreateTable(dbFacet, &modelDef.Param[idx])
+			rSql, wSql, err := sqlCreateParamTable(dbFacet, &modelDef.Param[idx])
 			if err != nil {
 				return err
 			}
@@ -572,10 +572,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 			}
 
 			// create db tables: output table expression(s) values and accumulator(s) values
-			eSql, aSql, err := outTableCreateTable(dbFacet, &modelDef.Table[idx])
-			if err != nil {
-				return err
-			}
+			eSql, aSql := sqlCreateOutTable(dbFacet, &modelDef.Table[idx])
 			err = TrxUpdate(trx, eSql)
 			if err != nil {
 				return err
@@ -586,10 +583,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 			}
 
 			// create db views: output table all accumulators view
-			avSql, err := outTableCreateAccAllView(dbFacet, &modelDef.Table[idx])
-			if err != nil {
-				return err
-			}
+			avSql := sqlCreateAccAllView(dbFacet, &modelDef.Table[idx])
 			err = TrxUpdate(trx, avSql)
 			if err != nil {
 				return err
@@ -707,7 +701,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 	return nil
 }
 
-// paramCreateTable return create table for parameter run values and workset values:
+// sqlCreateParamTable return create table for parameter run values and workset values:
 //
 // CREATE TABLE ageSex_p20120817
 // (
@@ -728,11 +722,11 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 //  param_value FLOAT NOT NULL, -- can be NULL
 //  PRIMARY KEY (set_id, sub_id, dim0, dim1)
 // )
-func paramCreateTable(dbFacet Facet, param *ParamMeta) (string, string, error) {
+func sqlCreateParamTable(dbFacet Facet, param *ParamMeta) (string, string, error) {
 
 	colPart := ""
 	for k := range param.Dim {
-		colPart += param.Dim[k].Name + " INT NOT NULL, "
+		colPart += param.Dim[k].colName + " INT NOT NULL, "
 	}
 
 	tname, err := param.typeOf.sqlColumnType(dbFacet)
@@ -747,7 +741,7 @@ func paramCreateTable(dbFacet Facet, param *ParamMeta) (string, string, error) {
 
 	keyPart := ""
 	for k := range param.Dim {
-		keyPart += ", " + param.Dim[k].Name
+		keyPart += ", " + param.Dim[k].colName
 	}
 
 	rSql := dbFacet.createTableIfNotExist(param.DbRunTable, "("+
@@ -765,7 +759,7 @@ func paramCreateTable(dbFacet Facet, param *ParamMeta) (string, string, error) {
 	return rSql, wSql, nil
 }
 
-// outTableCreateTable return create table for output table expressions and accumulators:
+// sqlCreateOutTable return create table for output table expressions and accumulators:
 //
 // CREATE TABLE salarySex_v20120820
 // (
@@ -787,16 +781,16 @@ func paramCreateTable(dbFacet Facet, param *ParamMeta) (string, string, error) {
 //  acc_value FLOAT NULL,
 //  PRIMARY KEY (run_id, acc_id, sub_id, dim0, dim1)
 // )
-func outTableCreateTable(dbFacet Facet, meta *TableMeta) (string, string, error) {
+func sqlCreateOutTable(dbFacet Facet, meta *TableMeta) (string, string) {
 
 	colPart := ""
 	for k := range meta.Dim {
-		colPart += meta.Dim[k].Name + " INT NOT NULL, "
+		colPart += meta.Dim[k].colName + " INT NOT NULL, "
 	}
 
 	keyPart := ""
 	for k := range meta.Dim {
-		keyPart += ", " + meta.Dim[k].Name
+		keyPart += ", " + meta.Dim[k].colName
 	}
 
 	eSql := dbFacet.createTableIfNotExist(meta.DbExprTable, "("+
@@ -814,56 +808,276 @@ func outTableCreateTable(dbFacet Facet, meta *TableMeta) (string, string, error)
 		"acc_value "+dbFacet.floatType()+" NULL, "+
 		"PRIMARY KEY (run_id, acc_id, sub_id"+keyPart+")"+
 		")")
-	return eSql, aSql, nil
+	return eSql, aSql
 }
 
-// outTableCreateAccAllView return create view for all accumulators view:
+// sqlCreateAccAllView return create view for all accumulators view:
 //
-// CREATE VIEW salarySex_d_2012820
+// CREATE VIEW IF NOT EXISTS T04_FertilityRatesByAgeGroup_d10612268
 // AS
+// WITH va1 AS
+// (
+//   SELECT
+//     run_id, sub_id, dim0, dim1, acc_value
+//   FROM salarySex_a_2012820
+//   WHERE acc_id = 1
+// )
 // SELECT
-//   A.run_id, A.sub_id, A.dim0, A.dim1,
-//   A.acc_value AS acc0,
+//   A.run_id,
+//   A.sub_id,
+//   A.dim0       AS "Year",
+//   A.dim1       AS "Age Group",
+//   A.acc_value  AS "Acc0",
+//   A1.acc_value AS "Average Income",
 //   (
-//     SELECT A1.acc_value FROM salarySex_a_2012820 A1
-//     WHERE A1.run_id = A.run_id AND A1.sub_id = A.sub_id AND A1.dim0 = A.dim0 AND A1.dim1 = A.dim1
-//     AND A1.acc_id = 1
-//   ) AS acc1,
-//   (
-//     (
-//       A.acc_value
-//     )
-//     +
-//     (
-//       SELECT A1.acc_value FROM salarySex_a_2012820 A1
-//       WHERE A1.run_id = A.run_id AND A1.sub_id = A.sub_id AND A1.dim0 = A.dim0 AND A1.dim1 = A.dim1
-//       AND A1.acc_id = 1
-//     )
-//   ) AS acc2
+//     A.acc_value / CASE WHEN ABS(A1.acc_value) > 1.0e-37 THEN A1.acc_value ELSE NULL END
+//   ) AS "Expr0"
 // FROM salarySex_a_2012820 A
+// INNER JOIN va1 A1 ON (A1.run_id = A.run_id AND A1.sub_id = A.sub_id AND A1.dim0 = A.dim0 AND A1.dim1 = A.dim1)
 // WHERE A.acc_id = 0;
 //
-func outTableCreateAccAllView(dbFacet Facet, meta *TableMeta) (string, error) {
+func sqlCreateAccAllView(dbFacet Facet, meta *TableMeta) string {
 
-	// start view body with run id, sub id and dimensions
+	sql := withPartOfAllAccView(meta)
+	if sql != "" {
+		sql += " "
+	}
+	sql += mainSelectOfAllAccView(meta, false) + ";"
+
+	return dbFacet.createViewIfNotExist(meta.DbAccAllView, sql)
+}
+
+// sqlAccAllViewAsWith return all accumulators view as WITH cte sql.
+// All dimesions, accumulators and expressions columns are AS db column names: dim0, dim1, acc0, expr0
+//
+// WITH va1 AS
+// (
+//   SELECT .... FROM salarySex_a_2012820 WHERE acc_id = 1
+// ),
+// v_all_acc AS
+// (
+//   SELECT .... FROM salarySex_a_2012820 A INNER JOIN va1 A1 ON (....) WHERE A.acc_id = 0
+// )
+//
+func sqlAccAllViewAsWith(meta *TableMeta) string {
+
+	sql := withPartOfAllAccView(meta)
+	if sql != "" {
+		sql += ","
+	} else {
+		sql += "WITH"
+	}
+	sql += " v_all_acc AS (" + mainSelectOfAllAccView(meta, true) + ")"
+
+	return sql
+}
+
+// withPartOfAllAccView return WITH part of all accumulators view.
+//
+// WITH va1 AS
+// (
+//   SELECT
+//     run_id, sub_id, dim0, dim1, acc_value
+//   FROM salarySex_a_2012820
+//   WHERE acc_id = 1
+// )
+// SELECT .... FROM salarySex_a_2012820 A INNER JOIN va1 A1 ON (....) WHERE A.acc_id = 0
+//
+func withPartOfAllAccView(meta *TableMeta) string {
+
+	// start from WITH for native accumulators CTE, excluding first accumulator
+	sql := ""
+	for k := range meta.Acc {
+
+		if k < 1 || meta.Acc[k].IsDerived {
+			continue // skip first accumulator and all derived accumultors
+		}
+
+		if sql == "" {
+			sql = "WITH"
+		} else {
+			sql += ","
+		}
+		sql += " va" + strconv.Itoa(k) + " AS (" + meta.Acc[k].AccSql + ")"
+	}
+
+	return sql
+}
+
+// mainSelectOfAllAccView return main SELECT part of all accumulators view.
+//
+// If isColumnNames is true then use internal db column names: dim0, dim1, acc0, expr0
+// else use model definition names: "Year", "Age Group", "Acc0", "Average Income"
+//
+// WITH va1 AS (....)
+// SELECT
+//   A.run_id,
+//   A.sub_id,
+//   A.dim0       AS "Year",
+//   A.dim1       AS "Age Group",
+//   A.acc_value  AS "acc0",
+//   A1.acc_value AS "acc1",
+//   (
+//     A.acc_value / CASE WHEN ABS(A1.acc_value) > 1.0e-37 THEN A1.acc_value ELSE NULL END
+//   ) AS "Expr0"
+// FROM salarySex_a_2012820 A
+// INNER JOIN va1 A1 ON (A1.run_id = A.run_id AND A1.sub_id = A.sub_id AND A1.dim0 = A.dim0 AND A1.dim1 = A.dim1)
+// WHERE A.acc_id = 0
+//
+func mainSelectOfAllAccView(meta *TableMeta, isColumnNames bool) string {
+
+	// start main SELECT body with run id, sub id and dimensions
 	sql := "SELECT A.run_id, A.sub_id"
 
 	for k := range meta.Dim {
-		sql += ", A." + meta.Dim[k].Name
+		sql += ", A." + meta.Dim[k].colName
+		if !isColumnNames {
+			sql += " AS \"" + meta.Dim[k].Name + "\""
+		}
 	}
 
-	// append accumulators as sql subqueries
+	// append accumulators: A.acc_value AS acc0, A1.acc_value AS "Year", (A.acc_value + A1.acc_value) AS expr0
 	for k := range meta.Acc {
-		sql += ", (" + meta.Acc[k].AccSql + ") AS " + meta.Acc[k].Name
+
+		if !meta.Acc[k].IsDerived && k < 1 {
+			sql += ", A.acc_value" // first native accumulator alias A.
+		}
+		if !meta.Acc[k].IsDerived && k >= 1 {
+			sql += ", A" + strconv.Itoa(k) + ".acc_value" // all other native accumulators
+		}
+		if meta.Acc[k].IsDerived {
+			sql += ", (" + meta.Acc[k].AccSql + ")" // derived accumulator expression
+		}
+
+		if !isColumnNames {
+			sql += " AS \"" + meta.Acc[k].Name + "\""
+		} else {
+			sql += " AS " + meta.Acc[k].colName
+		}
 	}
 
-	// main accumulator table
-	// select first accumulator from main table
-	// all other accumulators joined to the first by run id, sub id and dimensions
-	sql += " FROM " + meta.DbAccTable + " A" +
-		" WHERE A.acc_id = " + strconv.Itoa(meta.Acc[0].AccId) + ";"
+	// from accumulator table inner join all CTE for native accumulators
+	sql += " FROM " + meta.DbAccTable + " A"
 
-	return dbFacet.createViewIfNotExist(meta.DbAccAllView, sql), nil
+	for k := range meta.Acc {
+
+		if k < 1 || meta.Acc[k].IsDerived {
+			continue // skip first accumulator and all derived accumultors
+		}
+		alias := "A" + strconv.Itoa(k)
+
+		sql += " INNER JOIN va" + strconv.Itoa(k) + " " + alias + " ON (" +
+			alias + ".run_id = A.run_id AND " + alias + ".sub_id = A.sub_id"
+
+		for j := range meta.Dim {
+			sql += " AND " + alias + "." + meta.Dim[j].colName + " = A." + meta.Dim[j].colName
+		}
+		sql += ")"
+	}
+
+	sql += " WHERE A.acc_id = " + strconv.Itoa(meta.Acc[0].AccId)
+
+	return sql
+}
+
+// outTableCreateAccAllView return SELEST for all accumulators view.
+// If isColumnNames is true then use internal db column names: dim0, dim1, acc0, expr0
+// else use model definition names: "Year", "Age Group", "Acc0", "Average Income"
+//
+// WITH va1 AS
+// (
+//   SELECT
+//     run_id, sub_id, dim0, dim1, acc_value
+//   FROM salarySex_a_2012820
+//   WHERE acc_id = 1
+// )
+// SELECT
+//   A.run_id,
+//   A.sub_id,
+//   A.dim0       AS "Year",
+//   A.dim1       AS "Age Group",
+//   A.acc_value  AS "acc0",
+//   A1.acc_value AS "acc1",
+//   (
+//     A.acc_value / CASE WHEN ABS(A1.acc_value) > 1.0e-37 THEN A1.acc_value ELSE NULL END
+//   ) AS "Expr0"
+// FROM salarySex_a_2012820 A
+// INNER JOIN va1 A1 ON (A1.run_id = A.run_id AND A1.sub_id = A.sub_id AND A1.dim0 = A.dim0 AND A1.dim1 = A.dim1)
+// WHERE A.acc_id = 0
+//
+func outTableSelectAccAllView(meta *TableMeta, isColumnNames bool) string {
+
+	// start from WITH for native accumulators CTE, excluding first accumulator
+	sql := ""
+	for k := range meta.Acc {
+
+		if k < 1 || meta.Acc[k].IsDerived {
+			continue // skip first accumulator and all derived accumultors
+		}
+
+		if sql == "" {
+			sql = "WITH"
+		} else {
+			sql += ","
+		}
+		sql += " va" + strconv.Itoa(k) + " (" + meta.Acc[k].AccSql + ")"
+	}
+
+	// start main SELECT body with run id, sub id and dimensions
+	if sql != "" {
+		sql += " "
+	}
+	sql += "SELECT A.run_id, A.sub_id"
+
+	for k := range meta.Dim {
+		sql += ", A." + meta.Dim[k].colName
+		if !isColumnNames {
+			sql += " AS \"" + meta.Dim[k].Name + "\""
+		}
+	}
+
+	// append accumulators: A.acc_value AS acc0, A1.acc_value AS "Year", (A.acc_value + A1.acc_value) AS expr0
+	for k := range meta.Acc {
+
+		if !meta.Acc[k].IsDerived && k < 1 {
+			sql += ", A.acc_value" // first native accumulator alias A.
+		}
+		if !meta.Acc[k].IsDerived && k >= 1 {
+			sql += ", A" + strconv.Itoa(k) + ".acc_value" // all other native accumulators
+		}
+		if meta.Acc[k].IsDerived {
+			sql += ", (" + meta.Acc[k].AccSql + ")" // derived accumulator expression
+		}
+
+		if !isColumnNames {
+			sql += " AS \"" + meta.Acc[k].Name + "\""
+		} else {
+			sql += " AS " + meta.Acc[k].colName
+		}
+	}
+
+	// from accumulator table inner join all CTE for native accumulators
+	sql += " FROM " + meta.DbAccTable + " A"
+
+	for k := range meta.Acc {
+
+		if k < 1 || meta.Acc[k].IsDerived {
+			continue // skip first accumulator and all derived accumultors
+		}
+		alias := "A" + strconv.Itoa(k)
+
+		sql += " INNER JOIN va" + strconv.Itoa(k) + " " + alias + " ON (" +
+			alias + ".run_id = A.run_id AND " + alias + ".sub_id = A.sub_id"
+
+		for j := range meta.Dim {
+			sql += " AND " + alias + "." + meta.Dim[j].colName + " = A." + meta.Dim[j].colName
+		}
+		sql += ")"
+	}
+
+	sql += " WHERE A.acc_id = " + strconv.Itoa(meta.Acc[0].AccId)
+
+	return sql
 }
 
 // return prefix and suffix for parameter value db tables or output table value db tables.

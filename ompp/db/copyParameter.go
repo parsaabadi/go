@@ -186,15 +186,15 @@ func dbCopyParameterFromRun(trx *sql.Tx, ws *WorksetRow, pm *ParamMeta, isReplac
 	}
 
 	// do copy parameter values from base model run
-	sDim := ""
+	dimCols := ""
 	for k := range pm.Dim {
-		sDim += pm.Dim[k].Name + ", "
+		dimCols += pm.Dim[k].colName + ", "
 	}
 
 	err = TrxUpdate(trx,
 		"INSERT INTO "+pm.DbSetTable+
-			" (set_id, sub_id, "+sDim+"param_value)"+
-			" SELECT "+sDstId+", sub_id, "+sDim+"param_value"+
+			" (set_id, sub_id, "+dimCols+"param_value)"+
+			" SELECT "+sDstId+", sub_id, "+dimCols+"param_value"+
 			" FROM "+pm.DbRunTable+
 			" WHERE run_id = "+strconv.Itoa(baseRunId))
 	if err != nil {
@@ -354,15 +354,15 @@ func dbCopyParameterFromWorkset(trx *sql.Tx, dstWs *WorksetRow, pm *ParamMeta, i
 	}
 
 	// do copy parameter values from base model run
-	sDim := ""
+	dimCols := ""
 	for k := range pm.Dim {
-		sDim += pm.Dim[k].Name + ", "
+		dimCols += pm.Dim[k].colName + ", "
 	}
 
 	if isFromRun {
 		q = "INSERT INTO " + pm.DbSetTable +
-			" (set_id, sub_id, " + sDim + "param_value)" +
-			" SELECT " + sDstId + ", sub_id, " + sDim + "param_value" +
+			" (set_id, sub_id, " + dimCols + "param_value)" +
+			" SELECT " + sDstId + ", sub_id, " + dimCols + "param_value" +
 			" FROM " + pm.DbRunTable +
 			" WHERE run_id = " +
 			"(" +
@@ -370,8 +370,8 @@ func dbCopyParameterFromWorkset(trx *sql.Tx, dstWs *WorksetRow, pm *ParamMeta, i
 			")"
 	} else {
 		q = "INSERT INTO " + pm.DbSetTable +
-			" (set_id, sub_id, " + sDim + "param_value)" +
-			" SELECT " + sDstId + ", sub_id, " + sDim + "param_value" +
+			" (set_id, sub_id, " + dimCols + "param_value)" +
+			" SELECT " + sDstId + ", sub_id, " + dimCols + "param_value" +
 			" FROM " + pm.DbSetTable +
 			" WHERE set_id = " + sSrcId
 	}

@@ -350,7 +350,7 @@ func translateToExprSql(modelDef *ModelMeta, table *TableMeta, layout *CompareLa
 		}
 
 		f, err := makeDimFilter(
-			modelDef, &layout.Filter[k], "C", table.Dim[dix].Name, table.Dim[dix].typeOf, table.Dim[dix].IsTotal, "output table "+table.Name)
+			modelDef, &layout.Filter[k], "C", table.Dim[dix].Name, table.Dim[dix].colName, table.Dim[dix].typeOf, table.Dim[dix].IsTotal, "output table "+table.Name)
 		if err != nil {
 			return "", err
 		}
@@ -374,7 +374,7 @@ func translateToExprSql(modelDef *ModelMeta, table *TableMeta, layout *CompareLa
 		}
 
 		f, err := makeDimIdFilter(
-			modelDef, &layout.FilterById[k], "C", table.Dim[dix].Name, table.Dim[dix].typeOf, "output table "+table.Name)
+			modelDef, &layout.FilterById[k], "C", table.Dim[dix].Name, table.Dim[dix].colName, table.Dim[dix].typeOf, "output table "+table.Name)
 		if err != nil {
 			return "", err
 		}

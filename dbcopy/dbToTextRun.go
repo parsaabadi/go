@@ -101,8 +101,9 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
 	isWriteUtf8bom := runOpts.Bool(useUtf8CsvArgKey)
+	isWriteAccum := !runOpts.Bool(noAccumCsv)
 
-	if err = toRunText(srcDb, modelDef, meta, outDir, csvName, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames); err != nil {
+	if err = toRunText(srcDb, modelDef, meta, outDir, csvName, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames, isWriteAccum); err != nil {
 		return err
 	}
 
@@ -120,7 +121,14 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 
 // toRunListText write all model runs parameters and output tables into csv files, each run in separate subdirectory
 func toRunListText(
-	dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleFmt string, isIdCsv bool, isWriteUtf8bom bool, isUseIdNames bool) error {
+	dbConn *sql.DB,
+	modelDef *db.ModelMeta,
+	outDir string,
+	doubleFmt string,
+	isIdCsv bool,
+	isWriteUtf8bom bool,
+	isUseIdNames bool,
+	isWriteAccum bool) error {
 
 	// get all successfully completed model runs
 	rl, err := db.GetRunFullTextList(dbConn, modelDef.Model.ModelId, true, "")
@@ -130,7 +138,7 @@ func toRunListText(
 
 	// read all run parameters, output accumulators and expressions and dump it into csv files
 	for k := range rl {
-		err = toRunText(dbConn, modelDef, &rl[k], outDir, "", doubleFmt, isIdCsv, isWriteUtf8bom, isUseIdNames)
+		err = toRunText(dbConn, modelDef, &rl[k], outDir, "", doubleFmt, isIdCsv, isWriteUtf8bom, isUseIdNames, isWriteAccum)
 		if err != nil {
 			return err
 		}
@@ -150,7 +158,8 @@ func toRunText(
 	doubleFmt string,
 	isIdCsv bool,
 	isWriteUtf8bom bool,
-	isUseIdNames bool) error {
+	isUseIdNames bool,
+	isWriteAccum bool) error {
 
 	// convert db rows into "public" format
 	runId := meta.Run.RunId
@@ -235,33 +244,36 @@ func toRunText(
 		}
 
 		// write output table accumulators into csv file
-		tblLt.IsAccum = true
-		tblLt.IsAllAccum = false
+		if isWriteAccum {
 
-		cLst, _, err = db.ReadOutputTable(dbConn, modelDef, tblLt)
-		if err != nil {
-			return err
-		}
+			tblLt.IsAccum = true
+			tblLt.IsAllAccum = false
 
-		err = toCsvCellFile(
-			csvDir, modelDef, tblLt.Name, false, cvtAcc, cLst, isIdCsv, isWriteUtf8bom, "", "")
-		if err != nil {
-			return err
-		}
+			cLst, _, err = db.ReadOutputTable(dbConn, modelDef, tblLt)
+			if err != nil {
+				return err
+			}
 
-		// write all accumulators view into csv file
-		tblLt.IsAccum = true
-		tblLt.IsAllAccum = true
+			err = toCsvCellFile(
+				csvDir, modelDef, tblLt.Name, false, cvtAcc, cLst, isIdCsv, isWriteUtf8bom, "", "")
+			if err != nil {
+				return err
+			}
 
-		cLst, _, err = db.ReadOutputTable(dbConn, modelDef, tblLt)
-		if err != nil {
-			return err
-		}
+			// write all accumulators view into csv file
+			tblLt.IsAccum = true
+			tblLt.IsAllAccum = true
 
-		err = toCsvCellFile(
-			csvDir, modelDef, tblLt.Name, false, cvtAll, cLst, isIdCsv, isWriteUtf8bom, "", "")
-		if err != nil {
-			return err
+			cLst, _, err = db.ReadOutputTable(dbConn, modelDef, tblLt)
+			if err != nil {
+				return err
+			}
+
+			err = toCsvCellFile(
+				csvDir, modelDef, tblLt.Name, false, cvtAll, cLst, isIdCsv, isWriteUtf8bom, "", "")
+			if err != nil {
+				return err
+			}
 		}
 	}
 

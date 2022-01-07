@@ -106,6 +106,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
 	isWriteUtf8bom := runOpts.Bool(useUtf8CsvArgKey)
+	isWriteAccum := !runOpts.Bool(noAccumCsv)
 
 	for j := range meta.TaskRun {
 	nextRun:
@@ -142,7 +143,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 			}
 
 			// write model run metadata into json, parameters and output result values into csv files
-			if err = toRunText(srcDb, modelDef, rm, outDir, "", dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames); err != nil {
+			if err = toRunText(srcDb, modelDef, rm, outDir, "", dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames, isWriteAccum); err != nil {
 				return err
 			}
 		}

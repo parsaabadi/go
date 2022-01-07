@@ -242,13 +242,14 @@ type ParamTxtRow struct {
 
 // ParamDimsRow is db row of parameter_dims join to model_parameter_dic table
 type ParamDimsRow struct {
-	ModelId int       // model_id           INT         NOT NULL
-	ParamId int       // model_parameter_id INT         NOT NULL
-	DimId   int       // dim_id             INT         NOT NULL
-	Name    string    // dim_name           VARCHAR(32) NOT NULL
-	TypeId  int       // model_type_id      INT         NOT NULL
+	ModelId int       // model_id           INT          NOT NULL
+	ParamId int       // model_parameter_id INT          NOT NULL
+	DimId   int       // dim_id             INT          NOT NULL
+	Name    string    // dim_name           VARCHAR(255) NOT NULL
+	TypeId  int       // model_type_id      INT          NOT NULL
 	typeOf  *TypeMeta // type of dimension
 	sizeOf  int       // dimension size as enum count, zero if type is simple
+	colName string    // db column name: dim1
 }
 
 // ParamDimsTxtRow is db row of parameter_dims_txt join to model_parameter_dic table
@@ -295,14 +296,15 @@ type TableTxtRow struct {
 
 // TableDimsRow is db row of table_dims join to model_table_dic table
 type TableDimsRow struct {
-	ModelId int       // model_id       INT         NOT NULL
-	TableId int       // model_table_id INT         NOT NULL
-	DimId   int       // dim_id         INT         NOT NULL
-	Name    string    // dim_name       VARCHAR(32) NOT NULL
-	TypeId  int       // model_type_id  INT         NOT NULL
-	IsTotal bool      // is_total       SMALLINT    NOT NULL
-	DimSize int       // dim_size       INT         NOT NULL
+	ModelId int       // model_id       INT          NOT NULL
+	TableId int       // model_table_id INT          NOT NULL
+	DimId   int       // dim_id         INT          NOT NULL
+	Name    string    // dim_name       VARCHAR(255) NOT NULL
+	TypeId  int       // model_type_id  INT          NOT NULL
+	IsTotal bool      // is_total       SMALLINT     NOT NULL
+	DimSize int       // dim_size       INT          NOT NULL
 	typeOf  *TypeMeta // type of dimension
+	colName string    // db column name: dim1
 }
 
 // TableDimsTxtRow is db row of table_dims_txt join to model_table_dic table
@@ -318,12 +320,13 @@ type TableDimsTxtRow struct {
 // TableAccRow is db row of table_acc join to model_table_dic table
 type TableAccRow struct {
 	ModelId   int    // model_id       INT          NOT NULL
-	TableId   int    // model_table_id INT          NOT NULL
-	AccId     int    // acc_id         INT          NOT NULL
-	Name      string // acc_name       VARCHAR(32)  NOT NULL
-	IsDerived bool   // is_derived     SMALLINT     NOT NULL
+	TableId   int    // model_table_id INT           NOT NULL
+	AccId     int    // acc_id         INT           NOT NULL
+	Name      string // acc_name       VARCHAR(255)  NOT NULL
+	IsDerived bool   // is_derived     SMALLINT      NOT NULL
 	SrcAcc    string // acc_src        VARCHAR(255)  NOT NULL
 	AccSql    string // acc_sql        VARCHAR(2048) NOT NULL
+	colName   string // internal db column name: expr1
 }
 
 // TableAccTxtRow is db row of table_acc_txt join to model_table_dic table
@@ -341,10 +344,11 @@ type TableExprRow struct {
 	ModelId  int    // model_id       INT           NOT NULL
 	TableId  int    // model_table_id INT           NOT NULL
 	ExprId   int    // expr_id        INT           NOT NULL
-	Name     string // expr_name      VARCHAR(32)   NOT NULL
+	Name     string // expr_name      VARCHAR(255)  NOT NULL
 	Decimals int    // expr_decimals  INT           NOT NULL
 	SrcExpr  string // expr_src       VARCHAR(255)  NOT NULL
 	ExprSql  string // expr_sql       VARCHAR(2048) NOT NULL
+	colName  string // internal db column name: expr1
 }
 
 // TableExprTxtRow is db row of table_expr_txt join to model_table_dic table

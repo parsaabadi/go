@@ -23,6 +23,49 @@ func (meta *LangMeta) updateInternals() {
 	}
 }
 
+// updateParameterColumnNames sets internal db column names for parameter dimensions: dim0, dim1
+func (param *ParamMeta) updateParameterColumnNames() {
+
+	for i := range param.Dim {
+		param.Dim[i].colName = "dim" + strconv.Itoa(param.Dim[i].DimId)
+	}
+}
+
+// updateTableColumnNames sets internal db column names for output table dimensions, expressions and accumulators.
+// For example: dim0, dim1, acc0, expr1.
+// Accumulator db column name for native accumulator is acc1 = "acc" + id,
+// for derived accumulators it is the same as expression db column name: expr0 = "expr" + ecpression id.
+func (table *TableMeta) updateTableColumnNames() {
+
+	// dimensions column name: dim0
+	for i := range table.Dim {
+		table.Dim[i].colName = "dim" + strconv.Itoa(table.Dim[i].DimId)
+	}
+
+	// expressions column name: expr0
+	for i := range table.Expr {
+		table.Expr[i].colName = "expr" + strconv.Itoa(table.Expr[i].ExprId)
+	}
+
+	// accumulators column name: acc1 for native and expr0 for derived
+	for i := range table.Acc {
+
+		if !table.Acc[i].IsDerived {
+			table.Acc[i].colName = "acc" + strconv.Itoa(table.Acc[i].AccId) // native accumulator
+		} else {
+
+			// find expresiion with the same name as derived accumulator name
+			table.Acc[i].colName = "expr" + strconv.Itoa(table.Acc[i].AccId) // by default make unique name using accumulator id: expr8
+			for j := range table.Expr {
+				if table.Acc[i].Name == table.Expr[j].Name {
+					table.Acc[i].colName = table.Expr[j].colName
+					break
+				}
+			}
+		}
+	}
+}
+
 // updateInternals model metadata internal members.
 // It must be called after restoring from json.
 // It does recalculate digest of type, parameter, output table, model if digest is "" empty.
@@ -107,6 +150,7 @@ func (meta *ModelMeta) updateInternals() error {
 				meta.Param[idx].sizeOf *= meta.Param[idx].Dim[i].sizeOf
 			}
 		}
+		meta.Param[idx].updateParameterColumnNames() // set dimensions db column name
 
 		// update parameter digest and import digest, if digest is empty
 		if meta.Param[idx].Digest == "" {
@@ -190,6 +234,7 @@ func (meta *ModelMeta) updateInternals() error {
 				meta.Table[idx].sizeOf *= meta.Table[idx].Dim[i].DimSize
 			}
 		}
+		meta.Table[idx].updateTableColumnNames() // set db column name for dimensions, expressions and accumulators
 
 		// update output table digest and import digest, if digest is empty
 		if meta.Table[idx].Digest == "" {

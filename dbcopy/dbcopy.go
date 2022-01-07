@@ -105,8 +105,11 @@ To explicitly control usage of id's in directory and file names use IdOutputName
 
 Dbcopy create csv files for model parameters, output tables value(s) and accumulators.
 It is often accumulators are not required and you can suppress by using NoAccumulatorsCsv=true:
-  dbcopy -m modelOne -dbcopy.To csv -dbcopy.NoAccumulatorsCsv
-  dbcopy -m modelOne -dbcopy.To csv -dbcopy.NoAccumulatorsCsv=true
+  dbcopy -m modelOne -dbcopy.NoAccumulatorsCsv
+  dbcopy -m modelOne -dbcopy.NoAccumulatorsCsv=true
+  dbcopy -m modelOne -dbcopy.NoAccumulatorsCsv -dbcopy.To csv
+  dbcopy -m modelOne -dbcopy.NoAccumulatorsCsv -dbcopy.LastRun
+  dbcopy -m modelOne -dbcopy.NoAccumulatorsCsv -dbcopy.TaskName taskOne
 
 By default parameters and output results .csv files contain codes in dimension column(s), e.g.: Sex=[Male,Female].
 If you want to create csv files with numeric id's Sex=[0,1] instead then use IdCsv=true option:

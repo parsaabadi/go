@@ -167,19 +167,19 @@ func doWriteOutputTable(
 
 		// insert output table accumulators into model run
 		// prepare put() closure to convert each accumulator cell into parameters of insert sql statement
-		q := makeSqlAccValueInsert(meta, runId)
+		sql := makeSqlAccValueInsert(meta, runId)
 		put := makePutAccValueInsert(meta, accCellLst)
 
-		if err = TrxUpdateStatement(trx, q, put); err != nil {
+		if err = TrxUpdateStatement(trx, sql, put); err != nil {
 			return err
 		}
 
 		// insert output table expressions into model run
 		// prepare put() closure to convert each expression cell into parameters of insert sql statement
-		q = makeSqlExprValueInsert(meta, runId)
+		sql = makeSqlExprValueInsert(meta, runId)
 		put = makePutExprValueInsert(meta, exprCellLst)
 
-		if err = TrxUpdateStatement(trx, q, put); err != nil {
+		if err = TrxUpdateStatement(trx, sql, put); err != nil {
 			return err
 		}
 	}
@@ -226,7 +226,7 @@ func makeSqlExprValueInsert(meta *TableMeta, runId int) string {
 	//   (2, ?, ?, ?, ?)
 	q := "INSERT INTO " + meta.DbExprTable + " (run_id, expr_id, "
 	for k := range meta.Dim {
-		q += meta.Dim[k].Name + ", "
+		q += meta.Dim[k].colName + ", "
 	}
 
 	q += "expr_value) VALUES (" + strconv.Itoa(runId) + ", ?, "
@@ -290,7 +290,7 @@ func makeSqlAccValueInsert(meta *TableMeta, runId int) string {
 	//   (2, ?, ?, ?, ?, ?)
 	q := "INSERT INTO " + meta.DbAccTable + " (run_id, acc_id, sub_id, "
 	for k := range meta.Dim {
-		q += meta.Dim[k].Name + ", "
+		q += meta.Dim[k].colName + ", "
 	}
 
 	q += "acc_value) VALUES (" + strconv.Itoa(runId) + ", ?, ?, "

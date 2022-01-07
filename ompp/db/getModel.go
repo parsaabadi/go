@@ -313,6 +313,10 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 	if err != nil {
 		return nil, err
 	}
+	// set db column name for parameter dimnesions
+	for k := range meta.Param {
+		meta.Param[k].updateParameterColumnNames()
+	}
 
 	// select db rows from table_dic join to model_table_dic
 	err = SelectRows(dbConn,
@@ -440,6 +444,11 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 		})
 	if err != nil {
 		return nil, err
+	}
+
+	// set db column name for output tables dimnesions, expressions and accumulators
+	for k := range meta.Table {
+		meta.Table[k].updateTableColumnNames()
 	}
 
 	// select db rows from group_lst

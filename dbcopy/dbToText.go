@@ -60,8 +60,9 @@ func dbToText(modelName string, modelDigest string, runOpts *config.RunOptions) 
 	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
 	isWriteUtf8bom := runOpts.Bool(useUtf8CsvArgKey)
+	isWriteAccum := !runOpts.Bool(noAccumCsv)
 
-	if err = toRunListText(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames); err != nil {
+	if err = toRunListText(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames, isWriteAccum); err != nil {
 		return err
 	}
 

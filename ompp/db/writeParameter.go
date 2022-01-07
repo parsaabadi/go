@@ -193,11 +193,11 @@ func doWriteRunParameter(
 
 		// make sql to insert parameter values into model run
 		// prepare put() closure to convert each cell into insert sql statement parameters
-		q := makeSqlInsertParamValue(param.DbRunTable, "run_id", param.Dim, runId)
+		sql := makeSqlInsertParamValue(param.DbRunTable, "run_id", param.Dim, runId)
 		put := makePutInsertParamValue(param, subCount, 0, cellLst)
 
 		// execute sql insert using put() above for each row
-		if err = TrxUpdateStatement(trx, q, put); err != nil {
+		if err = TrxUpdateStatement(trx, sql, put); err != nil {
 			return errors.New("insert parameter failed: " + param.Name + " " + err.Error())
 		}
 	}
@@ -283,11 +283,11 @@ func doWriteSetParameter(trx *sql.Tx, param *ParamMeta, setId int, subCount int,
 
 	// make sql to insert parameter values into workset
 	// prepare put() closure to convert each cell into insert sql statement parameters
-	q := makeSqlInsertParamValue(param.DbSetTable, "set_id", param.Dim, setId)
+	sql := makeSqlInsertParamValue(param.DbSetTable, "set_id", param.Dim, setId)
 	put := makePutInsertParamValue(param, subCount, defaultSubId, cellLst)
 
 	// execute sql insert using put() above for each row
-	if err = TrxUpdateStatement(trx, q, put); err != nil {
+	if err = TrxUpdateStatement(trx, sql, put); err != nil {
 		return errors.New("insert parameter failed: " + param.Name + " " + err.Error())
 	}
 
@@ -307,7 +307,7 @@ func makeSqlInsertParamValue(dbTable string, runSetCol string, dims []ParamDimsR
 		" (" + runSetCol + ", sub_id, "
 
 	for k := range dims {
-		q += dims[k].Name + ", "
+		q += dims[k].colName + ", "
 	}
 
 	q += "param_value) VALUES (" + strconv.Itoa(toId) + ", ?, "
@@ -382,7 +382,7 @@ func makeSqlDeleteParamPage(dbTable string, dims []ParamDimsRow, setId int) stri
 		" AND sub_id = ?"
 
 	for k := range dims {
-		q += " AND " + dims[k].Name + " = ?"
+		q += " AND " + dims[k].colName + " = ?"
 	}
 	return q
 }
