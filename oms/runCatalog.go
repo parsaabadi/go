@@ -5,6 +5,7 @@ package main
 
 import (
 	"container/list"
+	"os"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -22,6 +23,7 @@ type RunCatalog struct {
 	etcDir       string                         // model run templates directory, if relative then must be relative to oms root directory
 	runTemplates []string                       // list of model run templates
 	mpiTemplates []string                       // list of model MPI run templates
+	presets      []RunOptionsPreset             // list of preset run options
 	runLst       *list.List                     // list of model runs state (runStateLog) submitted through the service
 	modelLogs    map[string]map[string]RunState // model runs state: map model digest to run stamp to run state
 }
@@ -38,9 +40,16 @@ type modelRunBasic struct {
 
 // RunCatalogConfig is "public" state of model run catalog for json import-export
 type RunCatalogConfig struct {
-	RunTemplates       []string // list of model run templates
-	DefaultMpiTemplate string   // default template to run MPI model
-	MpiTemplates       []string // list of model MPI run templates
+	RunTemplates       []string           // list of model run templates
+	DefaultMpiTemplate string             // default template to run MPI model
+	MpiTemplates       []string           // list of model MPI run templates
+	Presets            []RunOptionsPreset // list of preset run options
+}
+
+// RunOptionsPreset is "public" view of model run options preset
+type RunOptionsPreset struct {
+	Name    string // name of preset, based on file name
+	Options string // run options as json stringify
 }
 
 // RunRequest is request to run the model with specified model options.
@@ -128,6 +137,32 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string) error {
 		}
 	}
 
+	// read all run options preset files
+	// keep steam of preset file name: run-options.RiskPaths.1-small.json => RiskPaths.1-small
+	// and file content as string
+	rsc.presets = []RunOptionsPreset{}
+	if isDirExist(etcDir) == nil {
+		if fl, err := filepath.Glob(etcDir + "/" + "run-options.*.json"); err == nil {
+			for k := range fl {
+
+				f := filepath.Base(fl[k])
+				if len(f) < len("run-options.*.json") { // file name must be at least that size
+					continue
+				}
+				bt, err := os.ReadFile(fl[k]) // read entire file
+				if err != nil {
+					continue // skip on errors
+				}
+
+				rsc.presets = append(rsc.presets,
+					RunOptionsPreset{
+						Name:    f[len("run-options.") : len(f)-(len(".json"))], // stem of the file: skip prefix and suffix
+						Options: string(bt),
+					})
+			}
+		}
+	}
+
 	// make all models basic info: name, digest and files location
 	mbs := theCatalog.allModels()
 	rbs := make(map[string]modelRunBasic, len(mbs))
@@ -199,9 +234,11 @@ func (rsc *RunCatalog) toPublicConfig() *RunCatalogConfig {
 		RunTemplates:       make([]string, len(rsc.runTemplates)),
 		DefaultMpiTemplate: defaultMpiTemplate,
 		MpiTemplates:       make([]string, len(rsc.mpiTemplates)),
+		Presets:            make([]RunOptionsPreset, len(rsc.presets)),
 	}
 	copy(rcp.RunTemplates, rsc.runTemplates)
 	copy(rcp.MpiTemplates, rsc.mpiTemplates)
+	copy(rcp.Presets, rsc.presets)
 
 	return &rcp
 }
