@@ -1,11 +1,11 @@
 {
   "Text": [{
       "LangCode": "EN",
-      "ShortLabel": "Default Options"
+      "ShortLabel": "Default Options",
       "Descr": "Use default model run options"
     }, {
       "LangCode": "FR",
-      "ShortLabel": "Options par défaut"
+      "ShortLabel": "Options par défaut",
       "Descr": "Utiliser les options d'exécution du modèle par défaut"
     }
   ],
