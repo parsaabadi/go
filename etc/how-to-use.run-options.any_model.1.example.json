@@ -22,10 +22,12 @@ To show run options in UI:
 {
   "Text": [{
       "LangCode": "EN",
-      "Descr": "Default run options"
+      "ShortLabel": "Default Options"
+      "Descr": "Use default model run options"
     }, {
       "LangCode": "FR",
-      "Descr": "Options d'exécution par défaut"
+      "ShortLabel": "Options par défaut"
+      "Descr": "Utiliser les options d'exécution du modèle par défaut"
     }
   ],
   "threadCount": 1,
