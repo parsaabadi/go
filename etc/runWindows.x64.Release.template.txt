@@ -1,4 +1,6 @@
 {{/*
+This template is no longer applicable
+
 oms web-service:
   Template to run 64-bit Release modelName64.exe on Windows
 

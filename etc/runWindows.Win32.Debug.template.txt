@@ -1,4 +1,6 @@
 {{/*
+This template is no longer applicable
+
 oms web-service:
   Template to run Win32 Debug modelNameD.exe on Windows
 
