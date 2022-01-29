@@ -125,6 +125,24 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 		mArgs = append(mArgs, key, val) // append command line argument key and value
 	}
 
+	// if list of tables to retain is not empty then put the list into ini-file:
+	//
+	//   [Tables]
+	//   Retain   = ageSexIncome,AdditionalTables
+	//
+	if len(req.Tables) > 0 {
+		p, e := filepath.Abs(filepath.Join(mb.logDir, rs.RunStamp+"."+mb.name+".ini"))
+		if e == nil {
+			e = os.WriteFile(p, []byte("[Tables]"+"\n"+"Retain = "+strings.Join(req.Tables, ", ")+"\n"), 0644)
+		}
+		if e != nil {
+			omppLog.Log("Model run error: ", e)
+			rs.IsFinal = true
+			return rs, e
+		}
+		mArgs = append(mArgs, "-ini", p) // append ini file path to command line arguments
+	}
+
 	// save run notes into the file(s) and append file path(s) to the model run options
 	for _, rn := range req.RunNotes {
 		if rn.Note == "" {

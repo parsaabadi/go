@@ -65,7 +65,8 @@ type RunRequest struct {
 	Mpi         struct {
 		Np int // if non-zero then number of MPI processes
 	}
-	Template string // template file name to make run model command line
+	Template string   // template file name to make run model command line
+	Tables   []string // if not empty then output tables or table groups to retain, by default retain all tables
 	RunNotes []struct {
 		LangCode string // model language code
 		Note     string // run notes
