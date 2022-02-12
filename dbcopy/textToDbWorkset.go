@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/openmpp/go/ompp/config"
 	"github.com/openmpp/go/ompp/db"
@@ -349,13 +350,18 @@ func fromWorksetTextToDb(
 
 	// read all workset parameters and copy into destination database
 	omppLog.Log("Workset ", srcSetName, " into: ", dstId, " "+ws.Set.Name)
+	nP := len(paramLst)
+	omppLog.Log("  Parameters: ", nP)
+	logT := time.Now().Unix()
 
 	// read all workset parameters from csv files
 	for j := range paramLst {
 
 		// read parameter values from csv file
+		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nP, ": ", paramLst[j].Name)
+
 		cvtParam := db.CellParamConverter{DoubleFmt: doubleFmt}
-		cLst, err := fromCsvFile(csvDir, modelDef, paramLst[j].Name, paramLst[j].SubCount, cvtParam, encodingName)
+		cLst, err := fromCellCsvFile(csvDir, modelDef, paramLst[j].Name, paramLst[j].SubCount, cvtParam, encodingName)
 		if err != nil {
 			return 0, err
 		}

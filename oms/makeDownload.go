@@ -47,12 +47,15 @@ type PathItem struct {
 }
 
 // make dbcopy command to prepare full model download
-func makeModelDownloadCommand(baseName string, mb modelBasic, logPath string, isNoAcc bool) (*exec.Cmd, string) {
+func makeModelDownloadCommand(baseName string, mb modelBasic, logPath string, isNoAcc bool, isCsvBom bool) (*exec.Cmd, string) {
 
 	// make dbcopy message for user log
 	cmdMsg := "dbcopy -m " + mb.name + " -dbcopy.Zip -dbcopy.OutputDir " + theCfg.downloadDir
 	if isNoAcc {
 		cmdMsg += " -dbcopy.NoAccumulatorsCsv "
+	}
+	if isCsvBom {
+		cmdMsg += " -dbcopy.Utf8BomIntoCsv "
 	}
 
 	// make absolute path to download directory: dbcopy work directory is a model bin directory
@@ -67,6 +70,9 @@ func makeModelDownloadCommand(baseName string, mb modelBasic, logPath string, is
 	if isNoAcc {
 		cArgs = append(cArgs, "-dbcopy.NoAccumulatorsCsv")
 	}
+	if isCsvBom {
+		cArgs = append(cArgs, "-dbcopy.Utf8BomIntoCsv")
+	}
 
 	cmd := exec.Command(theCfg.dbcopyPath, cArgs...)
 	cmd.Dir = mb.binDir // dbcopy work directory is a model bin directory
@@ -75,12 +81,15 @@ func makeModelDownloadCommand(baseName string, mb modelBasic, logPath string, is
 }
 
 // make dbcopy command to prepare model run download
-func makeRunDownloadCommand(baseName string, mb modelBasic, runId int, logPath string, isNoAcc bool) (*exec.Cmd, string) {
+func makeRunDownloadCommand(baseName string, mb modelBasic, runId int, logPath string, isNoAcc bool, isCsvBom bool) (*exec.Cmd, string) {
 
 	// make dbcopy message for user log
 	cmdMsg := "dbcopy -m " + mb.name + " -dbcopy.RunId " + strconv.Itoa(runId) + " -dbcopy.Zip -dbcopy.OutputDir " + theCfg.downloadDir
 	if isNoAcc {
 		cmdMsg += " -dbcopy.NoAccumulatorsCsv "
+	}
+	if isCsvBom {
+		cmdMsg += " -dbcopy.Utf8BomIntoCsv "
 	}
 
 	// make absolute path to download directory: dbcopy work directory is a model bin directory
@@ -95,6 +104,9 @@ func makeRunDownloadCommand(baseName string, mb modelBasic, runId int, logPath s
 	if isNoAcc {
 		cArgs = append(cArgs, "-dbcopy.NoAccumulatorsCsv")
 	}
+	if isCsvBom {
+		cArgs = append(cArgs, "-dbcopy.Utf8BomIntoCsv")
+	}
 
 	cmd := exec.Command(theCfg.dbcopyPath, cArgs...)
 	cmd.Dir = mb.binDir // dbcopy work directory is a model bin directory
@@ -103,10 +115,13 @@ func makeRunDownloadCommand(baseName string, mb modelBasic, runId int, logPath s
 }
 
 // make dbcopy command to prepare model workset download
-func makeWorksetDownloadCommand(baseName string, mb modelBasic, setName string, logPath string) (*exec.Cmd, string) {
+func makeWorksetDownloadCommand(baseName string, mb modelBasic, setName string, logPath string, isCsvBom bool) (*exec.Cmd, string) {
 
 	// make dbcopy message for user log
-	cmdMsg := "dbcopy -m " + mb.name + " -dbcopy.SetName " + setName + " -dbcopy.Zip -dbcopy.OutputDir " + theCfg.downloadDir
+	cmdMsg := "dbcopy -m " + mb.name + " -dbcopy.SetName " + setName + " -dbcopy.Utf8BomIntoCsv -dbcopy.Zip -dbcopy.OutputDir " + theCfg.downloadDir
+	if isCsvBom {
+		cmdMsg += " -dbcopy.Utf8BomIntoCsv "
+	}
 
 	// make absolute path to download directory: dbcopy work directory is a model bin directory
 	absDownDir, err := filepath.Abs(theCfg.downloadDir)
@@ -116,9 +131,12 @@ func makeWorksetDownloadCommand(baseName string, mb modelBasic, setName string, 
 	}
 
 	// make dbcopy command
-	cmd := exec.Command(
-		theCfg.dbcopyPath, "-m", mb.name, "-dbcopy.SetName", setName, "-dbcopy.Zip", "-dbcopy.OutputDir", absDownDir, "-dbcopy.FromSqlite", mb.dbPath,
-	)
+	cArgs := []string{"-m", mb.name, "-dbcopy.SetName", setName, "-dbcopy.Zip", "-dbcopy.OutputDir", absDownDir, "-dbcopy.FromSqlite", mb.dbPath}
+	if isCsvBom {
+		cArgs = append(cArgs, "-dbcopy.Utf8BomIntoCsv")
+	}
+
+	cmd := exec.Command(theCfg.dbcopyPath, cArgs...)
 	cmd.Dir = mb.binDir // dbcopy work directory is a model bin directory
 
 	return cmd, cmdMsg

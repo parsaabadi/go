@@ -4,10 +4,8 @@
 package main
 
 import (
-	"container/list"
 	"encoding/csv"
 	"net/http"
-	"net/url"
 
 	"github.com/openmpp/go/ompp/db"
 	"github.com/openmpp/go/ompp/helper"
@@ -92,21 +90,51 @@ func doParameterGetCsvHandler(w http.ResponseWriter, r *http.Request, srcArg str
 		ReadLayout: db.ReadLayout{Name: name}, IsFromSet: isSet,
 	}
 
-	cLst, _, ok := theCatalog.ReadParameter(dn, src, &layout)
-	if !ok {
-		http.Error(w, "Error at parameter read "+src+": "+name, http.StatusBadRequest)
-		return
-	}
-
 	// get converter from cell list to csv rows []string
-	hdr, cvt, ok := theCatalog.ParameterToCsvConverter(dn, isCode, name)
+	hdr, cvtRow, ok := theCatalog.ParameterToCsvConverter(dn, isCode, name)
 	if !ok {
 		http.Error(w, "Failed to create parameter csv converter "+src+": "+name, http.StatusBadRequest)
 		return
 	}
 
-	// convert to csv and write into http response
-	writeCsvResponse(w, name, src, isBom, hdr, cLst, cvt)
+	// set response headers: Content-Disposition: attachment; filename=name.csv
+	csvSetHeaders(w, name)
+
+	// write csv body
+	if isBom {
+		if _, err := w.Write(helper.Utf8bom); err != nil {
+			http.Error(w, "Error at csv write: "+src+": "+name, http.StatusBadRequest)
+			return
+		}
+	}
+
+	cw := csv.NewWriter(w)
+
+	if err := cw.Write(hdr); err != nil {
+		http.Error(w, "Error at csv write: "+src+": "+name, http.StatusBadRequest)
+		return
+	}
+
+	// convert output table cell into []string and write line into csv file
+	cs := make([]string, len(hdr))
+
+	cvtWr := func(c interface{}) (bool, error) {
+
+		if err := cvtRow(c, cs); err != nil {
+			return false, err
+		}
+		if err := cw.Write(cs); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+
+	_, ok = theCatalog.ReadParameterTo(dn, src, &layout, cvtWr)
+	if !ok {
+		http.Error(w, "Error at parameter read "+src+": "+name, http.StatusBadRequest)
+		return
+	}
+	cw.Flush() // flush csv to response
 }
 
 // runTableExprCsvGetHandler read table expression(s) values from model run results and write it as csv response.
@@ -217,7 +245,7 @@ func doTableGetCsvHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllAc
 
 	// url or query parameters
 	dn := getRequestParam(r, "model")  // model digest-or-name
-	rdsn := getRequestParam(r, "run")  //  run digest-or-stamp-or-name
+	rdsn := getRequestParam(r, "run")  // run digest-or-stamp-or-name
 	name := getRequestParam(r, "name") // parameter name
 
 	// read output table values, page size =0: read all values
@@ -227,58 +255,56 @@ func doTableGetCsvHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllAc
 		IsAllAccum: isAllAcc,
 	}
 
-	cLst, _, ok := theCatalog.ReadOutTable(dn, rdsn, &layout)
-	if !ok {
-		http.Error(w, "Error at run output table read "+rdsn+": "+name, http.StatusBadRequest)
-		return
-	}
-
 	// get converter from cell list to csv rows []string
-	hdr, cvt, ok := theCatalog.TableToCsvConverter(dn, isCode, name, layout.IsAccum, layout.IsAllAccum)
+	hdr, cvtRow, ok := theCatalog.TableToCsvConverter(dn, isCode, name, layout.IsAccum, layout.IsAllAccum)
 	if !ok {
 		http.Error(w, "Failed to create output table csv converter: "+name, http.StatusBadRequest)
 		return
 	}
 
-	// convert to csv and write into http response
-	writeCsvResponse(w, name, rdsn, isBom, hdr, cLst, cvt)
-}
-
-// writeCsvResponse convert csv parameter or output table values and write it into http response
-func writeCsvResponse(
-	w http.ResponseWriter, name, src string, isBom bool, hdr []string, cLst *list.List, cvt func(interface{}, []string) error,
-) {
-	// set response headers: no Content-Length result in Transfer-Encoding: chunked
-	// todo: ETag instead no-cache and utf-8 file names
-	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
-	w.Header().Set("Content-Disposition", "attachment; filename="+`"`+url.QueryEscape(name)+".csv"+`"`)
-	w.Header().Set("Cache-Control", "no-cache")
+	// set response headers: Content-Disposition: attachment; filename=name.csv
+	fn := name
+	if isAcc {
+		if isAllAcc {
+			fn += ".acc-all"
+		} else {
+			fn += ".acc"
+		}
+	}
+	csvSetHeaders(w, fn)
 
 	// write csv body
 	if isBom {
 		if _, err := w.Write(helper.Utf8bom); err != nil {
-			http.Error(w, "Error at csv write: "+src+": "+name, http.StatusBadRequest)
+			http.Error(w, "Error at csv write: "+rdsn+": "+name, http.StatusBadRequest)
 			return
 		}
 	}
 
-	csvWr := csv.NewWriter(w)
+	cw := csv.NewWriter(w)
 
-	if err := csvWr.Write(hdr); err != nil {
-		http.Error(w, "Error at csv write: "+src+": "+name, http.StatusBadRequest)
+	if err := cw.Write(hdr); err != nil {
+		http.Error(w, "Error at csv write: "+rdsn+": "+name, http.StatusBadRequest)
 		return
 	}
+
+	// convert output table cell into []string and write line into csv file
 	cs := make([]string, len(hdr))
 
-	for c := cLst.Front(); c != nil; c = c.Next() {
-		if err := cvt(c.Value, cs); err != nil {
-			http.Error(w, "Error at convert cell value of: "+src+": "+name, http.StatusBadRequest)
-			return
+	cvtWr := func(c interface{}) (bool, error) {
+
+		if err := cvtRow(c, cs); err != nil {
+			return false, err
 		}
-		if err := csvWr.Write(cs); err != nil {
-			http.Error(w, "Error at csv write: "+src+": "+name, http.StatusBadRequest)
-			return
+		if err := cw.Write(cs); err != nil {
+			return false, err
 		}
+		return true, nil
 	}
-	csvWr.Flush() // flush csv to response
+	_, ok = theCatalog.ReadOutTableTo(dn, rdsn, &layout, cvtWr)
+	if !ok {
+		http.Error(w, "Error at run output table read "+rdsn+": "+name, http.StatusBadRequest)
+		return
+	}
+	cw.Flush() // flush csv to response
 }

@@ -57,17 +57,11 @@ func doReadParameterPageHandler(w http.ResponseWriter, r *http.Request, srcArg s
 	}
 	layout.IsFromSet = isSet // overwrite json value, it was likely default
 
-	// read parameter page and respond with json and convert enum id's to code if requested
-	cLst, lt, ok := theCatalog.ReadParameter(dn, src, &layout)
-	if !ok {
-		http.Error(w, "Error at parameter read "+src+": "+layout.Name, http.StatusBadRequest)
-		return
-	}
-
 	// get converter from id's cell into code cell
-	var cvt func(interface{}) (interface{}, error)
+	var cvtCell func(interface{}) (interface{}, error)
 	if isCode {
-		cvt, ok = theCatalog.ParameterCellConverter(false, dn, layout.Name)
+		ok := false
+		cvtCell, ok = theCatalog.ParameterCellConverter(false, dn, layout.Name)
 		if !ok {
 			http.Error(w, "Error at parameter read "+src+": "+layout.Name, http.StatusBadRequest)
 			return
@@ -77,16 +71,27 @@ func doReadParameterPageHandler(w http.ResponseWriter, r *http.Request, srcArg s
 	// write to response: page layout and page data
 	jsonSetHeaders(w, r) // start response with set json headers, i.e. content type
 
-	// output page layout: offset, size, last page flag
-	w.Write([]byte("{\"Layout\":"))
+	w.Write([]byte("{\"Page\":[")) // start of data page and start of json output array
+
+	enc := json.NewEncoder(w)
+	cvtWr := jsonCellWriter(w, enc, cvtCell)
+
+	// read parameter page into json array response, convert enum id's to code if requested
+	lt, ok := theCatalog.ReadParameterTo(dn, src, &layout, cvtWr)
+	if !ok {
+		http.Error(w, "Error at parameter read "+src+": "+layout.Name, http.StatusBadRequest)
+		return
+	}
+	w.Write([]byte{']'}) // end of data page array
+
+	// continue response with output page layout: offset, size, last page flag
+	w.Write([]byte(",\"Layout\":"))
+
 	err := json.NewEncoder(w).Encode(lt)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-
-	w.Write([]byte(",\"Page\":"))             // start of data page
-	jsonAppendListToResponse(w, r, cLst, cvt) // append data page to response
-	w.Write([]byte("}"))                      // end of data page and end of json
+	w.Write([]byte("}")) // end of data page and end of json
 }
 
 // runTablePageReadHandler read a "page" of output table values
@@ -124,18 +129,11 @@ func doReadTablePageHandler(w http.ResponseWriter, r *http.Request, isCode bool)
 		return // error at json decode, response done with http error
 	}
 
-	// read output table page and respond with json and convert enum id's to code if requested
-	cLst, lt, ok := theCatalog.ReadOutTable(dn, rdn, &layout)
-	if !ok {
-		http.Error(w, "Error at run output table read "+rdn+": "+layout.Name, http.StatusBadRequest)
-		return
-	}
-
 	// if required get converter from id's cell into code cell
-	var cvt func(interface{}) (interface{}, error)
-
+	var cvtCell func(interface{}) (interface{}, error)
 	if isCode {
-		cvt, ok = theCatalog.TableToCodeCellConverter(dn, layout.Name, layout.IsAccum, layout.IsAllAccum)
+		ok := false
+		cvtCell, ok = theCatalog.TableToCodeCellConverter(dn, layout.Name, layout.IsAccum, layout.IsAllAccum)
 		if !ok {
 			http.Error(w, "Failed to create output table cell id's to code converter: "+layout.Name, http.StatusBadRequest)
 			return
@@ -145,16 +143,27 @@ func doReadTablePageHandler(w http.ResponseWriter, r *http.Request, isCode bool)
 	// write to response: page layout and page data
 	jsonSetHeaders(w, r) // start response with set json headers, i.e. content type
 
-	// output page layout: offset, size, last page flag
-	w.Write([]byte("{\"Layout\":"))
+	w.Write([]byte("{\"Page\":[")) // start of data page and start of json output array
+
+	enc := json.NewEncoder(w)
+	cvtWr := jsonCellWriter(w, enc, cvtCell)
+
+	// read parameter page into json array response, convert enum id's to code if requested
+	lt, ok := theCatalog.ReadOutTableTo(dn, rdn, &layout, cvtWr)
+	if !ok {
+		http.Error(w, "Error at run output table read "+rdn+": "+layout.Name, http.StatusBadRequest)
+		return
+	}
+	w.Write([]byte{']'}) // end of data page array
+
+	// continue response with output page layout: offset, size, last page flag
+	w.Write([]byte(",\"Layout\":"))
+
 	err := json.NewEncoder(w).Encode(lt)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-
-	w.Write([]byte(",\"Page\":"))             // start of data page
-	jsonAppendListToResponse(w, r, cLst, cvt) // append data page to response
-	w.Write([]byte("}"))                      // end of data page and end of json
+	w.Write([]byte("}")) // end of data page and end of json
 }
 
 // worksetParameterPageGetHandler read a "page" of parameter values from workset.
@@ -207,26 +216,31 @@ func doParameterGetPageHandler(w http.ResponseWriter, r *http.Request, srcArg st
 		IsFromSet: isSet,
 	}
 
-	// read parameter page and respond with json
-	cLst, _, ok := theCatalog.ReadParameter(dn, src, &layout)
-	if !ok {
-		http.Error(w, "Error at parameter read "+src+": "+layout.Name, http.StatusBadRequest)
-		return
-	}
-
 	// if required get converter from id's cell into code cell
-	var cvt func(interface{}) (interface{}, error)
-
+	var cvtCell func(interface{}) (interface{}, error)
 	if isCode {
-		cvt, ok = theCatalog.ParameterCellConverter(false, dn, name)
+		cvtCell, ok = theCatalog.ParameterCellConverter(false, dn, name)
 		if !ok {
 			http.Error(w, "Failed to create parameter cell id's to code converter: "+name, http.StatusBadRequest)
 			return
 		}
 	}
 
-	jsonSetHeaders(w, r)                      // start response with set json headers, i.e. content type
-	jsonAppendListToResponse(w, r, cLst, cvt) // append data page to response
+	// write to response
+	jsonSetHeaders(w, r) // start response with set json headers, i.e. content type
+
+	w.Write([]byte{'['}) // start of json output array
+
+	enc := json.NewEncoder(w)
+	cvtWr := jsonCellWriter(w, enc, cvtCell)
+
+	// read parameter page into json array response, convert enum id's to code if requested
+	_, ok = theCatalog.ReadParameterTo(dn, src, &layout, cvtWr)
+	if !ok {
+		http.Error(w, "Error at parameter read "+src+": "+layout.Name, http.StatusBadRequest)
+		return
+	}
+	w.Write([]byte{']'}) // end of json output array
 }
 
 // runTableExprPageGetHandler read a "page" of output table expression(s) values from model run results.
@@ -289,24 +303,29 @@ func doTableGetPageHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllA
 		IsAllAccum: isAllAcc,
 	}
 
-	// read output table page and respond with json
-	cLst, _, ok := theCatalog.ReadOutTable(dn, rdsn, &layout)
-	if !ok {
-		http.Error(w, "Error at run output table read "+rdsn+": "+layout.Name, http.StatusBadRequest)
-		return
-	}
-
 	// if required get converter from id's cell into code cell
-	var cvt func(interface{}) (interface{}, error)
-
+	var cvtCell func(interface{}) (interface{}, error)
 	if isCode {
-		cvt, ok = theCatalog.TableToCodeCellConverter(dn, layout.Name, layout.IsAccum, layout.IsAllAccum)
+		cvtCell, ok = theCatalog.TableToCodeCellConverter(dn, layout.Name, layout.IsAccum, layout.IsAllAccum)
 		if !ok {
 			http.Error(w, "Failed to create output table cell id's to code converter: "+layout.Name, http.StatusBadRequest)
 			return
 		}
 	}
 
-	jsonSetHeaders(w, r)                      // start response with set json headers, i.e. content type
-	jsonAppendListToResponse(w, r, cLst, cvt) // append data page to response
+	// write to response: page layout and page data
+	jsonSetHeaders(w, r) // start response with set json headers, i.e. content type
+
+	w.Write([]byte{'['}) // start of json output array
+
+	enc := json.NewEncoder(w)
+	cvtWr := jsonCellWriter(w, enc, cvtCell)
+
+	// read parameter page into json array response, convert enum id's to code if requested
+	_, ok = theCatalog.ReadOutTableTo(dn, rdsn, &layout, cvtWr)
+	if !ok {
+		http.Error(w, "Error at run output table read "+rdsn+": "+layout.Name, http.StatusBadRequest)
+		return
+	}
+	w.Write([]byte{']'}) // end of json output array
 }

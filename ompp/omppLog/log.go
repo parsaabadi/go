@@ -37,6 +37,18 @@ var (
 	logOpts       = config.LogOptions{IsConsole: true} // log options, default is log to console
 )
 
+// LogIfTime do Log(msg) not more often then every periodSec seconds.
+// It does nothing if now time < lastT + periodSec. Time is a Unix time, seconds since epoch.
+func LogIfTime(lastT int64, periodSec int64, msg ...interface{}) int64 {
+
+	now := time.Now().Unix()
+	if now < lastT+periodSec {
+		return lastT // exit, period is not expired yet
+	}
+	Log(msg...) // log the message
+	return now
+}
+
 // New log settings
 func New(opts *config.LogOptions) {
 	theLock.Lock()

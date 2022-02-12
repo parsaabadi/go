@@ -102,7 +102,7 @@ func (cellCvt CellExprConverter) CsvToIdRow(modelDef *ModelMeta, name string) (f
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2))
+			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + name)
 		}
 
 		row[0] = fmt.Sprint(cell.ExprId)
@@ -169,7 +169,7 @@ func (cellCvt CellExprConverter) CsvToRow(modelDef *ModelMeta, name string) (fun
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2))
+			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + name)
 		}
 
 		row[0] = table.Expr[cell.ExprId].Name

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/openmpp/go/ompp/db"
 	"github.com/openmpp/go/ompp/helper"
@@ -273,10 +274,14 @@ func toWorksetCsv(
 	}
 
 	// write parameter into csv file
-	paramLt := &db.ReadParamLayout{ReadLayout: db.ReadLayout{FromId: setId}, IsFromSet: true}
+	paramLt := db.ReadParamLayout{ReadLayout: db.ReadLayout{FromId: setId}, IsFromSet: true}
 	cvtParam := db.CellParamConverter{DoubleFmt: doubleFmt}
 
-	for j := range meta.Param {
+	nP := len(meta.Param)
+	omppLog.Log("  Parameters: ", nP)
+	logT := time.Now().Unix()
+
+	for j := 0; j < nP; j++ {
 
 		idx, ok := modelDef.ParamByHid(meta.Param[j].ParamHid)
 		if !ok {
@@ -284,25 +289,12 @@ func toWorksetCsv(
 		}
 		paramLt.Name = modelDef.Param[idx].Name
 
-		cLst, _, err := db.ReadParameter(dbConn, modelDef, paramLt)
+		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nP, ": ", paramLt.Name)
+
+		err = toCellCsvFile(dbConn, modelDef, paramLt.Name, true, paramLt, cvtParam, firstUse[idx] && isAllInOne, csvDir, isIdCsv, isWriteUtf8bom, firstCol, firstVal)
 		if err != nil {
 			return err
 		}
-		if cLst.Len() <= 0 { // parameter data must exist for all parameters
-			return errors.New("missing workset parameter values " + paramLt.Name + " set id: " + strconv.Itoa(paramLt.FromId))
-		}
-
-		err = toCsvCellFile(
-			csvDir,
-			modelDef,
-			paramLt.Name,
-			firstUse[idx] && isAllInOne,
-			cvtParam,
-			cLst,
-			isIdCsv,
-			isWriteUtf8bom,
-			firstCol,
-			firstVal)
 		if err != nil {
 			return err
 		}

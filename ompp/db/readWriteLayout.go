@@ -35,8 +35,6 @@ type WriteTableLayout struct {
 
 // ReadLayout describes source and size of data page to read input parameter or output table values.
 //
-// If IsLastPage true then return non-empty last page and actual first row offset and size.
-//
 // Row filters combined by AND and allow to select dimension items,
 // it can be enum codes or enum id's, ex.: dim0 = 'CA' AND dim1 IN (2010, 2011, 2012)
 //
@@ -87,11 +85,10 @@ type ReadTableLayout struct {
 }
 
 // ReadPageLayout describes first row offset and size of data page to read input parameter or output table values.
-// If IsLastPage true then return non-empty last page and actual first row offset and size.
 type ReadPageLayout struct {
 	Offset     int64 // first row to return from select, zero-based ofsset
 	Size       int64 // max row count to select, if <= 0 then all rows
-	IsLastPage bool  // if true then return non-empty last page
+	IsLastPage bool  // last page flag: if true then read returned last page of rows
 }
 
 // CompareLayout describes source and size of data page to read and compare parameters or output table values from multiple model runs.

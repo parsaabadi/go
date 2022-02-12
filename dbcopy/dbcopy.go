@@ -24,7 +24,7 @@ Only model argument does not have default value and must be specified explicitly
   dbcopy -dbcopy.ModelName modelOne
   dbcopy -dbcopy.ModelDigest 649f17f26d67c37b78dde94f79772445
 
-Model digest is globally unique and you may want to it if there are multiple versions of the model.
+Model digest is globally unique and you may want to use it if there are multiple versions of the model.
 
 Copy to "text": read from database and save into metadata .json and .csv values (parameters and output tables):
   dbcopy -m modelOne
@@ -67,7 +67,7 @@ To copy only one modeling task metadata and run history:
   dbcopy -m modelOne -dbcopy.TaskId 1
   dbcopy -m modelOne -dbcopy.TaskName taskOne
 
-It may be convenient to pack (unpack) text files into .zip archive:
+It is convenient to pack (unpack) text files into .zip archive:
   dbcopy -m modelOne -dbcopy.Zip=true
   dbcopy -m modelOne -dbcopy.Zip
   dbcopy -m redModel -dbcopy.SetName Default -dbcopy.Zip

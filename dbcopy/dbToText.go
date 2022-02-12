@@ -4,9 +4,9 @@
 package main
 
 import (
-	"container/list"
 	"database/sql"
 	"encoding/csv"
+	"errors"
 	"os"
 	"path/filepath"
 
@@ -135,27 +135,30 @@ func toModelJson(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 	return nil
 }
 
-// toCsvCellFile convert parameter or output table values and write into csvDir/fileName.csv file.
+// toCellCsvFile convert parameter or output table values and write into csvDir/fileName.csv file.
 // if isIdCsv is true then csv contains enum id's, default: enum code
-func toCsvCellFile(
-	csvDir string,
+// The readLayout argument is db.ReadParamLayout if isParam is true else it is db.ReadTableLayout
+func toCellCsvFile(
+	dbConn *sql.DB,
 	modelDef *db.ModelMeta,
 	name string,
-	isAppend bool,
+	isParam bool,
+	readLayout interface{},
 	csvCvt db.CsvConverter,
-	cellLst *list.List,
+	isAppend bool,
+	csvDir string,
 	isIdCsv bool,
 	isWriteUtf8bom bool,
 	extraFirstName string,
 	extraFirstValue string) error {
 
 	// converter from db cell to csv row []string
-	var cvt func(interface{}, []string) error
+	var cvtRow func(interface{}, []string) error
 	var err error
 	if !isIdCsv {
-		cvt, err = csvCvt.CsvToRow(modelDef, name)
+		cvtRow, err = csvCvt.CsvToRow(modelDef, name)
 	} else {
-		cvt, err = csvCvt.CsvToIdRow(modelDef, name)
+		cvtRow, err = csvCvt.CsvToIdRow(modelDef, name)
 	}
 	if err != nil {
 		return err
@@ -203,20 +206,43 @@ func toCsvCellFile(
 		cs[0] = extraFirstValue // if this is all-in-one then first column value is run id (or name or set id set name)
 	}
 
-	for c := cellLst.Front(); c != nil; c = c.Next() {
+	// convert output table cell into []string and write line into csv file
+	cvtWr := func(src interface{}) (bool, error) {
 
 		// write cell line: dimension(s) and value
 		// if "all-in-one" then prepend first value, e.g.: run id
 		if extraFirstValue == "" {
-			if err := cvt(c.Value, cs); err != nil {
-				return err
+			if err := cvtRow(src, cs); err != nil {
+				return false, err
 			}
 		} else {
-			if err := cvt(c.Value, cs[1:]); err != nil {
-				return err
+			if err := cvtRow(src, cs[1:]); err != nil {
+				return false, err
 			}
 		}
 		if err := wr.Write(cs); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+
+	// select parameter or output table rows and write into csv file
+	if isParam {
+		lt, ok := readLayout.(db.ReadParamLayout)
+		if !ok {
+			return errors.New("invalid type, expected: ReadParamLayout (internal error)")
+		}
+		_, err = db.ReadParameterTo(dbConn, modelDef, &lt, cvtWr)
+		if err != nil {
+			return err
+		}
+	} else {
+		lt, ok := readLayout.(db.ReadTableLayout)
+		if !ok {
+			return errors.New("invalid type, expected: ReadTableLayout (internal error)")
+		}
+		_, err = db.ReadOutputTableTo(dbConn, modelDef, &lt, cvtWr)
+		if err != nil {
 			return err
 		}
 	}

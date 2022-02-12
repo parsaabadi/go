@@ -4,13 +4,13 @@
 package main
 
 import (
-	"container/list"
 	"encoding/json"
 	"errors"
 	"io"
 	"io/fs"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -141,6 +141,17 @@ func setContentType(next http.Handler) http.Handler {
 }
 
 // jsonSetHeaders set jscon response headers: Content-Type: application/json and Access-Control-Allow-Origin
+func csvSetHeaders(w http.ResponseWriter, name string) {
+
+	// set response headers: no Content-Length result in Transfer-Encoding: chunked
+	// todo: ETag instead no-cache and utf-8 file names
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", "attachment; filename="+`"`+url.QueryEscape(name)+".csv"+`"`)
+	w.Header().Set("Cache-Control", "no-cache")
+
+}
+
+// jsonSetHeaders set jscon response headers: Content-Type: application/json and Access-Control-Allow-Origin
 func jsonSetHeaders(w http.ResponseWriter, r *http.Request) {
 
 	// if Content-Type not set then use json
@@ -182,41 +193,37 @@ func jsonResponseBytes(w http.ResponseWriter, r *http.Request, src []byte) {
 	w.Write(src)
 }
 
-// jsonAppendListToResponse writes srcLst as json array into w response writer.
+// jsonCellWriter writes each row of data page into response as list of comma separated json values.
 // It is an append to response and response headers must already be set.
-// On error it writes 500 internal server error response.
-func jsonAppendListToResponse(
-	w http.ResponseWriter, r *http.Request, srcLst *list.List, cvt func(interface{}) (interface{}, error)) {
+func jsonCellWriter(w http.ResponseWriter, enc *json.Encoder, cvtCell func(interface{}) (interface{}, error)) func(src interface{}) (bool, error) {
 
-	w.Write([]byte{'['}) // start json output array
-
-	enc := json.NewEncoder(w)
 	isNext := false
 
-	for src := srcLst.Front(); src != nil; src = src.Next() {
+	// write data page into response as list of comma separated json values
+	cvtWr := func(src interface{}) (bool, error) {
 
 		if isNext {
 			w.Write([]byte{','}) // until the last separate array items with , comma
 		}
 
-		val := src.Value // id's cell
+		val := src // id's cell
 		var err error
 
 		// convert cell from id's to code if converter specified
-		if cvt != nil {
-			if val, err = cvt(val); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+		if cvtCell != nil {
+			if val, err = cvtCell(src); err != nil {
+				return false, err
 			}
 		}
 
 		// write actual value
 		if err := enc.Encode(val); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return false, err
 		}
 		isNext = true
+		return true, nil
 	}
-
-	w.Write([]byte{']'}) // end of array
+	return cvtWr
 }
 
 // jsonRequestDecode validate Content-Type: application/json and decode json body.

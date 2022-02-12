@@ -113,7 +113,7 @@ func (cellCvt CellParamConverter) CsvToIdRow(modelDef *ModelMeta, name string) (
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2))
+			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + name)
 		}
 
 		row[0] = fmt.Sprint(cell.SubId)
@@ -194,7 +194,7 @@ func (cellCvt CellParamConverter) CsvToRow(modelDef *ModelMeta, name string) (fu
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2))
+			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + name)
 		}
 
 		row[0] = fmt.Sprint(cell.SubId)

@@ -223,7 +223,7 @@ func SelectFirst(dbConn *sql.DB, query string, cvt func(row *sql.Row) error) err
 func SelectRows(dbConn *sql.DB, query string, cvt func(rows *sql.Rows) error) error {
 
 	if dbConn == nil {
-		return errors.New("invalid database transaction")
+		return errors.New("invalid database connection")
 	}
 	omppLog.LogSql(query)
 
@@ -237,6 +237,34 @@ func SelectRows(dbConn *sql.DB, query string, cvt func(rows *sql.Rows) error) er
 	for rows.Next() {
 		if err = cvt(rows); err != nil {
 			return err
+		}
+	}
+	return rows.Err()
+}
+
+// SelectRowsTo select db rows and pass each row to cvt().
+// cvt() return true to continue or false to stop rows processing.
+func SelectRowsTo(dbConn *sql.DB, query string, cvt func(rows *sql.Rows) (bool, error)) error {
+
+	if dbConn == nil {
+		return errors.New("invalid database connection")
+	}
+	omppLog.LogSql(query)
+
+	rows, err := dbConn.Query(query) // query db rows
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	// process each row until the end or until cvt() return false to continue
+	for rows.Next() {
+		isNext, err := cvt(rows)
+		if err != nil {
+			return err
+		}
+		if !isNext {
+			break
 		}
 	}
 	return rows.Err()
@@ -262,7 +290,7 @@ func SelectToList(
 	}
 	defer rows.Close()
 
-	// convert each row and append to the result list
+	// adjust page layout: starting offset and page size
 	nStart := layout.Offset
 	if nStart < 0 {
 		nStart = 0
@@ -273,55 +301,41 @@ func SelectToList(
 	}
 	var nRow int64
 
+	lt := ReadPageLayout{
+		Offset:     nStart,
+		Size:       0,
+		IsLastPage: false,
+	}
+
+	// convert each row and append to the result list
 	rs := list.New()
 	for rows.Next() {
 		nRow++
 		if nSize > 0 && nRow > nStart+nSize {
 			break
 		}
+		if nRow <= nStart {
+			continue
+		}
 		// convert and add row to the page
-		if layout.IsLastPage || !layout.IsLastPage && nRow > nStart {
-			r, err := cvt(rows)
-			if err != nil {
-				return nil, nil, err
-			}
-			rs.PushBack(r)
+		r, err := cvt(rows)
+		if err != nil {
+			return nil, nil, err
 		}
-		// if last page mode then
-		// 	 if page size limited then keep page rows
-		//   else keep only one row before page start offset
-		if layout.IsLastPage &&
-			(nSize > 0 && int64(rs.Len()) > nSize || nSize <= 0 && nRow <= nStart+1 && rs.Len() > 1) {
-			rs.Remove(rs.Front())
-		}
+		rs.PushBack(r)
+		lt.Size++
 	}
 	err = rows.Err()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// actual start row offset, size of result and last page flag
-	lt := ReadPageLayout{
-		Offset:     nRow - int64(rs.Len()),
-		Size:       int64(rs.Len()),
-		IsLastPage: nSize <= 0 || nSize > 0 && nRow <= nStart+nSize,
+	// check for the empty result page or last page
+	if lt.Size <= 0 {
+		lt.Offset = nRow
 	}
-	if !lt.IsLastPage && lt.Offset > 0 {
-		lt.Offset--
-	}
+	lt.IsLastPage = nSize <= 0 || nSize > 0 && nRow <= nStart+nSize
 
-	// return result if last page mode then:
-	//   if actual offset < input start offset then remove extra rows from top of the page
-	//   do such remove only if last row > input start offset
-	//   otherwise keep entire page (if input offset too far and below last row)
-	if layout.IsLastPage && lt.IsLastPage && nSize > 0 && lt.Offset < nStart && nRow > nStart {
-
-		for lt.Offset < nStart && rs.Len() > 1 {
-			rs.Remove(rs.Front())
-			lt.Offset++
-		}
-		lt.Size = int64(rs.Len())
-	}
 	return rs, &lt, nil
 }
 

@@ -9,12 +9,15 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/openmpp/go/ompp/config"
 	"github.com/openmpp/go/ompp/db"
 	"github.com/openmpp/go/ompp/helper"
 	"github.com/openmpp/go/ompp/omppLog"
 )
+
+const logPeriod = 5 // seconds, log periodically if copy take long time
 
 // copy model run from database into text json and csv files
 func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOptions) error {
@@ -183,37 +186,37 @@ func toRunText(
 	if err != nil {
 		return err
 	}
+	logT := time.Now().Unix()
 
-	paramLt := &db.ReadParamLayout{ReadLayout: db.ReadLayout{FromId: runId}}
+	paramLt := db.ReadParamLayout{ReadLayout: db.ReadLayout{FromId: runId}}
 	cvtParam := db.CellParamConverter{DoubleFmt: doubleFmt}
 
-	// write all parameters into csv file
-	for j := range modelDef.Param {
+	// write all parameters into csv files
+	nP := len(modelDef.Param)
+	omppLog.Log("  Parameters: ", nP)
+
+	for j := 0; j < nP; j++ {
 
 		paramLt.Name = modelDef.Param[j].Name
 
-		cLst, _, err := db.ReadParameter(dbConn, modelDef, paramLt)
-		if err != nil {
-			return err
-		}
-		if cLst.Len() <= 0 { // parameter data must exist for all parameters
-			return errors.New("missing run parameter values " + paramLt.Name + " run id: " + strconv.Itoa(paramLt.FromId))
-		}
+		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nP, ": ", paramLt.Name)
 
-		err = toCsvCellFile(
-			csvDir, modelDef, paramLt.Name, false, cvtParam, cLst, isIdCsv, isWriteUtf8bom, "", "")
+		err = toCellCsvFile(dbConn, modelDef, paramLt.Name, true, paramLt, cvtParam, false, csvDir, isIdCsv, isWriteUtf8bom, "", "")
 		if err != nil {
 			return err
 		}
 	}
 
-	// write output tables into csv file, if the table included in run results
-	tblLt := &db.ReadTableLayout{ReadLayout: db.ReadLayout{FromId: runId}}
+	// write output tables into csv files, if the table included in run results
+	tblLt := db.ReadTableLayout{ReadLayout: db.ReadLayout{FromId: runId}}
 	cvtExpr := db.CellExprConverter{DoubleFmt: doubleFmt, IsIdHeader: isIdCsv}
 	cvtAcc := db.CellAccConverter{DoubleFmt: doubleFmt, IsIdHeader: isIdCsv}
 	cvtAll := db.CellAllAccConverter{DoubleFmt: doubleFmt, ValueName: ""}
 
-	for j := range modelDef.Table {
+	nT := len(modelDef.Table)
+	omppLog.Log("  Tables: ", nT)
+
+	for j := 0; j < nT; j++ {
 
 		// check if table exist in model run results
 		var isFound bool
@@ -232,13 +235,9 @@ func toRunText(
 		tblLt.IsAccum = false
 		tblLt.IsAllAccum = false
 
-		cLst, _, err := db.ReadOutputTable(dbConn, modelDef, tblLt)
-		if err != nil {
-			return err
-		}
+		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name)
 
-		err = toCsvCellFile(
-			csvDir, modelDef, tblLt.Name, false, cvtExpr, cLst, isIdCsv, isWriteUtf8bom, "", "")
+		err = toCellCsvFile(dbConn, modelDef, tblLt.Name, false, tblLt, cvtExpr, false, csvDir, isIdCsv, isWriteUtf8bom, "", "")
 		if err != nil {
 			return err
 		}
@@ -249,13 +248,9 @@ func toRunText(
 			tblLt.IsAccum = true
 			tblLt.IsAllAccum = false
 
-			cLst, _, err = db.ReadOutputTable(dbConn, modelDef, tblLt)
-			if err != nil {
-				return err
-			}
+			logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name, " accumulators")
 
-			err = toCsvCellFile(
-				csvDir, modelDef, tblLt.Name, false, cvtAcc, cLst, isIdCsv, isWriteUtf8bom, "", "")
+			err = toCellCsvFile(dbConn, modelDef, tblLt.Name, false, tblLt, cvtAcc, false, csvDir, isIdCsv, isWriteUtf8bom, "", "")
 			if err != nil {
 				return err
 			}
@@ -264,13 +259,9 @@ func toRunText(
 			tblLt.IsAccum = true
 			tblLt.IsAllAccum = true
 
-			cLst, _, err = db.ReadOutputTable(dbConn, modelDef, tblLt)
-			if err != nil {
-				return err
-			}
+			logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name, " all accumulators")
 
-			err = toCsvCellFile(
-				csvDir, modelDef, tblLt.Name, false, cvtAll, cLst, isIdCsv, isWriteUtf8bom, "", "")
+			err = toCellCsvFile(dbConn, modelDef, tblLt.Name, false, tblLt, cvtAll, false, csvDir, isIdCsv, isWriteUtf8bom, "", "")
 			if err != nil {
 				return err
 			}

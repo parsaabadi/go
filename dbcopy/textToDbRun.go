@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/openmpp/go/ompp/config"
 	"github.com/openmpp/go/ompp/db"
@@ -246,10 +247,16 @@ func fromRunTextToDb(
 		IsToRun:     true}
 	cvtParam := db.CellParamConverter{DoubleFmt: doubleFmt}
 
+	nP := len(modelDef.Param)
+	omppLog.Log("  Parameters: ", nP)
+	logT := time.Now().Unix()
+
 	for j := range modelDef.Param {
 
 		// read parameter values from csv file
-		cLst, err := fromCsvFile(csvDir, modelDef, modelDef.Param[j].Name, meta.Param[j].SubCount, cvtParam, encodingName)
+		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nP, ": ", modelDef.Param[j].Name)
+
+		cLst, err := fromCellCsvFile(csvDir, modelDef, modelDef.Param[j].Name, meta.Param[j].SubCount, cvtParam, encodingName)
 		if err != nil {
 			return 0, err
 		}
@@ -273,6 +280,9 @@ func fromRunTextToDb(
 	cvtExpr := db.CellExprConverter{DoubleFmt: doubleFmt, IsIdHeader: false}
 	cvtAcc := db.CellAccConverter{DoubleFmt: doubleFmt, IsIdHeader: false}
 
+	nT := len(modelDef.Table)
+	omppLog.Log("  Tables: ", nT)
+
 	for j := range modelDef.Table {
 
 		// check if table exist in model run results
@@ -288,13 +298,15 @@ func fromRunTextToDb(
 		}
 
 		// read output table accumulator(s) values from csv file
-		acLst, err := fromCsvFile(csvDir, modelDef, modelDef.Table[j].Name, meta.Run.SubCount, cvtAcc, encodingName)
+		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", modelDef.Table[j].Name)
+
+		acLst, err := fromCellCsvFile(csvDir, modelDef, modelDef.Table[j].Name, meta.Run.SubCount, cvtAcc, encodingName)
 		if err != nil {
 			return 0, err
 		}
 
 		// read output table expression(s) values from csv file
-		ecLst, err := fromCsvFile(csvDir, modelDef, modelDef.Table[j].Name, meta.Run.SubCount, cvtExpr, encodingName)
+		ecLst, err := fromCellCsvFile(csvDir, modelDef, modelDef.Table[j].Name, meta.Run.SubCount, cvtExpr, encodingName)
 		if err != nil {
 			return 0, err
 		}

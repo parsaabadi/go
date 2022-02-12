@@ -137,7 +137,7 @@ func (cellCvt CellAllAccConverter) CsvToIdRow(modelDef *ModelMeta, name string) 
 		}
 
 		if len(row) != 1+nRank+nAcc || len(cell.DimIds) != nRank || len(cell.IsNull) != nAcc || len(cell.Value) != nAcc {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(1+nRank+nAcc))
+			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(1+nRank+nAcc) + ": " + name)
 		}
 
 		row[0] = fmt.Sprint(cell.SubId)
@@ -215,7 +215,7 @@ func (cellCvt CellAllAccConverter) CsvToRow(modelDef *ModelMeta, name string) (f
 		}
 
 		if len(row) != 1+nRank+nAcc || len(cell.DimIds) != nRank || len(cell.IsNull) != nAcc || len(cell.Value) != nAcc {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(1+nRank+nAcc))
+			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(1+nRank+nAcc) + ": " + name)
 		}
 
 		row[0] = fmt.Sprint(cell.SubId)
@@ -297,7 +297,7 @@ func (cellCvt CellAllAccConverter) CsvToCell(modelDef *ModelMeta, name string, s
 			Value:  make([]float64, nAcc)}
 
 		if len(row) != 1+nRank+nAcc {
-			return nil, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(1+nRank+nAcc))
+			return nil, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(1+nRank+nAcc) + ": " + name)
 		}
 
 		// subvalue number

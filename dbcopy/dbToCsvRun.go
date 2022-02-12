@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/openmpp/go/ompp/db"
 	"github.com/openmpp/go/ompp/helper"
@@ -409,15 +410,22 @@ func toRunCsv(
 	}
 
 	// write all parameters into csv file
-	paramLt := &db.ReadParamLayout{ReadLayout: db.ReadLayout{FromId: runId}}
+	paramLt := db.ReadParamLayout{ReadLayout: db.ReadLayout{FromId: runId}}
 	cvtParam := db.CellParamConverter{DoubleFmt: doubleFmt}
 
-	for j := range modelDef.Param {
+	nP := len(modelDef.Param)
+	omppLog.Log("  Parameters: ", nP)
+	logT := time.Now().Unix()
+
+	for j := 0; j < nP; j++ {
 
 		paramLt.Name = modelDef.Param[j].Name
 
-		if e := paramToRunCsv(dbConn, modelDef, paramLt, cvtParam, csvDir, isIdCsv, isWriteUtf8bom, isNextRun && isAllInOne, firstCol, firstVal); e != nil {
-			return e
+		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nP, ": ", paramLt.Name)
+
+		err = toCellCsvFile(dbConn, modelDef, paramLt.Name, true, paramLt, cvtParam, isNextRun && isAllInOne, csvDir, isIdCsv, isWriteUtf8bom, firstCol, firstVal)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -453,12 +461,15 @@ func toRunCsv(
 	}
 
 	// write output tables into csv file, if the table included in run results
-	tblLt := &db.ReadTableLayout{ReadLayout: db.ReadLayout{FromId: runId}}
+	tblLt := db.ReadTableLayout{ReadLayout: db.ReadLayout{FromId: runId}}
 	cvtExpr := db.CellExprConverter{DoubleFmt: doubleFmt, IsIdHeader: isIdCsv}
 	cvtAcc := db.CellAccConverter{DoubleFmt: doubleFmt, IsIdHeader: isIdCsv}
 	cvtAll := db.CellAllAccConverter{DoubleFmt: doubleFmt, ValueName: ""}
 
-	for j := range modelDef.Table {
+	nT := len(modelDef.Table)
+	omppLog.Log("  Tables: ", nT)
+
+	for j := 0; j < nT; j++ {
 
 		// check if table exist in model run results
 		var isFound bool
@@ -477,8 +488,11 @@ func toRunCsv(
 		tblLt.IsAccum = false
 		tblLt.IsAllAccum = false
 
-		if e := tableToRunCsv(dbConn, modelDef, tblLt, cvtExpr, csvDir, isIdCsv, isWriteUtf8bom, isNextRun && isAllInOne, firstCol, firstVal); e != nil {
-			return e
+		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name)
+
+		err = toCellCsvFile(dbConn, modelDef, tblLt.Name, false, tblLt, cvtExpr, isNextRun && isAllInOne, csvDir, isIdCsv, isWriteUtf8bom, firstCol, firstVal)
+		if err != nil {
+			return err
 		}
 
 		// write output table accumulators into csv file
@@ -487,82 +501,25 @@ func toRunCsv(
 			tblLt.IsAccum = true
 			tblLt.IsAllAccum = false
 
-			if e := tableToRunCsv(dbConn, modelDef, tblLt, cvtAcc, csvDir, isIdCsv, isWriteUtf8bom, isNextRun && isAllInOne, firstCol, firstVal); e != nil {
-				return e
+			logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name, " accumulators")
+
+			err = toCellCsvFile(dbConn, modelDef, tblLt.Name, false, tblLt, cvtAcc, isNextRun && isAllInOne, csvDir, isIdCsv, isWriteUtf8bom, firstCol, firstVal)
+			if err != nil {
+				return err
 			}
 
 			// write all accumulators view into csv file
 			tblLt.IsAccum = true
 			tblLt.IsAllAccum = true
 
-			if e := tableToRunCsv(dbConn, modelDef, tblLt, cvtAll, csvDir, isIdCsv, isWriteUtf8bom, isNextRun && isAllInOne, firstCol, firstVal); e != nil {
-				return e
+			logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name, " all accumulators")
+
+			err = toCellCsvFile(dbConn, modelDef, tblLt.Name, false, tblLt, cvtAll, isNextRun && isAllInOne, csvDir, isIdCsv, isWriteUtf8bom, firstCol, firstVal)
+			if err != nil {
+				return err
 			}
 		}
 	}
 
 	return nil
-}
-
-// write run parameter values into csv file
-func paramToRunCsv(
-	dbConn *sql.DB,
-	modelDef *db.ModelMeta,
-	paramLt *db.ReadParamLayout,
-	csvCvt db.CsvConverter,
-	csvDir string,
-	isIdCsv bool,
-	isWriteUtf8bom bool,
-	isAppend bool,
-	firstCol string,
-	firstVal string) error {
-
-	cLst, _, err := db.ReadParameter(dbConn, modelDef, paramLt)
-	if err != nil {
-		return err
-	}
-	if cLst.Len() <= 0 { // parameter data must exist for all parameters
-		return errors.New("missing run parameter values " + paramLt.Name + " run id: " + strconv.Itoa(paramLt.FromId))
-	}
-	return toCsvCellFile(
-		csvDir,
-		modelDef,
-		paramLt.Name,
-		isAppend,
-		csvCvt,
-		cLst,
-		isIdCsv,
-		isWriteUtf8bom,
-		firstCol,
-		firstVal)
-}
-
-// write output table expression values or accumulator values into csv file
-func tableToRunCsv(
-	dbConn *sql.DB,
-	modelDef *db.ModelMeta,
-	tblLt *db.ReadTableLayout,
-	csvCvt db.CsvConverter,
-	csvDir string,
-	isIdCsv bool,
-	isWriteUtf8bom bool,
-	isAppend bool,
-	firstCol string,
-	firstVal string) error {
-
-	cLst, _, err := db.ReadOutputTable(dbConn, modelDef, tblLt)
-	if err != nil {
-		return err
-	}
-	return toCsvCellFile(
-		csvDir,
-		modelDef,
-		tblLt.Name,
-		isAppend,
-		csvCvt,
-		cLst,
-		isIdCsv,
-		isWriteUtf8bom,
-		firstCol,
-		firstVal)
 }

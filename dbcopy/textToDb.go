@@ -185,8 +185,8 @@ func fromLangTextJsonToDb(dbConn *sql.DB, modelDef *db.ModelMeta, inpDir string)
 	return langDef, nil
 }
 
-// fromCsvFile read parameter or output table csv file and convert it to list of db cells.
-func fromCsvFile(
+// fromCellCsvFile read parameter or output table csv file and convert it to list of db cells.
+func fromCellCsvFile(
 	csvDir string, modelDef *db.ModelMeta, name string, subCount int, csvCvt db.CsvConverter, encodingName string) (*list.List, error) {
 
 	// converter from csv row []string to db cell

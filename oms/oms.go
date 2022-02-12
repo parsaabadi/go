@@ -897,17 +897,27 @@ func apiDownloadRoutes(router *vestigo.Router) {
 	router.Get("/api/download/file-tree/:folder", fileTreeDownloadGetHandler, logRequest)
 
 	// POST /api/download/model/:model
+	// POST /api/download/model/:model/csv-bom
 	// POST /api/download/model/:model/no-acc
+	// POST /api/download/model/:model/no-acc/csv-bom
 	router.Post("/api/download/model/:model", modelDownloadPostHandler, logRequest)
+	router.Post("/api/download/model/:model/csv-bom", modelDownloadCsvBomPostHandler, logRequest)
 	router.Post("/api/download/model/:model/no-acc", modelDownloadNoAccPostHandler, logRequest)
+	router.Post("/api/download/model/:model/no-acc/csv-bom", modelDownloadNoAccCsvBomPostHandler, logRequest)
 
 	// POST /api/download/model/:model/run/:run
+	// POST /api/download/model/:model/run/:run/csv-bom
 	// POST /api/download/model/:model/run/:run/no-acc
+	// POST /api/download/model/:model/run/:run/no-acc/csv-bom
 	router.Post("/api/download/model/:model/run/:run", runDownloadPostHandler, logRequest)
+	router.Post("/api/download/model/:model/run/:run/csv-bom", runDownloadCsvBomPostHandler, logRequest)
 	router.Post("/api/download/model/:model/run/:run/no-acc", runDownloadNoAccPostHandler, logRequest)
+	router.Post("/api/download/model/:model/run/:run/no-acc/csv-bom", runDownloadNoAccCsvBomPostHandler, logRequest)
 
 	// POST /api/download/model/:model/workset/:set
+	// POST /api/download/model/:model/workset/:set/csv-bom
 	router.Post("/api/download/model/:model/workset/:set", worksetDownloadPostHandler, logRequest)
+	router.Post("/api/download/model/:model/workset/:set/csv-bom", worksetDownloadCsvBomPostHandler, logRequest)
 
 	// DELETE /api/download/delete/:folder
 	router.Delete("/api/download/delete/:folder", downloadDeleteHandler, logRequest)

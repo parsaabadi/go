@@ -4,9 +4,11 @@
 package main
 
 import (
+	"container/list"
 	"database/sql"
 	"errors"
 	"strconv"
+	"time"
 
 	"github.com/openmpp/go/ompp/config"
 	"github.com/openmpp/go/ompp/db"
@@ -172,6 +174,9 @@ func copyRunDbToDb(
 
 	// copy all run parameters, output accumulators and expressions from source to destination
 	omppLog.Log("Model run from ", srcId, " ", pub.Name, " to ", dstId)
+	nP := len(srcModel.Param)
+	omppLog.Log("  Parameters: ", nP)
+	logT := time.Now().Unix()
 
 	paramLt := db.ReadParamLayout{ReadLayout: db.ReadLayout{FromId: srcId}}
 	dstParamLt := db.WriteParamLayout{
@@ -184,8 +189,14 @@ func copyRunDbToDb(
 
 		// source: read parameter values
 		paramLt.Name = srcModel.Param[j].Name
+		cLst := list.New()
 
-		cLst, _, err := db.ReadParameter(srcDb, srcModel, &paramLt)
+		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nP, ": ", paramLt.Name)
+
+		_, err := db.ReadParameterTo(srcDb, srcModel, &paramLt, func(src interface{}) (bool, error) {
+			cLst.PushBack(src)
+			return true, nil
+		})
 		if err != nil {
 			return 0, err
 		}
@@ -208,6 +219,9 @@ func copyRunDbToDb(
 		WriteLayout: db.WriteLayout{ToId: dstId},
 		DoubleFmt:   doubleFmt}
 
+	nT := len(srcModel.Table)
+	omppLog.Log("  Tables: ", nT)
+
 	for j := range srcModel.Table {
 
 		// check if table exist in model run results
@@ -225,16 +239,26 @@ func copyRunDbToDb(
 		// source: read output table accumulator
 		tblLt.Name = srcModel.Table[j].Name
 		tblLt.IsAccum = true
+		acLst := list.New()
 
-		acLst, _, err := db.ReadOutputTable(srcDb, srcModel, &tblLt)
+		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name)
+
+		_, err = db.ReadOutputTableTo(srcDb, srcModel, &tblLt, func(src interface{}) (bool, error) {
+			acLst.PushBack(src)
+			return true, nil
+		})
 		if err != nil {
 			return 0, err
 		}
 
 		// source: read output table expression values
 		tblLt.IsAccum = false
+		ecLst := list.New()
 
-		ecLst, _, err := db.ReadOutputTable(srcDb, srcModel, &tblLt)
+		_, err = db.ReadOutputTableTo(srcDb, srcModel, &tblLt, func(src interface{}) (bool, error) {
+			ecLst.PushBack(src)
+			return true, nil
+		})
 		if err != nil {
 			return 0, err
 		}
