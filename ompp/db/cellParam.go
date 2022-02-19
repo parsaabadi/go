@@ -50,7 +50,7 @@ func (cellCvt CellParamConverter) CsvFileName(modelDef *ModelMeta, name string, 
 	return modelDef.Param[k].Name + ".csv", nil
 }
 
-// CsvHeader retrun first line for csv file: column names, it's look like: sub_id,dim0,dim1,param_value.
+// CsvHeader return first line for csv file: column names, it's look like: sub_id,dim0,dim1,param_value.
 func (cellCvt CellParamConverter) CsvHeader(modelDef *ModelMeta, name string) ([]string, error) {
 
 	// validate parameters
@@ -80,10 +80,38 @@ func (cellCvt CellParamConverter) CsvHeader(modelDef *ModelMeta, name string) ([
 	return h, nil
 }
 
+// KeyIds return converter to copy primary key: (sub id, dimension ids) into key []int.
+//
+// Converter will return error if len(key) not equal to row key size.
+func (cellCvt CellParamConverter) KeyIds(name string) (func(interface{}, []int) error, error) {
+
+	cvt := func(src interface{}, key []int) error {
+
+		cell, ok := src.(CellParam)
+		if !ok {
+			return errors.New("invalid type, expected: CellParam (internal error): " + name)
+		}
+
+		n := len(cell.DimIds)
+		if len(key) != n+1 {
+			return errors.New("invalid size of key buffer, expected: " + strconv.Itoa(n+2) + ": " + name)
+		}
+
+		key[0] = cell.SubId
+
+		for k, e := range cell.DimIds {
+			key[k+1] = e
+		}
+		return nil
+	}
+
+	return cvt, nil
+}
+
 // CsvToIdRow return converter from parameter cell (sub id, dimensions, value) to csv row []string.
 //
 // Converter simply does Sprint() for each sub-value id, dimension item id and value.
-// Converter will retrun error if len(row) not equal to number of fields in csv record.
+// Converter will return error if len(row) not equal to number of fields in csv record.
 func (cellCvt CellParamConverter) CsvToIdRow(modelDef *ModelMeta, name string) (func(interface{}, []string) error, error) {
 
 	// validate parameters
@@ -108,7 +136,7 @@ func (cellCvt CellParamConverter) CsvToIdRow(modelDef *ModelMeta, name string) (
 
 		cell, ok := src.(CellParam)
 		if !ok {
-			return errors.New("invalid type, expected: parameter cell (internal error)")
+			return errors.New("invalid type, expected: CellParam (internal error): " + name)
 		}
 
 		n := len(cell.DimIds)
@@ -139,7 +167,7 @@ func (cellCvt CellParamConverter) CsvToIdRow(modelDef *ModelMeta, name string) (
 
 // CsvToRow return converter from parameter cell (sub id, dimensions, value) to csv row []string.
 //
-// Converter will retrun error if len(row) not equal to number of fields in csv record.
+// Converter will return error if len(row) not equal to number of fields in csv record.
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
 // If parameter type is enum based then csv row value is enum code and cell value is enum id.
 func (cellCvt CellParamConverter) CsvToRow(modelDef *ModelMeta, name string) (func(interface{}, []string) error, error) {
@@ -189,7 +217,7 @@ func (cellCvt CellParamConverter) CsvToRow(modelDef *ModelMeta, name string) (fu
 
 		cell, ok := src.(CellParam)
 		if !ok {
-			return errors.New("invalid type, expected: parameter cell (internal error)")
+			return errors.New("invalid type, expected: parameter cell (internal error): " + name)
 		}
 
 		n := len(cell.DimIds)
@@ -247,7 +275,7 @@ func (cellCvt CellParamConverter) CsvToRow(modelDef *ModelMeta, name string) (fu
 			case int:
 				iv = e
 			default:
-				return errors.New("invalid parameter value type, expected: integer enum")
+				return errors.New("invalid parameter value type, expected: integer enum: " + name)
 			}
 
 			v, err := fv(int(iv))
@@ -268,7 +296,7 @@ func (cellCvt CellParamConverter) CsvToRow(modelDef *ModelMeta, name string) (fu
 
 // CsvToCell return closure to convert csv row []string to parameter cell (sub id, dimensions, value).
 //
-// It does retrun error if len(row) not equal to number of fields in cell db-record.
+// It does return error if len(row) not equal to number of fields in cell db-record.
 // If dimension type is enum based then csv row is enum code and it is converted into cell.DimIds (into dimension type type enum ids).
 // If parameter type is enum based then csv row value is enum code and it is converted into value enum id.
 func (cellCvt CellParamConverter) CsvToCell(modelDef *ModelMeta, name string, subCount int) (func(row []string) (interface{}, error), error) {
@@ -322,7 +350,7 @@ func (cellCvt CellParamConverter) CsvToCell(modelDef *ModelMeta, name string, su
 					return true, 0.0, nil
 				}
 				// else parameter is not nullable
-				return true, 0.0, errors.New("invalid parameter value, it cannot be NULL")
+				return true, 0.0, errors.New("invalid parameter value, it cannot be NULL: " + name)
 			}
 			vf, e := strconv.ParseFloat(src, 64)
 			if e != nil {
@@ -348,7 +376,7 @@ func (cellCvt CellParamConverter) CsvToCell(modelDef *ModelMeta, name string, su
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {
-			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(n+2))
+			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(n+2) + ": " + name)
 		}
 
 		// subvalue number
@@ -448,10 +476,10 @@ func (cellCvt CellParamConverter) IdToCodeCell(modelDef *ModelMeta, name string)
 
 		srcCell, ok := src.(CellParam)
 		if !ok {
-			return nil, errors.New("invalid type, expected: parameter cell (internal error)")
+			return nil, errors.New("invalid type, expected: parameter cell (internal error): " + name)
 		}
 		if len(srcCell.DimIds) != param.Rank {
-			return nil, errors.New("invalid cell rank: " + strconv.Itoa(len(srcCell.DimIds)) + ", expected: " + strconv.Itoa(param.Rank))
+			return nil, errors.New("invalid cell rank: " + strconv.Itoa(len(srcCell.DimIds)) + ", expected: " + strconv.Itoa(param.Rank) + ": " + name)
 		}
 
 		dstCell := CellCodeParam{
@@ -505,7 +533,7 @@ func (cellCvt CellParamConverter) IdToCodeCell(modelDef *ModelMeta, name string)
 			case int:
 				iv = e
 			default:
-				return nil, errors.New("invalid parameter value type, expected: integer enum")
+				return nil, errors.New("invalid parameter value type, expected: integer enum: " + name)
 			}
 
 			v, err := fv(int(iv)) // find value code by id
@@ -572,10 +600,10 @@ func (cellCvt CellParamConverter) CodeToIdCell(modelDef *ModelMeta, name string)
 
 		srcCell, ok := src.(CellCodeParam)
 		if !ok {
-			return nil, errors.New("invalid type, expected: parameter code cell (internal error)")
+			return nil, errors.New("invalid type, expected: parameter code cell (internal error): " + name)
 		}
 		if len(srcCell.Dims) != param.Rank {
-			return nil, errors.New("invalid cell rank: " + strconv.Itoa(len(srcCell.Dims)) + ", expected: " + strconv.Itoa(param.Rank))
+			return nil, errors.New("invalid cell rank: " + strconv.Itoa(len(srcCell.Dims)) + ", expected: " + strconv.Itoa(param.Rank) + ": " + name)
 		}
 
 		dstCell := CellParam{
@@ -602,7 +630,7 @@ func (cellCvt CellParamConverter) CodeToIdCell(modelDef *ModelMeta, name string)
 		} else {
 			sv, ok := srcCell.Value.(string)
 			if !ok {
-				return nil, errors.New("invalid parameter value type, expected: string enum code")
+				return nil, errors.New("invalid parameter value type, expected: string enum code: " + name)
 			}
 			v, err := fv(sv) // find value id by code
 			if err != nil {

@@ -74,7 +74,7 @@ func Utf8Reader(f *os.File, encodingName string) (io.Reader, error) {
 
 	nBom, err := f.Read(bom)
 	if err != nil {
-		if nBom == 0 && err == io.EOF { // empty file: retrun source file as is
+		if nBom == 0 && err == io.EOF { // empty file: return source file as is
 			return f, nil
 		}
 		return nil, errors.New("file read error: " + err.Error())
@@ -115,7 +115,7 @@ func Utf8Reader(f *os.File, encodingName string) (io.Reader, error) {
 		buf := make([]byte, utf8ProbeLen)
 		nProbe, err := f.Read(buf)
 		if err != nil {
-			if nProbe == 0 && err == io.EOF { // empty file: retrun source file as is
+			if nProbe == 0 && err == io.EOF { // empty file: return source file as is
 				return f, nil
 			}
 			return nil, errors.New("file read error: " + err.Error())
@@ -138,7 +138,7 @@ func Utf8Reader(f *os.File, encodingName string) (io.Reader, error) {
 		}
 
 		// file is utf-8 if:
-		// all runes are utf-8 and file size less than max probe size or file size excceeds probe size
+		// all runes are utf-8 and file size less than max probe size or file size exceeds probe size
 		if nPos >= nProbe || nPos >= utf8ProbeLen-utf8.UTFMax {
 			return f, nil // utf-8 file: return source file reader
 		}

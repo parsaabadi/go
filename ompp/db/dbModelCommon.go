@@ -327,7 +327,7 @@ func (typeRow *TypeDicRow) sqlColumnType(dbFacet Facet) (string, error) {
 	return "", errors.New("invalid type id: " + strconv.Itoa(typeRow.TypeId))
 }
 
-// IsRunCompleted retrun true if run status one of: s=success, x=exit, e=error
+// IsRunCompleted return true if run status one of: s=success, x=exit, e=error
 func IsRunCompleted(status string) bool {
 	return status == DoneRunStatus || status == ExitRunStatus || status == ErrorRunStatus
 }

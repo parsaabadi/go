@@ -4,7 +4,6 @@
 package main
 
 import (
-	"container/list"
 	"encoding/csv"
 	"errors"
 	"io"
@@ -239,6 +238,9 @@ func (mc *ModelCatalog) UpdateWorksetParameter(
 		omppLog.Log("Warning: invalid (empty) workset name")
 		return false, nil
 	}
+	if len(cArr) <= 0 {
+		return false, errors.New("workset: " + wp.Name + " parameter empty: " + param.Name)
+	}
 
 	// if model metadata not loaded then read it from database
 	if _, ok := mc.loadModelMeta(dn); !ok {
@@ -278,21 +280,23 @@ func (mc *ModelCatalog) UpdateWorksetParameter(
 		return false, errors.New("Failed to create parameter cell value converter: " + param.Name + " : " + e.Error())
 	}
 
-	cLst := list.New()
-	for j := range cArr {
-		c, e := cvt(cArr[j])
-		if e != nil {
-			return false, errors.New("Failed to convert value of parameter: " + param.Name + " : " + e.Error())
+	// for each row convert parameter cell from code to enum id
+	k := -1
+	from := func() (interface{}, error) {
+		k++
+		if k >= len(cArr) {
+			return nil, nil // end of data
 		}
-		cLst.PushBack(c)
-	}
-	if cLst.Len() <= 0 {
-		return false, errors.New("workset: " + wp.Name + " parameter empty: " + param.Name)
+
+		c, e := cvt(cArr[k])
+		if e != nil {
+			return nil, errors.New("Failed to convert value of parameter: " + param.Name + " : " + e.Error())
+		}
+		return c, nil
 	}
 
 	// update workset parameter metadata and parameter values
-	hId, err := wm.UpdateWorksetParameter(
-		mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, isReplace, param, cLst, mc.modelLst[idx].langMeta)
+	hId, err := wm.UpdateWorksetParameterFrom(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, isReplace, param, mc.modelLst[idx].langMeta, from)
 	if err != nil {
 		omppLog.Log("Error at update workset: ", dn, ": ", wp.Name, ": ", err.Error())
 		return false, err
@@ -427,7 +431,7 @@ func (mc *ModelCatalog) UpdateWorksetParameterCsv(
 	}
 
 	// if csv file exist then read csv file and convert and append lines into cell list
-	cLst := list.New()
+	var from func() (interface{}, error) = nil
 
 	if csvRd != nil {
 
@@ -438,38 +442,38 @@ func (mc *ModelCatalog) UpdateWorksetParameterCsv(
 			return false, errors.New("invalid converter from csv row: " + err.Error())
 		}
 
-		isFirst := true
-	ReadFor:
-		for {
+		// skip header line
+		_, e := csvRd.Read()
+		switch {
+		case e == io.EOF:
+			return false, errors.New("Inavlid (empty) csv parameter values " + param.Name)
+		case err != nil:
+			return false, errors.New("Failed to read csv parameter values " + param.Name)
+		}
+
+		// convert each line into cell (id cell)
+		from = func() (interface{}, error) {
 			row, err := csvRd.Read()
 			switch {
 			case err == io.EOF:
-				break ReadFor
+				return nil, nil // eof
 			case err != nil:
-				return false, errors.New("Failed to read csv parameter values " + param.Name)
-			}
-
-			// skip header line
-			if isFirst {
-				isFirst = false
-				continue
+				return nil, errors.New("Failed to read csv parameter values " + param.Name)
 			}
 
 			// convert and append cell to cell list
 			c, err := cvt(row)
 			if err != nil {
-				return false, errors.New("Failed to convert csv parameter values " + param.Name)
+				return nil, errors.New("Failed to convert csv parameter values " + param.Name)
 			}
-			cLst.PushBack(c)
+			return c, nil
 		}
-		if cLst.Len() <= 0 {
-			return false, errors.New("workset: " + wp.Name + " parameter empty: " + param.Name)
-		}
+
 	}
 
 	// update workset parameter metadata and parameter values
-	hId, err := wm.UpdateWorksetParameter(
-		mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, isReplace, param, cLst, mc.modelLst[idx].langMeta)
+	hId, err := wm.UpdateWorksetParameterFrom(
+		mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, isReplace, param, mc.modelLst[idx].langMeta, from)
 	if err != nil {
 		omppLog.Log("Error at update workset: ", dn, ": ", wp.Name, ": ", err.Error())
 		return false, err
@@ -479,7 +483,7 @@ func (mc *ModelCatalog) UpdateWorksetParameterCsv(
 
 // UpdateWorksetParameterPage merge "page" of parameter values into workset.
 // Parameter must be already in workset and identified by model digest-or-name, set name, parameter name.
-func (mc *ModelCatalog) UpdateWorksetParameterPage(dn, wsn, name string, cellLst *list.List) error {
+func (mc *ModelCatalog) UpdateWorksetParameterPage(dn, wsn, name string, from func() (interface{}, error)) error {
 
 	// if model digest-or-name, set name or paramete name is empty then return empty results
 	if dn == "" {
@@ -536,7 +540,7 @@ func (mc *ModelCatalog) UpdateWorksetParameterPage(dn, wsn, name string, cellLst
 	layout.SubCount = nSub
 
 	// write parameter values
-	return db.WriteParameter(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, &layout, cellLst)
+	return db.WriteParameterFrom(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, &layout, from)
 }
 
 // DeleteWorksetParameter do delete workset parameter metadata and values from database.

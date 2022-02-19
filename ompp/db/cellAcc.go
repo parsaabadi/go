@@ -53,7 +53,7 @@ func (cellCvt CellAccConverter) CsvFileName(modelDef *ModelMeta, name string, is
 	return modelDef.Table[k].Name + ".acc.csv", nil
 }
 
-// CsvHeader retrun first line for csv file: column names.
+// CsvHeader return first line for csv file: column names.
 // Column names can be like: acc_name,sub_id,dim0,dim1,acc_value
 // or if isIdHeader is true then: acc_id,sub_id,dim0,dim1,acc_value
 func (cellCvt CellAccConverter) CsvHeader(modelDef *ModelMeta, name string) ([]string, error) {
@@ -91,17 +91,46 @@ func (cellCvt CellAccConverter) CsvHeader(modelDef *ModelMeta, name string) ([]s
 	return h, nil
 }
 
+// KeyIds return converter to copy primary key: (acc_id, sub_id, dimension ids) into key []int.
+//
+// Converter will return error if len(key) not equal to row key size.
+func (cellCvt CellAccConverter) KeyIds(name string) (func(interface{}, []int) error, error) {
+
+	cvt := func(src interface{}, key []int) error {
+
+		cell, ok := src.(CellAcc)
+		if !ok {
+			return errors.New("invalid type, expected: CellAcc (internal error): " + name)
+		}
+
+		n := len(cell.DimIds)
+		if len(key) != n+2 {
+			return errors.New("invalid size of key buffer, expected: " + strconv.Itoa(n+2) + ": " + name)
+		}
+
+		key[0] = cell.AccId
+		key[1] = cell.SubId
+
+		for k, e := range cell.DimIds {
+			key[k+2] = e
+		}
+		return nil
+	}
+
+	return cvt, nil
+}
+
 // CsvToIdRow return converter from output table cell (acc_id, sub_id, dimensions, value) to csv row []string.
 //
 // Converter simply does Sprint() for each dimension item id, accumulator id, subvalue number and value.
-// Converter will retrun error if len(row) not equal to number of fields in csv record.
+// Converter will return error if len(row) not equal to number of fields in csv record.
 func (cellCvt CellAccConverter) CsvToIdRow(modelDef *ModelMeta, name string) (func(interface{}, []string) error, error) {
 
 	cvt := func(src interface{}, row []string) error {
 
 		cell, ok := src.(CellAcc)
 		if !ok {
-			return errors.New("invalid type, expected: output table accumulator cell (internal error)")
+			return errors.New("invalid type, expected: CellAcc (internal error): " + name)
 		}
 
 		n := len(cell.DimIds)
@@ -135,7 +164,7 @@ func (cellCvt CellAccConverter) CsvToIdRow(modelDef *ModelMeta, name string) (fu
 // CsvToRow return converter from output table cell (acc_id, sub_id, dimensions, value)
 // to csv row []string (acc_name, sub_id, dimensions, value).
 //
-// Converter will retrun error if len(row) not equal to number of fields in csv record.
+// Converter will return error if len(row) not equal to number of fields in csv record.
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
 func (cellCvt CellAccConverter) CsvToRow(modelDef *ModelMeta, name string) (func(interface{}, []string) error, error) {
 
@@ -169,7 +198,7 @@ func (cellCvt CellAccConverter) CsvToRow(modelDef *ModelMeta, name string) (func
 
 		cell, ok := src.(CellAcc)
 		if !ok {
-			return errors.New("invalid type, expected: output table accumulator cell (internal error)")
+			return errors.New("invalid type, expected: output table accumulator cell (internal error): " + name)
 		}
 
 		n := len(cell.DimIds)
@@ -207,7 +236,7 @@ func (cellCvt CellAccConverter) CsvToRow(modelDef *ModelMeta, name string) (func
 
 // CsvToCell return closure to convert csv row []string to output table accumulator cell (dimensions and value).
 //
-// It does retrun error if len(row) not equal to number of fields in cell db-record.
+// It does return error if len(row) not equal to number of fields in cell db-record.
 // If dimension type is enum based then csv row is enum code and it is converted into cell.DimIds (into dimension type type enum ids).
 func (cellCvt CellAccConverter) CsvToCell(modelDef *ModelMeta, name string, subCount int) (func(row []string) (interface{}, error), error) {
 
@@ -245,7 +274,7 @@ func (cellCvt CellAccConverter) CsvToCell(modelDef *ModelMeta, name string, subC
 
 		n := len(cell.DimIds)
 		if len(row) != n+3 {
-			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(n+3))
+			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(n+3) + ": " + name)
 		}
 
 		// accumulator id by name
@@ -337,10 +366,10 @@ func (cellCvt CellAccConverter) IdToCodeCell(modelDef *ModelMeta, name string) (
 
 		srcCell, ok := src.(CellAcc)
 		if !ok {
-			return nil, errors.New("invalid type, expected: output table accumulator id cell (internal error)")
+			return nil, errors.New("invalid type, expected: output table accumulator id cell (internal error): " + name)
 		}
 		if len(srcCell.DimIds) != table.Rank {
-			return nil, errors.New("invalid cell rank: " + strconv.Itoa(len(srcCell.DimIds)) + ", expected: " + strconv.Itoa(table.Rank))
+			return nil, errors.New("invalid cell rank: " + strconv.Itoa(len(srcCell.DimIds)) + ", expected: " + strconv.Itoa(table.Rank) + ": " + name)
 		}
 
 		dstCell := CellCodeAcc{

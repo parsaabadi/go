@@ -12,8 +12,9 @@ import (
 //
 // Name is a parameter or output table name to read.
 type WriteLayout struct {
-	Name string // parameter name or output table name
-	ToId int    // run id or set id to write parameter or output table values
+	Name     string // parameter name or output table name
+	ToId     int    // run id or set id to write parameter or output table values
+	SubCount int    // sub-values count
 }
 
 // WriteParamLayout describes parameter values for insert or update.
@@ -22,7 +23,6 @@ type WriteParamLayout struct {
 	WriteLayout        // common write layout: parameter name, run or set id
 	IsToRun     bool   // if true then write into into model run else into workset
 	IsPage      bool   // if true then write only page of data else all parameter values
-	SubCount    int    // parameter sub-values count
 	DoubleFmt   string // used for float model types digest calculation
 }
 

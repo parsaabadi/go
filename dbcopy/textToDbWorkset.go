@@ -355,22 +355,14 @@ func fromWorksetTextToDb(
 	logT := time.Now().Unix()
 
 	// read all workset parameters from csv files
+	cvtParam := db.CellParamConverter{DoubleFmt: doubleFmt}
+
 	for j := range paramLst {
 
 		// read parameter values from csv file
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nP, ": ", paramLst[j].Name)
 
-		cvtParam := db.CellParamConverter{DoubleFmt: doubleFmt}
-		cLst, err := fromCellCsvFile(csvDir, modelDef, paramLst[j].Name, paramLst[j].SubCount, cvtParam, encodingName)
-		if err != nil {
-			return 0, err
-		}
-		if cLst == nil || cLst.Len() <= 0 {
-			return 0, errors.New("workset: " + ws.Set.Name + " parameter empty: " + paramLst[j].Name)
-		}
-
-		// insert or update parameter values in workset
-		_, err = ws.UpdateWorksetParameter(dbConn, modelDef, true, &paramLst[j], cLst, langDef)
+		err = updateWorksetParamFromCsvFile(dbConn, modelDef, ws, &paramLst[j], csvDir, langDef, cvtParam, encodingName)
 		if err != nil {
 			return 0, err
 		}
@@ -383,4 +375,48 @@ func fromWorksetTextToDb(
 	}
 
 	return dstId, nil
+}
+
+// updateWorksetParamFromCsvFile read parameter csv file values insert it into db parameter value table and update workset parameter metadata
+func updateWorksetParamFromCsvFile(
+	dbConn *sql.DB,
+	modelDef *db.ModelMeta,
+	wsMeta *db.WorksetMeta,
+	paramPub *db.ParamRunSetPub,
+	csvDir string,
+	langDef *db.LangMeta,
+	csvCvt db.CellParamConverter,
+	encodingName string) error {
+
+	// converter from csv row []string to db cell
+	cvt, err := csvCvt.CsvToCell(modelDef, paramPub.Name, paramPub.SubCount)
+	if err != nil {
+		return errors.New("invalid converter from csv row: " + err.Error())
+	}
+
+	// open csv file, convert to utf-8 and parse csv into db cells
+	// reading from .id.csv files not supported by converters
+	fn, err := csvCvt.CsvFileName(modelDef, paramPub.Name, false)
+	if err != nil {
+		return errors.New("invalid csv file name: " + err.Error())
+	}
+
+	f, err := os.Open(filepath.Join(csvDir, fn))
+	if err != nil {
+		return errors.New("csv file open error: " + fn + ": " + err.Error())
+	}
+	defer f.Close()
+
+	from, err := makeFromCsvReader(fn, f, encodingName, cvt)
+	if err != nil {
+		return errors.New("fail to create expressions csv reader: " + err.Error())
+	}
+
+	// write each csv row into parameter or output table
+	_, err = wsMeta.UpdateWorksetParameterFrom(dbConn, modelDef, true, paramPub, langDef, from)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

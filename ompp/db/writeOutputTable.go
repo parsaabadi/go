@@ -4,24 +4,26 @@
 package db
 
 import (
-	"container/list"
 	"crypto/md5"
 	"database/sql"
 	"errors"
 	"fmt"
+	"hash"
 	"strconv"
 	"time"
 
 	"github.com/openmpp/go/ompp/helper"
 )
 
-// WriteOutputTable insert output table values (accumulators or expressions) into model run.
+// WriteOutputTableFrom insert output table values (accumulators or expressions) into model run from accFrom() and exprFrom() readers.
 //
 // Model run must exist and be in completed state (i.e. success or error state).
 // Model run should not already contain output table values: it can be inserted only once in model run and cannot be updated after.
-// Double format is used for float model types digest calculation, if non-empty format supplied
-func WriteOutputTable(
-	dbConn *sql.DB, modelDef *ModelMeta, layout *WriteTableLayout, accCellLst *list.List, exprCellLst *list.List) error {
+// Accumulators and expressions values must come in the order of primary key otherwise digest calculated incorrectly.
+// Double format is used for float model types digest calculation, if non-empty format supplied.
+func WriteOutputTableFrom(
+	dbConn *sql.DB, modelDef *ModelMeta, layout *WriteTableLayout, accFrom func() (interface{}, error), exprFrom func() (interface{}, error),
+) error {
 
 	// validate parameters
 	if modelDef == nil {
@@ -36,7 +38,7 @@ func WriteOutputTable(
 	if layout.ToId <= 0 {
 		return errors.New("invalid destination run id: " + strconv.Itoa(layout.ToId))
 	}
-	if accCellLst == nil || exprCellLst == nil {
+	if accFrom == nil || exprFrom == nil {
 		return errors.New("invalid (empty) output table values")
 	}
 
@@ -53,7 +55,7 @@ func WriteOutputTable(
 	if err != nil {
 		return err
 	}
-	if err = doWriteOutputTable(trx, modelDef, meta, layout.ToId, accCellLst, exprCellLst, layout.DoubleFmt); err != nil {
+	if err = doWriteOutputTableFrom(trx, modelDef, meta, layout.ToId, layout.DoubleFmt, accFrom, exprFrom); err != nil {
 		trx.Rollback()
 		return err
 	}
@@ -62,13 +64,13 @@ func WriteOutputTable(
 	return nil
 }
 
-// doWriteOutputTable insert output table values (accumulators or expressions) into model run.
+// doWriteOutputTableFrom insert output table values (accumulators or expressions) into model run.
 // It does insert as part of transaction
 // Model run must exist and be in completed state (i.e. success or error state).
 // Model run should not already contain output table values: it can be inserted only once in model run and cannot be updated after.
 // Double format is used for float model types digest calculation, if non-empty format supplied
-func doWriteOutputTable(
-	trx *sql.Tx, modelDef *ModelMeta, meta *TableMeta, runId int, accCellLst *list.List, exprCellLst *list.List, doubleFmt string,
+func doWriteOutputTableFrom(
+	trx *sql.Tx, modelDef *ModelMeta, meta *TableMeta, runId int, doubleFmt string, accFrom func() (interface{}, error), exprFrom func() (interface{}, error),
 ) error {
 
 	// start run update
@@ -118,17 +120,60 @@ func doWriteOutputTable(
 		return errors.New("model run with id: " + srId + " already contain output table values " + meta.Name)
 	}
 
-	// calculate output table digest
-	digest, err := digestOutputTable(modelDef, meta, accCellLst, exprCellLst, doubleFmt)
-	if err != nil {
-		return err
-	}
-
 	// insert into run_table with digest and current run id as base run id
 	err = TrxUpdate(trx,
 		"INSERT INTO run_table (run_id, table_hid, base_run_id, value_digest)"+
 			" VALUES ("+
-			srId+", "+sHid+", "+srId+", "+ToQuoted(digest)+")")
+			srId+", "+sHid+", "+srId+", NULL)")
+	if err != nil {
+		return err
+	}
+
+	// create output table digest calculator and start accumulator(s) digest
+	hMd5, digestAcc, isOrderBy, err := digestAccumulatorsFrom(modelDef, meta, doubleFmt)
+	if err != nil {
+		return err
+	}
+
+	// insert output table accumulators into model run
+	// prepare put() closure to convert each accumulator cell into parameters of insert sql statement
+	accSql := makeSqlAccValueInsert(meta, runId)
+	put := putAccInsertFrom(meta, accFrom, digestAcc)
+
+	if err = TrxUpdateStatement(trx, accSql, put); err != nil {
+		return err
+	}
+	// check if all rows ordered by primary key, digest is incorrect otherwise
+	if isOrderBy == nil || !*isOrderBy {
+		return errors.New("invalid digest due to incorrect accumulator(s) rows order: " + meta.Name)
+	}
+
+	// start expression(s) digest calculation
+	digestExpr, isOrderBy, err := digestExpressionsFrom(modelDef, meta, doubleFmt, hMd5)
+	if err != nil {
+		return err
+	}
+
+	// insert output table expressions into model run
+	// prepare put() closure to convert each expression cell into parameters of insert sql statement
+	exprSql := makeSqlExprValueInsert(meta, runId)
+	put = putExprInsertFrom(meta, exprFrom, digestExpr)
+
+	if err = TrxUpdateStatement(trx, exprSql, put); err != nil {
+		return err
+	}
+	// check if all rows ordered by primary key, digest is incorrect otherwise
+	if isOrderBy == nil || !*isOrderBy {
+		return errors.New("invalid digest due to incorrect expression(s) rows order: " + meta.Name)
+	}
+
+	// update output table digest with actual value
+	dgst := fmt.Sprintf("%x", hMd5.Sum(nil))
+
+	err = TrxUpdate(trx,
+		"UPDATE run_table SET value_digest = "+ToQuoted(dgst)+
+			" WHERE run_id = "+srId+
+			" AND table_hid ="+sHid)
 	if err != nil {
 		return err
 	}
@@ -138,7 +183,7 @@ func doWriteOutputTable(
 	err = TrxSelectFirst(trx,
 		"SELECT MIN(run_id) FROM run_table"+
 			" WHERE table_hid = "+sHid+
-			" AND value_digest = "+ToQuoted(digest),
+			" AND value_digest = "+ToQuoted(dgst),
 		func(row *sql.Row) error {
 			if err := row.Scan(&nBase); err != nil {
 				return err
@@ -152,34 +197,22 @@ func doWriteOutputTable(
 	}
 
 	// if output table values already exist then update base run id
-	// else insert new output table values into model run
+	// and remove duplicate values
 	if runId != nBase {
 
 		err = TrxUpdate(trx,
 			"UPDATE run_table SET base_run_id = "+strconv.Itoa(nBase)+
-				" WHERE table_hid = "+sHid+
-				" AND run_id = "+srId)
+				" WHERE run_id = "+srId+
+				" AND table_hid = "+sHid)
 		if err != nil {
 			return err
 		}
-
-	} else { // insert new output table values into model run
-
-		// insert output table accumulators into model run
-		// prepare put() closure to convert each accumulator cell into parameters of insert sql statement
-		sql := makeSqlAccValueInsert(meta, runId)
-		put := makePutAccValueInsert(meta, accCellLst)
-
-		if err = TrxUpdateStatement(trx, sql, put); err != nil {
+		err = TrxUpdate(trx, "DELETE FROM "+meta.DbExprTable+" WHERE run_id = "+srId)
+		if err != nil {
 			return err
 		}
-
-		// insert output table expressions into model run
-		// prepare put() closure to convert each expression cell into parameters of insert sql statement
-		sql = makeSqlExprValueInsert(meta, runId)
-		put = makePutExprValueInsert(meta, exprCellLst)
-
-		if err = TrxUpdateStatement(trx, sql, put); err != nil {
+		err = TrxUpdate(trx, "DELETE FROM "+meta.DbAccTable+" WHERE run_id = "+srId)
+		if err != nil {
 			return err
 		}
 	}
@@ -187,34 +220,48 @@ func doWriteOutputTable(
 	return nil
 }
 
-// digestOutputTable retrun digest of output table values (accumulators and expressions).
-func digestOutputTable(
-	modelDef *ModelMeta, meta *TableMeta, accCellLst *list.List, exprCellLst *list.List, doubleFmt string) (string, error) {
+// digestAccumulatorsFrom start output table digest calculation and return closure to add accumulator(s) row to digest.
+func digestAccumulatorsFrom(
+	modelDef *ModelMeta, meta *TableMeta, doubleFmt string,
+) (hash.Hash, func(interface{}) error, *bool, error) {
 
 	// start from name and metadata digest
 	hMd5 := md5.New()
 	_, err := hMd5.Write([]byte("table_name,table_digest\n"))
 	if err != nil {
-		return "", err
+		return nil, nil, nil, err
 	}
 	_, err = hMd5.Write([]byte(meta.Name + "," + meta.Digest + "\n"))
 	if err != nil {
-		return "", err
+		return nil, nil, nil, err
 	}
 
-	// append digest of accumulator(s) cells
+	// create accumulator(s) row digester append digest of parameter cells
 	cvtAcc := CellAccConverter{DoubleFmt: doubleFmt, IsIdHeader: true}
-	if err = digestCells(hMd5, modelDef, meta.Name, cvtAcc, accCellLst); err != nil {
-		return "", err
+
+	digestRow, isOrderBy, err := digestCellsFrom(hMd5, modelDef, meta.Name, cvtAcc)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
+	return hMd5, digestRow, isOrderBy, nil
+}
+
+// digestExpressionsFrom append output expression(s) header to digest and return closure to add expression(s) row to digest.
+func digestExpressionsFrom(
+	modelDef *ModelMeta, meta *TableMeta, doubleFmt string, hSum hash.Hash,
+) (func(interface{}) error, *bool, error) {
+
+	// create expression(s) row digester append digest of parameter cells
 	// append digest of expression(s) cells
 	cvtExpr := CellExprConverter{DoubleFmt: doubleFmt, IsIdHeader: true}
-	if err = digestCells(hMd5, modelDef, meta.Name, cvtExpr, exprCellLst); err != nil {
-		return "", err
+
+	digestRow, isOrderBy, err := digestCellsFrom(hSum, modelDef, meta.Name, cvtExpr)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	return fmt.Sprintf("%x", hMd5.Sum(nil)), nil // retrun digest as hex string
+	return digestRow, isOrderBy, nil
 }
 
 // make sql to insert output table expressions into model run
@@ -239,21 +286,27 @@ func makeSqlExprValueInsert(meta *TableMeta, runId int) string {
 	return q
 }
 
-// prepare put() closure to convert each cell of output expressions into parameters of insert sql statement
-func makePutExprValueInsert(meta *TableMeta, cellLst *list.List) func() (bool, []interface{}, error) {
+// prepare put() closure to convert each cell of output expression into parameters of insert sql statement until from() return not nil CellExpr value.
+func putExprInsertFrom(
+	meta *TableMeta, from func() (interface{}, error), digestFrom func(interface{}) error,
+) func() (bool, []interface{}, error) {
 
 	// for each cell of output expressions put into row of sql statement parameters
 	row := make([]interface{}, meta.Rank+2)
-	c := cellLst.Front()
 
 	put := func() (bool, []interface{}, error) {
 
+		// get next input row
+		c, err := from()
+		if err != nil {
+			return false, nil, err
+		}
 		if c == nil {
 			return false, nil, nil // end of data
 		}
 
 		// convert and check input row
-		cell, ok := c.Value.(CellExpr)
+		cell, ok := c.(CellExpr)
 		if !ok {
 			return false, nil, errors.New("invalid type, expected: output table expression cell (internal error)")
 		}
@@ -273,9 +326,13 @@ func makePutExprValueInsert(meta *TableMeta, cellLst *list.List) func() (bool, [
 		// cell value is nullable
 		row[n+1] = sql.NullFloat64{Float64: cell.Value.(float64), Valid: !cell.IsNull}
 
-		// move to next input row and return current row to sql statement
-		c = c.Next()
-		return true, row, nil
+		// append row digest to output table digest
+		err = digestFrom(cell)
+		if err != nil {
+			return false, nil, err
+		}
+
+		return true, row, nil // return current row to sql statement
 	}
 
 	return put
@@ -303,21 +360,27 @@ func makeSqlAccValueInsert(meta *TableMeta, runId int) string {
 	return q
 }
 
-// prepare put() closure to convert each cell of accumulators into parameters of insert sql statement
-func makePutAccValueInsert(meta *TableMeta, cellLst *list.List) func() (bool, []interface{}, error) {
+// prepare put() closure to convert each cell of accumulators into parameters of insert sql statement until from() return not nil CellAcc value.
+func putAccInsertFrom(
+	meta *TableMeta, from func() (interface{}, error), digestFrom func(interface{}) error,
+) func() (bool, []interface{}, error) {
 
 	// for each cell of accumulators put into row of sql statement parameters
 	row := make([]interface{}, meta.Rank+3)
-	c := cellLst.Front()
 
 	put := func() (bool, []interface{}, error) {
 
+		// get next input row
+		c, err := from()
+		if err != nil {
+			return false, nil, err
+		}
 		if c == nil {
 			return false, nil, nil // end of data
 		}
 
 		// convert and check input row
-		cell, ok := c.Value.(CellAcc)
+		cell, ok := c.(CellAcc)
 		if !ok {
 			return false, nil, errors.New("invalid type, expected: output table accumulator cell (internal error)")
 		}
@@ -338,9 +401,13 @@ func makePutAccValueInsert(meta *TableMeta, cellLst *list.List) func() (bool, []
 		// cell value is nullable
 		row[n+2] = sql.NullFloat64{Float64: cell.Value.(float64), Valid: !cell.IsNull}
 
-		// move to next input row and return current row to sql statement
-		c = c.Next()
-		return true, row, nil
+		// append row digest to output table digest
+		err = digestFrom(cell)
+		if err != nil {
+			return false, nil, err
+		}
+
+		return true, row, nil // return current row to sql statement
 	}
 
 	return put

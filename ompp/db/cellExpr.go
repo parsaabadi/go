@@ -51,7 +51,7 @@ func (cellCvt CellExprConverter) CsvFileName(modelDef *ModelMeta, name string, i
 	return modelDef.Table[k].Name + ".csv", nil
 }
 
-// CsvHeader retrun first line for csv file: column names.
+// CsvHeader return first line for csv file: column names.
 // Column names can be like: expr_name,dim0,dim1,expr_value
 // or if isIdHeader is true: expr_id,dim0,dim1,expr_value
 func (cellCvt CellExprConverter) CsvHeader(modelDef *ModelMeta, name string) ([]string, error) {
@@ -87,17 +87,45 @@ func (cellCvt CellExprConverter) CsvHeader(modelDef *ModelMeta, name string) ([]
 	return h, nil
 }
 
+// KeyIds return converter to copy primary key: (expr_id, dimension ids) into key []int.
+//
+// Converter will return error if len(key) not equal to row key size.
+func (cellCvt CellExprConverter) KeyIds(name string) (func(interface{}, []int) error, error) {
+
+	cvt := func(src interface{}, key []int) error {
+
+		cell, ok := src.(CellExpr)
+		if !ok {
+			return errors.New("invalid type, expected: CellExpr (internal error): " + name)
+		}
+
+		n := len(cell.DimIds)
+		if len(key) != n+1 {
+			return errors.New("invalid size of key buffer, expected: " + strconv.Itoa(n+2) + ": " + name)
+		}
+
+		key[0] = cell.ExprId
+
+		for k, e := range cell.DimIds {
+			key[k+1] = e
+		}
+		return nil
+	}
+
+	return cvt, nil
+}
+
 // CsvToIdRow return converter from output table cell (expr_id, dimensions, value) to csv row []string.
 //
 // Converter simply does Sprint() for each dimension item id, expression id and value.
-// Converter will retrun error if len(row) not equal to number of fields in csv record.
+// Converter will return error if len(row) not equal to number of fields in csv record.
 func (cellCvt CellExprConverter) CsvToIdRow(modelDef *ModelMeta, name string) (func(interface{}, []string) error, error) {
 
 	cvt := func(src interface{}, row []string) error {
 
 		cell, ok := src.(CellExpr)
 		if !ok {
-			return errors.New("invalid type, expected: output table expression cell (internal error)")
+			return errors.New("invalid type, expected: CellExpr (internal error): " + name)
 		}
 
 		n := len(cell.DimIds)
@@ -130,7 +158,7 @@ func (cellCvt CellExprConverter) CsvToIdRow(modelDef *ModelMeta, name string) (f
 // CsvToRow return converter from output table cell (expr_id, dimensions, value)
 // to csv row []string (expr_name, dimensions, value).
 //
-// Converter will retrun error if len(row) not equal to number of fields in csv record.
+// Converter will return error if len(row) not equal to number of fields in csv record.
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
 func (cellCvt CellExprConverter) CsvToRow(modelDef *ModelMeta, name string) (func(interface{}, []string) error, error) {
 
@@ -164,7 +192,7 @@ func (cellCvt CellExprConverter) CsvToRow(modelDef *ModelMeta, name string) (fun
 
 		cell, ok := src.(CellExpr)
 		if !ok {
-			return errors.New("invalid type, expected: output table expression cell (internal error)")
+			return errors.New("invalid type, expected: output table expression cell (internal error): " + name)
 		}
 
 		n := len(cell.DimIds)
@@ -201,7 +229,7 @@ func (cellCvt CellExprConverter) CsvToRow(modelDef *ModelMeta, name string) (fun
 
 // CsvToCell return closure to convert csv row []string to output table expression cell (dimensions and value).
 //
-// It does retrun error if len(row) not equal to number of fields in cell db-record.
+// It does return error if len(row) not equal to number of fields in cell db-record.
 // If dimension type is enum based then csv row is enum code and it is converted into cell.DimIds (into dimension type type enum ids).
 func (cellCvt CellExprConverter) CsvToCell(modelDef *ModelMeta, name string, subCount int) (func(row []string) (interface{}, error), error) {
 
@@ -239,7 +267,7 @@ func (cellCvt CellExprConverter) CsvToCell(modelDef *ModelMeta, name string, sub
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {
-			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(n+2))
+			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(n+2) + ": " + name)
 		}
 
 		// expression id by name
@@ -319,10 +347,10 @@ func (cellCvt CellExprConverter) IdToCodeCell(modelDef *ModelMeta, name string) 
 
 		srcCell, ok := src.(CellExpr)
 		if !ok {
-			return nil, errors.New("invalid type, expected: output table expression cell (internal error)")
+			return nil, errors.New("invalid type, expected: output table expression cell (internal error): " + name)
 		}
 		if len(srcCell.DimIds) != table.Rank {
-			return nil, errors.New("invalid cell rank: " + strconv.Itoa(len(srcCell.DimIds)) + ", expected: " + strconv.Itoa(table.Rank))
+			return nil, errors.New("invalid cell rank: " + strconv.Itoa(len(srcCell.DimIds)) + ", expected: " + strconv.Itoa(table.Rank) + ": " + name)
 		}
 
 		dstCell := CellCodeExpr{

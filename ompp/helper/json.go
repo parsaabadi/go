@@ -18,7 +18,7 @@ func FromJsonFile(jsonPath string, dst interface{}) (bool, error) {
 	f, err := os.Open(jsonPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return false, nil // retrun: json file not exist
+			return false, nil // return: json file not exist
 		}
 		return false, errors.New("json file open error: " + err.Error())
 	}

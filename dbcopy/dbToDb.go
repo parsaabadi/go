@@ -4,6 +4,7 @@
 package main
 
 import (
+	"container/list"
 	"database/sql"
 	"errors"
 
@@ -155,4 +156,21 @@ func copyDbToDb(
 	}
 
 	return nil
+}
+
+// return closure to iterate over list until the last element
+func makeFromList(srcLst *list.List) func() (interface{}, error) {
+
+	c := srcLst.Front()
+
+	from := func() (interface{}, error) {
+		if c == nil {
+			return nil, nil // end of data
+		}
+
+		cell := c.Value
+		c = c.Next()
+		return cell, nil
+	}
+	return from
 }

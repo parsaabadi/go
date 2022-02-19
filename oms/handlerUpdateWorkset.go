@@ -4,7 +4,6 @@
 package main
 
 import (
-	"container/list"
 	"encoding/csv"
 	"io"
 	"net/http"
@@ -293,6 +292,7 @@ func worksetUpdateHandler(isReplace bool, w http.ResponseWriter, r *http.Request
 		// read csv values and update parameter
 		rd := csv.NewReader(part)
 		rd.TrimLeadingSpace = true
+		rd.ReuseRecord = true
 
 		_, err = theCatalog.UpdateWorksetParameterCsv(isReplace, &newWp, &newParamLst[np], rd)
 		part.Close() // done with csv parameter data
@@ -374,16 +374,29 @@ func doUpdateParameterPageHandler(w http.ResponseWriter, r *http.Request, isCode
 	wsn := getRequestParam(r, "set")   // workset name
 	name := getRequestParam(r, "name") // parameter name
 
-	// decode json body and convert to id cells, if required
-	cLst := list.New()
+	var from func() (interface{}, error) = nil
 
+	// decode json body into array of cells
+	// make closure to process each cell, convert to id cells, if required
 	if !isCode {
+
 		var cArr []db.CellParam
 		if !jsonRequestDecode(w, r, &cArr) {
 			return // error at json decode, response done with http error
 		}
-		for k := range cArr {
-			cLst.PushBack(cArr[k])
+		if len(cArr) <= 0 {
+			http.Error(w, "Workset parameter update failed "+wsn+" parameter empty: "+name, http.StatusInternalServerError)
+			return
+		}
+
+		// iterate over cell array
+		k := -1
+		from = func() (interface{}, error) {
+			k++
+			if k >= len(cArr) {
+				return nil, nil // end of data
+			}
+			return cArr[k], nil
 		}
 	} else {
 
@@ -391,6 +404,10 @@ func doUpdateParameterPageHandler(w http.ResponseWriter, r *http.Request, isCode
 		var cArr []db.CellCodeParam
 		if !jsonRequestDecode(w, r, &cArr) {
 			return // error at json decode, response done with http error
+		}
+		if len(cArr) <= 0 {
+			http.Error(w, "Workset parameter update failed "+wsn+" parameter empty: "+name, http.StatusInternalServerError)
+			return
 		}
 
 		// convert from enum code cells to id cells
@@ -400,23 +417,24 @@ func doUpdateParameterPageHandler(w http.ResponseWriter, r *http.Request, isCode
 			return
 		}
 
-		for k := range cArr {
+		// iterate over cell array and convert each cell from code to enum id
+		k := -1
+		from = func() (interface{}, error) {
+			k++
+			if k >= len(cArr) {
+				return nil, nil // end of data
+			}
+
 			c, err := cvt(cArr[k])
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
+				return nil, err
 			}
-			cLst.PushBack(c)
+			return c, nil
 		}
-
-	}
-	if cLst.Len() <= 0 {
-		http.Error(w, "Workset parameter update failed "+wsn+" parameter empty: "+name, http.StatusInternalServerError)
-		return
 	}
 
 	// update parameter values
-	err := theCatalog.UpdateWorksetParameterPage(dn, wsn, name, cLst)
+	err := theCatalog.UpdateWorksetParameterPage(dn, wsn, name, from)
 	if err != nil {
 		omppLog.Log(err.Error())
 		http.Error(w, "Workset parameter update failed "+wsn+": "+name, http.StatusBadRequest)

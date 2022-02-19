@@ -208,7 +208,7 @@ func copyRunDbToDb(
 		dstParamLt.Name = dstModel.Param[j].Name
 		dstParamLt.SubCount = dstRun.Param[j].SubCount
 
-		if err = db.WriteParameter(dstDb, dstModel, &dstParamLt, cLst); err != nil {
+		if err = db.WriteParameterFrom(dstDb, dstModel, &dstParamLt, makeFromList(cLst)); err != nil {
 			return 0, err
 		}
 	}
@@ -216,8 +216,11 @@ func copyRunDbToDb(
 	// copy all output tables values for that model run, if the table included in run results
 	tblLt := db.ReadTableLayout{ReadLayout: db.ReadLayout{FromId: srcId}}
 	dstTblLt := db.WriteTableLayout{
-		WriteLayout: db.WriteLayout{ToId: dstId},
-		DoubleFmt:   doubleFmt}
+		WriteLayout: db.WriteLayout{
+			ToId:     dstId,
+			SubCount: dstRun.Run.SubCount,
+		},
+		DoubleFmt: doubleFmt}
 
 	nT := len(srcModel.Table)
 	omppLog.Log("  Tables: ", nT)
@@ -265,7 +268,9 @@ func copyRunDbToDb(
 
 		// insert output table values (accumulators and expressions) in model run
 		dstTblLt.Name = dstModel.Table[j].Name
-		if err = db.WriteOutputTable(dstDb, dstModel, &dstTblLt, acLst, ecLst); err != nil {
+
+		err = db.WriteOutputTableFrom(dstDb, dstModel, &dstTblLt, makeFromList(acLst), makeFromList(ecLst))
+		if err != nil {
 			return 0, err
 		}
 	}

@@ -35,7 +35,7 @@ func MakeDateTime(t time.Time) string {
 	return fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d.%03d", y, mm, dd, h, mi, s, ms)
 }
 
-// MakeTimeStamp retrun timestamp string as: 2012_08_17_16_04_59_148
+// MakeTimeStamp return timestamp string as: 2012_08_17_16_04_59_148
 func MakeTimeStamp(t time.Time) string {
 	y, mm, dd := t.Date()
 	h, mi, s := t.Clock()
@@ -44,9 +44,9 @@ func MakeTimeStamp(t time.Time) string {
 	return fmt.Sprintf("%04d_%02d_%02d_%02d_%02d_%02d_%03d", y, mm, dd, h, mi, s, ms)
 }
 
-// CleanPath replace special file path characters: "'`$}{@><:|?*&^;/\ by _ underscore
+// CleanPath replace special file path characters: "'`:*?><|$}{@&^;/\ by _ underscore
 func CleanPath(src string) string {
-	re := regexp.MustCompile("[\"'`$}{@><:|?*&^;/\\\\]")
+	re := regexp.MustCompile("[\"'`:*?><|$}{@&^;/\\\\]")
 	return re.ReplaceAllString(src, "_")
 }
 

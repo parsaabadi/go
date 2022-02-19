@@ -52,7 +52,7 @@ func (rsc *RunCatalog) readModelRunLog(digest, runStamp string, start, count int
 		if lrp.RunState.IsLog {
 
 			if lines, isOk = rsc.readLogFile(lrp.logPath); isOk && len(lines) > 0 {
-				lrp.Offset, lrp.Size, lrp.Lines = getLinesPage(start, count, lines) // make log page to retrun
+				lrp.Offset, lrp.Size, lrp.Lines = getLinesPage(start, count, lines) // make log page to return
 				lrp.TotalSize = len(lines)
 			}
 		}

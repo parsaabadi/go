@@ -242,7 +242,7 @@ func fromRunTextToDb(
 
 	// restore run parameters: all model parameters must be included in the run
 	paramLt := db.WriteParamLayout{
-		WriteLayout: db.WriteLayout{ToId: meta.Run.RunId},
+		WriteLayout: db.WriteLayout{ToId: dstId},
 		DoubleFmt:   doubleFmt,
 		IsToRun:     true}
 	cvtParam := db.CellParamConverter{DoubleFmt: doubleFmt}
@@ -256,27 +256,31 @@ func fromRunTextToDb(
 		// read parameter values from csv file
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nP, ": ", modelDef.Param[j].Name)
 
-		cLst, err := fromCellCsvFile(csvDir, modelDef, modelDef.Param[j].Name, meta.Param[j].SubCount, cvtParam, encodingName)
-		if err != nil {
-			return 0, err
-		}
-		if cLst == nil || cLst.Len() <= 0 {
-			return 0, errors.New("run: " + meta.Run.Name + " parameter empty: " + modelDef.Param[j].Name)
-		}
-
 		// insert parameter values in model run
 		paramLt.Name = modelDef.Param[j].Name
 		paramLt.SubCount = meta.Param[j].SubCount
 
-		if err = db.WriteParameter(dbConn, modelDef, &paramLt, cLst); err != nil {
-			return 0, err
+		err = writeParamFromCsvFile(dbConn, modelDef, paramLt, csvDir, cvtParam, encodingName)
+		if err != nil {
+			omppLog.Log("Error at: ", paramLt.Name, ": ", err.Error())
+			omppLog.Log("Cleanup on error: delete model run ", srcName, " ", dstId)
+
+			// delete model run on error to rollback results of UpdateRun() call above
+			e := db.DeleteRun(dbConn, dstId)
+			if e != nil {
+				omppLog.Log("Failed to delete model run ", srcName, " ", dstId, ": ", e.Error())
+			}
+			return 0, err // return original error
 		}
 	}
 
 	// restore run output tables accumulators and expressions, if the table included in run results
 	tblLt := db.WriteTableLayout{
-		WriteLayout: db.WriteLayout{ToId: meta.Run.RunId},
-		DoubleFmt:   doubleFmt}
+		WriteLayout: db.WriteLayout{
+			ToId:     dstId,
+			SubCount: meta.Run.SubCount,
+		},
+		DoubleFmt: doubleFmt}
 	cvtExpr := db.CellExprConverter{DoubleFmt: doubleFmt, IsIdHeader: false}
 	cvtAcc := db.CellAccConverter{DoubleFmt: doubleFmt, IsIdHeader: false}
 
@@ -298,23 +302,22 @@ func fromRunTextToDb(
 		}
 
 		// read output table accumulator(s) values from csv file
-		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", modelDef.Table[j].Name)
-
-		acLst, err := fromCellCsvFile(csvDir, modelDef, modelDef.Table[j].Name, meta.Run.SubCount, cvtAcc, encodingName)
-		if err != nil {
-			return 0, err
-		}
-
-		// read output table expression(s) values from csv file
-		ecLst, err := fromCellCsvFile(csvDir, modelDef, modelDef.Table[j].Name, meta.Run.SubCount, cvtExpr, encodingName)
-		if err != nil {
-			return 0, err
-		}
-
-		// insert output table values (accumulators and expressions) in model run
 		tblLt.Name = modelDef.Table[j].Name
-		if err = db.WriteOutputTable(dbConn, modelDef, &tblLt, acLst, ecLst); err != nil {
-			return 0, err
+		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name)
+
+		err := fromTableCsvFile(dbConn, modelDef, tblLt, csvDir, cvtExpr, cvtAcc, encodingName)
+		if err != nil {
+			if err != nil {
+				omppLog.Log("Error at: ", tblLt.Name, ": ", err.Error())
+				omppLog.Log("Cleanup on error: delete model run ", srcName, " ", dstId)
+
+				// delete model run on error to rollback results of UpdateRun() call above
+				e := db.DeleteRun(dbConn, dstId)
+				if e != nil {
+					omppLog.Log("Failed to delete model run ", srcName, " ", dstId, ": ", e.Error())
+				}
+				return 0, err // return original error
+			}
 		}
 	}
 
@@ -329,4 +332,46 @@ func fromRunTextToDb(
 	}
 
 	return dstId, nil
+}
+
+// writeParamFromCsvFile read parameter csv file and write into db parameter value table.
+func writeParamFromCsvFile(
+	dbConn *sql.DB,
+	modelDef *db.ModelMeta,
+	layout db.WriteParamLayout,
+	csvDir string,
+	csvCvt db.CellParamConverter,
+	encodingName string) error {
+
+	// converter from csv row []string to db cell
+	cvt, err := csvCvt.CsvToCell(modelDef, layout.Name, layout.SubCount)
+	if err != nil {
+		return errors.New("invalid converter from csv row: " + err.Error())
+	}
+
+	// open csv file, convert to utf-8 and parse csv into db cells
+	// reading from .id.csv files not supported by converters
+	fn, err := csvCvt.CsvFileName(modelDef, layout.Name, false)
+	if err != nil {
+		return errors.New("invalid csv file name: " + err.Error())
+	}
+
+	f, err := os.Open(filepath.Join(csvDir, fn))
+	if err != nil {
+		return errors.New("csv file open error: " + err.Error())
+	}
+	defer f.Close()
+
+	from, err := makeFromCsvReader(fn, f, encodingName, cvt)
+	if err != nil {
+		return errors.New("fail to create expressions csv reader: " + err.Error())
+	}
+
+	// write each csv row into parameter or output table
+	err = db.WriteParameterFrom(dbConn, modelDef, &layout, from)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

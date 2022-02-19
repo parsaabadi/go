@@ -47,6 +47,47 @@ func doDeleteRun(trx *sql.Tx, runId int) error {
 		return err
 	}
 
+	// build a list of run parameter values db-tables
+	var pTblArr []string
+	err = TrxSelectRows(trx,
+		"SELECT P.db_run_table"+
+			" FROM run_parameter RP"+
+			" INNER JOIN parameter_dic P ON (P.parameter_hid = RP.parameter_hid)"+
+			" WHERE RP.run_id = "+sId,
+		func(rows *sql.Rows) error {
+			tn := ""
+			if err := rows.Scan(&tn); err != nil {
+				return err
+			}
+			pTblArr = append(pTblArr, tn)
+			return nil
+		})
+	if err != nil {
+		return err
+	}
+
+	// build a list of run expression and accumulator values db-tables
+	var eTblArr []string
+	var aTblArr []string
+	err = TrxSelectRows(trx,
+		"SELECT T.db_expr_table, T.db_acc_table"+
+			" FROM run_table RT"+
+			" INNER JOIN table_dic T ON (T.table_hid = RT.table_hid)"+
+			" WHERE RT.run_id = "+sId,
+		func(rows *sql.Rows) error {
+			eTbl := ""
+			aTbl := ""
+			if err := rows.Scan(&eTbl, &aTbl); err != nil {
+				return err
+			}
+			eTblArr = append(eTblArr, eTbl)
+			aTblArr = append(aTblArr, aTbl)
+			return nil
+		})
+	if err != nil {
+		return err
+	}
+
 	// delete model runs:
 	// for all model parameters where parameter run value shared between runs
 	// build list of new base run id's
@@ -242,6 +283,28 @@ func doDeleteRun(trx *sql.Tx, runId int) error {
 	err = TrxUpdate(trx, "DELETE FROM run_lst WHERE run_id = "+sId)
 	if err != nil {
 		return err
+	}
+
+	// delete rows from run parameter value tables
+	for k := range pTblArr {
+		err = TrxUpdate(trx, "DELETE FROM "+pTblArr[k]+" WHERE run_id = "+sId)
+		if err != nil {
+			return err
+		}
+	}
+
+	// delete rows from run expression value and accumulator value tables
+	for k := range eTblArr {
+		err = TrxUpdate(trx, "DELETE FROM "+eTblArr[k]+" WHERE run_id = "+sId)
+		if err != nil {
+			return err
+		}
+	}
+	for k := range aTblArr {
+		err = TrxUpdate(trx, "DELETE FROM "+aTblArr[k]+" WHERE run_id = "+sId)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

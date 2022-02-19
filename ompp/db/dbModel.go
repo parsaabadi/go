@@ -14,7 +14,8 @@ const nameDbMax = 255     // max database length for names: parameter name, tabl
 const descrDbMax = 255    // max database length for description: parameter description, table description, etc.
 const wordDbMax = 255     // max database length for word: word_code, word_value
 const optionDbMax = 32000 // max database length for option value: profile_option, run_option
-const noteDbMax = 32000   // max database string length: notes varchar (clob, text)
+const noteDbMax = 32000   // max database notes length: notes varchar (clob, text)
+const stringDbMax = 32000 // max database string length: parameter varchar (clob, text)
 
 // ModelMeta is model metadata db rows, language-neutral portion of it.
 //

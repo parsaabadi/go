@@ -4,7 +4,6 @@
 package main
 
 import (
-	"container/list"
 	"database/sql"
 	"encoding/csv"
 	"errors"
@@ -185,63 +184,113 @@ func fromLangTextJsonToDb(dbConn *sql.DB, modelDef *db.ModelMeta, inpDir string)
 	return langDef, nil
 }
 
-// fromCellCsvFile read parameter or output table csv file and convert it to list of db cells.
-func fromCellCsvFile(
-	csvDir string, modelDef *db.ModelMeta, name string, subCount int, csvCvt db.CsvConverter, encodingName string) (*list.List, error) {
+// fromTableCsvFile read output table csv files (accumulators and expressions) and write it into db output tables.
+func fromTableCsvFile(
+	dbConn *sql.DB,
+	modelDef *db.ModelMeta,
+	layout db.WriteTableLayout,
+	csvDir string,
+	cvtExpr db.CellExprConverter,
+	cvtAcc db.CellAccConverter,
+	encodingName string) error {
 
-	// converter from csv row []string to db cell
-	cvt, err := csvCvt.CsvToCell(modelDef, name, subCount)
+	// accumulator converter from csv row []string to db cell
+	aToCell, err := cvtAcc.CsvToCell(modelDef, layout.Name, layout.SubCount)
 	if err != nil {
-		return nil, errors.New("invalid converter from csv row: " + err.Error())
+		return errors.New("invalid converter from accumulators csv row: " + err.Error())
 	}
 
-	// open csv file, convert to utf-8 and parse csv into db cells
-	// reading from .id.csv files not supported by converteres
-	fn, err := csvCvt.CsvFileName(modelDef, name, false)
+	// open accumulators csv file
+	aFn, err := cvtAcc.CsvFileName(modelDef, layout.Name, false)
 	if err != nil {
-		return nil, errors.New("invalid csv file name: " + err.Error())
+		return errors.New("invalid accumulators csv file name: " + err.Error())
 	}
 
-	f, err := os.Open(filepath.Join(csvDir, fn))
+	accFile, err := os.Open(filepath.Join(csvDir, aFn))
 	if err != nil {
-		return nil, errors.New("csv file open error: " + err.Error())
+		return errors.New("accumulators csv file open error: " + err.Error())
 	}
-	defer f.Close()
+	defer accFile.Close()
 
-	uRd, err := helper.Utf8Reader(f, encodingName)
+	accFrom, err := makeFromCsvReader(aFn, accFile, encodingName, aToCell)
+	if err != nil {
+		return errors.New("fail to create expressions csv reader: " + err.Error())
+	}
+
+	// expression converter from csv row []string to db cell
+	eToCell, err := cvtExpr.CsvToCell(modelDef, layout.Name, layout.SubCount)
+	if err != nil {
+		return errors.New("invalid converter from expressions csv row: " + err.Error())
+	}
+
+	// open expressions csv file
+	eFn, err := cvtExpr.CsvFileName(modelDef, layout.Name, false)
+	if err != nil {
+		return errors.New("invalid expressions csv file name: " + err.Error())
+	}
+
+	exprFile, err := os.Open(filepath.Join(csvDir, eFn))
+	if err != nil {
+		return errors.New("expressions csv file open error: " + err.Error())
+	}
+	defer exprFile.Close()
+
+	exprFrom, err := makeFromCsvReader(eFn, exprFile, encodingName, eToCell)
+	if err != nil {
+		return errors.New("fail to create expressions csv reader: " + err.Error())
+	}
+
+	// write each accumulator(s) csv rows into accumulator(s) output table
+	// write each expression(s) csv rows into expression(s) output table
+	err = db.WriteOutputTableFrom(dbConn, modelDef, &layout, accFrom, exprFrom)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// return closure to iterate over csv file rows
+func makeFromCsvReader(
+	fileName string, csvFile *os.File, encodingName string, csvToCell func(row []string) (interface{}, error),
+) (func() (interface{}, error), error) {
+
+	// create csv reader from utf-8 line
+	uRd, err := helper.Utf8Reader(csvFile, encodingName)
 	if err != nil {
 		return nil, errors.New("fail to create utf-8 converter: " + err.Error())
 	}
 
-	rd := csv.NewReader(uRd)
-	rd.TrimLeadingSpace = true
+	csvRd := csv.NewReader(uRd)
+	csvRd.TrimLeadingSpace = true
+	csvRd.ReuseRecord = true
 
-	// read csv file and convert and append lines into cell list
-	cLst := list.New()
-	isFirst := true
-ReadFor:
-	for {
-		row, err := rd.Read()
-		switch {
-		case err == io.EOF:
-			break ReadFor
-		case err != nil:
-			return nil, errors.New("csv file read error: " + err.Error())
-		}
-
-		// skip header line
-		if isFirst {
-			isFirst = false
-			continue
-		}
-
-		// convert and append cell to cell list
-		c, err := cvt(row)
-		if err != nil {
-			return nil, errors.New("csv file row convert error: " + err.Error())
-		}
-		cLst.PushBack(c)
+	// skip header line
+	_, e := csvRd.Read()
+	switch {
+	case e == io.EOF:
+		return nil, errors.New("invalid (empty) csv file: " + fileName)
+	case err != nil:
+		return nil, errors.New("csv file read error: " + fileName + ": " + err.Error())
 	}
 
-	return cLst, nil
+	// convert each csv line into cell (id cell)
+	// reading from .id.csv files not supported by converters
+	from := func() (interface{}, error) {
+		row, err := csvRd.Read()
+		switch {
+		case err == io.EOF:
+			return nil, nil // eof
+		case err != nil:
+			return nil, errors.New("csv file read error: " + fileName + ": " + err.Error())
+		}
+
+		// convert csv line to cell and return from reader
+		c, err := csvToCell(row)
+		if err != nil {
+			return nil, errors.New("csv file row convert error: " + fileName + ": " + err.Error())
+		}
+		return c, nil
+	}
+	return from, nil
 }

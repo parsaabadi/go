@@ -139,7 +139,7 @@ func doRenameWorkset(trx *sql.Tx, setId int, newSetName string, isAnyReadonly bo
 // Workset must be read-write for replace or merge.
 //
 // Only metadata updated: list of workset parameters not changed.
-// To add or remove parameters form workset use UpdateWorksetParameter() method.
+// To add or remove parameters form workset use UpdateWorksetParameterFrom() method.
 // It is an error if incoming list parameters include any parameter which are not already in workset_parameter table.
 //
 // If workset does not exist then empty workset created, without parameters.

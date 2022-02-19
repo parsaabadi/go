@@ -4,7 +4,6 @@
 package db
 
 import (
-	"container/list"
 	"database/sql"
 	"errors"
 	"strconv"
@@ -13,17 +12,17 @@ import (
 	"github.com/openmpp/go/ompp/helper"
 )
 
-// UpdateWorksetParameter add new or replace existing workset parameter.
+// UpdateWorksetParameterFrom add new or replace existing workset parameter.
 //
 // If parameter already exist in workset then parameter metadata either merged or replaced.
 // If parameter not exist in workset then parameter values must be supplied, it cannot be empty.
 // If parameter not exist in workset then new parameter metadata and values inserted.
-// If list of new parameter values supplied then parameter values completely replaced.
+// If from() not nil then parameter values completely replaced, on each call from() must return CellParam for all parameter values.
 //
 // Set name is used to find workset and set id updated with actual database value.
 // Workset must be read-write for replace or merge.
-func (meta *WorksetMeta) UpdateWorksetParameter(
-	dbConn *sql.DB, modelDef *ModelMeta, isReplaceMeta bool, param *ParamRunSetPub, cellLst *list.List, langDef *LangMeta,
+func (meta *WorksetMeta) UpdateWorksetParameterFrom(
+	dbConn *sql.DB, modelDef *ModelMeta, isReplaceMeta bool, param *ParamRunSetPub, langDef *LangMeta, from func() (interface{}, error),
 ) (int, error) {
 
 	// validate parameters
@@ -50,7 +49,7 @@ func (meta *WorksetMeta) UpdateWorksetParameter(
 	}
 
 	// if parameter values supplied then sub-value count must be positive
-	isData := cellLst != nil && cellLst.Len() > 0
+	isData := from != nil
 	if isData && param.SubCount <= 0 {
 		return 0, errors.New("parameter sub-value count must be positive: " + strconv.Itoa(param.SubCount) + ": " + param.Name)
 	}
@@ -73,7 +72,7 @@ func (meta *WorksetMeta) UpdateWorksetParameter(
 			return 0, errors.New("parameter not found: " + param.Name)
 		}
 
-		err = doWriteSetParameter(trx, pm, meta.Set.SetId, param.SubCount, param.DefaultSubId, false, cellLst)
+		err = doWriteSetParameterFrom(trx, pm, meta.Set.SetId, param.SubCount, param.DefaultSubId, false, from, "")
 		if err != nil {
 			trx.Rollback()
 			return 0, err
@@ -142,7 +141,7 @@ func UpdateWorksetParameterText(dbConn *sql.DB, modelDef *ModelMeta, setName str
 	return nil
 }
 
-// doUpdateWorksetParameter insert new or update existing workset parameter metadata.
+// doUpdateWorksetParameterMeta insert new or update existing workset parameter metadata.
 // It does update as part of transaction.
 //
 // If parameter already exist in workset then parameter metadata either merged or replaced.

@@ -52,7 +52,7 @@ func (cellCvt CellTableCmpConverter) CsvFileName(modelDef *ModelMeta, name strin
 	return name + ".cmp.csv", nil
 }
 
-// CsvHeader retrun first line for csv file: column names, it's look like: run_digest,dim0,dim1,value
+// CsvHeader return first line for csv file: column names, it's look like: run_digest,dim0,dim1,value
 func (cellCvt CellTableCmpConverter) CsvHeader(modelDef *ModelMeta, name string) ([]string, error) {
 
 	// validate parameters
@@ -82,17 +82,45 @@ func (cellCvt CellTableCmpConverter) CsvHeader(modelDef *ModelMeta, name string)
 	return h, nil
 }
 
+// KeyIds return converter to copy primary key: (run_id, dimension ids) into key []int.
+//
+// Converter will return error if len(key) not equal to row key size.
+func (cellCvt CellTableCmpConverter) KeyIds(name string) (func(interface{}, []int) error, error) {
+
+	cvt := func(src interface{}, key []int) error {
+
+		cell, ok := src.(CellTableCmp)
+		if !ok {
+			return errors.New("invalid type, expected: CellTableCmp (internal error): " + name)
+		}
+
+		n := len(cell.DimIds)
+		if len(key) != n+1 {
+			return errors.New("invalid size of key buffer, expected: " + strconv.Itoa(n+2) + ": " + name)
+		}
+
+		key[0] = cell.RunId
+
+		for k, e := range cell.DimIds {
+			key[k+1] = e
+		}
+		return nil
+	}
+
+	return cvt, nil
+}
+
 // CsvToIdRow return converter from output table comparison cell (run_id, dimensions, value) to csv row []string.
 //
 // Converter simply does Sprint() for each dimension item id, run id and value.
-// Converter will retrun error if len(row) not equal to number of fields in csv record.
+// Converter will return error if len(row) not equal to number of fields in csv record.
 func (cellCvt CellTableCmpConverter) CsvToIdRow(modelDef *ModelMeta, name string) (func(interface{}, []string) error, error) {
 
 	cvt := func(src interface{}, row []string) error {
 
 		cell, ok := src.(CellTableCmp)
 		if !ok {
-			return errors.New("invalid type, expected: output table comparison cell (internal error)")
+			return errors.New("invalid type, expected: CellTableCmp (internal error)")
 		}
 
 		n := len(cell.DimIds)
@@ -125,8 +153,8 @@ func (cellCvt CellTableCmpConverter) CsvToIdRow(modelDef *ModelMeta, name string
 // CsvToRow return converter from output table comparison cell (run_id, dimensions, value)
 // to csv row []string (run digest, dimensions, value).
 //
-// Converter will retrun error if len(row) not equal to number of fields in csv record.
-// Converter will retrun error if run_id not exist in the list of model runs (in run_lst table).
+// Converter will return error if len(row) not equal to number of fields in csv record.
+// Converter will return error if run_id not exist in the list of model runs (in run_lst table).
 // Double format string is used if parameter type is float, double, long double.
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
 func (cellCvt CellTableCmpConverter) CsvToRow(modelDef *ModelMeta, name string) (func(interface{}, []string) error, error) {
@@ -201,7 +229,7 @@ func (cellCvt CellTableCmpConverter) CsvToRow(modelDef *ModelMeta, name string) 
 
 // CsvToCell return closure to convert csv row []string to output table comparison cell (run id, dimensions and value).
 //
-// It does retrun error if len(row) not equal to number of fields in cell db-record.
+// It does return error if len(row) not equal to number of fields in cell db-record.
 // If dimension type is enum based then csv row is enum code and it is converted into cell.DimIds (into dimension type type enum ids).
 func (cellCvt CellTableCmpConverter) CsvToCell(modelDef *ModelMeta, name string, subCount int) (func(row []string) (interface{}, error), error) {
 
@@ -239,7 +267,7 @@ func (cellCvt CellTableCmpConverter) CsvToCell(modelDef *ModelMeta, name string,
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {
-			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(n+2))
+			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(n+2) + ": " + name)
 		}
 
 		// run id by digest
@@ -313,10 +341,10 @@ func (cellCvt CellTableCmpConverter) IdToCodeCell(modelDef *ModelMeta, name stri
 
 		srcCell, ok := src.(CellTableCmp)
 		if !ok {
-			return nil, errors.New("invalid type, expected: output table comparison cell (internal error)")
+			return nil, errors.New("invalid type, expected: output table comparison cell (internal error): " + name)
 		}
 		if len(srcCell.DimIds) != table.Rank {
-			return nil, errors.New("invalid cell rank: " + strconv.Itoa(len(srcCell.DimIds)) + ", expected: " + strconv.Itoa(table.Rank))
+			return nil, errors.New("invalid cell rank: " + strconv.Itoa(len(srcCell.DimIds)) + ", expected: " + strconv.Itoa(table.Rank) + ": " + name)
 		}
 
 		dgst := cellCvt.IdToDigest[srcCell.RunId]

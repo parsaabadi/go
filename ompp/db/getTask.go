@@ -437,7 +437,7 @@ func GetTaskRunListByStampOrName(dbConn *sql.DB, taskId int, trsn string) ([]Tas
 	return runRs, err
 }
 
-// GetTaskRunSetRows retrun task run body (pairs of run id and set id) by task run id: task_run_set table rows.
+// GetTaskRunSetRows return task run body (pairs of run id and set id) by task run id: task_run_set table rows.
 //
 // It does not return non-completed task run (run in progress).
 // Task run completed if run status one of: s=success, x=exit, e=error

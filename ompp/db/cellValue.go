@@ -31,10 +31,14 @@ type CsvConverter interface {
 	// return file name of csv file to store parameter or output table rows
 	CsvFileName(modelDef *ModelMeta, name string, isIdCsv bool) (string, error)
 
-	// retrun first line of csv file with column names: expr_name,dim0,dim1,expr_value.
+	// return first line of csv file with column names: expr_name,dim0,dim1,expr_value.
 	// if isIdHeader is true: expr_id,dim0,dim1,expr_value
 	// if isAllAcc is true: sub_id,dim0,dim1,acc0,acc1,acc2
 	CsvHeader(modelDef *ModelMeta, name string) ([]string, error)
+
+	// KeyIds return converter to copy row primary key into key []int.
+	// Row primary key is: (acc_id, sub_id, dimension ids) or (expr_id, dimension ids) or (sub_id, dimension ids)
+	KeyIds(name string) (func(interface{}, []int) error, error)
 
 	// return converter from cell (dimensions and value) of parameter or output table to csv row []string.
 	// it simply sprint() dimension id's and value into []string.

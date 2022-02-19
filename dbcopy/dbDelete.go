@@ -172,9 +172,9 @@ func dbDeleteWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 		return errors.New("workset " + strconv.Itoa(wsRow.SetId) + " " + wsRow.Name + " does not belong to model " + modelName + " " + modelDigest)
 	}
 
-	// check: workset must be readonly
-	if !wsRow.IsReadonly {
-		return errors.New("workset must be readonly: " + strconv.Itoa(wsRow.SetId) + " " + wsRow.Name)
+	// check: workset must be read-write in order to delete
+	if wsRow.IsReadonly {
+		return errors.New("workset is read-only: " + strconv.Itoa(wsRow.SetId) + " " + wsRow.Name)
 	}
 
 	// delete workset metadata and workset parameter values from database

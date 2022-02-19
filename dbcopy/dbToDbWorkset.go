@@ -243,7 +243,7 @@ func copyWorksetDbToDb(
 		}
 
 		// destination: insert or update parameter values in workset
-		_, err = dstWs.UpdateWorksetParameter(dstDb, dstModel, true, &paramLst[j], cLst, dstLang)
+		_, err = dstWs.UpdateWorksetParameterFrom(dstDb, dstModel, true, &paramLst[j], dstLang, makeFromList(cLst))
 		if err != nil {
 			return 0, err
 		}

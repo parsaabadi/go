@@ -4,28 +4,29 @@
 package db
 
 import (
-	"container/list"
 	"crypto/md5"
 	"database/sql"
 	"errors"
 	"fmt"
+	"hash"
 	"strconv"
 	"time"
 
 	"github.com/openmpp/go/ompp/helper"
 )
 
-// WriteParameter insert or update parameter values in workset or insert parameter values into model run.
+// WriteParameterFrom insert or update parameter values in workset or insert parameter values into model run until from() return not nil CellParam value.
 //
 // If this is model run update (layout.IsToRun is true) then model run must exist and be in completed state (i.e. success or error state).
 // Model run should not already contain parameter values: parameter can be inserted only once in model run and cannot be updated after.
+// Parameter values must come in the order of primary key otherwise digest calculated incorrectly.
 //
 // If workset already contain parameter values then values updated else inserted.
 // If only "page" of workset parameter rows supplied (layout.IsPage is true)
 // then each row deleted by primary key before insert else all rows deleted by one delete by set id.
 //
-// Double format is used for float model types digest calculation, if non-empty format supplied
-func WriteParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *WriteParamLayout, cellLst *list.List) error {
+// Double format is used for float model types digest calculation, if non-empty format supplied.
+func WriteParameterFrom(dbConn *sql.DB, modelDef *ModelMeta, layout *WriteParamLayout, from func() (interface{}, error)) error {
 
 	// validate parameters
 	if modelDef == nil {
@@ -46,7 +47,7 @@ func WriteParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *WriteParamLayou
 	if layout.SubCount <= 0 {
 		return errors.New("invalid number of parameter sub-vaules: " + strconv.Itoa(layout.SubCount))
 	}
-	if cellLst == nil {
+	if from == nil {
 		return errors.New("invalid (empty) parameter values")
 	}
 
@@ -76,9 +77,9 @@ func WriteParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *WriteParamLayou
 		return err
 	}
 	if layout.IsToRun {
-		err = doWriteRunParameter(trx, modelDef, param, layout.ToId, layout.SubCount, cellLst, layout.DoubleFmt)
+		err = doWriteRunParameterFrom(trx, modelDef, param, layout.ToId, layout.SubCount, from, layout.DoubleFmt)
 	} else {
-		err = doWriteSetParameter(trx, param, layout.ToId, layout.SubCount, defSubId, layout.IsPage, cellLst)
+		err = doWriteSetParameterFrom(trx, param, layout.ToId, layout.SubCount, defSubId, layout.IsPage, from, layout.DoubleFmt)
 	}
 	if err != nil {
 		trx.Rollback()
@@ -89,13 +90,13 @@ func WriteParameter(dbConn *sql.DB, modelDef *ModelMeta, layout *WriteParamLayou
 	return nil
 }
 
-// doWriteRunParameter insert parameter values into model run.
+// doWriteRunParameterFrom insert parameter values into model run.
 // It does insert as part of transaction
 // Model run must exist and be in completed state (i.e. success or error state).
 // Model run should not already contain parameter values: parameter can be inserted only once in model run and cannot be updated after.
 // Double format is used for float model types digest calculation, if non-empty format supplied
-func doWriteRunParameter(
-	trx *sql.Tx, modelDef *ModelMeta, param *ParamMeta, runId int, subCount int, cellLst *list.List, doubleFmt string,
+func doWriteRunParameterFrom(
+	trx *sql.Tx, modelDef *ModelMeta, param *ParamMeta, runId int, subCount int, from func() (interface{}, error), doubleFmt string,
 ) error {
 
 	// start run update
@@ -145,17 +146,43 @@ func doWriteRunParameter(
 		return errors.New("model run with id: " + srId + " already contain parameter values " + param.Name)
 	}
 
-	// calculate parameter digest
-	digest, err := digestParameter(modelDef, param, cellLst, doubleFmt)
+	// insert into run_parameter with digest and current run id as base run id and NULL digest
+	err = TrxUpdate(trx,
+		"INSERT INTO run_parameter (run_id, parameter_hid, base_run_id, sub_count, value_digest)"+
+			" VALUES ("+
+			srId+", "+sHid+", "+srId+", "+strconv.Itoa(subCount)+", NULL)")
 	if err != nil {
 		return err
 	}
 
-	// insert into run_parameter with digest and current run id as base run id
+	// create parameter digest calculator
+	hMd5, digestFrom, isOrderBy, err := digestParameterFrom(modelDef, param, doubleFmt)
+	if err != nil {
+		return err
+	}
+
+	// make sql to insert parameter values into model run
+	// prepare put() closure to convert each cell into insert sql statement parameters
+	q := makeSqlInsertParamValue(param.DbRunTable, "run_id", param.Dim, runId)
+	put := putInsertParamFrom(param, subCount, 0, from, digestFrom)
+
+	// execute sql insert using put() above for each row
+	if err = TrxUpdateStatement(trx, q, put); err != nil {
+		return errors.New("insert parameter failed: " + param.Name + " " + err.Error())
+	}
+
+	// check if all rows ordered by primary key, digest is incorrect otherwise
+	if isOrderBy == nil || !*isOrderBy {
+		return errors.New("invalid digest due to incorrect parameter rows order: " + param.Name)
+	}
+
+	// update parameter digest with actual value
+	dgst := fmt.Sprintf("%x", hMd5.Sum(nil))
+
 	err = TrxUpdate(trx,
-		"INSERT INTO run_parameter (run_id, parameter_hid, base_run_id, sub_count, value_digest)"+
-			" VALUES ("+
-			srId+", "+sHid+", "+srId+", "+strconv.Itoa(subCount)+", "+ToQuoted(digest)+")")
+		"UPDATE run_parameter SET value_digest = "+ToQuoted(dgst)+
+			" WHERE run_id = "+srId+
+			" AND parameter_hid ="+sHid)
 	if err != nil {
 		return err
 	}
@@ -165,7 +192,7 @@ func doWriteRunParameter(
 	err = TrxSelectFirst(trx,
 		"SELECT MIN(run_id) FROM run_parameter"+
 			" WHERE parameter_hid = "+sHid+
-			" AND value_digest = "+ToQuoted(digest),
+			" AND value_digest = "+ToQuoted(dgst),
 		func(row *sql.Row) error {
 			if err := row.Scan(&nBase); err != nil {
 				return err
@@ -179,59 +206,31 @@ func doWriteRunParameter(
 	}
 
 	// if parameter values already exist then update base run id
-	// else insert new parameter values into model run
+	// and remove duplicate values
 	if runId != nBase {
 
 		err = TrxUpdate(trx,
 			"UPDATE run_parameter SET base_run_id = "+strconv.Itoa(nBase)+
-				" WHERE parameter_hid = "+sHid+
-				" AND run_id = "+srId)
+				" WHERE run_id = "+srId+
+				" AND parameter_hid = "+sHid)
 		if err != nil {
 			return err
 		}
-	} else { // insert new parameter values into model run
-
-		// make sql to insert parameter values into model run
-		// prepare put() closure to convert each cell into insert sql statement parameters
-		sql := makeSqlInsertParamValue(param.DbRunTable, "run_id", param.Dim, runId)
-		put := makePutInsertParamValue(param, subCount, 0, cellLst)
-
-		// execute sql insert using put() above for each row
-		if err = TrxUpdateStatement(trx, sql, put); err != nil {
-			return errors.New("insert parameter failed: " + param.Name + " " + err.Error())
+		err = TrxUpdate(trx, "DELETE FROM "+param.DbRunTable+" WHERE run_id = "+srId)
+		if err != nil {
+			return err
 		}
 	}
 
 	return nil
 }
 
-// digestParameter retrun digest of parameter values.
-func digestParameter(modelDef *ModelMeta, param *ParamMeta, cellLst *list.List, doubleFmt string) (string, error) {
-
-	// start from name and metadata digest
-	hMd5 := md5.New()
-	_, err := hMd5.Write([]byte("parameter_name,parameter_digest\n"))
-	if err != nil {
-		return "", err
-	}
-	_, err = hMd5.Write([]byte(param.Name + "," + param.Digest + "\n"))
-	if err != nil {
-		return "", err
-	}
-
-	// append digest of parameter cells
-	cvtParam := CellParamConverter{DoubleFmt: doubleFmt}
-	if err = digestCells(hMd5, modelDef, param.Name, cvtParam, cellLst); err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("%x", hMd5.Sum(nil)), nil // retrun digest as hex string
-}
-
-// doWriteSetParameter insert or update parameter values in workset.
+// doWriteSetParameterFrom insert or update parameter values in workset.
 // It does insert as part of transaction
 // If workset already contain parameter values then values updated else inserted.
-func doWriteSetParameter(trx *sql.Tx, param *ParamMeta, setId int, subCount int, defaultSubId int, isPage bool, cellLst *list.List) error {
+func doWriteSetParameterFrom(
+	trx *sql.Tx, param *ParamMeta, setId int, subCount int, defaultSubId int, isPage bool, from func() (interface{}, error), doubleFmt string,
+) error {
 
 	// start workset update
 	sId := strconv.Itoa(setId)
@@ -263,32 +262,28 @@ func doWriteSetParameter(trx *sql.Tx, param *ParamMeta, setId int, subCount int,
 		return errors.New("cannot update parameter " + param.Name + ", workset is readonly, id: " + sId)
 	}
 
-	// delete existing parameter values
+	// delete existing parameter values and insert new values
 	if !isPage {
 		if err = TrxUpdate(trx, "DELETE FROM "+param.DbSetTable+" WHERE set_id = "+sId); err != nil {
 			return err
 		}
-	} else {
 
-		// make sql to delete parameter rows by primary key from workset
-		// prepare put() closure to convert each cell into delete sql statement parameters
-		q := makeSqlDeleteParamPage(param.DbSetTable, param.Dim, setId)
-		put := makePutDeleteParamPage(param, cellLst)
+		// make sql to insert parameter values into workset
+		// prepare put() closure to convert each cell into insert sql statement parameters
+		sql := makeSqlInsertParamValue(param.DbSetTable, "set_id", param.Dim, setId)
+		put := putInsertParamFrom(param, subCount, defaultSubId, from, nil)
 
-		// execute sql delete using put() above for each row
-		if err = TrxUpdateStatement(trx, q, put); err != nil {
-			return errors.New("delete parameter failed: " + param.Name + " " + err.Error())
+		// execute sql insert using put() above for each row
+		if err = TrxUpdateStatement(trx, sql, put); err != nil {
+			return errors.New("insert parameter failed: " + param.Name + " " + err.Error())
 		}
-	}
 
-	// make sql to insert parameter values into workset
-	// prepare put() closure to convert each cell into insert sql statement parameters
-	sql := makeSqlInsertParamValue(param.DbSetTable, "set_id", param.Dim, setId)
-	put := makePutInsertParamValue(param, subCount, defaultSubId, cellLst)
+	} else { // page of data: parameter page updated, typically json from UI
 
-	// execute sql insert using put() above for each row
-	if err = TrxUpdateStatement(trx, sql, put); err != nil {
-		return errors.New("insert parameter failed: " + param.Name + " " + err.Error())
+		err = doDeleteInsertParamRows(trx, param, setId, subCount, defaultSubId, from, doubleFmt)
+		if err != nil {
+			return errors.New("update parameter failed: " + param.Name + " " + err.Error())
+		}
 	}
 
 	// update completed: reset readonly status to "read-write"
@@ -320,24 +315,30 @@ func makeSqlInsertParamValue(dbTable string, runSetCol string, dims []ParamDimsR
 	return q
 }
 
-// prepare put() closure to convert each cell into insert sql statement parameters
-func makePutInsertParamValue(param *ParamMeta, subCount int, defaultSubId int, cellLst *list.List) func() (bool, []interface{}, error) {
+// prepare put() closure to convert each cell into insert sql statement parameters until from() return not nil CellParam value.
+func putInsertParamFrom(
+	param *ParamMeta, subCount int, defaultSubId int, from func() (interface{}, error), digestFrom func(interface{}) error,
+) func() (bool, []interface{}, error) {
 
 	// converter from value into db value
 	fv := cvtValue(param)
 
 	//  for each cell put into row of sql statement parameters
 	row := make([]interface{}, param.Rank+2)
-	c := cellLst.Front()
 
 	put := func() (bool, []interface{}, error) {
 
+		// get next input row
+		c, err := from()
+		if err != nil {
+			return false, nil, err
+		}
 		if c == nil {
 			return false, nil, nil // end of data
 		}
 
 		// convert and check input row
-		cell, ok := c.Value.(CellParam)
+		cell, ok := c.(CellParam)
 		if !ok {
 			return false, nil, errors.New("invalid type, expected: parameter cell (internal error)")
 		}
@@ -366,63 +367,126 @@ func makePutInsertParamValue(param *ParamMeta, subCount int, defaultSubId int, c
 			return false, nil, err
 		}
 
-		// move to next input row and return current row to sql statement
-		c = c.Next()
-		return true, row, nil
+		// if parameter digest required then append row digest to parameter value digest
+		if digestFrom != nil {
+			err = digestFrom(cell)
+			if err != nil {
+				return false, nil, err
+			}
+		}
+
+		return true, row, nil // return current row to sql statement
 	}
 	return put
 }
 
-// make sql to delete parameter rows from workset by specified keys: set id, sub-value number and dimension(s) items id
-func makeSqlDeleteParamPage(dbTable string, dims []ParamDimsRow, setId int) string {
+// digestParameterFrom start run parameter digest calculation and return closure to add parameter row to digest.
+func digestParameterFrom(modelDef *ModelMeta, param *ParamMeta, doubleFmt string) (hash.Hash, func(interface{}) error, *bool, error) {
 
-	// DELETE FROM ageSex_w2012817 WHERE set_id = 2 AND sub_id = ? AND dim0 = ? AND dim1 = ?
-	q := "DELETE FROM " + dbTable +
-		" WHERE set_id = " + strconv.Itoa(setId) +
-		" AND sub_id = ?"
-
-	for k := range dims {
-		q += " AND " + dims[k].colName + " = ?"
+	// start from name and metadata digest
+	hMd5 := md5.New()
+	_, err := hMd5.Write([]byte("parameter_name,parameter_digest\n"))
+	if err != nil {
+		return nil, nil, nil, err
 	}
-	return q
+	_, err = hMd5.Write([]byte(param.Name + "," + param.Digest + "\n"))
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	// create parameter row digester append digest of parameter cells
+	cvtParam := CellParamConverter{DoubleFmt: doubleFmt}
+
+	digestRow, isOrderBy, err := digestCellsFrom(hMd5, modelDef, param.Name, cvtParam)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return hMd5, digestRow, isOrderBy, nil
 }
 
-// prepare put() closure to convert each cell into delete sql statement parameters
-func makePutDeleteParamPage(param *ParamMeta, cellLst *list.List) func() (bool, []interface{}, error) {
+// delete and insert parameter rows from workset by specified keys: set id, sub-value number and dimension(s) items id
+func doDeleteInsertParamRows(
+	trx *sql.Tx, param *ParamMeta, setId int, subCount int, defaultSubId int, from func() (interface{}, error), doubleFmt string,
+) error {
 
-	// for each cell put into row of sql statement parameters
-	row := make([]interface{}, param.Rank+1)
-	c := cellLst.Front()
+	// start of delete sql:
+	// DELETE FROM ageSex_w2012817 WHERE set_id = 2 AND sub_id = 0 AND dim0 = 1 AND dim1 = 2
+	del := "DELETE FROM " + param.DbSetTable +
+		" WHERE set_id = " + strconv.Itoa(setId)
 
-	put := func() (bool, []interface{}, error) {
+	// start of insert sql:
+	// INSERT INTO ageSex_w2012817 (set_id, sub_id, dim0, dim1, param_value) VALUES (2, 0, 1, 2, 'QC')
+	ins := "INSERT INTO " + param.DbSetTable + " (set_id, sub_id, "
 
+	dimCount := len(param.Dim)
+	for k := 0; k < dimCount; k++ {
+		ins += param.Dim[k].colName + ", "
+	}
+
+	ins += "param_value) VALUES (" + strconv.Itoa(setId) + ", "
+
+	// converter from value into sql string to insert, if parameter type is string the retrun is 'sql quoted value'
+	fv := cvtValueToSqlString(param, doubleFmt)
+
+	for {
+		// get next input row
+		c, err := from()
+		if err != nil {
+			return err
+		}
 		if c == nil {
-			return false, nil, nil // end of data
+			break // end of data
 		}
 
 		// convert and check input row
-		cell, ok := c.Value.(CellParam)
+		cell, ok := c.(CellParam)
 		if !ok {
-			return false, nil, errors.New("invalid type, expected: parameter cell (internal error)")
+			return errors.New("invalid type, expected: parameter cell (internal error)")
 		}
 
 		n := len(cell.DimIds)
-		if len(row) != n+1 {
-			return false, nil, errors.New("invalid parameter row size, expected: " + strconv.Itoa(n+1))
+		if n != dimCount {
+			return errors.New("invalid parameter row dimensions count, expected: " + strconv.Itoa(dimCount))
 		}
 
-		// set sql statement parameter values: sub-value number, dimensions enum, parameter value
-		row[0] = cell.SubId
+		// make delete sql: add sub-value number and dimensions enum
+		delSql := del + " AND sub_id = " + strconv.Itoa(cell.SubId)
 
-		for k, e := range cell.DimIds {
-			row[k+1] = e
+		for k := 0; k < dimCount; k++ {
+			delSql += " AND " + param.Dim[k].colName + " = " + strconv.Itoa(cell.DimIds[k])
 		}
 
-		// move to next input row and return current row to sql statement
-		c = c.Next()
-		return true, row, nil
+		// parameter sub-value id and default sub-value id can be any integer
+		// however if workset created by openM++ tools (e.g. by omc) then default id =0 and sub-value ids: [0,subCount-1]
+		// to validate allow non-zero based sub id only for single sub-values set
+		if defaultSubId == 0 && (cell.SubId < 0 || cell.SubId >= subCount) || subCount == 1 && cell.SubId != defaultSubId {
+			return errors.New("invalid sub-value id: " + strconv.Itoa(cell.SubId) + " parameter: " + param.Name)
+		}
+
+		// make insert sql: add sub-value number, dimensions enum, parameter value
+		insSql := ins + strconv.Itoa(cell.SubId) + ", "
+
+		for k := 0; k < dimCount; k++ {
+			insSql += strconv.Itoa(cell.DimIds[k]) + ", "
+		}
+
+		if v, err := fv(cell); err == nil {
+			insSql += v + ")"
+		} else {
+			return err
+		}
+
+		// do delete and insert
+		if err = TrxUpdate(trx, delSql); err != nil {
+			return err
+		}
+		if err = TrxUpdate(trx, insSql); err != nil {
+			return err
+		}
 	}
-	return put
+
+	return nil
 }
 
 // cvtValue return converter from source value into db value
@@ -582,4 +646,70 @@ func cvtValue(param *ParamMeta) func(bool, interface{}) (interface{}, error) {
 		}
 		return nil, errors.New("invalid parameter value type, expected: integer enum id")
 	}
+}
+
+// cvtValueToSqlString return converter from value into sql string to insert
+// if parameter type is string then return is 'sql quoted value'
+// converter does type validation
+// for non built-it types validate enum id presense in enum list
+// only float parameter values can be NULL, for any other parameter types NULL values rejected.
+func cvtValueToSqlString(param *ParamMeta, doubleFmt string) func(cell CellParam) (string, error) {
+
+	// float parameter: check if isNull flag, validate and convert type
+	// cell value is nullable for extended parameters only
+	isNullable := param.IsExtendable
+
+	isUseFmt := param.typeOf.IsFloat() && doubleFmt != "" // for float model types use format if specified
+	isUseEnum := !param.typeOf.IsBuiltIn()                // parameter is enum-based: validate enum id, it must be in enum type
+	isBool := param.typeOf.IsBool()                       // boolean sql values are 0 or 1
+	isStr := param.typeOf.IsString()                      // string value must 'sql quoted'
+
+	cvt := func(cell CellParam) (string, error) {
+
+		// validate if cell value is null and parameter value can be NULL then retun "NULL" string
+		if cell.IsNull || cell.Value == nil {
+			if !isNullable {
+				return "", errors.New("invalid parameter value, it cannot be NULL")
+			}
+			return "NULL", nil
+		}
+		if isBool {
+			if is, ok := cell.Value.(bool); ok && is {
+				return "1", nil
+			}
+			return "0", nil
+		}
+		if isStr {
+			if sv, ok := cell.Value.(string); !ok {
+				return "", errors.New("invalid parameter value, it must be string")
+			} else {
+				return toQuotedMax(sv, stringDbMax), nil
+			}
+		}
+
+		// if parameter type is enum based then validate enum id
+		if isUseEnum {
+			iv, ok := cell.Value.(int)
+			if !ok {
+				return "", errors.New("invalid parameter value, expected: integer enum id")
+			}
+
+			// validate enum id: it must be in enum list
+			for j := range param.typeOf.Enum {
+				if iv == param.typeOf.Enum[j].EnumId {
+					return strconv.Itoa(iv), nil
+				}
+			}
+			return "", errors.New("invalid parameter value type, expected: integer enum id")
+		}
+
+		// format integer and for model float types
+		if isUseFmt {
+			return fmt.Sprintf(doubleFmt, cell.Value), nil
+		} else {
+			return fmt.Sprint(cell.Value), nil
+		}
+	}
+
+	return cvt
 }
