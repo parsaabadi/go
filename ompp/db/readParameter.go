@@ -9,7 +9,7 @@ import (
 	"strconv"
 )
 
-// ReadParameterTo read input parameter page (sub id, dimensions, value) from workset or model run results and process each row by cvtTo().
+// ReadParameterTo read input parameter rows (sub id, dimensions, value) from workset or model run results and process each row by cvtTo().
 func ReadParameterTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayout, cvtTo func(src interface{}) (bool, error)) (*ReadPageLayout, error) {
 
 	// validate parameters
@@ -182,12 +182,100 @@ func ReadParameterTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayou
 
 	// prepare db-row conversion buffer: sub_id, dimensions, value
 	// define conversion functin to make new cell from scan buffer
+	scanBuf, fc := scanSqlRowToCellParam(param)
+
+	// adjust page layout: starting offset and page size
+	nStart := layout.Offset
+	if nStart < 0 {
+		nStart = 0
+	}
+	nSize := layout.Size
+	if nSize < 0 {
+		nSize = 0
+	}
+	var nRow int64
+
+	lt := ReadPageLayout{
+		Offset:     nStart,
+		Size:       0,
+		IsLastPage: false,
+	}
+
+	// select parameter cells: (sub id, dimension(s) enum ids, parameter value)
+	err := SelectRowsTo(dbConn, q,
+		func(rows *sql.Rows) (bool, error) {
+
+			// if page size is limited then select only a page of rows
+			nRow++
+			if nSize > 0 && nRow > nStart+nSize {
+				return false, nil
+			}
+			if nRow <= nStart {
+				return true, nil
+			}
+
+			// select next row
+			if e := rows.Scan(scanBuf...); e != nil {
+				return false, e
+			}
+			lt.Size++
+
+			// make new cell from conversion buffer
+			var c = CellParam{cellIdValue: cellIdValue{DimIds: make([]int, param.Rank)}}
+			if e := fc(&c); e != nil {
+				return false, e
+			}
+
+			return cvtTo(c) // process cell
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	// check for the empty result page or last page
+	if lt.Size <= 0 {
+		lt.Offset = nRow
+	}
+	lt.IsLastPage = nSize <= 0 || nSize > 0 && nRow <= nStart+nSize
+
+	return &lt, nil
+}
+
+// trxReadParameterTo read input parameter rows (sub id, dimensions, value) from workset or model run results and process each row by cvtTo().
+func trxReadParameterTo(trx *sql.Tx, param *ParamMeta, query string, cvtTo func(src interface{}) error) error {
+
+	// select parameter cells: (sub id, dimension(s) enum ids, parameter value)
+	scanBuf, fc := scanSqlRowToCellParam(param)
+
+	err := TrxSelectRows(trx, query,
+		func(rows *sql.Rows) error {
+
+			// select next row
+			if e := rows.Scan(scanBuf...); e != nil {
+				return e
+			}
+
+			// make new cell from conversion buffer
+			var c = CellParam{cellIdValue: cellIdValue{DimIds: make([]int, param.Rank)}}
+			if e := fc(&c); e != nil {
+				return e
+			}
+
+			return cvtTo(c) // process cell
+		})
+	return err
+}
+
+// prepare to scan sql rows and convert each row to CellParam
+// retun scan buffer to to be popualted by rows.Scan() and closure to that buffer into CellParam
+func scanSqlRowToCellParam(param *ParamMeta) ([]interface{}, func(*CellParam) error) {
+
 	var nSub int
 	d := make([]int, param.Rank)
 	var v interface{}
 	var vs string
 	var vf sql.NullFloat64
-	var fc func(c *CellParam) error
+	var cvt func(c *CellParam) error
 	var scanBuf []interface{}
 
 	scanBuf = append(scanBuf, &nSub)
@@ -198,7 +286,7 @@ func ReadParameterTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayou
 	switch {
 	case param.typeOf.IsBool():
 		scanBuf = append(scanBuf, &v)
-		fc = func(c *CellParam) error {
+		cvt = func(c *CellParam) error {
 			c.SubId = nSub
 			copy(c.DimIds, d)
 			c.IsNull = false // logical parameter expected to be NOT NULL
@@ -242,7 +330,7 @@ func ReadParameterTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayou
 
 	case param.typeOf.IsString():
 		scanBuf = append(scanBuf, &vs)
-		fc = func(c *CellParam) error {
+		cvt = func(c *CellParam) error {
 			c.SubId = nSub
 			copy(c.DimIds, d)
 			c.IsNull = false
@@ -252,7 +340,7 @@ func ReadParameterTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayou
 
 	case param.typeOf.IsFloat():
 		scanBuf = append(scanBuf, &vf)
-		fc = func(c *CellParam) error {
+		cvt = func(c *CellParam) error {
 			c.SubId = nSub
 			copy(c.DimIds, d)
 			c.IsNull = !vf.Valid
@@ -265,66 +353,8 @@ func ReadParameterTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayou
 
 	default:
 		scanBuf = append(scanBuf, &v)
-		fc = func(c *CellParam) error { c.SubId = nSub; copy(c.DimIds, d); c.IsNull = false; c.Value = v; return nil }
+		cvt = func(c *CellParam) error { c.SubId = nSub; copy(c.DimIds, d); c.IsNull = false; c.Value = v; return nil }
 	}
 
-	// adjust page layout: starting offset and page size
-	nStart := layout.Offset
-	if nStart < 0 {
-		nStart = 0
-	}
-	nSize := layout.Size
-	if nSize < 0 {
-		nSize = 0
-	}
-	var nRow int64
-
-	lt := ReadPageLayout{
-		Offset:     nStart,
-		Size:       0,
-		IsLastPage: false,
-	}
-
-	// select parameter cells: (sub id, dimension(s) enum ids, parameter value)
-	err := SelectRowsTo(dbConn, q,
-		func(rows *sql.Rows) (bool, error) {
-
-			// if page size is limited then select only a page of rows
-			nRow++
-			if nSize > 0 && nRow > nStart+nSize {
-				return false, nil
-			}
-			if nRow <= nStart {
-				return true, nil
-			}
-
-			if err := rows.Scan(scanBuf...); err != nil { // select next row
-				return false, err
-			}
-			lt.Size++
-
-			// select next row
-			if err := rows.Scan(scanBuf...); err != nil {
-				return false, err
-			}
-
-			// make new cell from conversion buffer
-			var c = CellParam{cellIdValue: cellIdValue{DimIds: make([]int, param.Rank)}}
-			if e := fc(&c); e != nil {
-				return false, e
-			}
-
-			return cvtTo(c) // process cell
-		})
-	if err != nil {
-		return nil, err
-	}
-
-	// check for the empty result page or last page
-	if lt.Size <= 0 {
-		lt.Offset = nRow
-	}
-	lt.IsLastPage = nSize <= 0 || nSize > 0 && nRow <= nStart+nSize
-
-	return &lt, nil
+	return scanBuf, cvt
 }

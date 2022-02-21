@@ -171,9 +171,33 @@ func doWriteRunParameterFrom(
 		return errors.New("insert parameter failed: " + param.Name + " " + err.Error())
 	}
 
-	// check if all rows ordered by primary key, digest is incorrect otherwise
+	// for correct digest calculation rows order by must be: sub_id, dim0, dim1,....
+	// if rows order by was incorrect then read parameter rows from run values table and recaluculate digest
 	if isOrderBy == nil || !*isOrderBy {
-		return errors.New("invalid digest due to incorrect parameter rows order: " + param.Name)
+		//
+		// SELECT sub_id, dim0, dim1, param_value FROM ageSex_w2012_817 WHERE run_id = 1234 ORDER BY 1, 2, 3
+		//
+		q := "SELECT sub_id, "
+		for k := range param.Dim {
+			q += param.Dim[k].colName + ", "
+		}
+		q += "param_value FROM " + param.DbRunTable + " WHERE run_id = " + srId
+
+		q += " ORDER BY 1"
+		for k := range param.Dim {
+			q += ", " + strconv.Itoa(k+2)
+		}
+
+		// select all parameter rows and re-calculate digest
+		hMd5, digestFrom, _, err = digestParameterFrom(modelDef, param, doubleFmt)
+		if err != nil {
+			return err
+		}
+
+		err = trxReadParameterTo(trx, param, q, digestFrom)
+		if err != nil {
+			return errors.New("digest parameter failed: " + param.Name + " " + err.Error())
+		}
 	}
 
 	// update parameter digest with actual value
@@ -412,8 +436,7 @@ func doDeleteInsertParamRows(
 
 	// start of delete sql:
 	// DELETE FROM ageSex_w2012817 WHERE set_id = 2 AND sub_id = 0 AND dim0 = 1 AND dim1 = 2
-	del := "DELETE FROM " + param.DbSetTable +
-		" WHERE set_id = " + strconv.Itoa(setId)
+	del := "DELETE FROM " + param.DbSetTable + " WHERE set_id = " + strconv.Itoa(setId)
 
 	// start of insert sql:
 	// INSERT INTO ageSex_w2012817 (set_id, sub_id, dim0, dim1, param_value) VALUES (2, 0, 1, 2, 'QC')

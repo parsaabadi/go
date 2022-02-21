@@ -108,9 +108,9 @@ func doParameterGetCsvHandler(w http.ResponseWriter, r *http.Request, srcArg str
 		}
 	}
 
-	cw := csv.NewWriter(w)
+	csvWr := csv.NewWriter(w)
 
-	if err := cw.Write(hdr); err != nil {
+	if err := csvWr.Write(hdr); err != nil {
 		http.Error(w, "Error at csv write: "+src+": "+name, http.StatusBadRequest)
 		return
 	}
@@ -123,7 +123,7 @@ func doParameterGetCsvHandler(w http.ResponseWriter, r *http.Request, srcArg str
 		if err := cvtRow(c, cs); err != nil {
 			return false, err
 		}
-		if err := cw.Write(cs); err != nil {
+		if err := csvWr.Write(cs); err != nil {
 			return false, err
 		}
 		return true, nil
@@ -134,7 +134,7 @@ func doParameterGetCsvHandler(w http.ResponseWriter, r *http.Request, srcArg str
 		http.Error(w, "Error at parameter read "+src+": "+name, http.StatusBadRequest)
 		return
 	}
-	cw.Flush() // flush csv to response
+	csvWr.Flush() // flush csv to response
 }
 
 // runTableExprCsvGetHandler read table expression(s) values from model run results and write it as csv response.
@@ -281,9 +281,9 @@ func doTableGetCsvHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllAc
 		}
 	}
 
-	cw := csv.NewWriter(w)
+	csvWr := csv.NewWriter(w)
 
-	if err := cw.Write(hdr); err != nil {
+	if err := csvWr.Write(hdr); err != nil {
 		http.Error(w, "Error at csv write: "+rdsn+": "+name, http.StatusBadRequest)
 		return
 	}
@@ -296,7 +296,7 @@ func doTableGetCsvHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllAc
 		if err := cvtRow(c, cs); err != nil {
 			return false, err
 		}
-		if err := cw.Write(cs); err != nil {
+		if err := csvWr.Write(cs); err != nil {
 			return false, err
 		}
 		return true, nil
@@ -306,5 +306,5 @@ func doTableGetCsvHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllAc
 		http.Error(w, "Error at run output table read "+rdsn+": "+name, http.StatusBadRequest)
 		return
 	}
-	cw.Flush() // flush csv to response
+	csvWr.Flush() // flush csv to response
 }

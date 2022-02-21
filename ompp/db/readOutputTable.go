@@ -303,7 +303,8 @@ func ReadOutputTableTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLay
 				return true, nil
 			}
 
-			if err := rows.Scan(scanBuf...); err != nil { // select next row
+			// select next row
+			if err := rows.Scan(scanBuf...); err != nil {
 				return false, err
 			}
 			lt.Size++
