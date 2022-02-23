@@ -79,7 +79,6 @@ To specify output or input directory for text files:
   dbcopy -m modelOne -dbcopy.OutputDir one
   dbcopy -m redModel -dbcopy.OutputDir red -s Default
   dbcopy -m redModel -dbcopy.InputDir red -dbcopy.To db -dbcopy.ToSqlite redModel.sqlite
-  dbcopy -m redModel -dbcopy.OutputDir red -s Default
 
 If you are using InputDir or OutputDir result path combined with
 model name, model run name or name of input parameters set to prevent path conflicts.
@@ -90,7 +89,7 @@ will place "Default" input set of parameters into directory red/redModel.set.Def
 If neccesary you can specify exact directory for input parameters by using "-dbcopy.ParamDir" or "-p":
   dbcopy -m modelOne -dbcopy.SetId 2 -dbcopy.ParamDir two
   dbcopy -m modelOne -dbcopy.SetId 2 -p two
-  dbcopy -m redModel -s Default -p 101 -dbcopy.To db  -dbcopy.ToSqlite redModel.sqlite
+  dbcopy -m redModel -s Default -p two -dbcopy.To db -dbcopy.ToSqlite redModel.sqlite
 
 Dbcopy create output directories (and json files) for model data by combining model name and run name or input set name.
 By default names may be combined with run id (set id) to make it unique.

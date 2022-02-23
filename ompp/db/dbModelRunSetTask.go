@@ -51,13 +51,13 @@ type RunPub struct {
 	Progress       []RunProgress     // run progress by sub-values: run_progress table rows
 }
 
-// ParamRunSetPub is "public" run or workset parameter metadata for json import-export
+// ParamRunSetTxtPub is "public" run or workset parameter metadata for json import-export: name, description and notes
 type ParamRunSetTxtPub struct {
 	Name string     // parameter name
 	Txt  []LangNote // parameter value notes by language
 }
 
-// ParamRunSetPub is "public" run or workset parameter metadata for json import-export
+// ParamRunSetPub is "public" run or workset parameter value metadata for json import-export
 type ParamRunSetPub struct {
 	ParamRunSetTxtPub
 	SubCount     int    // number of parameter sub-values
