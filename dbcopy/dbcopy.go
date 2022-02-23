@@ -87,9 +87,11 @@ For example:
 will place "Default" input set of parameters into directory red/redModel.set.Default.
 
 If neccesary you can specify exact directory for input parameters by using "-dbcopy.ParamDir" or "-p":
-  dbcopy -m modelOne -dbcopy.SetId 2 -dbcopy.ParamDir two
-  dbcopy -m modelOne -dbcopy.SetId 2 -p two
-  dbcopy -m redModel -s Default -p two -dbcopy.To db -dbcopy.ToSqlite redModel.sqlite
+  dbcopy -m modelOne -s Custom -dbcopy.ParamDir two
+  dbcopy -m modelOne -s Custom -dbcopy.ParamDir two -dbcopy.Zip
+  dbcopy -m modelOne -s Custom -dbcopy.ParamDir two -dbcopy.To db
+  dbcopy -m modelOne -s Custom -dbcopy.ParamDir two -dbcopy.To db -dbcopy.Zip
+  dbcopy -m modelOne -s Custom -dbcopy.ParamDir two -dbcopy.OutputDir my-m1 -dbcopy.To db -dbcopy.Zip
 
 Dbcopy create output directories (and json files) for model data by combining model name and run name or input set name.
 By default names may be combined with run id (set id) to make it unique.
