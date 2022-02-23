@@ -336,7 +336,7 @@ func doRunDownloadPost(w http.ResponseWriter, r *http.Request, isNoAcc bool, isC
 	}
 
 	// base part of: output directory name, .zip file name and log file name
-	baseName := mb.name + ".run." + strconv.Itoa(r0.RunId)
+	baseName := mb.name + ".run." + helper.CleanPath(r0.Name)
 	omppLog.Log("Download of: ", baseName)
 
 	// if download.progress.log file exist the retun error: download in progress

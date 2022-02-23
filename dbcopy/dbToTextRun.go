@@ -71,11 +71,16 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 		return err
 	}
 
+	// use of run and set id's in directory names:
+	// do this by default or if use id name = true
+	// only if use id name = false then do not use id's in directory names
+	isUseIdNames := !runOpts.IsExist(useIdNamesArgKey) || runOpts.Bool(useIdNamesArgKey)
+
 	// create new "root" output directory for model run metadata
 	// for csv files this "root" combined as root/run.1234.runName
 	var outDir, csvName string
 	switch {
-	case runId > 0:
+	case runId > 0 && isUseIdNames: // run id and use id's in directory names (it is by default)
 		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".run."+strconv.Itoa(runId))
 	case runDigest != "":
 		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".run."+helper.CleanPath(runDigest))
@@ -87,6 +92,7 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 		csvName = "last.run"
 	default:
 		// if not run id and not digest then run name
+		// it is also if run id specified and user expicitly disable id's in directory names: IdOutputNames=false
 		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".run."+helper.CleanPath(runRow.Name))
 	}
 
@@ -94,11 +100,6 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 	if err != nil {
 		return err
 	}
-
-	// use of run and set id's in directory names:
-	// do this by default or if use id name = true
-	// only if use id name = false then do not use id's in directory names
-	isUseIdNames := !runOpts.IsExist(useIdNamesArgKey) || runOpts.Bool(useIdNamesArgKey)
 
 	// write model run metadata into json, parameters and output result values into csv files
 	dblFmt := runOpts.String(doubleFormatArgKey)

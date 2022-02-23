@@ -84,7 +84,7 @@ func makeModelDownloadCommand(baseName string, mb modelBasic, logPath string, is
 func makeRunDownloadCommand(baseName string, mb modelBasic, runId int, logPath string, isNoAcc bool, isCsvBom bool) (*exec.Cmd, string) {
 
 	// make dbcopy message for user log
-	cmdMsg := "dbcopy -m " + mb.name + " -dbcopy.RunId " + strconv.Itoa(runId) + " -dbcopy.Zip -dbcopy.OutputDir " + theCfg.downloadDir
+	cmdMsg := "dbcopy -m " + mb.name + " -dbcopy.IdOutputNames=false -dbcopy.RunId " + strconv.Itoa(runId) + " -dbcopy.Zip -dbcopy.OutputDir " + theCfg.downloadDir
 	if isNoAcc {
 		cmdMsg += " -dbcopy.NoAccumulatorsCsv "
 	}
@@ -100,7 +100,7 @@ func makeRunDownloadCommand(baseName string, mb modelBasic, runId int, logPath s
 	}
 
 	// make dbcopy command
-	cArgs := []string{"-m", mb.name, "-dbcopy.RunId", strconv.Itoa(runId), "-dbcopy.Zip", "-dbcopy.OutputDir", absDownDir, "-dbcopy.FromSqlite", mb.dbPath}
+	cArgs := []string{"-m", mb.name, "-dbcopy.IdOutputNames=false", "-dbcopy.RunId", strconv.Itoa(runId), "-dbcopy.Zip", "-dbcopy.OutputDir", absDownDir, "-dbcopy.FromSqlite", mb.dbPath}
 	if isNoAcc {
 		cArgs = append(cArgs, "-dbcopy.NoAccumulatorsCsv")
 	}
@@ -118,7 +118,7 @@ func makeRunDownloadCommand(baseName string, mb modelBasic, runId int, logPath s
 func makeWorksetDownloadCommand(baseName string, mb modelBasic, setName string, logPath string, isCsvBom bool) (*exec.Cmd, string) {
 
 	// make dbcopy message for user log
-	cmdMsg := "dbcopy -m " + mb.name + " -dbcopy.SetName " + setName + " -dbcopy.Utf8BomIntoCsv -dbcopy.Zip -dbcopy.OutputDir " + theCfg.downloadDir
+	cmdMsg := "dbcopy -m " + mb.name + " -dbcopy.IdOutputNames=false -dbcopy.SetName " + setName + " -dbcopy.Utf8BomIntoCsv -dbcopy.Zip -dbcopy.OutputDir " + theCfg.downloadDir
 	if isCsvBom {
 		cmdMsg += " -dbcopy.Utf8BomIntoCsv "
 	}
@@ -131,7 +131,7 @@ func makeWorksetDownloadCommand(baseName string, mb modelBasic, setName string, 
 	}
 
 	// make dbcopy command
-	cArgs := []string{"-m", mb.name, "-dbcopy.SetName", setName, "-dbcopy.Zip", "-dbcopy.OutputDir", absDownDir, "-dbcopy.FromSqlite", mb.dbPath}
+	cArgs := []string{"-m", mb.name, "-dbcopy.IdOutputNames=false", "-dbcopy.SetName", setName, "-dbcopy.Zip", "-dbcopy.OutputDir", absDownDir, "-dbcopy.FromSqlite", mb.dbPath}
 	if isCsvBom {
 		cArgs = append(cArgs, "-dbcopy.Utf8BomIntoCsv")
 	}
