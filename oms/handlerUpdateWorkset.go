@@ -290,11 +290,11 @@ func worksetUpdateHandler(isReplace bool, w http.ResponseWriter, r *http.Request
 		}
 
 		// read csv values and update parameter
-		rd := csv.NewReader(part)
-		rd.TrimLeadingSpace = true
-		rd.ReuseRecord = true
+		csvRd := csv.NewReader(part)
+		csvRd.TrimLeadingSpace = true
+		csvRd.ReuseRecord = true
 
-		_, err = theCatalog.UpdateWorksetParameterCsv(isReplace, &newWp, &newParamLst[np], rd)
+		_, err = theCatalog.UpdateWorksetParameterCsv(isReplace, &newWp, &newParamLst[np], csvRd)
 		part.Close() // done with csv parameter data
 		if err != nil {
 			http.Error(w, "Failed update workset parameter "+newWp.Name+" : "+name+" : "+err.Error(), http.StatusBadRequest)

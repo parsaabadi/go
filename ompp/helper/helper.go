@@ -11,6 +11,8 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -69,6 +71,21 @@ func ToAlphaNumeric(src string) string {
 		}
 	}
 	return sb.String()
+}
+
+// SaveTo copy all from source reader into new outPath file. File truncated if already exists.
+func SaveTo(outPath string, rd io.Reader) error {
+
+	// create or truncate output file
+	f, err := os.OpenFile(outPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	// copy request body into the file
+	_, err = io.Copy(f, rd)
+	return err
 }
 
 // DeepCopy using gob to make a deep copy from src into dst, both src and dst expected to be a pointers

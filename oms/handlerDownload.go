@@ -4,150 +4,16 @@
 package main
 
 import (
-	"errors"
-	"io/fs"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
-	"time"
 
 	"github.com/openmpp/go/ompp/db"
 	"github.com/openmpp/go/ompp/helper"
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
-// modelDownloadLogGetHandler return .download.log file by name with download status.
-// GET /api/download/log/file/:name
-// Download status is one of: progress ready error or "" if unknown
-func fileLogDownloadGetHandler(w http.ResponseWriter, r *http.Request) {
-
-	// url or query parameters
-	fileName := getRequestParam(r, "name")
-
-	// validate name: it must be a file name only, it cannot be any directory
-	if fileName == "" || !strings.HasSuffix(fileName, ".download.log") || fileName != filepath.Base(helper.CleanPath(fileName)) {
-		http.Error(w, "Log file name invalid (or empty): "+fileName, http.StatusBadRequest)
-		return
-	}
-
-	// read file content
-	filePath := filepath.Join(theCfg.downloadDir, fileName)
-
-	if isFileExist(filePath) != nil {
-		http.Error(w, "Log file not found: "+fileName, http.StatusBadRequest)
-		return
-	}
-
-	bt, err := os.ReadFile(filePath)
-	if err != nil {
-		http.Error(w, "Failed to read log file: "+fileName, http.StatusBadRequest)
-		return
-	}
-	fc := string(bt)
-
-	// parse log file content to get folder name, log file kind and keys
-	dl := parseDownloadLog(fileName, fc)
-	updateStatDownloadLog(fileName, &dl)
-
-	jsonResponse(w, r, dl) // return log file content and status
-}
-
-// allDownloadLogGetHandler return all .download.log files with download status.
-// GET /api/download/log/all
-// Download status is one of: progress ready error or "" if unknown
-func allLogDownloadGetHandler(w http.ResponseWriter, r *http.Request) {
-
-	// find all .download.log files
-	fLst, err := os.ReadDir(theCfg.downloadDir)
-	if err != nil {
-		http.Error(w, "Error at reading download directory", http.StatusBadRequest)
-		return
-	}
-
-	// parse all files
-	dlLst := parseDownloadLogFileList("", fLst)
-
-	jsonResponse(w, r, dlLst)
-}
-
-// modelDownloadLogGetHandler return model .download.log files with download status.
-// GET /api/download/log/model/:model
-// Download status is one of: progress ready error or "" if unknown
-func modelLogDownloadGetHandler(w http.ResponseWriter, r *http.Request) {
-
-	// url or query parameters
-	dn := getRequestParam(r, "model") // model digest-or-name
-	mName := dn
-
-	// if this model digest then try to find model name in catalog
-	mb, ok := theCatalog.modelBasicByDigestOrName(dn)
-	if ok {
-		mName = mb.name
-	}
-
-	// find all .download.log files
-	fLst, err := os.ReadDir(theCfg.downloadDir)
-	if err != nil {
-		http.Error(w, "Error at reading download directory", http.StatusBadRequest)
-		return
-	}
-
-	// parse all files
-	dlLst := parseDownloadLogFileList(mName+".", fLst)
-
-	jsonResponse(w, r, dlLst)
-}
-
-// fileTreeDownloadGetHandler return file tree (file path, size, modification time) by folder name.
-// GET /api/download/file-tree/:folder
-func fileTreeDownloadGetHandler(w http.ResponseWriter, r *http.Request) {
-
-	// url or query parameters
-	folder := getRequestParam(r, "folder")
-	if folder == "" || folder != filepath.Base(helper.CleanPath(folder)) {
-		http.Error(w, "Folder name invalid (or empty): "+folder, http.StatusBadRequest)
-		return
-	}
-
-	folderPath := filepath.Join(theCfg.downloadDir, folder)
-	if isDirExist(folderPath) != nil {
-		http.Error(w, "Folder not found: "+folder, http.StatusBadRequest)
-		return
-	}
-	dp := filepath.ToSlash(theCfg.downloadDir) + "/"
-
-	// get list of files under download/folder
-	treeLst := []PathItem{}
-	err := filepath.WalkDir(folderPath, func(path string, de fs.DirEntry, err error) error {
-		if err != nil {
-			omppLog.Log("Error at directory walk: ", path, " : ", err.Error())
-			return err
-		}
-		fi, e := de.Info()
-		if e != nil {
-			return nil // ignore directory entry where file removed after readdir()
-		}
-		p := strings.TrimPrefix(filepath.ToSlash(path), dp)
-		treeLst = append(treeLst, PathItem{
-			Path:    filepath.ToSlash(p),
-			IsDir:   de.IsDir(),
-			Size:    fi.Size(),
-			ModTime: fi.ModTime().UnixNano() / int64(time.Millisecond),
-		})
-		return nil
-	})
-	if err != nil {
-		omppLog.Log("Error at directory walk: ", err.Error())
-		http.Error(w, "Error at folder scan: "+folder, http.StatusBadRequest)
-		return
-	}
-
-	jsonResponse(w, r, treeLst)
-}
-
-// modelDownloadPostHandler initate creation of model zip archive in home/out/download folder.
+// modelDownloadPostHandler initate creation of model zip archive in home/io/download folder.
 // POST /api/download/model/:model
 // Zip archive is the same as created by dbcopy command line utilty.
 // Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
@@ -155,7 +21,7 @@ func modelDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 	doModelDownloadPost(w, r, false, false)
 }
 
-// modelDownloadPostHandler initate creation of model zip archive in home/out/download folder.
+// modelDownloadPostHandler initate creation of model zip archive in home/io/download folder.
 // POST /api/download/model/:model/csv-bom
 // Zip archive is the same as created by dbcopy command line utilty.
 // Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
@@ -164,7 +30,7 @@ func modelDownloadCsvBomPostHandler(w http.ResponseWriter, r *http.Request) {
 	doModelDownloadPost(w, r, false, true)
 }
 
-// modelDownloadPostHandler initate creation of model zip archive in home/out/download folder.
+// modelDownloadPostHandler initate creation of model zip archive in home/io/download folder.
 // POST /api/download/model/:model/no-acc
 // Zip archive is the same as created by dbcopy command line utilty.
 // Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
@@ -175,7 +41,7 @@ func modelDownloadNoAccPostHandler(w http.ResponseWriter, r *http.Request) {
 	doModelDownloadPost(w, r, true, false)
 }
 
-// modelDownloadPostHandler initate creation of model zip archive in home/out/download folder.
+// modelDownloadPostHandler initate creation of model zip archive in home/io/download folder.
 // POST /api/download/model/:model/no-acc/csv-bom
 // Zip archive is the same as created by dbcopy command line utilty.
 // Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
@@ -187,8 +53,7 @@ func modelDownloadNoAccCsvBomPostHandler(w http.ResponseWriter, r *http.Request)
 	doModelDownloadPost(w, r, true, true)
 }
 
-// modelDownloadPostHandler initate creation of model zip archive in home/out/download folder.
-// POST /api/download/model/:model
+// doModelDownloadPost initate creation of model zip archive in home/io/download folder.
 // Zip archive is the same as created by dbcopy command line utilty.
 // Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
 func doModelDownloadPost(w http.ResponseWriter, r *http.Request, isNoAcc bool, isCsvBom bool) {
@@ -221,7 +86,7 @@ func doModelDownloadPost(w http.ResponseWriter, r *http.Request, isNoAcc bool, i
 	}
 
 	// create new download.progress.log file and write model decsription
-	logPath, isLog := createDownloadLog(logPath)
+	logPath, isLog := createUpDownLog(logPath)
 	if !isLog {
 		omppLog.Log("Failed to create download log file: " + baseName + ".progress.download.log")
 		http.Error(w, "Model download failed: "+baseName, http.StatusBadRequest)
@@ -235,13 +100,13 @@ func doModelDownloadPost(w http.ResponseWriter, r *http.Request, isNoAcc bool, i
 		"Folder        : " + baseName,
 		"---------------",
 	}
-	if !appendToDownloadLog(logPath, true, "Download of: "+baseName) {
+	if !appendToUpDownLog(logPath, true, "Download of: "+baseName) {
 		renameToDownloadErrorLog(logPath, "")
 		omppLog.Log("Failed to write into download log file: " + baseName + ".progress.download.log")
 		http.Error(w, "Model download failed: "+baseName, http.StatusBadRequest)
 		return
 	}
-	if !appendToDownloadLog(logPath, false, hdrMsg...) {
+	if !appendToUpDownLog(logPath, false, hdrMsg...) {
 		renameToDownloadErrorLog(logPath, "")
 		omppLog.Log("Failed to write into download log file: " + baseName + ".progress.download.log")
 		http.Error(w, "Model download failed: "+baseName, http.StatusBadRequest)
@@ -249,7 +114,7 @@ func doModelDownloadPost(w http.ResponseWriter, r *http.Request, isNoAcc bool, i
 	}
 
 	// create model download files on separate thread
-	cmd, cmdMsg := makeModelDownloadCommand(baseName, mb, logPath, isNoAcc, isCsvBom)
+	cmd, cmdMsg := makeModelDownloadCommand(mb, logPath, isNoAcc, isCsvBom)
 
 	go makeDownload(baseName, cmd, cmdMsg, logPath)
 
@@ -257,7 +122,7 @@ func doModelDownloadPost(w http.ResponseWriter, r *http.Request, isNoAcc bool, i
 	w.Header().Set("Content-Location", "/api/download/model/"+dn+"/"+baseName)
 }
 
-// runDownloadPostHandler initate creation of model run zip archive in home/out/download folder.
+// runDownloadPostHandler initate creation of model run zip archive in home/io/download folder.
 // POST /api/download/model/:model/run/:run
 // Zip archive is the same as created by dbcopy command line utilty.
 // Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
@@ -265,7 +130,7 @@ func runDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 	doRunDownloadPost(w, r, false, false)
 }
 
-// runDownloadPostHandler initate creation of model run zip archive in home/out/download folder.
+// runDownloadPostHandler initate creation of model run zip archive in home/io/download folder.
 // POST /api/download/model/:model/run/:run/csv-bom
 // Zip archive is the same as created by dbcopy command line utilty.
 // Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
@@ -274,7 +139,7 @@ func runDownloadCsvBomPostHandler(w http.ResponseWriter, r *http.Request) {
 	doRunDownloadPost(w, r, false, true)
 }
 
-// runDownloadPostHandler initate creation of model run zip archive in home/out/download folder.
+// runDownloadPostHandler initate creation of model run zip archive in home/io/download folder.
 // POST /api/download/model/:model/run/:run/no-acc
 // Zip archive is the same as created by dbcopy command line utilty.
 // Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
@@ -285,7 +150,7 @@ func runDownloadNoAccPostHandler(w http.ResponseWriter, r *http.Request) {
 	doRunDownloadPost(w, r, true, false)
 }
 
-// runDownloadPostHandler initate creation of model run zip archive in home/out/download folder.
+// runDownloadPostHandler initate creation of model run zip archive in home/io/download folder.
 // POST /api/download/model/:model/run/:run/no-acc/csv-bom
 // Zip archive is the same as created by dbcopy command line utilty.
 // Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
@@ -297,8 +162,7 @@ func runDownloadNoAccCsvBomPostHandler(w http.ResponseWriter, r *http.Request) {
 	doRunDownloadPost(w, r, true, true)
 }
 
-// runDownloadPostHandler initate creation of model run zip archive in home/out/download folder.
-// POST /api/download/model/:model/run/:run
+// doRunDownloadPost initate creation of model run zip archive in home/io/download folder.
 // Zip archive is the same as created by dbcopy command line utilty.
 // Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
 func doRunDownloadPost(w http.ResponseWriter, r *http.Request, isNoAcc bool, isCsvBom bool) {
@@ -348,7 +212,7 @@ func doRunDownloadPost(w http.ResponseWriter, r *http.Request, isNoAcc bool, isC
 	}
 
 	// create new download.progress.log file and write model run decsription
-	logPath, isLog := createDownloadLog(logPath)
+	logPath, isLog := createUpDownLog(logPath)
 	if !isLog {
 		omppLog.Log("Failed to create download log file: " + baseName + ".progress.download.log")
 		http.Error(w, "Model run download failed: "+baseName, http.StatusBadRequest)
@@ -365,13 +229,13 @@ func doRunDownloadPost(w http.ResponseWriter, r *http.Request, isNoAcc bool, isC
 		"Folder        : " + baseName,
 		"---------------",
 	}
-	if !appendToDownloadLog(logPath, true, "Download of: "+baseName) {
+	if !appendToUpDownLog(logPath, true, "Download of: "+baseName) {
 		renameToDownloadErrorLog(logPath, "")
 		omppLog.Log("Failed to write into download log file: " + baseName + ".progress.download.log")
 		http.Error(w, "Model run download failed: "+baseName, http.StatusBadRequest)
 		return
 	}
-	if !appendToDownloadLog(logPath, false, hdrMsg...) {
+	if !appendToUpDownLog(logPath, false, hdrMsg...) {
 		renameToDownloadErrorLog(logPath, "")
 		omppLog.Log("Failed to write into download log file: " + baseName + ".progress.download.log")
 		http.Error(w, "Model run download failed: "+baseName, http.StatusBadRequest)
@@ -379,7 +243,7 @@ func doRunDownloadPost(w http.ResponseWriter, r *http.Request, isNoAcc bool, isC
 	}
 
 	// create model run download files on separate thread
-	cmd, cmdMsg := makeRunDownloadCommand(baseName, mb, r0.RunId, logPath, isNoAcc, isCsvBom)
+	cmd, cmdMsg := makeRunDownloadCommand(mb, r0.RunId, logPath, isNoAcc, isCsvBom)
 
 	go makeDownload(baseName, cmd, cmdMsg, logPath)
 
@@ -387,7 +251,7 @@ func doRunDownloadPost(w http.ResponseWriter, r *http.Request, isNoAcc bool, isC
 	w.Header().Set("Content-Location", "/api/download/model/"+dn+"/run/"+rdsn+"/"+baseName)
 }
 
-// worksetDownloadPostHandler initate creation of model workset zip archive in home/out/download folder.
+// worksetDownloadPostHandler initate creation of model workset zip archive in home/io/download folder.
 // POST /api/download/model/:model/workset/:set
 // Zip archive is the same as created by dbcopy command line utilty.
 // Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
@@ -395,7 +259,7 @@ func worksetDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 	doWorksetDownloadPost(w, r, false)
 }
 
-// worksetDownloadPostHandler initate creation of model workset zip archive in home/out/download folder.
+// worksetDownloadPostHandler initate creation of model workset zip archive in home/io/download folder.
 // POST /api/download/model/:model/workset/:set/csv-bom
 // Zip archive is the same as created by dbcopy command line utilty.
 // Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
@@ -404,8 +268,7 @@ func worksetDownloadCsvBomPostHandler(w http.ResponseWriter, r *http.Request) {
 	doWorksetDownloadPost(w, r, true)
 }
 
-// worksetDownloadPostHandler initate creation of model workset zip archive in home/out/download folder.
-// POST /api/download/model/:model/workset/:set
+// doWorksetDownloadPost initate creation of model workset zip archive in home/io/download folder.
 // Zip archive is the same as created by dbcopy command line utilty.
 // Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
 func doWorksetDownloadPost(w http.ResponseWriter, r *http.Request, isCsvBom bool) {
@@ -450,7 +313,7 @@ func doWorksetDownloadPost(w http.ResponseWriter, r *http.Request, isCsvBom bool
 	}
 
 	// create new download.progress.log file and write model scenario decsription
-	logPath, isLog := createDownloadLog(logPath)
+	logPath, isLog := createUpDownLog(logPath)
 	if !isLog {
 		omppLog.Log("Failed to create download log file: " + baseName + ".progress.download.log")
 		http.Error(w, "Model scenario download failed: "+baseName, http.StatusBadRequest)
@@ -466,13 +329,13 @@ func doWorksetDownloadPost(w http.ResponseWriter, r *http.Request, isCsvBom bool
 		"Folder           : " + baseName,
 		"------------------",
 	}
-	if !appendToDownloadLog(logPath, true, "Download of: "+baseName) {
+	if !appendToUpDownLog(logPath, true, "Download of: "+baseName) {
 		renameToDownloadErrorLog(logPath, "")
 		omppLog.Log("Failed to write into download log file: " + baseName + ".progress.download.log")
 		http.Error(w, "Model scenario download failed: "+baseName, http.StatusBadRequest)
 		return
 	}
-	if !appendToDownloadLog(logPath, false, hdrMsg...) {
+	if !appendToUpDownLog(logPath, false, hdrMsg...) {
 		renameToDownloadErrorLog(logPath, "")
 		omppLog.Log("Failed to write into download log file: " + baseName + ".progress.download.log")
 		http.Error(w, "Model scenario download failed: "+baseName, http.StatusBadRequest)
@@ -480,114 +343,10 @@ func doWorksetDownloadPost(w http.ResponseWriter, r *http.Request, isCsvBom bool
 	}
 
 	// create model scenario download files on separate thread
-	cmd, cmdMsg := makeWorksetDownloadCommand(baseName, mb, wst.Name, logPath, isCsvBom)
+	cmd, cmdMsg := makeWorksetDownloadCommand(mb, wst.Name, logPath, isCsvBom)
 
 	go makeDownload(baseName, cmd, cmdMsg, logPath)
 
 	// report to the client results location
 	w.Header().Set("Content-Location", "/api/download/model/"+dn+"/workset/"+wsn+"/"+baseName)
-}
-
-// downloadDeleteHandler delete download files by folder name.
-// DELETE /api/download/delete/:folder
-// Delete of folder, .zip file and .download.log files
-func downloadDeleteHandler(w http.ResponseWriter, r *http.Request) {
-
-	// url or query parameters
-	folder := getRequestParam(r, "folder")
-
-	// delete files
-	err := deleteDownload(folder, false)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	// report to the client results location
-	w.Header().Set("Content-Location", "/api/download/delete/"+folder)
-}
-
-// downloadAsyncDeleteHandler starts deleting of download files by folder name.
-// DELETE /api/download/start/delete/:folder
-// Delete started on separate thread and does delete of folder, .zip file and .download.log files
-func downloadAsyncDeleteHandler(w http.ResponseWriter, r *http.Request) {
-
-	// url or query parameters
-	folder := getRequestParam(r, "folder")
-
-	// delete files on separate thread
-	err := deleteDownload(folder, true)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	// report to the client results location
-	w.Header().Set("Content-Location", "/api/download/start/delete/"+folder)
-}
-
-// delete download files by folder name.
-// if isAsync is true then start delete on separate thread
-func deleteDownload(folder string, isAsync bool) error {
-
-	if folder == "" || folder != filepath.Base(helper.CleanPath(folder)) {
-		return errors.New("Folder name invalid (or empty): " + folder)
-	}
-	omppLog.Log("Delete download: ", folder)
-
-	// create new download.progress.log file and write delete header
-	logPath := filepath.Join(theCfg.downloadDir, folder+".progress.download.log")
-
-	logPath, isLog := createDownloadLog(logPath)
-	if !isLog {
-		omppLog.Log("Failed to create download delete log file: " + folder + ".progress.download.log")
-		return errors.New("Delete of download failed: " + folder)
-	}
-	hdrMsg := []string{
-		"---------------",
-		"Delete        : " + folder,
-		"Folder        : " + folder,
-		"---------------",
-	}
-	if !appendToDownloadLog(logPath, true, "Delete download of: "+folder) {
-		renameToDownloadErrorLog(logPath, "")
-		omppLog.Log("Failed to write into download log file: " + folder + ".progress.download.log")
-		return errors.New("Delete of download failed: " + folder)
-	}
-	if !appendToDownloadLog(logPath, false, hdrMsg...) {
-		renameToDownloadErrorLog(logPath, "")
-		omppLog.Log("Failed to write into download delete log file: " + folder + ".progress.download.log")
-		return errors.New("Delete of download failed: " + folder)
-	}
-
-	// delete download files on separate thread
-	doDelete := func(baseName, logPath string) {
-
-		// remove download results
-		basePath := filepath.Join(theCfg.downloadDir, baseName)
-
-		if !removeDownloadFile(basePath+".ready.download.log", logPath, "delete: "+baseName+".ready.download.log") {
-			return
-		}
-		if !removeDownloadFile(basePath+".error.download.log", logPath, "delete: "+baseName+".error.download.log") {
-			return
-		}
-		if !removeDownloadFile(basePath+".zip", logPath, "delete: "+baseName+".zip") {
-			return
-		}
-		if !removeDownloadDir(basePath, logPath, "delete: "+baseName) {
-			return
-		}
-		// last step: remove delete progress log file
-		if e := os.Remove(basePath + ".progress.download.log"); e != nil && !os.IsNotExist(e) {
-			omppLog.Log(e)
-		}
-	}
-
-	if isAsync {
-		go doDelete(folder, logPath)
-	} else {
-		doDelete(folder, logPath)
-	}
-	return nil
 }

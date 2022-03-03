@@ -34,13 +34,11 @@ user personal home directory to store files and settings.
 If relative then must be relative to oms root directory.
 Default value is empty "" string and it is disable use of home directory.
 
-  -oms.HomeRootDir home
-root of users home directories to store files and settings.
-If relative then must be relative to oms root directory.
-Default value is empty "" string and it is disable use of home directories.
-
   -oms.AllowDownload false
-if true then allow download from user home/out/download directory.
+if true then allow download from user home/io/download directory.
+
+  -oms.AllowUpload false
+if true then allow upload to user home/io/upload directory.
 
   -l localhost:4040
   -oms.Listen localhost:4040
@@ -115,8 +113,8 @@ const (
 	modelDirArgKey       = "oms.ModelDir"      // models executable and model.sqlite directory, if relative then must be relative to oms root directory
 	modelLogDirArgKey    = "oms.ModelLogDir"   // models log directory, if relative then must be relative to oms root directory
 	homeDirArgKey        = "oms.HomeDir"       // user personal home directory, if relative then must be relative to oms root directory
-	homeRootDirArgKey    = "oms.HomeRootDir"   // root of users home directories, if relative then must be relative to oms root directory
-	isDownloadArgKey     = "oms.AllowDownload" // if true then allow download from user home sub-directory: home/out/download
+	isDownloadArgKey     = "oms.AllowDownload" // if true then allow download from user home sub-directory: home/io/download
+	isUploadArgKey       = "oms.AllowUpload"   // if true then allow upload to user home sub-directory: home/io/upload
 	listenArgKey         = "oms.Listen"        // address to listen, default: localhost:4040
 	listenShortKey       = "l"                 // address to listen (short form)
 	urlFileArgKey        = "oms.UrlSaveTo"     // file path to save oms URL in form of: http://localhost:4040, if relative then must be relative to oms root directory
@@ -143,9 +141,10 @@ var theCfg = struct {
 	rootDir           string            // server root directory
 	isSingleUser      bool              // if true then it is a single user mode
 	homeDir           string            // user(s) home directory
-	downloadDir       string            // if download allowed then it is home/out/download directory
-	downloadOutDir    string            // if download allowed then it is home/out directory
-	dbcopyPath        string            // if download allowed then it is path to dbcopy.exe
+	downloadDir       string            // if download allowed then it is home/io/download directory
+	uploadDir         string            // if upload allowed then it is home/io/upload directory
+	inOutDir          string            // if download or upload allowed then it is home/io directory
+	dbcopyPath        string            // if download or upload allowed then it is path to dbcopy.exe
 	pageMaxSize       int64             // default "page" size: row count to read parameters or output tables
 	runHistoryMaxSize int               // max number of model run states to keep in run list history
 	doubleFmt         string            // format to convert float or double value to string
@@ -155,6 +154,7 @@ var theCfg = struct {
 	isSingleUser:      false,
 	homeDir:           "",
 	downloadDir:       "",
+	uploadDir:         "",
 	runHistoryMaxSize: runHistoryDefaultSize,
 	doubleFmt:         "%.15g",
 	env:               map[string]string{},
@@ -186,8 +186,8 @@ func mainBody(args []string) error {
 	_ = flag.String(modelDirArgKey, "models/bin", "models directory, if relative then must be relative to root directory")
 	_ = flag.String(modelLogDirArgKey, "models/log", "models log directory, if relative then must be relative to root directory")
 	_ = flag.String(homeDirArgKey, "", "user personal home directory, if relative then must be relative to root directory")
-	_ = flag.String(homeRootDirArgKey, "", "this option is currently disabled")
-	_ = flag.Bool(isDownloadArgKey, false, "if true then allow download from user home/out/download directory")
+	_ = flag.Bool(isDownloadArgKey, false, "if true then allow download from user home/io/download directory")
+	_ = flag.Bool(isUploadArgKey, false, "if true then allow upload to user home/io/upload directory")
 	_ = flag.String(listenArgKey, "localhost:4040", "address to listen")
 	_ = flag.String(listenShortKey, "localhost:4040", "address to listen (short form of "+listenArgKey+")")
 	_ = flag.Bool(logRequestArgKey, false, "if true then log HTTP requests")
@@ -263,28 +263,56 @@ func mainBody(args []string) error {
 		}
 		theCfg.isSingleUser = theCfg.homeDir != ""
 	}
-	if runOpts.String(homeRootDirArgKey) != "" {
-		return errors.New("Error: this option is currently disabled: " + homeRootDirArgKey)
-	}
 
-	// check download option: home/out/download directory must exist and dbcopy.exe must exist
+	// check download and upload options:
+	// home/io/download or home/io/upload directory must exist and dbcopy.exe must exist
+	isInOut := runOpts.Bool(isDownloadArgKey) || runOpts.Bool(isUploadArgKey)
 	isDownload := false
-	if runOpts.Bool(isDownloadArgKey) {
+	isUpload := false
+
+	if isInOut {
 		if theCfg.homeDir != "" {
 
-			theCfg.downloadOutDir = filepath.Join(theCfg.homeDir, "out")          // download directory for web-server, to serve static content
-			theCfg.downloadDir = filepath.Join(theCfg.downloadOutDir, "download") // download directory UI
+			theCfg.inOutDir = filepath.Join(theCfg.homeDir, "io") // download and upload directory for web-server, to serve static content
 
-			if err = isDirExist(theCfg.downloadDir); err == nil {
+			if err = isDirExist(theCfg.inOutDir); err == nil {
 				theCfg.dbcopyPath = dbcopyPath(args[0])
 			}
 		}
-		isDownload = theCfg.downloadDir != "" && theCfg.downloadOutDir != "" && theCfg.dbcopyPath != ""
+		isInOut = theCfg.inOutDir != "" && theCfg.dbcopyPath != ""
+		if !isInOut {
+			theCfg.inOutDir = ""
+			theCfg.dbcopyPath = ""
+		}
+	}
+	if runOpts.Bool(isDownloadArgKey) {
+		if isInOut && theCfg.inOutDir != "" {
+
+			theCfg.downloadDir = filepath.Join(theCfg.inOutDir, "download") // download directory UI
+
+			if err = isDirExist(theCfg.downloadDir); err != nil {
+				theCfg.downloadDir = ""
+			}
+		}
+		isDownload = isInOut && theCfg.downloadDir != ""
 		if !isDownload {
 			theCfg.downloadDir = ""
-			theCfg.downloadOutDir = ""
-			theCfg.dbcopyPath = ""
 			omppLog.Log("Warning: user home download directory not found or dbcopy not found, download disabled")
+		}
+	}
+	if runOpts.Bool(isUploadArgKey) {
+		if isInOut && theCfg.inOutDir != "" {
+
+			theCfg.uploadDir = filepath.Join(theCfg.inOutDir, "upload") // upload directory UI
+
+			if err = isDirExist(theCfg.uploadDir); err != nil {
+				theCfg.uploadDir = ""
+			}
+		}
+		isUpload = isInOut && theCfg.uploadDir != ""
+		if !isUpload {
+			theCfg.uploadDir = ""
+			omppLog.Log("Warning: user home upload directory not found or dbcopy not found, upload disabled")
 		}
 	}
 
@@ -340,16 +368,23 @@ func mainBody(args []string) error {
 	apiReadRoutes(router)    // web-service /api routes to read values
 	apiReadCsvRoutes(router) // web-service /api routes to read values into csv stream
 	if isDownload {
-		apiDownloadRoutes(router) // web-service /api routes to download files from home/out/download
+		apiDownloadRoutes(router) // web-service /api routes to download files from home/io/download
+	}
+	if isUpload {
+		apiUploadRoutes(router) // web-service /api routes to upload files to home/io/upload
 	}
 	apiUpdateRoutes(router)   // web-service /api routes to update metadata
 	apiRunModelRoutes(router) // web-service /api routes to run the model
 	apiUserRoutes(router)     // web-service /api routes for user-specific requests
 	apiAdminRoutes(router)    // web-service /api routes for administrative tasks
 
-	// serve static content from home/out/download folder
+	// serve static content from home/io/download folder
 	if isDownload {
 		router.Get("/download/*", downloadHandler, logRequest)
+	}
+	// serve static content from home/io/upload folder
+	if isUpload {
+		router.Get("/upload/*", downloadHandler, logRequest)
 	}
 
 	// set web root handler: UI web pages or "not found" if this is web-service mode
@@ -458,11 +493,13 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	setContentType(http.FileServer(http.Dir(htmlDir))).ServeHTTP(w, r)
 }
 
-// downloadHandler is static file download handler from user home/out/download folder.
-// files served from home/out directory and URL is https://domain-name/download/file.name
+// downloadHandler is static file download handler from user home/io/download and home/io/upload folders.
+// Files served from home/io directory URLs are:
+//   https://domain.name/download/file.name
+//   https://domain.name/upload/file.name
 // Only GET requests expected.
 func downloadHandler(w http.ResponseWriter, r *http.Request) {
-	setContentType(http.FileServer(http.Dir(theCfg.downloadOutDir))).ServeHTTP(w, r)
+	setContentType(http.FileServer(http.Dir(theCfg.inOutDir))).ServeHTTP(w, r)
 }
 
 // add http GET web-service /api routes to get metadata
@@ -881,7 +918,7 @@ func apiRunModelRoutes(router *vestigo.Router) {
 	router.Get("/api/run/log/model/:model/stamp/:stamp/start/:start/count/", http.NotFound)
 }
 
-// add http web-service /api routes to download and manage files from home/out/download folder
+// add http web-service /api routes to download and manage files from home/io/download folder
 func apiDownloadRoutes(router *vestigo.Router) {
 
 	// GET /api/download/log/all
@@ -926,7 +963,38 @@ func apiDownloadRoutes(router *vestigo.Router) {
 	router.Delete("/api/download/start/delete/:folder", downloadAsyncDeleteHandler, logRequest)
 }
 
-// add http web-service /api routes to upload, download and manage files at home/user/files folder
+// add http web-service /api routes to upload and manage files at home/io/upload folder
+func apiUploadRoutes(router *vestigo.Router) {
+
+	// GET /api/upload/log/all
+	router.Get("/api/upload/log/all", allLogUploadGetHandler, logRequest)
+
+	// GET /api/upload/log/model/:model
+	router.Get("/api/upload/log/model/:model", modelLogUploadGetHandler, logRequest)
+
+	// GET /api/upload/log/file/:name
+	router.Get("/api/upload/log/file/:name", fileLogUploadGetHandler, logRequest)
+
+	// GET /api/upload/file-tree/:folder
+	router.Get("/api/upload/file-tree/:folder", fileTreeUploadGetHandler, logRequest)
+
+	// POST /api/upload/model/:model/workset
+	// POST /api/upload/model/:model/workset/:set
+	router.Post("/api/upload/model/:model/workset", worksetUploadPostHandler, logRequest)
+	router.Post("/api/upload/model/:model/workset/:set", worksetUploadPostHandler, logRequest)
+
+	// reject if request ill-formed
+	router.Post("/api/upload/model/", http.NotFound)
+	router.Post("/api/upload/model/:model/workset/", http.NotFound)
+
+	// DELETE /api/upload/delete/:folder
+	router.Delete("/api/upload/delete/:folder", uploadDeleteHandler, logRequest)
+
+	// DELETE /api/upload/start/delete/:folder
+	router.Delete("/api/upload/start/delete/:folder", uploadAsyncDeleteHandler, logRequest)
+}
+
+// add http web-service /api routes to upload, download and manage files at home/io/files folder
 func apiFilesRoutes(router *vestigo.Router) {
 
 	// GET /api/files/list/:folder

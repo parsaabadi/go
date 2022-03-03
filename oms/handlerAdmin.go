@@ -21,7 +21,8 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 		LoginUrl          string             // user login URL for UI
 		LogoutUrl         string             // user logout URL for UI
 		AllowUserHome     bool               // if true then store user settings in home directory
-		AllowDownload     bool               // if true then allow download from home/download directory
+		AllowDownload     bool               // if true then allow download from home/io/download directory
+		AllowUpload       bool               // if true then allow upload from home/io/upload directory
 		Env               map[string]string  // server config environmemt variables
 		ModelCatalog      ModelCatalogConfig // "public" state of model catalog
 		RunCatalog        RunCatalogConfig   // "public" state of model run catalog
@@ -32,6 +33,7 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 		DoubleFmt:         theCfg.doubleFmt,
 		AllowUserHome:     theCfg.isSingleUser,
 		AllowDownload:     theCfg.downloadDir != "",
+		AllowUpload:       theCfg.uploadDir != "",
 		Env:               theCfg.env,
 		ModelCatalog:      *theCatalog.toPublicConfig(),
 		RunCatalog:        *theRunCatalog.toPublicConfig(),

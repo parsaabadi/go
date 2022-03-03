@@ -19,6 +19,7 @@ import (
 	"github.com/husobee/vestigo"
 	"golang.org/x/text/language"
 
+	"github.com/openmpp/go/ompp/helper"
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
@@ -301,16 +302,7 @@ func jsonRequestToFile(w http.ResponseWriter, r *http.Request, outPath string) b
 	// create or truncate output file
 	fName := filepath.Base(outPath)
 
-	f, err := os.OpenFile(outPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
-	if err != nil {
-		omppLog.Log("Error: unable to create or truncate file ", outPath, err)
-		http.Error(w, "Error: unable to create or truncate file "+fName, http.StatusInternalServerError)
-		return false
-	}
-	defer f.Close()
-
-	// copy request body into the file
-	_, err = io.Copy(f, r.Body)
+	err := helper.SaveTo(outPath, r.Body)
 	if err != nil {
 		omppLog.Log("Error: unable to write into ", outPath, err)
 		http.Error(w, "Error: unable to write into "+fName, http.StatusInternalServerError)
