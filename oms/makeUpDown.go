@@ -479,7 +479,7 @@ func parseUpDownLogFileList(upDown string, preffix string, dirEntryLst []fs.DirE
 
 		// parse log file content to get folder name, log file kind and keys
 		uds := parseUpDownLog(upDown, f.Name(), fc)
-		updateStatDownloadLog(f.Name(), &uds)
+		updateStatUpDownLog(f.Name(), &uds, upDownDir)
 
 		udsLst = append(udsLst, uds)
 	}
