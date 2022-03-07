@@ -110,7 +110,7 @@ func UnpackZip(zipPath string, dstDir string) error {
 			p := filepath.Join(baseDir, zf.Name)
 
 			if info.IsDir() {
-				return os.MkdirAll(p, info.Mode())
+				return os.MkdirAll(p, 0750)
 			}
 			// else unpack file
 
