@@ -114,7 +114,7 @@ func worksetCreateHandler(w http.ResponseWriter, r *http.Request) {
 		switch wp.Param[k].Kind {
 		case "run":
 			if e := theCatalog.CopyParameterToWsFromRun(dn, wsn, wp.Param[k].Name, false, wp.Param[k].From); e != nil {
-				http.Error(w, "Failed to copy parameter from model run"+wsn+" : "+wp.Param[k].Name+": "+wp.Param[k].From+" : "+e.Error(), http.StatusBadRequest)
+				http.Error(w, "Failed to copy parameter from model run "+wsn+" : "+wp.Param[k].Name+": "+wp.Param[k].From+" : "+e.Error(), http.StatusBadRequest)
 				return
 			}
 			continue
