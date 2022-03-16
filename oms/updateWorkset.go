@@ -8,8 +8,10 @@ import (
 	"errors"
 	"io"
 	"sort"
+	"strings"
 
 	"github.com/openmpp/go/ompp/db"
+	"github.com/openmpp/go/ompp/helper"
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
@@ -442,13 +444,25 @@ func (mc *ModelCatalog) UpdateWorksetParameterCsv(
 			return false, errors.New("invalid converter from csv row: " + err.Error())
 		}
 
-		// skip header line
-		_, e := csvRd.Read()
+		// validate header line
+		fhs, e := csvRd.Read()
 		switch {
 		case e == io.EOF:
 			return false, errors.New("Inavlid (empty) csv parameter values " + param.Name)
 		case err != nil:
-			return false, errors.New("Failed to read csv parameter values " + param.Name)
+			return false, errors.New("Failed to read csv parameter values " + param.Name + ": " + e.Error())
+		}
+		if chs, e := csvCvt.CsvHeader(mc.modelLst[idx].meta, param.Name); e != nil {
+			return false, errors.New("Error at building csv parameter header " + param.Name)
+		} else {
+			fh := strings.Join(fhs, ",")
+			if strings.HasPrefix(fh, string(helper.Utf8bom)) {
+				fh = fh[len(helper.Utf8bom):]
+			}
+			ch := strings.Join(chs, ",")
+			if fh != ch {
+				return false, errors.New("Invalid csv parameter header " + param.Name + ": " + fh + " expected: " + ch)
+			}
 		}
 
 		// convert each line into cell (id cell)

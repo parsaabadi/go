@@ -355,6 +355,11 @@ func writeParamFromCsvFile(
 	if err != nil {
 		return errors.New("invalid csv file name: " + err.Error())
 	}
+	chs, err := csvCvt.CsvHeader(modelDef, layout.Name)
+	if err != nil {
+		return errors.New("Error at building csv parameter header " + layout.Name + ": " + err.Error())
+	}
+	ch := strings.Join(chs, ",")
 
 	f, err := os.Open(filepath.Join(csvDir, fn))
 	if err != nil {
@@ -362,7 +367,7 @@ func writeParamFromCsvFile(
 	}
 	defer f.Close()
 
-	from, err := makeFromCsvReader(fn, f, encodingName, cvt)
+	from, err := makeFromCsvReader(fn, f, encodingName, ch, cvt)
 	if err != nil {
 		return errors.New("fail to create expressions csv reader: " + err.Error())
 	}

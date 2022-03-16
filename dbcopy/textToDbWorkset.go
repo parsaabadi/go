@@ -400,6 +400,11 @@ func updateWorksetParamFromCsvFile(
 	if err != nil {
 		return errors.New("invalid csv file name: " + err.Error())
 	}
+	chs, err := csvCvt.CsvHeader(modelDef, paramPub.Name)
+	if err != nil {
+		return errors.New("Error at building csv parameter header " + paramPub.Name + ": " + err.Error())
+	}
+	ch := strings.Join(chs, ",")
 
 	f, err := os.Open(filepath.Join(csvDir, fn))
 	if err != nil {
@@ -407,7 +412,7 @@ func updateWorksetParamFromCsvFile(
 	}
 	defer f.Close()
 
-	from, err := makeFromCsvReader(fn, f, encodingName, cvt)
+	from, err := makeFromCsvReader(fn, f, encodingName, ch, cvt)
 	if err != nil {
 		return errors.New("fail to create expressions csv reader: " + err.Error())
 	}

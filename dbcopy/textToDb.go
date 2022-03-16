@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/openmpp/go/ompp/config"
 	"github.com/openmpp/go/ompp/db"
@@ -205,6 +206,11 @@ func fromTableCsvFile(
 	if err != nil {
 		return errors.New("invalid accumulators csv file name: " + err.Error())
 	}
+	ahs, err := cvtAcc.CsvHeader(modelDef, layout.Name)
+	if err != nil {
+		return errors.New("Error at building csv accumulators header " + layout.Name + ": " + err.Error())
+	}
+	ah := strings.Join(ahs, ",")
 
 	accFile, err := os.Open(filepath.Join(csvDir, aFn))
 	if err != nil {
@@ -212,7 +218,7 @@ func fromTableCsvFile(
 	}
 	defer accFile.Close()
 
-	accFrom, err := makeFromCsvReader(aFn, accFile, encodingName, aToCell)
+	accFrom, err := makeFromCsvReader(aFn, accFile, encodingName, ah, aToCell)
 	if err != nil {
 		return errors.New("fail to create expressions csv reader: " + err.Error())
 	}
@@ -228,6 +234,11 @@ func fromTableCsvFile(
 	if err != nil {
 		return errors.New("invalid expressions csv file name: " + err.Error())
 	}
+	ehs, err := cvtExpr.CsvHeader(modelDef, layout.Name)
+	if err != nil {
+		return errors.New("Error at building csv expressions header " + layout.Name + ": " + err.Error())
+	}
+	eh := strings.Join(ehs, ",")
 
 	exprFile, err := os.Open(filepath.Join(csvDir, eFn))
 	if err != nil {
@@ -235,7 +246,7 @@ func fromTableCsvFile(
 	}
 	defer exprFile.Close()
 
-	exprFrom, err := makeFromCsvReader(eFn, exprFile, encodingName, eToCell)
+	exprFrom, err := makeFromCsvReader(eFn, exprFile, encodingName, eh, eToCell)
 	if err != nil {
 		return errors.New("fail to create expressions csv reader: " + err.Error())
 	}
@@ -252,7 +263,7 @@ func fromTableCsvFile(
 
 // return closure to iterate over csv file rows
 func makeFromCsvReader(
-	fileName string, csvFile *os.File, encodingName string, csvToCell func(row []string) (interface{}, error),
+	fileName string, csvFile *os.File, encodingName string, csvHeader string, csvToCell func(row []string) (interface{}, error),
 ) (func() (interface{}, error), error) {
 
 	// create csv reader from utf-8 line
@@ -266,12 +277,19 @@ func makeFromCsvReader(
 	csvRd.ReuseRecord = true
 
 	// skip header line
-	_, e := csvRd.Read()
+	fhs, e := csvRd.Read()
 	switch {
 	case e == io.EOF:
 		return nil, errors.New("invalid (empty) csv file: " + fileName)
 	case err != nil:
 		return nil, errors.New("csv file read error: " + fileName + ": " + err.Error())
+	}
+	fh := strings.Join(fhs, ",")
+	if strings.HasPrefix(fh, string(helper.Utf8bom)) {
+		fh = fh[len(helper.Utf8bom):]
+	}
+	if fh != csvHeader {
+		return nil, errors.New("Invalid csv file header " + fileName + ": " + fh + " expected: " + csvHeader)
 	}
 
 	// convert each csv line into cell (id cell)
