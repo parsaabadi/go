@@ -73,6 +73,47 @@ func ToAlphaNumeric(src string) string {
 	return sb.String()
 }
 
+// ToIntValue cast src to int if it not nil and type is one of integer or float types.
+// Return int value and true on success or 0 and false if src is nil or invalid type.
+func ToIntValue(src interface{}) (int, bool) {
+
+	if src == nil {
+		return 0, false
+	}
+
+	var iv int
+	switch e := src.(type) {
+	case int:
+		iv = e
+	case uint:
+		iv = int(e)
+	case int64:
+		iv = int(e)
+	case uint64:
+		iv = int(e)
+	case int32:
+		iv = int(e)
+	case uint32:
+		iv = int(e)
+	case int16:
+		iv = int(e)
+	case uint16:
+		iv = int(e)
+	case int8:
+		iv = int(e)
+	case uint8:
+		iv = int(e)
+	case float64: // from json or oracle (often)
+		iv = int(e)
+	case float32: // from json or oracle (unlikely)
+		iv = int(e)
+	default:
+		return 0, false
+	}
+
+	return iv, true
+}
+
 // SaveTo copy all from source reader into new outPath file. File truncated if already exists.
 func SaveTo(outPath string, rd io.Reader) error {
 

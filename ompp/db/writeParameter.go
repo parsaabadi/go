@@ -631,34 +631,9 @@ func cvtValue(param *ParamMeta) func(bool, interface{}) (interface{}, error) {
 		}
 
 		// validate type and convert to int
-		var iv int
-		switch e := src.(type) {
-		case int:
-			iv = e
-		case uint:
-			iv = int(e)
-		case int64:
-			iv = int(e)
-		case uint64:
-			iv = int(e)
-		case int32:
-			iv = int(e)
-		case uint32:
-			iv = int(e)
-		case int16:
-			iv = int(e)
-		case uint16:
-			iv = int(e)
-		case int8:
-			iv = int(e)
-		case uint8:
-			iv = int(e)
-		case float64: // from json or oracle (often)
-			iv = int(e)
-		case float32: // from json or oracle (unlikely)
-			iv = int(e)
-		default:
-			return nil, errors.New("invalid parameter value type, expected: integer enum")
+		iv, ok := helper.ToIntValue(src)
+		if !ok {
+			return nil, errors.New("invalid parameter value type, expected: integer enum id")
 		}
 
 		// validate enum id: it must be in enum list
@@ -667,7 +642,7 @@ func cvtValue(param *ParamMeta) func(bool, interface{}) (interface{}, error) {
 				return iv, nil
 			}
 		}
-		return nil, errors.New("invalid parameter value type, expected: integer enum id")
+		return nil, errors.New("invalid parameter value type, enum id not found: " + strconv.Itoa(iv))
 	}
 }
 
@@ -712,7 +687,7 @@ func cvtValueToSqlString(param *ParamMeta, doubleFmt string) func(cell CellParam
 
 		// if parameter type is enum based then validate enum id
 		if isUseEnum {
-			iv, ok := cell.Value.(int)
+			iv, ok := helper.ToIntValue(cell.Value)
 			if !ok {
 				return "", errors.New("invalid parameter value, expected: integer enum id")
 			}
@@ -723,7 +698,7 @@ func cvtValueToSqlString(param *ParamMeta, doubleFmt string) func(cell CellParam
 					return strconv.Itoa(iv), nil
 				}
 			}
-			return "", errors.New("invalid parameter value type, expected: integer enum id")
+			return "", errors.New("invalid parameter value type, enum id not found: " + strconv.Itoa(iv))
 		}
 
 		// format integer and for model float types
