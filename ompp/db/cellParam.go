@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+
+	"github.com/openmpp/go/ompp/helper"
 )
 
 // CellParam is value of input parameter.
@@ -248,33 +250,8 @@ func (cellCvt CellParamConverter) CsvToRow(modelDef *ModelMeta, name string) (fu
 
 		case isUseEnum:
 			// depending on sql + driver it can be different type
-			var iv int
-			switch e := cell.Value.(type) {
-			case int64:
-				iv = int(e)
-			case uint64:
-				iv = int(e)
-			case int32:
-				iv = int(e)
-			case uint32:
-				iv = int(e)
-			case int16:
-				iv = int(e)
-			case uint16:
-				iv = int(e)
-			case int8:
-				iv = int(e)
-			case uint8:
-				iv = int(e)
-			case uint:
-				iv = int(e)
-			case float32: // oracle (very unlikely)
-				iv = int(e)
-			case float64: // oracle (often)
-				iv = int(e)
-			case int:
-				iv = e
-			default:
+			iv, ok := helper.ToIntValue(cell.Value)
+			if !ok {
 				return errors.New("invalid parameter value type, expected: integer enum: " + name)
 			}
 
@@ -506,33 +483,8 @@ func (cellCvt CellParamConverter) IdToCodeCell(modelDef *ModelMeta, name string)
 		} else {
 
 			// depending on sql + driver it can be different type
-			var iv int
-			switch e := srcCell.Value.(type) {
-			case int64:
-				iv = int(e)
-			case uint64:
-				iv = int(e)
-			case int32:
-				iv = int(e)
-			case uint32:
-				iv = int(e)
-			case int16:
-				iv = int(e)
-			case uint16:
-				iv = int(e)
-			case int8:
-				iv = int(e)
-			case uint8:
-				iv = int(e)
-			case uint:
-				iv = int(e)
-			case float32: // oracle (very unlikely)
-				iv = int(e)
-			case float64: // oracle (often)
-				iv = int(e)
-			case int:
-				iv = e
-			default:
+			iv, ok := helper.ToIntValue(srcCell.Value)
+			if !ok {
 				return nil, errors.New("invalid parameter value type, expected: integer enum: " + name)
 			}
 
