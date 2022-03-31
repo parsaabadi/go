@@ -354,18 +354,18 @@ func fileStat(filePath string) (fs.FileInfo, error) {
 	return fi, nil
 }
 
-// dbcopyPath return path to dbcopy.exe, it is expected to be in the same directory as oms.exe
-func dbcopyPath(omsPath string) string {
+// dbcopyPath return path to dbcopy.exe, it is expected to be in the same directory as oms.exe.
+// argument omsAbsPath expected to be /absolute/path/to/oms.exe
+func dbcopyPath(omsAbsPath string) string {
 
-	if p, e := filepath.Abs(filepath.Join(filepath.Dir(omsPath), "dbcopy.exe")); e == nil {
-		if e = isFileExist(p); e == nil {
-			return p
-		}
+	d := filepath.Dir(omsAbsPath)
+	p := filepath.Join(d, "dbcopy.exe")
+	if e := isFileExist(p); e == nil {
+		return p
 	}
-	if p, e := filepath.Abs(filepath.Join(filepath.Dir(omsPath), "dbcopy")); e == nil {
-		if e = isFileExist(p); e == nil {
-			return p
-		}
+	p = filepath.Join(d, "dbcopy")
+	if e := isFileExist(p); e == nil {
+		return p
 	}
 	return "" // dbcopy not found or not accessible or not regular file
 }

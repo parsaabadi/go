@@ -223,8 +223,6 @@ func mainBody(args []string) error {
 		theCfg.runHistoryMaxSize = runHistoryDefaultSize
 	}
 
-	theCfg.rootDir = runOpts.String(rootDirArgKey) // server root directory
-
 	// get server config environmemt variables
 	env := os.Environ()
 	for _, e := range env {
@@ -235,7 +233,14 @@ func mainBody(args []string) error {
 		}
 	}
 
+	omsAbsPath, err := filepath.Abs(args[0])
+	if err != nil {
+		return errors.New("Error: unable to make absolute path to oms: " + err.Error())
+	}
+
 	// change to root directory
+	theCfg.rootDir = runOpts.String(rootDirArgKey) // server root directory
+
 	if theCfg.rootDir != "" && theCfg.rootDir != "." {
 		if err := os.Chdir(theCfg.rootDir); err != nil {
 			return errors.New("Error: unable to change directory: " + err.Error())
@@ -244,7 +249,7 @@ func mainBody(args []string) error {
 	omppLog.New(logOpts) // adjust log options, log path can be relative to root directory
 
 	if theCfg.rootDir != "" && theCfg.rootDir != "." {
-		omppLog.Log("Changing directory to: ", theCfg.rootDir)
+		omppLog.Log("Change directory to: ", theCfg.rootDir)
 	}
 
 	// if UI required then server root directory must have html subdir
@@ -276,7 +281,7 @@ func mainBody(args []string) error {
 			theCfg.inOutDir = filepath.Join(theCfg.homeDir, "io") // download and upload directory for web-server, to serve static content
 
 			if err = isDirExist(theCfg.inOutDir); err == nil {
-				theCfg.dbcopyPath = dbcopyPath(args[0])
+				theCfg.dbcopyPath = dbcopyPath(omsAbsPath)
 			}
 		}
 		isInOut = theCfg.inOutDir != "" && theCfg.dbcopyPath != ""
