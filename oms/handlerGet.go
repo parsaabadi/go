@@ -10,17 +10,27 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
-// modelListHandler return list of model_dic rows:
+// modelListHandler return list of models as model_dic rows and model directory:
 // GET /api/model-list
 func modelListHandler(w http.ResponseWriter, r *http.Request) {
 
-	// list of models digest and for each model in catalog and get model_dic row
-	mds := theCatalog.allModelDigests()
+	// get list of model basics: name, digest and directory
+	mbs := theCatalog.allModels()
 
-	ml := make([]db.ModelDicRow, 0, len(mds))
-	for _, d := range mds {
-		if m, ok := theCatalog.ModelDicByDigest(d); ok {
-			ml = append(ml, m)
+	type modelListItem struct {
+		Model db.ModelDicRow // model_dic db row
+		Dir   string         // model directory, relative to model root and slashed: dir/sub
+	}
+	ml := make([]modelListItem, 0, len(mbs))
+
+	// by model digest get model_dic row
+	for _, b := range mbs {
+		if m, ok := theCatalog.ModelDicByDigest(b.digest); ok {
+			ml = append(ml,
+				modelListItem{
+					Model: m,
+					Dir:   b.relDir,
+				})
 		}
 	}
 
@@ -28,7 +38,7 @@ func modelListHandler(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, r, ml)
 }
 
-// modelTextListHandler return list of model_dic and model_dic_txt rows:
+// modelTextListHandler return list models as model_dic row, model_dic_txt row and model directory:
 // GET /api/model-list/text
 // GET /api/model-list/text/lang/:lang
 // If optional lang specified then result in that language else in browser language or model default.
@@ -36,13 +46,23 @@ func modelTextListHandler(w http.ResponseWriter, r *http.Request) {
 
 	rqLangTags := getRequestLang(r, "lang") // get optional language argument and languages accepted by browser
 
-	// get model name, description, notes
-	mds := theCatalog.allModelDigests()
+	// get list of model basics: name, digest and directory
+	mbs := theCatalog.allModels()
 
-	mtl := make([]ModelDicDescrNote, 0, len(mds))
-	for _, d := range mds {
-		if mt, ok := theCatalog.ModelTextByDigest(d, rqLangTags); ok {
-			mtl = append(mtl, *mt)
+	type modelTxtListItem struct {
+		ModelDicDescrNote        // model_dic db row and model_dic_txt row
+		Dir               string // model directory, relative to model root and slashed: dir/sub
+	}
+	mtl := make([]modelTxtListItem, 0, len(mbs))
+
+	// by model digest get model_dic row and model_dic_txt row in UI language
+	for _, b := range mbs {
+		if mt, ok := theCatalog.ModelTextByDigest(b.digest, rqLangTags); ok {
+			mtl = append(mtl,
+				modelTxtListItem{
+					ModelDicDescrNote: *mt,
+					Dir:               b.relDir,
+				})
 		}
 	}
 

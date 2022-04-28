@@ -81,6 +81,11 @@ func (mc *ModelCatalog) refreshSqlite(modelDir, modelLogDir string) error {
 			omppLog.Log("Error: ", fp, " : ", err.Error())
 			continue
 		}
+		dbRel, err := filepath.Rel(modelDir, dbDir)
+		if err != nil {
+			omppLog.Log("Error: ", fp, " : ", err.Error())
+			continue
+		}
 
 		// read list of models: model_dic rows
 		dicLst, err := db.GetModelList(dbc)
@@ -128,6 +133,7 @@ func (mc *ModelCatalog) refreshSqlite(modelDir, modelLogDir string) error {
 				dbConn:     dbc,
 				binDir:     dbDir,
 				dbPath:     dbPath,
+				relDir:     filepath.ToSlash(dbRel),
 				logDir:     modelLogDir,
 				isLogDir:   isLogDir,
 				isMetaFull: false,
