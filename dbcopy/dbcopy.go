@@ -121,6 +121,16 @@ If you want to create csv files with numeric id's Sex=[0,1] instead then use IdC
   dbcopy -m modelOne -dbcopy.IdCsv -dbcopy.RunDigest d722febf683992aa624ce9844a2e597d
   dbcopy -m modelOne -dbcopy.IdCsv -dbcopy.TaskName taskOne
 
+Dbcopy can transfer the data between differnt versions of the same model or even between different models.
+For example, it is possible create new input set of parameters just form csv file(s) with model data, nothing else is required.
+On the other hand dbcopy package output data with model metadata (e.g. parameter name, model name, model digest, etc.).
+If JSON metadata file(s) are supplied then dbcopy using it for validation to make sure input data match destination model.
+It may be neccessary to disable model digest validation In order to transfer data between diffrent versions of the model.
+You can do it by editing JSON file in text editor or by using NoDigestCheck=true:
+  dbcopy -m modelOne -dbcopy.To db -dbcopy.SetName MyData  -dbcopy.NoDigestCheck
+  dbcopy -m modelOne -dbcopy.To db -dbcopy.SetName MyData  -dbcopy.NoDigestCheck=true
+  dbcopy -m modelOne -dbcopy.To db -dbcopy.RunName MyResut -dbcopy.NoDigestCheck
+
 Dbcopy do auto detect input files encoding to convert source text into utf-8.
 On Windows you may want to expliciltly specify encoding name:
   dbcopy -m modelOne -dbcopy.To db -dbcopy.CodePage windows-1252
@@ -240,6 +250,7 @@ const (
 	doubleFormatArgKey = "dbcopy.DoubleFormat"      // convert to string format for float and double
 	useIdCsvArgKey     = "dbcopy.IdCsv"             // if true then create csv files with enum id's default: enum code
 	noAccumCsv         = "dbcopy.NoAccumulatorsCsv" // if true then do not create accumulators .csv files
+	noDigestCheck      = "dbcopy.NoDigestCheck"     // if true then ignore input model digest, use model name only
 	useIdNamesArgKey   = "dbcopy.IdOutputNames"     // if true then always use id's in output directory and file names, false never use it
 	encodingArgKey     = "dbcopy.CodePage"          // code page for converting source files, e.g. windows-1252
 	useUtf8CsvArgKey   = "dbcopy.Utf8BomIntoCsv"    // if true then write utf-8 BOM into csv file
@@ -301,6 +312,7 @@ func mainBody(args []string) error {
 	_ = flag.String(doubleFormatArgKey, "%.15g", "convert to string format for float and double")
 	_ = flag.Bool(useIdCsvArgKey, false, "if true then create csv files with enum id's default: enum code")
 	_ = flag.Bool(noAccumCsv, false, "if true then do not create accumulators .csv files")
+	_ = flag.Bool(noDigestCheck, false, "if true then ignore input model digest, use model name only")
 	_ = flag.Bool(useIdNamesArgKey, false, "if true then always use id's in output directory names, false never use. Default for csv: only if name conflict")
 	_ = flag.String(encodingArgKey, "", "code page to convert source file into utf-8, e.g.: windows-1252")
 	_ = flag.Bool(useUtf8CsvArgKey, false, "if true then write utf-8 BOM into csv file")

@@ -97,11 +97,17 @@ func dbToDbRun(modelName string, modelDigest string, runOpts *config.RunOptions)
 	}
 
 	// convert model run db rows into "public" format
-	// and copy source model run metadata, parameter values, output results into destination database
 	pub, err := meta.ToPublic(srcDb, srcModel)
 	if err != nil {
 		return err
 	}
+
+	// if model digest validation disabled
+	if runOpts.Bool(noDigestCheck) {
+		pub.ModelDigest = ""
+	}
+
+	// copy source model run metadata, parameter values, output results into destination database
 	dblFmt := runOpts.String(doubleFormatArgKey)
 
 	_, err = copyRunDbToDb(srcDb, dstDb, srcModel, dstModel, meta.Run.RunId, pub, dstLang, dblFmt)

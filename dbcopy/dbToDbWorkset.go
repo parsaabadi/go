@@ -120,6 +120,11 @@ func dbToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOpti
 		return err
 	}
 
+	// if model digest validation disabled
+	if runOpts.Bool(noDigestCheck) {
+		pub.ModelDigest = ""
+	}
+
 	// rename destination workset
 	if runOpts.IsExist(setNewNameArgKey) {
 		pub.Name = runOpts.String(setNewNameArgKey)

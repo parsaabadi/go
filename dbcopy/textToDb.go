@@ -74,13 +74,14 @@ func textToDb(modelName string, runOpts *config.RunOptions) error {
 	// parameters, output expressions and accumulators
 	dblFmt := runOpts.String(doubleFormatArgKey)
 	encName := runOpts.String(encodingArgKey)
+	isNoModelDigestCheck := runOpts.Bool(noDigestCheck)
 
-	if err = fromRunTextListToDb(dstDb, modelDef, langDef, inpDir, dblFmt, encName); err != nil {
+	if err = fromRunTextListToDb(dstDb, modelDef, langDef, inpDir, isNoModelDigestCheck, dblFmt, encName); err != nil {
 		return err
 	}
 
 	// insert model workset data from csv into database: input parameters
-	if err = fromWorksetTextListToDb(dstDb, modelDef, langDef, inpDir, dblFmt, encName); err != nil {
+	if err = fromWorksetTextListToDb(dstDb, modelDef, langDef, inpDir, isNoModelDigestCheck, dblFmt, encName); err != nil {
 		return err
 	}
 

@@ -138,8 +138,9 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 	// read from metadata json and csv files and update target database
 	dblFmt := runOpts.String(doubleFormatArgKey)
 	encName := runOpts.String(encodingArgKey)
+	isNoModelDigestCheck := runOpts.Bool(noDigestCheck)
 
-	dstId, err := fromRunTextToDb(dstDb, modelDef, langDef, runName, metaPath, dblFmt, encName)
+	dstId, err := fromRunTextToDb(dstDb, modelDef, langDef, runName, metaPath, isNoModelDigestCheck, dblFmt, encName)
 	if err != nil {
 		return err
 	}
@@ -154,7 +155,7 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 // from csv and json files, convert it to db cells and insert into database.
 // Double format is used for float model types digest calculation, if non-empty format supplied
 func fromRunTextListToDb(
-	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, inpDir string, doubleFmt string, encodingName string,
+	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, inpDir string, isNoModelDigestCheck bool, doubleFmt string, encodingName string,
 ) error {
 
 	// get list of model run json files
@@ -172,7 +173,7 @@ func fromRunTextListToDb(
 	// update model run digest
 	for k := range fl {
 
-		_, err := fromRunTextToDb(dbConn, modelDef, langDef, "", fl[k], doubleFmt, encodingName)
+		_, err := fromRunTextToDb(dbConn, modelDef, langDef, "", fl[k], isNoModelDigestCheck, doubleFmt, encodingName)
 		if err != nil {
 			return err
 		}
@@ -188,7 +189,14 @@ func fromRunTextListToDb(
 // Double format is used for float model types digest calculation, if non-empty format supplied
 // it return source run id (run id from metadata json file) and destination run id
 func fromRunTextToDb(
-	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, srcName string, metaPath string, doubleFmt string, encodingName string,
+	dbConn *sql.DB,
+	modelDef *db.ModelMeta,
+	langDef *db.LangMeta,
+	srcName string,
+	metaPath string,
+	isNoModelDigestCheck bool,
+	doubleFmt string,
+	encodingName string,
 ) (int, error) {
 
 	// if no metadata file then exit: nothing to do
@@ -219,6 +227,10 @@ func fromRunTextToDb(
 	// run name: use run name from json metadata if json metadata not empty, else use supplied run name
 	if pub.Name != "" && srcName != pub.Name {
 		srcName = pub.Name
+	}
+
+	if isNoModelDigestCheck {
+		pub.ModelDigest = "" // model digest validation disabled
 	}
 
 	// destination: convert from "public" format into destination db rows

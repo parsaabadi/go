@@ -111,6 +111,7 @@ func dbToDbTask(modelName string, modelDigest string, runOpts *config.RunOptions
 	var runIdLst []int
 	var isRunNotFound, isRunNotCompleted bool
 	dblFmt := runOpts.String(doubleFormatArgKey)
+	isNoModelDigestCheck := runOpts.Bool(noDigestCheck)
 
 	for j := range meta.TaskRun {
 	nextRun:
@@ -147,11 +148,15 @@ func dbToDbTask(modelName string, modelDigest string, runOpts *config.RunOptions
 			}
 
 			// convert model run db rows into "public" format
-			// and copy source model run metadata, parameter values, output results into destination database
 			runPub, err := rm.ToPublic(srcDb, srcModel)
 			if err != nil {
 				return err
 			}
+			if isNoModelDigestCheck {
+				runPub.ModelDigest = "" // model digest validation disabled
+			}
+
+			// copy source model run metadata, parameter values, output results into destination database
 			_, err = copyRunDbToDb(srcDb, dstDb, srcModel, dstModel, rm.Run.RunId, runPub, dstLang, dblFmt)
 			if err != nil {
 				return err
@@ -193,11 +198,15 @@ func dbToDbTask(modelName string, modelDigest string, runOpts *config.RunOptions
 		}
 
 		// convert workset db rows into "public" format
-		// and copy source workset metadata and parameters into destination database
 		setPub, err := wm.ToPublic(srcDb, srcModel)
 		if err != nil {
 			return err
 		}
+		if isNoModelDigestCheck {
+			setPub.ModelDigest = "" // model digest validation disabled
+		}
+
+		// copy source workset metadata and parameters into destination database
 		_, err = copyWorksetDbToDb(srcDb, dstDb, srcModel, dstModel, wm.Set.SetId, setPub, dstLang)
 		if err != nil {
 			return err

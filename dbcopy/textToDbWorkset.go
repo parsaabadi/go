@@ -176,8 +176,9 @@ func textToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 	dstSetName := runOpts.String(setNewNameArgKey)
 	dblFmt := runOpts.String(doubleFormatArgKey)
 	encName := runOpts.String(encodingArgKey)
+	isNoModelDigestCheck := runOpts.Bool(noDigestCheck)
 
-	dstId, err := fromWorksetTextToDb(dstDb, modelDef, langDef, setName, dstSetName, metaPath, csvDir, dblFmt, encName)
+	dstId, err := fromWorksetTextToDb(dstDb, modelDef, langDef, setName, dstSetName, metaPath, csvDir, isNoModelDigestCheck, dblFmt, encName)
 	if err != nil {
 		return err
 	}
@@ -192,7 +193,7 @@ func textToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 // convert it to db cells and insert into database
 // update set id's and base run id's with actual id in database
 func fromWorksetTextListToDb(
-	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, inpDir string, doubleFmt string, encodingName string,
+	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, inpDir string, isNoModelDigestCheck bool, doubleFmt string, encodingName string,
 ) error {
 
 	// get list of workset json files
@@ -223,7 +224,7 @@ func fromWorksetTextListToDb(
 		}
 
 		// update or insert workset metadata and parameters from csv if csv directory exist
-		_, err := fromWorksetTextToDb(dbConn, modelDef, langDef, "", "", fl[k], csvDir, doubleFmt, encodingName)
+		_, err := fromWorksetTextToDb(dbConn, modelDef, langDef, "", "", fl[k], csvDir, isNoModelDigestCheck, doubleFmt, encodingName)
 		if err != nil {
 			return err
 		}
@@ -244,6 +245,7 @@ func fromWorksetTextToDb(
 	dstSetName string,
 	metaPath string,
 	csvDir string,
+	isNoModelDigestCheck bool,
 	doubleFmt string,
 	encodingName string,
 ) (int, error) {
@@ -283,6 +285,10 @@ func fromWorksetTextToDb(
 		return 0, errors.New("workset name is empty and metadata json file not found or empty")
 	}
 	srcSetName = pub.Name
+
+	if isNoModelDigestCheck {
+		pub.ModelDigest = "" // model digest validation disabled
+	}
 
 	// if only csv directory specified:
 	//   make list of parameters based on csv file names
