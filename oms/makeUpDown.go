@@ -143,10 +143,18 @@ func makeWorksetDownloadCommand(mb modelBasic, setName string, logPath string, i
 }
 
 // make dbcopy command to prepare model workset import into database after upload
-func makeWorksetUploadCommand(mb modelBasic, setName string, logPath string) (*exec.Cmd, string) {
+func makeWorksetUploadCommand(mb modelBasic, setName string, logPath string, isNoDigestCheck bool) (*exec.Cmd, string) {
 
 	// make dbcopy message for user log
-	cmdMsg := "dbcopy -m " + mb.name + " -dbcopy.IdOutputNames=false -dbcopy.SetName " + setName + " -dbcopy.To db -dbcopy.Zip -dbcopy.InputDir " + theCfg.uploadDir
+	cmdMsg := "dbcopy -m " + mb.name +
+		" -dbcopy.IdOutputNames=false" +
+		" -dbcopy.SetName " + setName +
+		" -dbcopy.To db" +
+		" -dbcopy.Zip" +
+		" -dbcopy.InputDir " + theCfg.uploadDir
+	if isNoDigestCheck {
+		cmdMsg += " -dbcopy.NoDigestCheck"
+	}
 
 	// make absolute path to upload directory: dbcopy work directory is a model bin directory
 	absUpDir, err := filepath.Abs(theCfg.uploadDir)
@@ -156,7 +164,18 @@ func makeWorksetUploadCommand(mb modelBasic, setName string, logPath string) (*e
 	}
 
 	// make dbcopy command
-	cArgs := []string{"-m", mb.name, "-dbcopy.IdOutputNames=false", "-dbcopy.SetName", setName, "-dbcopy.To", "db", "-dbcopy.Zip", "-dbcopy.InputDir", absUpDir, "-dbcopy.FromSqlite", mb.dbPath}
+	cArgs := []string{
+		"-m", mb.name,
+		"-dbcopy.IdOutputNames=false",
+		"-dbcopy.SetName", setName,
+		"-dbcopy.To", "db",
+		"-dbcopy.Zip",
+		"-dbcopy.InputDir", absUpDir,
+		"-dbcopy.FromSqlite", mb.dbPath,
+	}
+	if isNoDigestCheck {
+		cArgs = append(cArgs, "-dbcopy.NoDigestCheck")
+	}
 
 	cmd := exec.Command(theCfg.dbcopyPath, cArgs...)
 	cmd.Dir = mb.binDir // dbcopy work directory is a model bin directory

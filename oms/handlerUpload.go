@@ -14,13 +14,30 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
-// worksetUploadPostHandler initate creation of model workset zip archive in home/io/upload folder.
+// worksetUploadNoDigestPostHandler post model workset zip archive in home/io/upload folder.
+// POST /api/upload/model/:model/no-digest-check/workset
+// POST /api/upload/model/:model/no-digest-check/workset/:set
+// Zip archive is the same as created by dbcopy command line utilty.
+// Model digest in source zip is ignored, only model name is used and that allows to upload worksets into different model version.
+// Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
+func worksetUploadNoDigestPostHandler(w http.ResponseWriter, r *http.Request) {
+	doWorksetUploadPost(w, r, true)
+}
+
+// worksetUploadPostHandler post of model workset zip archive in home/io/upload folder.
 // POST /api/upload/model/:model/workset
 // POST /api/upload/model/:model/workset/:set
 // Zip archive is the same as created by dbcopy command line utilty.
 // Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
 func worksetUploadPostHandler(w http.ResponseWriter, r *http.Request) {
+	doWorksetUploadPost(w, r, false)
+}
 
+// doWorksetUploadPost post of model workset zip archive in home/io/upload folder.
+// Posted zip archived processed by dbcopy on separate thread.
+// Zip archive is the same as created by dbcopy command line utilty.
+// Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
+func doWorksetUploadPost(w http.ResponseWriter, r *http.Request, isNoDigestCheck bool) {
 	// url or query parameters
 	dn := getRequestParam(r, "model") // model digest-or-name
 	wsn := getRequestParam(r, "set")  // workset name
@@ -130,7 +147,7 @@ func worksetUploadPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// create model scenario upload files on separate thread
-	cmd, cmdMsg := makeWorksetUploadCommand(mb, setName, logPath)
+	cmd, cmdMsg := makeWorksetUploadCommand(mb, setName, logPath, isNoDigestCheck)
 
 	go makeUpload(baseName, cmd, cmdMsg, logPath)
 

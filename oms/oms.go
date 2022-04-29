@@ -985,8 +985,12 @@ func apiUploadRoutes(router *vestigo.Router) {
 
 	// POST /api/upload/model/:model/workset
 	// POST /api/upload/model/:model/workset/:set
+	// POST /api/upload/model/:model/no-digest-check/workset
+	// POST /api/upload/model/:model/no-digest-check/workset/:set
 	router.Post("/api/upload/model/:model/workset", worksetUploadPostHandler, logRequest)
 	router.Post("/api/upload/model/:model/workset/:set", worksetUploadPostHandler, logRequest)
+	router.Post("/api/upload/model/:model/no-digest-check/workset", worksetUploadNoDigestPostHandler, logRequest)
+	router.Post("/api/upload/model/:model/no-digest-check/workset/:set", worksetUploadNoDigestPostHandler, logRequest)
 
 	// reject if request ill-formed
 	router.Post("/api/upload/model/", http.NotFound)
