@@ -19,7 +19,7 @@ func profileReplaceHandler(w http.ResponseWriter, r *http.Request) {
 	dn := getRequestParam(r, "model")
 
 	var pm db.ProfileMeta
-	if !jsonRequestDecode(w, r, &pm) {
+	if !jsonRequestDecode(w, r, true, &pm) {
 		return // error at json decode, response done with http error
 	}
 
@@ -132,7 +132,7 @@ func runTextMergeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// decode json run "public" metadata
 	var rp db.RunPub
-	if !jsonRequestDecode(w, r, &rp) {
+	if !jsonRequestDecode(w, r, true, &rp) {
 		return // error at json decode, response done with http error
 	}
 
@@ -165,7 +165,7 @@ func runParameterTextMergeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// decode json parameter value notes
 	var pvtLst []db.ParamRunSetTxtPub
-	if !jsonRequestDecode(w, r, &pvtLst) {
+	if !jsonRequestDecode(w, r, true, &pvtLst) {
 		return // error at json decode, response done with http error
 	}
 
@@ -237,7 +237,7 @@ func taskDefUpdateHandler(w http.ResponseWriter, r *http.Request, isReplace bool
 
 	// decode json run "public" metadata
 	var tpd db.TaskDefPub
-	if !jsonRequestDecode(w, r, &tpd) {
+	if !jsonRequestDecode(w, r, true, &tpd) {
 		return // error at json decode, response done with http error
 	}
 

@@ -229,8 +229,9 @@ func jsonCellWriter(w http.ResponseWriter, enc *json.Encoder, cvtCell func(inter
 
 // jsonRequestDecode validate Content-Type: application/json and decode json body.
 // Destination for json decode: dst must be a pointer.
+// If isRequired is true then json body is required else it can be empty by default.
 // On error it writes error response 400 or 415 and return false.
-func jsonRequestDecode(w http.ResponseWriter, r *http.Request, dst interface{}) bool {
+func jsonRequestDecode(w http.ResponseWriter, r *http.Request, isRequired bool, dst interface{}) bool {
 
 	// json body expected
 	if !strings.Contains(r.Header.Get("Content-Type"), "application/json") {
@@ -242,8 +243,12 @@ func jsonRequestDecode(w http.ResponseWriter, r *http.Request, dst interface{}) 
 	err := json.NewDecoder(r.Body).Decode(dst)
 	if err != nil {
 		if err == io.EOF {
-			http.Error(w, "Invalid (empty) json at "+r.URL.String(), http.StatusBadRequest)
-			return false
+			if !isRequired {
+				return true // empty default values
+			} else {
+				http.Error(w, "Invalid (empty) json at "+r.URL.String(), http.StatusBadRequest)
+				return false
+			}
 		}
 		omppLog.Log("Json decode error at " + r.URL.String() + ": " + err.Error())
 		http.Error(w, "Json decode error at "+r.URL.String(), http.StatusBadRequest)
@@ -252,8 +257,8 @@ func jsonRequestDecode(w http.ResponseWriter, r *http.Request, dst interface{}) 
 	return true // completed OK
 }
 
-// jsonMultipartDecode decode json from multipart form reader.
-// It does move to next part, check part form name and decode json from part body.
+// jsonMultipartDecode decode json part of multipart form reader.
+// It does move to next part, check part form name and decode json content from part body.
 // Destination for json decode: dst must be a pointer.
 // On error it writes error response 400 or 415 and return false.
 func jsonMultipartDecode(w http.ResponseWriter, mr *multipart.Reader, name string, dst interface{}) bool {

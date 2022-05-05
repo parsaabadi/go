@@ -52,7 +52,7 @@ func doReadParameterPageHandler(w http.ResponseWriter, r *http.Request, srcArg s
 
 	// decode json request body
 	var layout db.ReadParamLayout
-	if !jsonRequestDecode(w, r, &layout) {
+	if !jsonRequestDecode(w, r, true, &layout) {
 		return // error at json decode, response done with http error
 	}
 	layout.IsFromSet = isSet // overwrite json value, it was likely default
@@ -125,7 +125,7 @@ func doReadTablePageHandler(w http.ResponseWriter, r *http.Request, isCode bool)
 
 	// decode json request body
 	var layout db.ReadTableLayout
-	if !jsonRequestDecode(w, r, &layout) {
+	if !jsonRequestDecode(w, r, true, &layout) {
 		return // error at json decode, response done with http error
 	}
 

@@ -52,6 +52,9 @@ func textToDb(modelName string, runOpts *config.RunOptions) error {
 		omppLog.Log("Unpack ", modelName, ".zip")
 
 		outDir := runOpts.String(outputDirArgKey)
+		if outDir == "" {
+			outDir = filepath.Dir(inpDir)
+		}
 		if err = helper.UnpackZip(filepath.Join(inpDir, modelName+".zip"), outDir); err != nil {
 			return err
 		}

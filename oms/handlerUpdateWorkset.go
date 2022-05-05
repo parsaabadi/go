@@ -57,7 +57,7 @@ func worksetCreateHandler(w http.ResponseWriter, r *http.Request) {
 
 	// decode json workset "public" metadata
 	var wp db.WorksetCreatePub
-	if !jsonRequestDecode(w, r, &wp) {
+	if !jsonRequestDecode(w, r, true, &wp) {
 		return // error at json decode, response done with http error
 	}
 	dn := wp.ModelDigest
@@ -381,7 +381,7 @@ func doUpdateParameterPageHandler(w http.ResponseWriter, r *http.Request, isCode
 	if !isCode {
 
 		var cArr []db.CellParam
-		if !jsonRequestDecode(w, r, &cArr) {
+		if !jsonRequestDecode(w, r, true, &cArr) {
 			return // error at json decode, response done with http error
 		}
 		if len(cArr) <= 0 {
@@ -402,7 +402,7 @@ func doUpdateParameterPageHandler(w http.ResponseWriter, r *http.Request, isCode
 
 		// decode code cells from json body
 		var cArr []db.CellCodeParam
-		if !jsonRequestDecode(w, r, &cArr) {
+		if !jsonRequestDecode(w, r, true, &cArr) {
 			return // error at json decode, response done with http error
 		}
 		if len(cArr) <= 0 {
@@ -565,7 +565,7 @@ func worksetParameterTextMergeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// decode json parameter value notes
 	var pvtLst []db.ParamRunSetTxtPub
-	if !jsonRequestDecode(w, r, &pvtLst) {
+	if !jsonRequestDecode(w, r, true, &pvtLst) {
 		return // error at json decode, response done with http error
 	}
 

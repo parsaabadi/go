@@ -4,6 +4,7 @@
 package main
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"path"
@@ -14,14 +15,127 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
-// worksetUploadNoDigestPostHandler post model workset zip archive in home/io/upload folder.
-// POST /api/upload/model/:model/no-digest-check/workset
-// POST /api/upload/model/:model/no-digest-check/workset/:set
+// runUploadPostHandler post of model run zip archive in home/io/upload folder.
+// POST /api/upload/model/:model/run
+// POST /api/upload/model/:model/run/:run
 // Zip archive is the same as created by dbcopy command line utilty.
-// Model digest in source zip is ignored, only model name is used and that allows to upload worksets into different model version.
 // Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
-func worksetUploadNoDigestPostHandler(w http.ResponseWriter, r *http.Request) {
-	doWorksetUploadPost(w, r, true)
+func runUploadPostHandler(w http.ResponseWriter, r *http.Request) {
+	// url or query parameters
+	dn := getRequestParam(r, "model")  // model digest-or-name
+	rName := getRequestParam(r, "run") // run name
+
+	// find model metadata by digest or name
+	mb, ok := theCatalog.modelBasicByDigestOrName(dn)
+	if !ok {
+		http.Error(w, "Model not found: "+dn, http.StatusBadRequest)
+		return // empty result: model digest not found
+	}
+	m, ok := theCatalog.ModelDicByDigest(mb.digest)
+	if !ok {
+		http.Error(w, "Model not found: "+dn, http.StatusBadRequest)
+		return // empty result: model digest not found
+	}
+
+	// parse multipart form: only single part expected with run.zip file attached
+	mr, err := r.MultipartReader()
+	if err != nil {
+		http.Error(w, "Error at multipart form open ", http.StatusBadRequest)
+		return
+	}
+
+	// open next part
+	part, err := mr.NextPart()
+	if err == io.EOF {
+		http.Error(w, "Invalid (empty) next part of multipart form", http.StatusBadRequest)
+		return
+	}
+	if err != nil {
+		http.Error(w, "Failed to get next part of multipart form: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	defer part.Close()
+
+	// check file name: it should be modelName.run.RunName.zip
+	// if run name not specified in URL the get it from file name
+	fName := part.FileName()
+	ext := path.Ext(fName)
+	baseName := strings.TrimSuffix(fName, ext)
+	mpn := m.Name + ".run."
+	runName := strings.TrimPrefix(baseName, mpn)
+
+	if baseName == "" || baseName == "." || baseName == ".." ||
+		runName == "" || runName == "." || runName == ".." ||
+		fName != helper.CleanPath(fName) {
+		http.Error(w, "Error: invalid (or empty) file name: "+fName, http.StatusBadRequest)
+		return
+	}
+	if ext != ".zip" || !strings.HasPrefix(baseName, mpn) {
+		http.Error(w, "Error: file name must be: "+mpn+"Name.zip", http.StatusBadRequest)
+		return
+	}
+	if rName != "" && runName != rName {
+		http.Error(w, "Error: invalid file name, expected: "+mpn+rName+".zip", http.StatusBadRequest)
+		return
+	}
+
+	// if upload.progress.log file exist the retun error: upload in progress
+	omppLog.Log("Upload of: ", fName)
+
+	logPath := filepath.Join(theCfg.uploadDir, baseName+".progress.upload.log")
+	if isFileExist(logPath) == nil {
+		omppLog.Log("Error: upload already in progress: ", logPath)
+		http.Error(w, "Model run upload already in progress: "+baseName, http.StatusBadRequest)
+		return
+	}
+
+	// create new upload.progress.log file and write model run decsription
+	logPath, isLog := createUpDownLog(logPath)
+	if !isLog {
+		omppLog.Log("Failed to create upload log file: " + baseName + ".progress.upload.log")
+		http.Error(w, "Model run upload failed: "+baseName, http.StatusBadRequest)
+		return
+	}
+	hdrMsg := []string{
+		"------------------",
+		"Upload           : " + fName,
+		"Model Name       : " + m.Name,
+		"Model Version    : " + m.Version + " " + m.CreateDateTime,
+		"Model Digest     : " + m.Digest,
+		"Run Name         : " + runName,
+		"Folder           : " + baseName,
+		"------------------",
+	}
+	if !appendToUpDownLog(logPath, true, "Upload of: "+baseName) {
+		renameToUploadErrorLog(logPath, "")
+		omppLog.Log("Failed to write into upload log file: " + baseName + ".progress.upload.log")
+		http.Error(w, "Model run upload failed: "+baseName, http.StatusBadRequest)
+		return
+	}
+	if !appendToUpDownLog(logPath, false, hdrMsg...) {
+		renameToUploadErrorLog(logPath, "")
+		omppLog.Log("Failed to write into upload log file: " + baseName + ".progress.upload.log")
+		http.Error(w, "Model run upload failed: "+baseName, http.StatusBadRequest)
+		return
+	}
+
+	// save run.zip into upload directory
+	saveToPath := filepath.Join(theCfg.uploadDir, fName)
+
+	helper.SaveTo(saveToPath, part)
+	if err != nil {
+		omppLog.Log("Error: unable to write into ", saveToPath, err)
+		http.Error(w, "Error: unable to write into "+fName, http.StatusInternalServerError)
+		return
+	}
+
+	// create model run upload files on separate thread
+	cmd, cmdMsg := makeRunUploadCommand(mb, runName, logPath)
+
+	go makeUpload(baseName, cmd, cmdMsg, logPath)
+
+	// report to the client results location
+	w.Header().Set("Content-Location", "/api/upload/model/"+dn+"/run/"+runName+"/"+baseName)
 }
 
 // worksetUploadPostHandler post of model workset zip archive in home/io/upload folder.
@@ -29,15 +143,10 @@ func worksetUploadNoDigestPostHandler(w http.ResponseWriter, r *http.Request) {
 // POST /api/upload/model/:model/workset/:set
 // Zip archive is the same as created by dbcopy command line utilty.
 // Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
+// Posted multi-part form can have optional "workset-upload-options" part with json upload options
+// Upload option NoDigestCheck=true do suppress model digest verification:
+// model digest in source zip is ignored, only model name is used and that allows to upload worksets into different model version.
 func worksetUploadPostHandler(w http.ResponseWriter, r *http.Request) {
-	doWorksetUploadPost(w, r, false)
-}
-
-// doWorksetUploadPost post of model workset zip archive in home/io/upload folder.
-// Posted zip archived processed by dbcopy on separate thread.
-// Zip archive is the same as created by dbcopy command line utilty.
-// Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
-func doWorksetUploadPost(w http.ResponseWriter, r *http.Request, isNoDigestCheck bool) {
 	// url or query parameters
 	dn := getRequestParam(r, "model") // model digest-or-name
 	wsn := getRequestParam(r, "set")  // workset name
@@ -61,7 +170,7 @@ func doWorksetUploadPost(w http.ResponseWriter, r *http.Request, isNoDigestCheck
 		return
 	}
 
-	// open next part and check part name, it must be "workset-zip"
+	// open first part: it can be workset-upload-options part or workset.zip file
 	part, err := mr.NextPart()
 	if err == io.EOF {
 		http.Error(w, "Invalid (empty) next part of multipart form", http.StatusBadRequest)
@@ -70,6 +179,34 @@ func doWorksetUploadPost(w http.ResponseWriter, r *http.Request, isNoDigestCheck
 	if err != nil {
 		http.Error(w, "Failed to get next part of multipart form: "+err.Error(), http.StatusBadRequest)
 		return
+	}
+
+	// if this is workset-upload-options then decode json
+	isNoDigestCheck := false
+	if part.FormName() == "workset-upload-options" {
+
+		opts := struct{ NoDigestCheck bool }{}
+
+		err = json.NewDecoder(part).Decode(&opts)
+		if err != nil && err != io.EOF {
+			http.Error(w, "Json decode error at 'workset-upload-options' part of multipart form", http.StatusBadRequest)
+			part.Close()
+			return
+		}
+		isNoDigestCheck = opts.NoDigestCheck
+
+		// open next part: workset.zip file
+		part.Close()
+
+		part, err = mr.NextPart()
+		if err == io.EOF {
+			http.Error(w, "Invalid (empty) next part of multipart form", http.StatusBadRequest)
+			return
+		}
+		if err != nil {
+			http.Error(w, "Failed to get next part of multipart form: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 	defer part.Close()
 

@@ -939,27 +939,20 @@ func apiDownloadRoutes(router *vestigo.Router) {
 	router.Get("/api/download/file-tree/:folder", fileTreeDownloadGetHandler, logRequest)
 
 	// POST /api/download/model/:model
-	// POST /api/download/model/:model/csv-bom
-	// POST /api/download/model/:model/no-acc
-	// POST /api/download/model/:model/no-acc/csv-bom
 	router.Post("/api/download/model/:model", modelDownloadPostHandler, logRequest)
-	router.Post("/api/download/model/:model/csv-bom", modelDownloadCsvBomPostHandler, logRequest)
-	router.Post("/api/download/model/:model/no-acc", modelDownloadNoAccPostHandler, logRequest)
-	router.Post("/api/download/model/:model/no-acc/csv-bom", modelDownloadNoAccCsvBomPostHandler, logRequest)
 
 	// POST /api/download/model/:model/run/:run
-	// POST /api/download/model/:model/run/:run/csv-bom
-	// POST /api/download/model/:model/run/:run/no-acc
-	// POST /api/download/model/:model/run/:run/no-acc/csv-bom
 	router.Post("/api/download/model/:model/run/:run", runDownloadPostHandler, logRequest)
-	router.Post("/api/download/model/:model/run/:run/csv-bom", runDownloadCsvBomPostHandler, logRequest)
-	router.Post("/api/download/model/:model/run/:run/no-acc", runDownloadNoAccPostHandler, logRequest)
-	router.Post("/api/download/model/:model/run/:run/no-acc/csv-bom", runDownloadNoAccCsvBomPostHandler, logRequest)
 
 	// POST /api/download/model/:model/workset/:set
-	// POST /api/download/model/:model/workset/:set/csv-bom
 	router.Post("/api/download/model/:model/workset/:set", worksetDownloadPostHandler, logRequest)
-	router.Post("/api/download/model/:model/workset/:set/csv-bom", worksetDownloadCsvBomPostHandler, logRequest)
+
+	// reject if request ill-formed
+	// POST /api/download/model/:model/run/
+	// POST /api/download/model/:model/workset/
+	router.Post("/api/download/model/", http.NotFound)
+	router.Post("/api/download/model/run/", http.NotFound)
+	router.Post("/api/download/model/workset/", http.NotFound)
 
 	// DELETE /api/download/delete/:folder
 	router.Delete("/api/download/delete/:folder", downloadDeleteHandler, logRequest)
@@ -985,16 +978,18 @@ func apiUploadRoutes(router *vestigo.Router) {
 
 	// POST /api/upload/model/:model/workset
 	// POST /api/upload/model/:model/workset/:set
-	// POST /api/upload/model/:model/no-digest-check/workset
-	// POST /api/upload/model/:model/no-digest-check/workset/:set
 	router.Post("/api/upload/model/:model/workset", worksetUploadPostHandler, logRequest)
 	router.Post("/api/upload/model/:model/workset/:set", worksetUploadPostHandler, logRequest)
-	router.Post("/api/upload/model/:model/no-digest-check/workset", worksetUploadNoDigestPostHandler, logRequest)
-	router.Post("/api/upload/model/:model/no-digest-check/workset/:set", worksetUploadNoDigestPostHandler, logRequest)
+
+	// POST /api/upload/model/:model/run
+	// POST /api/upload/model/:model/run/:run
+	router.Post("/api/upload/model/:model/run", runUploadPostHandler, logRequest)
+	router.Post("/api/upload/model/:model/run/:run", runUploadPostHandler, logRequest)
 
 	// reject if request ill-formed
 	router.Post("/api/upload/model/", http.NotFound)
 	router.Post("/api/upload/model/:model/workset/", http.NotFound)
+	router.Post("/api/upload/model/:model/run/", http.NotFound)
 
 	// DELETE /api/upload/delete/:folder
 	router.Delete("/api/upload/delete/:folder", uploadDeleteHandler, logRequest)

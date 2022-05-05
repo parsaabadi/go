@@ -20,7 +20,7 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 
 	// decode json request body
 	var src RunRequest
-	if !jsonRequestDecode(w, r, &src) {
+	if !jsonRequestDecode(w, r, true, &src) {
 		return // error at json decode, response done with http error
 	}
 

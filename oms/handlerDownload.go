@@ -17,49 +17,24 @@ import (
 // POST /api/download/model/:model
 // Zip archive is the same as created by dbcopy command line utilty.
 // Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
+// Json is posted to specify download options.
+// If NoAccumulatorsCsv is true then accumulators CSV files are not included in result.
+// It is significantly faster to porduce the result archive, we but cannot import it back into the model database,
+// it is only to analyze model output values CSV data using some other tools
+// If Utf8BomIntoCsv is true then add utf-8 byte order mark into csv files
 func modelDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
-	doModelDownloadPost(w, r, false, false)
-}
-
-// modelDownloadPostHandler initate creation of model zip archive in home/io/download folder.
-// POST /api/download/model/:model/csv-bom
-// Zip archive is the same as created by dbcopy command line utilty.
-// Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
-// Add utf-8 byte order mark into csv files
-func modelDownloadCsvBomPostHandler(w http.ResponseWriter, r *http.Request) {
-	doModelDownloadPost(w, r, false, true)
-}
-
-// modelDownloadPostHandler initate creation of model zip archive in home/io/download folder.
-// POST /api/download/model/:model/no-acc
-// Zip archive is the same as created by dbcopy command line utilty.
-// Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
-// Accumulators CSV files are not included in result,
-// It is significantly faster to porduce the result archive, we but cannot import it back into the model database,
-// it is only to analyze model output values CSV data using some other tools
-func modelDownloadNoAccPostHandler(w http.ResponseWriter, r *http.Request) {
-	doModelDownloadPost(w, r, true, false)
-}
-
-// modelDownloadPostHandler initate creation of model zip archive in home/io/download folder.
-// POST /api/download/model/:model/no-acc/csv-bom
-// Zip archive is the same as created by dbcopy command line utilty.
-// Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
-// Accumulators CSV files are not included in result,
-// It is significantly faster to porduce the result archive, we but cannot import it back into the model database,
-// it is only to analyze model output values CSV data using some other tools
-// Add utf-8 byte order mark into csv files
-func modelDownloadNoAccCsvBomPostHandler(w http.ResponseWriter, r *http.Request) {
-	doModelDownloadPost(w, r, true, true)
-}
-
-// doModelDownloadPost initate creation of model zip archive in home/io/download folder.
-// Zip archive is the same as created by dbcopy command line utilty.
-// Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
-func doModelDownloadPost(w http.ResponseWriter, r *http.Request, isNoAcc bool, isCsvBom bool) {
 
 	// url or query parameters
 	dn := getRequestParam(r, "model") // model digest-or-name
+
+	// decode json download options
+	opts := struct {
+		NoAccumulatorsCsv bool
+		Utf8BomIntoCsv    bool
+	}{}
+	if !jsonRequestDecode(w, r, false, &opts) {
+		return // error at json decode, response done with http error
+	}
 
 	// find model metadata by digest or name
 	mb, ok := theCatalog.modelBasicByDigestOrName(dn)
@@ -114,7 +89,7 @@ func doModelDownloadPost(w http.ResponseWriter, r *http.Request, isNoAcc bool, i
 	}
 
 	// create model download files on separate thread
-	cmd, cmdMsg := makeModelDownloadCommand(mb, logPath, isNoAcc, isCsvBom)
+	cmd, cmdMsg := makeModelDownloadCommand(mb, logPath, opts.NoAccumulatorsCsv, opts.Utf8BomIntoCsv)
 
 	go makeDownload(baseName, cmd, cmdMsg, logPath)
 
@@ -126,50 +101,25 @@ func doModelDownloadPost(w http.ResponseWriter, r *http.Request, isNoAcc bool, i
 // POST /api/download/model/:model/run/:run
 // Zip archive is the same as created by dbcopy command line utilty.
 // Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
+// Json is posted to specify download options.
+// If NoAccumulatorsCsv is true then accumulators CSV files are not included in result.
+// It is significantly faster to porduce the result archive, we but cannot import it back into the model database,
+// it is only to analyze model output values CSV data using some other tools
+// If Utf8BomIntoCsv is true then add utf-8 byte order mark into csv files
 func runDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
-	doRunDownloadPost(w, r, false, false)
-}
-
-// runDownloadPostHandler initate creation of model run zip archive in home/io/download folder.
-// POST /api/download/model/:model/run/:run/csv-bom
-// Zip archive is the same as created by dbcopy command line utilty.
-// Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
-// Add utf-8 byte order mark into csv files
-func runDownloadCsvBomPostHandler(w http.ResponseWriter, r *http.Request) {
-	doRunDownloadPost(w, r, false, true)
-}
-
-// runDownloadPostHandler initate creation of model run zip archive in home/io/download folder.
-// POST /api/download/model/:model/run/:run/no-acc
-// Zip archive is the same as created by dbcopy command line utilty.
-// Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
-// Accumulators CSV files are not included in result,
-// It is significantly faster to porduce the result archive, we but cannot import it back into the model database,
-// it is only to analyze model output values CSV data using some other tools
-func runDownloadNoAccPostHandler(w http.ResponseWriter, r *http.Request) {
-	doRunDownloadPost(w, r, true, false)
-}
-
-// runDownloadPostHandler initate creation of model run zip archive in home/io/download folder.
-// POST /api/download/model/:model/run/:run/no-acc/csv-bom
-// Zip archive is the same as created by dbcopy command line utilty.
-// Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
-// Accumulators CSV files are not included in result,
-// It is significantly faster to porduce the result archive, we but cannot import it back into the model database,
-// it is only to analyze model output values CSV data using some other tools
-// Add utf-8 byte order mark into csv files
-func runDownloadNoAccCsvBomPostHandler(w http.ResponseWriter, r *http.Request) {
-	doRunDownloadPost(w, r, true, true)
-}
-
-// doRunDownloadPost initate creation of model run zip archive in home/io/download folder.
-// Zip archive is the same as created by dbcopy command line utilty.
-// Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
-func doRunDownloadPost(w http.ResponseWriter, r *http.Request, isNoAcc bool, isCsvBom bool) {
 
 	// url or query parameters
 	dn := getRequestParam(r, "model") // model digest-or-name
 	rdsn := getRequestParam(r, "run") // run digest-or-stamp-or-name
+
+	// decode json download options
+	opts := struct {
+		NoAccumulatorsCsv bool
+		Utf8BomIntoCsv    bool
+	}{}
+	if !jsonRequestDecode(w, r, false, &opts) {
+		return // error at json decode, response done with http error
+	}
 
 	// find model metadata by digest or name
 	mb, ok := theCatalog.modelBasicByDigestOrName(dn)
@@ -243,7 +193,7 @@ func doRunDownloadPost(w http.ResponseWriter, r *http.Request, isNoAcc bool, isC
 	}
 
 	// create model run download files on separate thread
-	cmd, cmdMsg := makeRunDownloadCommand(mb, r0.RunId, logPath, isNoAcc, isCsvBom)
+	cmd, cmdMsg := makeRunDownloadCommand(mb, r0.RunId, logPath, opts.NoAccumulatorsCsv, opts.Utf8BomIntoCsv)
 
 	go makeDownload(baseName, cmd, cmdMsg, logPath)
 
@@ -255,27 +205,20 @@ func doRunDownloadPost(w http.ResponseWriter, r *http.Request, isNoAcc bool, isC
 // POST /api/download/model/:model/workset/:set
 // Zip archive is the same as created by dbcopy command line utilty.
 // Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
+// Json is posted to specify download options.
+// If Utf8BomIntoCsv is true then add utf-8 byte order mark into csv files
 func worksetDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
-	doWorksetDownloadPost(w, r, false)
-}
-
-// worksetDownloadPostHandler initate creation of model workset zip archive in home/io/download folder.
-// POST /api/download/model/:model/workset/:set/csv-bom
-// Zip archive is the same as created by dbcopy command line utilty.
-// Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
-// Add utf-8 byte order mark into csv files
-func worksetDownloadCsvBomPostHandler(w http.ResponseWriter, r *http.Request) {
-	doWorksetDownloadPost(w, r, true)
-}
-
-// doWorksetDownloadPost initate creation of model workset zip archive in home/io/download folder.
-// Zip archive is the same as created by dbcopy command line utilty.
-// Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
-func doWorksetDownloadPost(w http.ResponseWriter, r *http.Request, isCsvBom bool) {
 
 	// url or query parameters
 	dn := getRequestParam(r, "model") // model digest-or-name
 	wsn := getRequestParam(r, "set")  // workset name
+
+	// decode json download options
+	opts := struct{ Utf8BomIntoCsv bool }{}
+
+	if !jsonRequestDecode(w, r, false, &opts) {
+		return // error at json decode, response done with http error
+	}
 
 	// find model metadata by digest or name
 	mb, ok := theCatalog.modelBasicByDigestOrName(dn)
@@ -343,7 +286,7 @@ func doWorksetDownloadPost(w http.ResponseWriter, r *http.Request, isCsvBom bool
 	}
 
 	// create model scenario download files on separate thread
-	cmd, cmdMsg := makeWorksetDownloadCommand(mb, wst.Name, logPath, isCsvBom)
+	cmd, cmdMsg := makeWorksetDownloadCommand(mb, wst.Name, logPath, opts.Utf8BomIntoCsv)
 
 	go makeDownload(baseName, cmd, cmdMsg, logPath)
 
