@@ -21,11 +21,13 @@ func (meta *TaskMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskPub, e
 	// task header
 	pub := TaskPub{
 		TaskDefPub: TaskDefPub{
-			ModelName:   modelDef.Model.Name,
-			ModelDigest: modelDef.Model.Digest,
-			Name:        meta.Task.Name,
-			Txt:         make([]DescrNote, len(meta.Txt)),
-			Set:         []string{}},
+			ModelName:           modelDef.Model.Name,
+			ModelDigest:         modelDef.Model.Digest,
+			ModelVersion:        modelDef.Model.Version,
+			ModelCreateDateTime: modelDef.Model.CreateDateTime,
+			Name:                meta.Task.Name,
+			Txt:                 make([]DescrNote, len(meta.Txt)),
+			Set:                 []string{}},
 		TaskRun: []taskRunPub{},
 	}
 

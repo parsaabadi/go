@@ -32,23 +32,25 @@ type RunMeta struct {
 
 // RunPub is "public" model run metadata for json import-export
 type RunPub struct {
-	ModelName      string            // model name for that run
-	ModelDigest    string            // model digest for that run
-	Name           string            // run_name      VARCHAR(255) NOT NULL
-	SubCount       int               // sub_count     INT          NOT NULL, -- subvalue count
-	SubStarted     int               // sub_started   INT          NOT NULL, -- number of subvalues started
-	SubCompleted   int               // sub_completed INT          NOT NULL, -- number of subvalues completed
-	CreateDateTime string            // create_dt     VARCHAR(32)  NOT NULL, -- start date-time
-	Status         string            // status        VARCHAR(1)   NOT NULL, -- run status: i=init p=progress s=success x=exit e=error(failed)
-	UpdateDateTime string            // update_dt     VARCHAR(32)  NOT NULL, -- last update date-time
-	RunDigest      string            // run_digest    VARCHAR(32)  NULL,     -- digest of the run metadata: model digest, run name, sub count, created date-time, run stamp
-	ValueDigest    string            // value_digest  VARCHAR(32),           -- if not NULL then digest of the run values: all parameters and output tables
-	RunStamp       string            // run_stamp     VARCHAR(32)  NOT NULL, -- process run stamp, by default is log time stamp
-	Txt            []DescrNote       // run text: description and notes by language
-	Opts           map[string]string // options used to run the model: run_option
-	Param          []ParamRunSetPub  // run parameters: name, sub-value count and value notes by language
-	Table          []TableRunPub     // run tables: name for tables included in run_table
-	Progress       []RunProgress     // run progress by sub-values: run_progress table rows
+	ModelName           string            // model name for that run
+	ModelDigest         string            // model digest for that run
+	ModelVersion        string            // model_ver     VARCHAR(32)  NOT NULL
+	ModelCreateDateTime string            // create_dt     VARCHAR(32)  NOT NULL
+	Name                string            // run_name      VARCHAR(255) NOT NULL
+	SubCount            int               // sub_count     INT          NOT NULL, -- subvalue count
+	SubStarted          int               // sub_started   INT          NOT NULL, -- number of subvalues started
+	SubCompleted        int               // sub_completed INT          NOT NULL, -- number of subvalues completed
+	CreateDateTime      string            // create_dt     VARCHAR(32)  NOT NULL, -- start date-time
+	Status              string            // status        VARCHAR(1)   NOT NULL, -- run status: i=init p=progress s=success x=exit e=error(failed)
+	UpdateDateTime      string            // update_dt     VARCHAR(32)  NOT NULL, -- last update date-time
+	RunDigest           string            // run_digest    VARCHAR(32)  NULL,     -- digest of the run metadata: model digest, run name, sub count, created date-time, run stamp
+	ValueDigest         string            // value_digest  VARCHAR(32),           -- if not NULL then digest of the run values: all parameters and output tables
+	RunStamp            string            // run_stamp     VARCHAR(32)  NOT NULL, -- process run stamp, by default is log time stamp
+	Txt                 []DescrNote       // run text: description and notes by language
+	Opts                map[string]string // options used to run the model: run_option
+	Param               []ParamRunSetPub  // run parameters: name, sub-value count and value notes by language
+	Table               []TableRunPub     // run tables: name for tables included in run_table
+	Progress            []RunProgress     // run progress by sub-values: run_progress table rows
 }
 
 // ParamRunSetTxtPub is "public" run or workset parameter metadata for json import-export: name, description and notes
@@ -173,14 +175,16 @@ type WorksetMeta struct {
 
 // WorksetHdrPub is "public" workset metadata for json import-export
 type WorksetHdrPub struct {
-	ModelName      string      // model name for that workset
-	ModelDigest    string      // model digest for that workset
-	Name           string      // workset name: set_name VARCHAR(255) NOT NULL
-	BaseRunDigest  string      // if not empty then digest of the base run
-	IsReadonly     bool        // readonly flag
-	UpdateDateTime string      // last update date-time
-	IsCleanBaseRun bool        // if true then update set base run digest to NULL
-	Txt            []DescrNote // workset text: description and notes by language
+	ModelName           string      // model name for that workset
+	ModelDigest         string      // model digest for that workset
+	ModelVersion        string      // model_ver     VARCHAR(32)  NOT NULL
+	ModelCreateDateTime string      // create_dt     VARCHAR(32)  NOT NULL
+	Name                string      // workset name: set_name VARCHAR(255) NOT NULL
+	BaseRunDigest       string      // if not empty then digest of the base run
+	IsReadonly          bool        // readonly flag
+	UpdateDateTime      string      // last update date-time
+	IsCleanBaseRun      bool        // if true then update set base run digest to NULL
+	Txt                 []DescrNote // workset text: description and notes by language
 }
 
 // WorksetPub is "public" workset metadata and parameter metadata for json import-export
@@ -316,11 +320,13 @@ type TaskPub struct {
 
 // TaskDefPub is "public" modeling task metadata and task input worksets for json import-export
 type TaskDefPub struct {
-	ModelName   string      // model name for that task list
-	ModelDigest string      // model digest for that task list
-	Name        string      // task_name    VARCHAR(255) NOT NULL
-	Txt         []DescrNote // task text: description and notes by language
-	Set         []string    // task body: list of workset names
+	ModelName           string      // model name for that task list
+	ModelDigest         string      // model digest for that task list
+	ModelVersion        string      // model_ver     VARCHAR(32)  NOT NULL
+	ModelCreateDateTime string      // create_dt     VARCHAR(32)  NOT NULL
+	Name                string      // task_name    VARCHAR(255) NOT NULL
+	Txt                 []DescrNote // task text: description and notes by language
+	Set                 []string    // task body: list of workset names
 }
 
 // taskRunPub is "public" metadata of task run history.

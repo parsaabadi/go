@@ -152,7 +152,8 @@ func toWorksetListText(
 	return nil
 }
 
-// toWorksetText write workset into csv file, in separate subdirectory
+// toWorksetText write workset metadata into json file
+// and parameters into csv files, in separate subdirectory
 // by default file name and directory name include set id: modelName.set.1234.SetName
 // user can explicitly disable it by IdNames=false
 func toWorksetText(

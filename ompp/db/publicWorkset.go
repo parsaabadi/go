@@ -20,12 +20,14 @@ func (meta *WorksetMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*Workset
 	// workset header
 	pub := WorksetPub{
 		WorksetHdrPub: WorksetHdrPub{
-			ModelName:      modelDef.Model.Name,
-			ModelDigest:    modelDef.Model.Digest,
-			Name:           meta.Set.Name,
-			IsReadonly:     meta.Set.IsReadonly,
-			UpdateDateTime: meta.Set.UpdateDateTime,
-			Txt:            make([]DescrNote, len(meta.Txt))},
+			ModelName:           modelDef.Model.Name,
+			ModelDigest:         modelDef.Model.Digest,
+			ModelVersion:        modelDef.Model.Version,
+			ModelCreateDateTime: modelDef.Model.CreateDateTime,
+			Name:                meta.Set.Name,
+			IsReadonly:          meta.Set.IsReadonly,
+			UpdateDateTime:      meta.Set.UpdateDateTime,
+			Txt:                 make([]DescrNote, len(meta.Txt))},
 		Param: make([]ParamRunSetPub, len(meta.Param)),
 	}
 

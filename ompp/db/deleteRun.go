@@ -7,6 +7,9 @@ import (
 	"database/sql"
 	"errors"
 	"strconv"
+	"time"
+
+	"github.com/openmpp/go/ompp/helper"
 )
 
 // DeleteRun delete model run metadata, parameters run values and output tables run values from database.
@@ -36,7 +39,8 @@ func doDeleteRun(trx *sql.Tx, runId int) error {
 
 	// update model run master record to prevent run use
 	sId := strconv.Itoa(runId)
-	err := TrxUpdate(trx, "UPDATE run_lst SET run_name = 'deleted' WHERE run_id = "+sId)
+	sn := "deleted" + helper.MakeDateTime(time.Now())
+	err := TrxUpdate(trx, "UPDATE run_lst SET run_name = "+ToQuoted(sn)+" WHERE run_id = "+sId)
 	if err != nil {
 		return err
 	}
