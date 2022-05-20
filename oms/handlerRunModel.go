@@ -19,35 +19,44 @@ import (
 func runModelHandler(w http.ResponseWriter, r *http.Request) {
 
 	// decode json request body
-	var src RunRequest
-	if !jsonRequestDecode(w, r, true, &src) {
+	var req RunRequest
+	if !jsonRequestDecode(w, r, true, &req) {
 		return // error at json decode, response done with http error
 	}
 
 	// if log messages language not specified then use browser preferred language
-	if _, ok := src.Opts["OpenM.MessageLanguage"]; !ok {
+	if _, ok := req.Opts["OpenM.MessageLanguage"]; !ok {
 		if rqLangTags, _, e := language.ParseAcceptLanguage(r.Header.Get("Accept-Language")); e == nil {
 			if len(rqLangTags) > 0 && rqLangTags[0] != language.Und {
-				src.Opts["OpenM.MessageLanguage"] = rqLangTags[0].String()
+				req.Opts["OpenM.MessageLanguage"] = rqLangTags[0].String()
 			}
 		}
 	}
 
 	// find model metadata by digest or name
-	dn := src.ModelDigest
+	dn := req.ModelDigest
 	if dn == "" {
-		dn = src.ModelName
+		dn = req.ModelName
 	}
 	m, ok := theCatalog.ModelDicByDigestOrName(dn)
 	if !ok {
 		http.Error(w, "Model not found: "+dn, http.StatusBadRequest)
 		return // empty result: model digest not found
 	}
-	src.ModelDigest = m.Digest
-	src.ModelName = m.Name
+	req.ModelDigest = m.Digest
+	req.ModelName = m.Name
+
+	// if job control enabled then add model run to queue
+	req.SubmitStamp, _ = theCatalog.getNewTimeStamp()
+
+	e := addJobToQueue(&req)
+	if e != nil {
+		http.Error(w, "Model run submission failed: "+dn, http.StatusBadRequest)
+		return
+	}
 
 	// start model run
-	prs, e := theRunCatalog.runModel(&src)
+	prs, e := theRunCatalog.runModel(&req)
 	if e != nil {
 		omppLog.Log(e)
 		http.Error(w, "Model start failed: "+dn, http.StatusBadRequest)
@@ -55,7 +64,7 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// write new model run key and json response
-	w.Header().Set("Content-Location", "/api/model/"+src.ModelDigest+"/run/"+prs.RunStamp)
+	w.Header().Set("Content-Location", "/api/model/"+req.ModelDigest+"/run/"+prs.RunStamp)
 	jsonResponse(w, r, prs)
 }
 

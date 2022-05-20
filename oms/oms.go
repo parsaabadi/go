@@ -16,10 +16,6 @@ Following arguments supporetd by oms:
 
   -oms.RootDir om/root
 oms root directory, default: current directory.
-Expected to have models/bin/ subdirectory unless other location specified: -oms.ModelDir /dir/models/bin.
-Recommended to have models/log/ subdirectory unless other location specified: -oms.ModelLogDir /dir/models/log.
-Expected to have html/ subdirectory unless -oms.ApiOnly true specified.
-Expected to have etc/ subdirectory with templates to run models on MPI cluster.
 Recommended to have log/ subdirectory to store oms web-service log files.
 
   -oms.ModelDir models/bin
@@ -29,7 +25,26 @@ If relative then must be relative to oms root directory.
   -oms.ModelLogDir models/log
 models log directory, default: models/log, if relative then must be relative to oms root directory.
 
-  -oms.HomeDir models/home
+  -oms.HtmlDir html
+front-end UI directory, default: html.
+If relative then must be relative to oms root directory.
+It is not used if -oms.ApiOnly specified.
+
+  -oms.EtcDir etc
+configuration files directory, default: etc.
+If relative then must be relative to oms root directory.
+It is an optional directory, it may contain configuration files,for example, templates to run models on MPI cluster.
+
+  -oms.JobDir job
+jobs control directory.
+If relative then must be relative to oms root directory.
+Jobs control allow to manage computational resources (e.g. CPUs) and organize model run queue.
+Default value is empty "" string and it is disable jobs control.
+
+  -oms.Name someName
+instance name which used for job control.
+
+-oms.HomeDir models/home
 user personal home directory to store files and settings.
 If relative then must be relative to oms root directory.
 Default value is empty "" string and it is disable use of home directory.
@@ -104,19 +119,24 @@ import (
 	"golang.org/x/text/language"
 
 	"github.com/openmpp/go/ompp/config"
+	"github.com/openmpp/go/ompp/helper"
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // config keys to get values from ini-file or command line arguments.
 const (
-	rootDirArgKey        = "oms.RootDir"       // oms root directory, expected subfoldesr: html, etc, log
+	rootDirArgKey        = "oms.RootDir"       // oms root directory, expected to contain log subfolder
 	modelDirArgKey       = "oms.ModelDir"      // models executable and model.sqlite directory, if relative then must be relative to oms root directory
 	modelLogDirArgKey    = "oms.ModelLogDir"   // models log directory, if relative then must be relative to oms root directory
+	etcDirArgKey         = "oms.EtcDir"        // configuration files directory, if relative then must be relative to oms root directory
+	htmlDirArgKey        = "oms.HtmlDir"       // front-end UI directory, if relative then must be relative to oms root directory
+	jobDirArgKey         = "oms.JobDir"        // job control directory, if relative then must be relative to oms root directory
 	homeDirArgKey        = "oms.HomeDir"       // user personal home directory, if relative then must be relative to oms root directory
 	isDownloadArgKey     = "oms.AllowDownload" // if true then allow download from user home sub-directory: home/io/download
 	isUploadArgKey       = "oms.AllowUpload"   // if true then allow upload to user home sub-directory: home/io/upload
 	listenArgKey         = "oms.Listen"        // address to listen, default: localhost:4040
 	listenShortKey       = "l"                 // address to listen (short form)
+	omsNameArgKey        = "oms.Name"          // oms instance name, if empty then derived from address to listen
 	urlFileArgKey        = "oms.UrlSaveTo"     // file path to save oms URL in form of: http://localhost:4040, if relative then must be relative to oms root directory
 	logRequestArgKey     = "oms.LogRequest"    // if true then log http request
 	apiOnlyArgKey        = "oms.ApiOnly"       // if true then API only web-service, no web UI
@@ -127,23 +147,22 @@ const (
 	doubleFormatArgKey   = "oms.DoubleFormat"  // format to convert float or double value to string, e.g. %.15g
 )
 
-// front-end UI subdirectory with html and javascript
-const htmlDir = "html"
-
-// configuration subdirectory with template(s) to run model on MPI cluster
-const etcDir = "etc"
-
 // max number of model run states to keep in run list history
 const runHistoryDefaultSize int = 100
 
 // server run configuration
 var theCfg = struct {
 	rootDir           string            // server root directory
-	isSingleUser      bool              // if true then it is a single user mode
-	homeDir           string            // user(s) home directory
+	htmlDir           string            // front-end UI directory with html and javascript
+	etcDir            string            // configuration files directory
+	isHome            bool              // if true then it is a single user mode
+	homeDir           string            // user home directory
 	downloadDir       string            // if download allowed then it is home/io/download directory
 	uploadDir         string            // if upload allowed then it is home/io/upload directory
 	inOutDir          string            // if download or upload allowed then it is home/io directory
+	isJobControl      bool              // if true then do job control: model run queue and resource allocation
+	jobDir            string            // job control directory
+	omsName           string            // oms instance name, if empty then derived from address to listen
 	dbcopyPath        string            // if download or upload allowed then it is path to dbcopy.exe
 	pageMaxSize       int64             // default "page" size: row count to read parameters or output tables
 	runHistoryMaxSize int               // max number of model run states to keep in run list history
@@ -151,10 +170,15 @@ var theCfg = struct {
 	env               map[string]string // server config environmemt variables
 }{
 	pageMaxSize:       100,
-	isSingleUser:      false,
+	htmlDir:           "html",
+	etcDir:            "etc",
+	isHome:            false,
 	homeDir:           "",
 	downloadDir:       "",
 	uploadDir:         "",
+	isJobControl:      false,
+	jobDir:            "",
+	omsName:           "",
 	runHistoryMaxSize: runHistoryDefaultSize,
 	doubleFmt:         "%.15g",
 	env:               map[string]string{},
@@ -185,11 +209,15 @@ func mainBody(args []string) error {
 	_ = flag.String(rootDirArgKey, "", "root directory, default: current directory")
 	_ = flag.String(modelDirArgKey, "models/bin", "models directory, if relative then must be relative to root directory")
 	_ = flag.String(modelLogDirArgKey, "models/log", "models log directory, if relative then must be relative to root directory")
+	_ = flag.String(etcDirArgKey, theCfg.etcDir, "configuration files directory, if relative then must be relative to oms root director")
+	_ = flag.String(htmlDirArgKey, theCfg.htmlDir, "front-end UI directory, if relative then must be relative to root directory")
 	_ = flag.String(homeDirArgKey, "", "user personal home directory, if relative then must be relative to root directory")
 	_ = flag.Bool(isDownloadArgKey, false, "if true then allow download from user home/io/download directory")
 	_ = flag.Bool(isUploadArgKey, false, "if true then allow upload to user home/io/upload directory")
+	_ = flag.String(jobDirArgKey, "", "job control directory, if relative then must be relative to root directory")
 	_ = flag.String(listenArgKey, "localhost:4040", "address to listen")
 	_ = flag.String(listenShortKey, "localhost:4040", "address to listen (short form of "+listenArgKey+")")
+	_ = flag.String(omsNameArgKey, "", "instance name, automatically generated if empty")
 	_ = flag.Bool(logRequestArgKey, false, "if true then log HTTP requests")
 	_ = flag.String(urlFileArgKey, "", "file path to save oms URL, if relative then must be relative to root directory")
 	_ = flag.Bool(apiOnlyArgKey, false, "if true then API only web-service, no web UI")
@@ -252,12 +280,16 @@ func mainBody(args []string) error {
 		omppLog.Log("Change directory to: ", theCfg.rootDir)
 	}
 
-	// if UI required then server root directory must have html subdir
-	if !isApiOnly {
-		if err := isDirExist(htmlDir); err != nil {
-			isApiOnly = true
-			omppLog.Log("Warning: serving API only because UI directory not found: ", filepath.Join(theCfg.rootDir, htmlDir))
-		}
+	// model directory required to build initial list of model sqlite files
+	modelLogDir := runOpts.String(modelLogDirArgKey)
+	modelDir := filepath.Clean(runOpts.String(modelDirArgKey))
+	if modelDir == "" || modelDir == "." {
+		return errors.New("Error: model directory argument cannot be empty or . dot")
+	}
+	omppLog.Log("Model directory: ", modelDir)
+
+	if err := theCatalog.refreshSqlite(modelDir, modelLogDir); err != nil {
+		return err
 	}
 
 	// check if it is single user run mode and use of home directory enabled
@@ -266,7 +298,10 @@ func mainBody(args []string) error {
 			omppLog.Log("Warning: user home directory not found: ", theCfg.homeDir)
 			theCfg.homeDir = ""
 		}
-		theCfg.isSingleUser = theCfg.homeDir != ""
+		theCfg.isHome = theCfg.homeDir != ""
+		if theCfg.isHome {
+			omppLog.Log("User directory: ", theCfg.homeDir)
+		}
 	}
 
 	// check download and upload options:
@@ -321,25 +356,33 @@ func mainBody(args []string) error {
 		}
 	}
 
-	// model directory required to build initial list of model sqlite files
-	modelLogDir := runOpts.String(modelLogDirArgKey)
-	modelDir := filepath.Clean(runOpts.String(modelDirArgKey))
-	if modelDir == "" || modelDir == "." {
-		return errors.New("Error: model directory argument cannot be empty or . dot")
+	// if UI required then server root directory must have html subdir
+	if !isApiOnly {
+		theCfg.htmlDir = runOpts.String(htmlDirArgKey)
+		if err := isDirExist(theCfg.htmlDir); err != nil {
+			isApiOnly = true
+			omppLog.Log("Warning: serving API only because UI directory not found: ", theCfg.htmlDir)
+		}
 	}
-	omppLog.Log("Model directory: ", modelDir)
 
-	if err := theCatalog.refreshSqlite(modelDir, modelLogDir); err != nil {
-		return err
+	// check if job control is required:
+	theCfg.jobDir = runOpts.String(jobDirArgKey)
+	if err := isJobDirValid(theCfg.jobDir); err != nil {
+		return errors.New("Error: invalid job control directory: " + err.Error())
+	}
+	theCfg.isJobControl = theCfg.jobDir != ""
+	if theCfg.isJobControl {
+		omppLog.Log("Job directory: ", theCfg.jobDir)
 	}
 
 	// etc subdirectory required to run MPI models
-	if err := isDirExist(etcDir); err != nil {
-		omppLog.Log("Warning: templates directory not found, it is required to run models on MPI cluster: ", filepath.Join(theCfg.rootDir, etcDir))
+	theCfg.etcDir = runOpts.String(etcDirArgKey)
+	if err := isDirExist(theCfg.etcDir); err != nil {
+		omppLog.Log("Warning: configuration files directory not found, it is required to run models on MPI cluster: ", filepath.Join(theCfg.etcDir))
 	}
 
 	// refresh run state catalog and start scanning model log files
-	if err := theRunCatalog.refreshCatalog(etcDir); err != nil {
+	if err := theRunCatalog.refreshCatalog(theCfg.etcDir); err != nil {
 		return err
 	}
 
@@ -402,6 +445,13 @@ func mainBody(args []string) error {
 	// initialize server
 	addr := runOpts.String(listenArgKey)
 	srv := http.Server{Addr: addr, Handler: router}
+
+	// make instance name, use address to listen if name not specified
+	theCfg.omsName = runOpts.String(omsNameArgKey)
+	if theCfg.omsName == "" {
+		theCfg.omsName = addr
+	}
+	theCfg.omsName = helper.CleanPath(theCfg.omsName)
 
 	// add shutdown handler, it does not wait for requests, it does reset connections and exit
 	// PUT /api/admin/shutdown
@@ -495,7 +545,7 @@ func exitOnPanic() {
 // homeHandler is static pages handler for front-end UI served on web / root.
 // Only GET requests expected.
 func homeHandler(w http.ResponseWriter, r *http.Request) {
-	setContentType(http.FileServer(http.Dir(htmlDir))).ServeHTTP(w, r)
+	setContentType(http.FileServer(http.Dir(theCfg.htmlDir))).ServeHTTP(w, r)
 }
 
 // downloadHandler is static file download handler from user home/io/download and home/io/upload folders.

@@ -59,6 +59,7 @@ type RunRequest struct {
 	ModelName   string            // model name to run
 	ModelDigest string            // model digest to run
 	RunStamp    string            // run stamp, if empty then auto-generated as timestamp
+	SubmitStamp string            // submission timestamp
 	Dir         string            // working directory to run the model, if relative then must be relative to oms root directory
 	Opts        map[string]string // model run options
 	Env         map[string]string // environment variables to set
@@ -79,6 +80,7 @@ type RunState struct {
 	ModelName      string // model name
 	ModelDigest    string // model digest
 	RunStamp       string // model run stamp, may be auto-generated as timestamp
+	SubmitStamp    string // submission timestamp
 	IsFinal        bool   // final state, model completed
 	UpdateDateTime string // last update date-time
 	RunName        string // if not empty then run name

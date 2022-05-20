@@ -17,7 +17,7 @@ import (
 // If no model view file in user home directory then response is 200 OK with is empty {} json payload
 func userViewGetHandler(w http.ResponseWriter, r *http.Request) {
 
-	if !theCfg.isSingleUser {
+	if !theCfg.isHome {
 		http.Error(w, "Forbidden: model view reading disabled on the server", http.StatusForbidden)
 		return
 	}
@@ -56,7 +56,7 @@ func userViewGetHandler(w http.ResponseWriter, r *http.Request) {
 // If file name already exist in home directory it is truncated.
 func userViewPutHandler(w http.ResponseWriter, r *http.Request) {
 
-	if !theCfg.isSingleUser {
+	if !theCfg.isHome {
 		http.Error(w, "Forbidden: model view saving disabled on the server", http.StatusForbidden)
 		return
 	}
@@ -80,7 +80,7 @@ func userViewPutHandler(w http.ResponseWriter, r *http.Request) {
 // If multiple models with same name exist only one is used.
 func userViewDeleteHandler(w http.ResponseWriter, r *http.Request) {
 
-	if !theCfg.isSingleUser {
+	if !theCfg.isHome {
 		http.Error(w, "Forbidden: model view saving disabled on the server", http.StatusForbidden)
 		return
 	}

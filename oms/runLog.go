@@ -51,7 +51,7 @@ func (rsc *RunCatalog) readModelRunLog(digest, runStamp string, start, count int
 		lines := []string{}
 		if lrp.RunState.IsLog {
 
-			if lines, isOk = rsc.readLogFile(lrp.logPath); isOk && len(lines) > 0 {
+			if lines, isOk = readLogFile(lrp.logPath); isOk && len(lines) > 0 {
 				lrp.Offset, lrp.Size, lrp.Lines = getLinesPage(start, count, lines) // make log page to return
 				lrp.TotalSize = len(lines)
 			}
@@ -160,7 +160,7 @@ func (rsc *RunCatalog) getRunStateLogPage(digest, runStamp string, start, count 
 }
 
 // read all non-empty text lines from log file.
-func (rsc *RunCatalog) readLogFile(logPath string) ([]string, bool) {
+func readLogFile(logPath string) ([]string, bool) {
 
 	if logPath == "" {
 		return []string{}, false // empty log file path: exit

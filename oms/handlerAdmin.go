@@ -14,7 +14,7 @@ import (
 func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 
 	st := struct {
-		RootDir           string             // server root directory
+		OmsName           string             // server instance name
 		RowPageMaxSize    int64              // default "page" size: row count to read parameters or output tables
 		RunHistoryMaxSize int                // max number of model run states to keep in run list history
 		DoubleFmt         string             // format to convert float or double value to string
@@ -27,11 +27,11 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 		ModelCatalog      ModelCatalogConfig // "public" state of model catalog
 		RunCatalog        RunCatalogConfig   // "public" state of model run catalog
 	}{
-		RootDir:           theCfg.rootDir,
+		OmsName:           theCfg.omsName,
 		RowPageMaxSize:    theCfg.pageMaxSize,
 		RunHistoryMaxSize: theCfg.runHistoryMaxSize,
 		DoubleFmt:         theCfg.doubleFmt,
-		AllowUserHome:     theCfg.isSingleUser,
+		AllowUserHome:     theCfg.isHome,
 		AllowDownload:     theCfg.downloadDir != "",
 		AllowUpload:       theCfg.uploadDir != "",
 		Env:               theCfg.env,
@@ -63,7 +63,7 @@ func allModelsRefreshHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// refresh run state catalog
-	if err := theRunCatalog.refreshCatalog(etcDir); err != nil {
+	if err := theRunCatalog.refreshCatalog(theCfg.etcDir); err != nil {
 		omppLog.Log(err)
 		http.Error(w, "Failed to refersh model runs catalog", http.StatusBadRequest)
 		return

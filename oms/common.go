@@ -359,6 +359,33 @@ func fileStat(filePath string) (fs.FileInfo, error) {
 	return fi, nil
 }
 
+// Delete file and log it if isLog is true, return false on delete error.
+func fileDleteAndLog(isLog bool, path string) bool {
+	if isLog {
+		omppLog.Log("Delete: ", path)
+	}
+	if e := os.Remove(path); e != nil && !os.IsNotExist(e) {
+		omppLog.Log(e)
+		return false
+	}
+	return true
+}
+
+// Delete file and log it if isLog is true, return false on delete error.
+func fileMoveAndLog(isLog bool, srcPath string, dstPath string) bool {
+	if srcPath == "" || dstPath == "" {
+		return false
+	}
+	if isLog {
+		omppLog.Log("Move: ", srcPath, " To: ", dstPath)
+	}
+	if e := os.Rename(srcPath, dstPath); e != nil && !os.IsNotExist(e) {
+		omppLog.Log(e)
+		return false
+	}
+	return true
+}
+
 // dbcopyPath return path to dbcopy.exe, it is expected to be in the same directory as oms.exe.
 // argument omsAbsPath expected to be /absolute/path/to/oms.exe
 func dbcopyPath(omsAbsPath string) string {
