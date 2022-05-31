@@ -9,6 +9,7 @@
       "Descr": "Utiliser les options d'exécution du modèle par défaut"
     }
   ],
+  "subCount": 1,
   "threadCount": 1,
   "workDir": "",
   "csvDir": "",
