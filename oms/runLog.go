@@ -7,11 +7,13 @@ import (
 	"bufio"
 	"io"
 	"os"
+	"path/filepath"
+	"sort"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/openmpp/go/ompp/db"
-
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
@@ -217,4 +219,135 @@ func getLinesPage(offset, count int, logLines []string) (int, int, []string) {
 	copy(lines, logLines[offset:offset+count])
 
 	return offset, count, lines
+}
+
+// scan model log directories to collect list log files for each model run history
+func scanModelLogDirs(doneC <-chan bool) {
+
+	// path to model run log file found by log directory scan
+	type logItem struct {
+		runId       int    // model run id
+		runStamp    string // model run stamp
+		runName     string // model run name
+		isCompleted bool   // if true then run completed
+		updateDt    string // last update date-time
+	}
+
+	for {
+		// get current models from run catalog and main catalog
+		rbs := theRunCatalog.allModels()
+		dLst := theCatalog.allModelDigests()
+		sort.Strings(dLst)
+
+		// find new model runs since last scan
+		for dgst, it := range rbs {
+
+			// skip model if digest does not exist in main catalog, ie: catalog closed
+			if i := sort.SearchStrings(dLst, dgst); i < 0 || i >= len(dLst) || dLst[i] != dgst {
+				continue
+			}
+
+			// model log directory path must be not empty to search for log files
+			if !it.isLogDir {
+				continue
+			}
+			if it.logDir == "" {
+				it.logDir = "." // assume current directory if log directory not specified but eanbled by isLogDir
+			}
+			it.logDir = filepath.ToSlash(it.logDir) // use / path separator
+
+			// get list of model runs
+			rl, ok := theCatalog.RunRowListByModelDigest(dgst)
+			if !ok || len(rl) <= 0 {
+				continue // no model runs (or ignore get runs error)
+			}
+
+			// append new runs to model run list
+			logLst := make([]logItem, len(rl))
+
+			for k := range rl {
+				logLst[k] = logItem{
+					runId:       rl[k].RunId,
+					runStamp:    rl[k].RunStamp,
+					runName:     rl[k].Name,
+					isCompleted: db.IsRunCompleted(rl[k].Status),
+					updateDt:    rl[k].UpdateDateTime,
+				}
+			}
+
+			// get list of model run log files
+			ptrn := it.logDir + "/" + it.name + "." + "*.log"
+
+			fLst, err := filepath.Glob(ptrn)
+			if err != nil {
+				omppLog.Log("Error at log files search: ", ptrn)
+				continue
+			}
+
+			// replace path separators by / and sort file paths list
+			for k := range fLst {
+				fLst[k] = filepath.ToSlash(fLst[k])
+			}
+			sort.Strings(fLst) // sort by file path
+
+			// search new model runs to find log file path
+			// append run state to run state list ordered by run id
+			rsLst := []RunState{}
+			for k := 0; k < len(logLst); k++ {
+
+				// search for modelName.runStamp.console.log
+				fn := it.logDir + "/" + it.name + "." + logLst[k].runStamp + ".console.log"
+				n := sort.SearchStrings(fLst, fn)
+				isFound := n < len(fLst) && fLst[n] == fn
+
+				// search for modelName.runStamp.log
+				if !isFound {
+					fn = it.logDir + "/" + it.name + "." + logLst[k].runStamp + ".log"
+					n = sort.SearchStrings(fLst, fn)
+					isFound = n < len(fLst) && fLst[n] == fn
+				}
+
+				if isFound {
+					rsLst = append(rsLst,
+						RunState{
+							ModelName:      it.name,
+							ModelDigest:    dgst,
+							RunStamp:       logLst[k].runStamp,
+							IsFinal:        logLst[k].isCompleted,
+							UpdateDateTime: logLst[k].updateDt,
+							RunName:        logLst[k].runName,
+							IsLog:          true,
+							LogFileName:    filepath.Base(fn),
+							logPath:        fn,
+							isHistory:      true,
+						})
+				}
+			}
+
+			// add new log file names to model log list and update most recent run id for that model
+			theRunCatalog.addModelLogs(dgst, rsLst)
+		}
+
+		// wait for doneC or sleep
+		select {
+		case <-doneC:
+			return
+		case <-time.After(logScanInterval * time.Millisecond):
+		}
+	}
+}
+
+// add new log file names to model log list
+// if run stamp already exist in model run history then replace run state with more recent data
+func (rsc *RunCatalog) addModelLogs(digest string, runStateLst []RunState) {
+	rsc.rscLock.Lock()
+	defer rsc.rscLock.Unlock()
+
+	// add new runs to model run history
+	for _, r := range runStateLst {
+
+		if ml, ok := rsc.modelLogs[digest]; ok { // skip model if not exist
+			ml[r.RunStamp] = r
+		}
+	}
 }

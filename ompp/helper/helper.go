@@ -19,6 +19,8 @@ import (
 	"unicode"
 )
 
+const TimeStampLength = len("2012_08_17_16_04_59_148") // length of timestap string
+
 // UnQuote trim spaces and remove "double" or 'single' quotes around string
 func UnQuote(src string) string {
 	s := strings.TrimSpace(src)

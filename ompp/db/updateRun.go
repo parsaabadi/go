@@ -9,7 +9,26 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
+
+	"github.com/openmpp/go/ompp/helper"
 )
+
+// UpdateRunStatus updates run status to the one of run completed: s=success, x=exit, e=error.
+func UpdateRunStatus(dbConn *sql.DB, runId int, status string) error {
+
+	if runId <= 0 {
+		return errors.New("invalid run id: " + strconv.Itoa(runId))
+	}
+	if status != DoneRunStatus && status != ExitRunStatus && status != ErrorRunStatus {
+		return errors.New("invalid run status:" + status + " , it must be one of: s=success, x=exit, e=error")
+	}
+
+	return Update(dbConn,
+		"UPDATE run_lst"+
+			" SET status = "+ToQuoted(status)+", update_dt = "+ToQuoted(helper.MakeDateTime(time.Now()))+
+			" WHERE run_id = "+strconv.Itoa(runId))
+}
 
 // RenameRun do rename model run if new name is not empty "" string.
 func RenameRun(dbConn *sql.DB, runId int, newRunName string) (bool, error) {

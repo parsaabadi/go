@@ -10,6 +10,54 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
+// UpdateRunStatus updates run status to the one of run completed: s=success, x=exit, e=error.
+func (mc *ModelCatalog) UpdateRunStatus(dn, rdsn string, status string) (bool, error) {
+
+	// if model digest-or-name or run digest-or-name name is empty then return empty results
+	if dn == "" {
+		omppLog.Log("Warning: invalid (empty) model digest and name")
+		return false, nil
+	}
+	if rdsn == "" {
+		omppLog.Log("Warning: invalid (empty) model run digest, stamp and name")
+		return false, nil
+	}
+
+	// if model metadata not loaded then read it from database
+	if _, ok := mc.loadModelMeta(dn); !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return false, nil // return empty result: model not found or error
+	}
+
+	// lock catalog and delete model run
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return false, nil // return empty result: model not found or error
+	}
+
+	// find model run by digest, stamp or run name
+	r, err := db.GetRunByDigestOrStampOrName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, rdsn)
+	if err != nil {
+		omppLog.Log("Error at get model run: ", dn, ": ", rdsn, ": ", err.Error())
+		return false, err
+	}
+	if r == nil {
+		return false, nil // return OK: model run not found
+	}
+
+	// update run status
+	err = db.UpdateRunStatus(mc.modelLst[idx].dbConn, r.RunId, status)
+	if err != nil {
+		omppLog.Log("Error at run status update: ", dn, ": ", rdsn, ": ", err.Error())
+		return false, err
+	}
+	return true, nil
+}
+
 // DeleteRun do delete  model run including output table values and run input parameters.
 func (mc *ModelCatalog) DeleteRun(dn, rdsn string) (bool, error) {
 

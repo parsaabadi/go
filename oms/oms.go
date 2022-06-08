@@ -294,7 +294,7 @@ func mainBody(args []string) error {
 
 	// check if it is single user run mode and use of home directory enabled
 	if theCfg.homeDir = runOpts.String(homeDirArgKey); theCfg.homeDir != "" {
-		if err := isDirExist(theCfg.homeDir); err != nil {
+		if err := dirExist(theCfg.homeDir); err != nil {
 			omppLog.Log("Warning: user home directory not found: ", theCfg.homeDir)
 			theCfg.homeDir = ""
 		}
@@ -315,7 +315,7 @@ func mainBody(args []string) error {
 
 			theCfg.inOutDir = filepath.Join(theCfg.homeDir, "io") // download and upload directory for web-server, to serve static content
 
-			if err = isDirExist(theCfg.inOutDir); err == nil {
+			if err = dirExist(theCfg.inOutDir); err == nil {
 				theCfg.dbcopyPath = dbcopyPath(omsAbsPath)
 			}
 		}
@@ -330,7 +330,7 @@ func mainBody(args []string) error {
 
 			theCfg.downloadDir = filepath.Join(theCfg.inOutDir, "download") // download directory UI
 
-			if err = isDirExist(theCfg.downloadDir); err != nil {
+			if err = dirExist(theCfg.downloadDir); err != nil {
 				theCfg.downloadDir = ""
 			}
 		}
@@ -345,7 +345,7 @@ func mainBody(args []string) error {
 
 			theCfg.uploadDir = filepath.Join(theCfg.inOutDir, "upload") // upload directory UI
 
-			if err = isDirExist(theCfg.uploadDir); err != nil {
+			if err = dirExist(theCfg.uploadDir); err != nil {
 				theCfg.uploadDir = ""
 			}
 		}
@@ -359,7 +359,7 @@ func mainBody(args []string) error {
 	// if UI required then server root directory must have html subdir
 	if !isApiOnly {
 		theCfg.htmlDir = runOpts.String(htmlDirArgKey)
-		if err := isDirExist(theCfg.htmlDir); err != nil {
+		if err := dirExist(theCfg.htmlDir); err != nil {
 			isApiOnly = true
 			omppLog.Log("Warning: serving API only because UI directory not found: ", theCfg.htmlDir)
 		}
@@ -377,7 +377,7 @@ func mainBody(args []string) error {
 
 	// etc subdirectory required to run MPI models
 	theCfg.etcDir = runOpts.String(etcDirArgKey)
-	if err := isDirExist(theCfg.etcDir); err != nil {
+	if err := dirExist(theCfg.etcDir); err != nil {
 		omppLog.Log("Warning: configuration files directory not found, it is required to run models on MPI cluster: ", filepath.Join(theCfg.etcDir))
 	}
 
@@ -386,8 +386,19 @@ func mainBody(args []string) error {
 		return err
 	}
 
-	doneScanC := make(chan bool)
-	go scanModelLogDirs(doneScanC)
+	doneLogScanC := make(chan bool)
+	go scanModelLogDirs(doneLogScanC)
+
+	// make instance name, use address to listen if name not specified
+	// start scanning for active jobs
+	theCfg.omsName = runOpts.String(omsNameArgKey)
+	if theCfg.omsName == "" {
+		theCfg.omsName = runOpts.String(listenArgKey)
+	}
+	theCfg.omsName = helper.CleanPath(theCfg.omsName)
+
+	doneJobScanC := make(chan bool)
+	go scanActiveJobs(doneJobScanC)
 
 	// set UI languages to find model text in browser language
 	ll := strings.Split(runOpts.String(uiLangsArgKey), ",")
@@ -445,13 +456,6 @@ func mainBody(args []string) error {
 	// initialize server
 	addr := runOpts.String(listenArgKey)
 	srv := http.Server{Addr: addr, Handler: router}
-
-	// make instance name, use address to listen if name not specified
-	theCfg.omsName = runOpts.String(omsNameArgKey)
-	if theCfg.omsName == "" {
-		theCfg.omsName = addr
-	}
-	theCfg.omsName = helper.CleanPath(theCfg.omsName)
 
 	// add shutdown handler, it does not wait for requests, it does reset connections and exit
 	// PUT /api/admin/shutdown
@@ -521,7 +525,8 @@ func mainBody(args []string) error {
 		}
 	}
 
-	doneScanC <- true
+	doneLogScanC <- true
+	doneJobScanC <- true
 	return err
 }
 
@@ -966,11 +971,15 @@ func apiRunModelRoutes(router *vestigo.Router) {
 	router.Get("/api/run/log/model/:model/stamp/:stamp/start/:start", runModelLogPageHandler, logRequest)
 	router.Get("/api/run/log/model/:model/stamp/:stamp/start/:start/count/:count", runModelLogPageHandler, logRequest)
 
+	// PUT /api/run/stop/model/:model/stamp/:stamp
+	router.Put("/api/run/stop/model/:model/stamp/:stamp", runModelStopHandler, logRequest)
+
 	// reject run log if request ill-formed
 	router.Get("/api/run/log/model/", http.NotFound)
 	router.Get("/api/run/log/model/:model/stamp/", http.NotFound)
 	router.Get("/api/run/log/model/:model/stamp/:stamp/start/", http.NotFound)
 	router.Get("/api/run/log/model/:model/stamp/:stamp/start/:start/count/", http.NotFound)
+	router.Put("/api/run/log/model/:model/stamp/", http.NotFound)
 }
 
 // add http web-service /api routes to download and manage files from home/io/download folder

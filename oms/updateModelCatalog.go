@@ -26,7 +26,7 @@ func (mc *ModelCatalog) refreshSqlite(modelDir, modelLogDir string) error {
 	// model directory must exist
 	isDir := modelDir != "" && modelDir != "."
 	if isDir {
-		isDir = isDirExist(modelDir) == nil
+		isDir = dirExist(modelDir) == nil
 	}
 	if !isDir {
 		return errors.New("Error: model directory not exist or not accesible: " + modelDir)
@@ -35,7 +35,7 @@ func (mc *ModelCatalog) refreshSqlite(modelDir, modelLogDir string) error {
 	// model log directory is optional, if empty or not exists then model log disabled
 	isLogDir := modelLogDir != "" && modelLogDir != "."
 	if isLogDir {
-		isLogDir = isDirExist(modelLogDir) == nil
+		isLogDir = dirExist(modelLogDir) == nil
 	}
 
 	// get list of model/dir/*.sqlite files

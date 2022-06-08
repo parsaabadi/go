@@ -331,3 +331,22 @@ func (typeRow *TypeDicRow) sqlColumnType(dbFacet Facet) (string, error) {
 func IsRunCompleted(status string) bool {
 	return status == DoneRunStatus || status == ExitRunStatus || status == ErrorRunStatus
 }
+
+// NameOfRunStatus return short name by run run status code: s=success, x=exit, e=error
+func NameOfRunStatus(status string) string {
+	switch status {
+	case InitRunStatus:
+		return "init"
+	case ProgressRunStatus:
+		return "progress"
+	case WaitRunStatus:
+		return "wait"
+	case DoneRunStatus:
+		return "success"
+	case ExitRunStatus:
+		return "exit"
+	case ErrorRunStatus:
+		return "error"
+	}
+	return "unknown"
+}

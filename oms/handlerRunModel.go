@@ -5,6 +5,7 @@ package main
 
 import (
 	"net/http"
+	"strconv"
 
 	"golang.org/x/text/language"
 
@@ -47,16 +48,16 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 	req.ModelName = m.Name
 
 	// if job control enabled then add model run to queue
-	req.SubmitStamp, _ = theCatalog.getNewTimeStamp()
+	submitStamp, _ := theCatalog.getNewTimeStamp()
 
-	e := addJobToQueue(&req)
+	e := addJobToQueue(submitStamp, &req)
 	if e != nil {
 		http.Error(w, "Model run submission failed: "+dn, http.StatusBadRequest)
 		return
 	}
 
 	// start model run
-	prs, e := theRunCatalog.runModel(&req)
+	prs, e := theRunCatalog.runModel(submitStamp, &req)
 	if e != nil {
 		omppLog.Log(e)
 		http.Error(w, "Model start failed: "+dn, http.StatusBadRequest)
@@ -66,6 +67,31 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 	// write new model run key and json response
 	w.Header().Set("Content-Location", "/api/model/"+req.ModelDigest+"/run/"+prs.RunStamp)
 	jsonResponse(w, r, prs)
+}
+
+// runModelStopHandler kill model run by model digest-or-name and run stamp or remove model run request from queue by submit stamp.
+// PUT /api/run/stop/model/:model/stamp/:stamp
+// If multiple models with same name exist then result is undefined.
+func runModelStopHandler(w http.ResponseWriter, r *http.Request) {
+
+	// url or query parameters:  model digest-or-name, page offset and page size
+	dn := getRequestParam(r, "model")
+	stamp := getRequestParam(r, "stamp")
+
+	// find model metadata by digest or name
+	m, ok := theCatalog.ModelDicByDigestOrName(dn)
+	if !ok {
+		http.Error(w, "Model not found: "+dn, http.StatusBadRequest)
+		return // empty result: model digest not found
+	}
+	modelDigest := m.Digest
+
+	// kill model run by run stamp or
+	// remove run request from the queue by submit stamp or by run stamp
+	isDone := theRunCatalog.stopModelRun(modelDigest, stamp)
+
+	// write new model run key and json response
+	w.Header().Set("Content-Location", "/api/model/"+modelDigest+"/run/"+stamp+"/"+strconv.FormatBool(isDone))
 }
 
 // runModelLogPageHandler return model run status and log by model digest-or-name and run stamp.

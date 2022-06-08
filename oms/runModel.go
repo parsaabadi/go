@@ -10,11 +10,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"text/template"
 	"time"
 
+	"github.com/openmpp/go/ompp/db"
 	"github.com/openmpp/go/ompp/helper"
 	"github.com/openmpp/go/ompp/omppLog"
 )
@@ -22,7 +22,7 @@ import (
 // runModel starts new model run and return run stamp.
 // if run stamp not specified as input parameter then use unique timestamp.
 // Model run console output redirected to log file: models/log/modelName.runStamp.console.log
-func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
+func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState, error) {
 
 	// make model process run stamp, if not specified then use timestamp by default
 	ts, dtNow := theCatalog.getNewTimeStamp()
@@ -36,7 +36,7 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 		ModelName:      req.ModelName,
 		ModelDigest:    req.ModelDigest,
 		RunStamp:       rStamp,
-		SubmitStamp:    req.SubmitStamp,
+		SubmitStamp:    submitStamp,
 		UpdateDateTime: helper.MakeDateTime(dtNow),
 	}
 
@@ -49,7 +49,7 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 	if !ok {
 		err := errors.New("Model not found: " + rs.ModelName + ": " + rs.ModelDigest)
 		omppLog.Log("Model run error: ", err)
-		moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName)
+		moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
 		rs.IsFinal = true
 		return rs, err // exit with error: model failed to start
 	}
@@ -139,7 +139,7 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 		}
 		if e != nil {
 			omppLog.Log("Model run error: ", e)
-			moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName)
+			moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
 			rs.IsFinal = true
 			return rs, e
 		}
@@ -154,7 +154,7 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 		if !rs.IsLog {
 			e := errors.New("Unable to save run notes: " + rs.ModelName + ": " + rs.ModelDigest)
 			omppLog.Log("Model run error: ", e)
-			moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName)
+			moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
 			rs.IsFinal = true
 			return rs, e
 		}
@@ -165,7 +165,7 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 		}
 		if e != nil {
 			omppLog.Log("Model run error: ", e)
-			moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName)
+			moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
 			rs.IsFinal = true
 			return rs, e
 		}
@@ -179,7 +179,7 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 	cmd, err := rsc.makeCommand(mExe, binDir, wDir, mb.dbPath, mArgs, req)
 	if err != nil {
 		omppLog.Log("Error at starting model: ", err)
-		moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName)
+		moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
 		rs.IsFinal = true
 		return rs, errors.New("Error at starting model " + rs.ModelName + ": " + err.Error())
 	}
@@ -188,55 +188,59 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 	outPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		omppLog.Log("Error at starting model: ", err)
-		moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName)
+		moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
 		rs.IsFinal = true
 		return rs, errors.New("Error at starting model " + rs.ModelName + ": " + err.Error())
 	}
 	errPipe, err := cmd.StderrPipe()
 	if err != nil {
 		omppLog.Log("Error at starting model: ", err)
-		moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName)
+		moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
 		rs.IsFinal = true
 		return rs, errors.New("Error at starting model " + rs.ModelName + ": " + err.Error())
 	}
 	outDoneC := make(chan bool, 1)
 	errDoneC := make(chan bool, 1)
+	killC := make(chan bool, 1)
 	logTck := time.NewTicker(logTickTimeout * time.Millisecond)
 
 	// append console output to log lines array
-	doLog := func(digest, runStamp string, r io.Reader, done chan<- bool) {
+	doLog := func(rState *RunState, r io.Reader, done chan<- bool) {
 		sc := bufio.NewScanner(r)
 		for sc.Scan() {
-			rsc.updateRunState(digest, runStamp, false, sc.Text())
+			rsc.updateRunStateLog(rState, false, sc.Text())
 		}
 		done <- true
 		close(done)
 	}
 
 	// run state initialized: save in run state list
-	rsc.createProcRunState(rs)
+	// create model run log file
+	rsc.createRunStateLog(rs)
 
 	// start console output listners
-	go doLog(rs.ModelDigest, rs.RunStamp, outPipe, outDoneC)
-	go doLog(rs.ModelDigest, rs.RunStamp, errPipe, errDoneC)
+	go doLog(rs, outPipe, outDoneC)
+	go doLog(rs, errPipe, errDoneC)
 
 	// start the model
 	omppLog.Log("Run model: ", mExe, " in directory: ", wDir)
 	omppLog.Log(strings.Join(cmd.Args, " "))
+	rsc.updateRunStateProcess(rs, false, cmd.Path, 0, killC)
 
 	err = cmd.Start()
 	if err != nil {
 		omppLog.Log("Model run error: ", err)
-		moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName)
-		rsc.updateRunState(rs.ModelDigest, rs.RunStamp, true, err.Error())
+		moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
+		rsc.updateRunStateLog(rs, true, err.Error())
 		rs.IsFinal = true
 		return rs, err // exit with error: model failed to start
 	}
-	// else model started: wait until run completed
-	pid := cmd.Process.Pid
-	moveJobToActive(rs.SubmitStamp, rs.ModelName, pid)
+	// else model started
+	rsc.updateRunStateProcess(rs, false, cmd.Path, cmd.Process.Pid, killC)
+	moveJobToActive(rs.SubmitStamp, rs.ModelName, rs.ModelDigest, rStamp, cmd.Process.Pid, cmd.Path)
 
-	go func(digest, runStamp, submitStamp, modelName string, cmd *exec.Cmd) {
+	//  wait until run completed or terminated
+	go func(rState *RunState, cmd *exec.Cmd) {
 
 		// wait until stdout and stderr closed
 		for outDoneC != nil || errDoneC != nil {
@@ -249,6 +253,16 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 				if !ok {
 					errDoneC = nil
 				}
+			case isKill, ok := <-killC:
+				if !ok {
+					killC = nil
+				}
+				if isKill && ok {
+					omppLog.Log("Kill run: ", rState.ModelName, " ", rState.ModelDigest, " ", rState.RunName, " ", rState.RunStamp)
+					if e := cmd.Process.Kill(); e != nil {
+						omppLog.Log(e)
+					}
+				}
 			case <-logTck.C:
 			}
 		}
@@ -256,16 +270,20 @@ func (rsc *RunCatalog) runModel(req *RunRequest) (*RunState, error) {
 		// wait for model run to be completed
 		e := cmd.Wait()
 		if e != nil {
-			omppLog.Log(e)
-			rsc.updateRunState(digest, runStamp, true, e.Error())
-			moveJobToHistory(false, submitStamp, modelName, pid)
+			omppLog.Log("Model run error: ", e)
+			rsc.updateRunStateLog(rState, true, e.Error())
+			moveJobToHistory(db.ErrorRunStatus, rState.SubmitStamp, rState.ModelName, rState.ModelDigest, rState.RunStamp, cmd.Process.Pid)
+			_, e = theCatalog.UpdateRunStatus(rState.ModelDigest, rState.RunStamp, db.ErrorRunStatus)
+			if e != nil {
+				omppLog.Log(e)
+			}
 			return
 		}
 		// else: completed OK
-		rsc.updateRunState(digest, runStamp, true, "")
-		moveJobToHistory(true, submitStamp, modelName, pid)
+		rsc.updateRunStateLog(rState, true, "")
+		moveJobToHistory(db.DoneRunStatus, rState.SubmitStamp, rState.ModelName, rState.ModelDigest, rState.RunStamp, cmd.Process.Pid)
 
-	}(rs.ModelDigest, rs.RunStamp, rs.SubmitStamp, rs.ModelName, cmd)
+	}(rs, cmd)
 
 	return rs, nil
 }
@@ -318,6 +336,10 @@ func (rsc *RunCatalog) makeCommand(mExe, binDir, workDir, dbPath string, mArgs [
 		}
 
 		// set template parameters
+		wd, err := filepath.Abs(workDir)
+		if err != nil {
+			return nil, err
+		}
 		d := struct {
 			ModelName string            // model name
 			ExeStem   string            // base part of model exe name, usually modelName
@@ -330,7 +352,7 @@ func (rsc *RunCatalog) makeCommand(mExe, binDir, workDir, dbPath string, mArgs [
 		}{
 			ModelName: req.ModelName,
 			ExeStem:   mExe,
-			Dir:       workDir,
+			Dir:       wd,
 			BinDir:    binDir,
 			DbPath:    dbPath,
 			MpiNp:     req.Mpi.Np,
@@ -392,93 +414,4 @@ func (rsc *RunCatalog) makeCommand(mExe, binDir, workDir, dbPath string, mArgs [
 	}
 
 	return cmd, nil
-}
-
-// add new model run state into run history
-func (rsc *RunCatalog) createProcRunState(rs *RunState) {
-	if rs == nil {
-		return
-	}
-	rsc.rscLock.Lock()
-	defer rsc.rscLock.Unlock()
-
-	rsc.runLst.PushFront(
-		&runStateLog{
-			RunState:   *rs,
-			logLineLst: make([]string, 0, 128),
-		})
-	for rsc.runLst.Len() > theCfg.runHistoryMaxSize { // remove old run state from history
-		rsc.runLst.Remove(rsc.runLst.Back())
-	}
-
-	// create log file or truncate existing
-	if rs.IsLog {
-		f, err := os.Create(rs.logPath)
-		if err != nil {
-			rs.IsLog = false
-			return
-		}
-		defer f.Close()
-	}
-}
-
-// updateRunState does model run state update and append to model log lines array
-func (rsc *RunCatalog) updateRunState(digest, runStamp string, isFinal bool, msg string) {
-	if digest == "" || runStamp == "" {
-		return // model run undefined
-	}
-	dtNow := time.Now()
-
-	rsc.rscLock.Lock()
-	defer rsc.rscLock.Unlock()
-
-	// find model run state by digest and run stamp
-	// update model run state and append log message
-	var rs *runStateLog
-	var ok bool
-	for re := rsc.runLst.Front(); re != nil; re = re.Next() {
-
-		rs, ok = re.Value.(*runStateLog)
-		if !ok || rs == nil {
-			continue
-		}
-		ok = rs.ModelDigest == digest && rs.RunStamp == runStamp
-		if ok {
-			break
-		}
-	}
-	if !ok || rs == nil {
-		return // model run state not found
-	}
-	// run state found
-
-	// update run state and append new log line if not empty
-	rs.IsFinal = isFinal
-	rs.UpdateDateTime = helper.MakeDateTime(dtNow)
-	if msg != "" {
-		rs.logLineLst = append(rs.logLineLst, msg)
-	}
-
-	// write into model console log file
-	if rs.IsLog {
-
-		f, err := os.OpenFile(rs.logPath, os.O_APPEND|os.O_WRONLY, 0644)
-		if err != nil {
-			rs.IsLog = false
-			return
-		}
-		defer f.Close()
-
-		_, err = f.WriteString(msg)
-		if err == nil {
-			if runtime.GOOS == "windows" { // adjust newline for windows
-				_, err = f.WriteString("\r\n")
-			} else {
-				_, err = f.WriteString("\n")
-			}
-		}
-		if err != nil {
-			rs.IsLog = false
-		}
-	}
 }
