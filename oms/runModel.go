@@ -415,3 +415,53 @@ func (rsc *RunCatalog) makeCommand(mExe, binDir, workDir, dbPath string, mArgs [
 
 	return cmd, nil
 }
+
+// stopModelRun kill model run by run stamp or
+// remove run request from the queue by submit stamp or by run stamp
+func (rsc *RunCatalog) stopModelRun(modelDigest string, stamp string) bool {
+
+	dtNow := time.Now()
+
+	rsc.rscLock.Lock()
+	defer rsc.rscLock.Unlock()
+
+	// find model run state by digest and run stamp
+	// update model run state and append log message
+	var rs *runStateLog
+	var rsSubmit *runStateLog
+	var ok bool
+	for re := rsc.runLst.Front(); re != nil; re = re.Next() {
+
+		rs, ok = re.Value.(*runStateLog)
+		if !ok || rs == nil {
+			continue
+		}
+		ok = rs.ModelDigest == modelDigest && rs.RunStamp == stamp
+		if ok {
+			break
+		}
+		ok = rs.ModelDigest == modelDigest && rs.SubmitStamp == stamp
+		if ok {
+			rsSubmit = rs
+		}
+	}
+	// if model run stamp not found then check if submit stamp found
+	if !ok || rs == nil {
+		if rsSubmit == nil {
+			return false // no model run stamp and no submit stamp found
+		}
+		rs = rsSubmit // submit stamp found
+	}
+	rs.UpdateDateTime = helper.MakeDateTime(dtNow)
+
+	// kill model run if model is running
+	if rs.killC != nil {
+		rs.killC <- true
+		return true
+	}
+	// else remove request from the queue
+	rs.IsFinal = true
+	moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
+
+	return true
+}

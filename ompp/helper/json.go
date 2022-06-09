@@ -74,15 +74,28 @@ func ToJsonFile(jsonPath string, src interface{}) error {
 // ToJsonIndent return source conveted to json indeneted string.
 func ToJsonIndent(src interface{}) (string, error) {
 
-	srcJson, err := json.Marshal(src)
+	srcJson, err := json.MarshalIndent(src, "", "  ")
 	if err != nil {
-		return "", errors.New("json marshal error: " + err.Error())
+		return "", errors.New("json marshal indent error: " + err.Error())
 	}
-	var srcIndent bytes.Buffer
+	return string(srcJson), nil
+}
 
-	err = json.Indent(&srcIndent, srcJson, "", "  ")
+// ToJsonIndentFile convert source to json and write into jsonPath file.
+func ToJsonIndentFile(jsonPath string, src interface{}) error {
+
+	f, err := os.OpenFile(jsonPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
-		return "", errors.New("json indent error: " + err.Error())
+		return errors.New("json file create error: " + err.Error())
 	}
-	return srcIndent.String(), nil
+	defer f.Close()
+
+	enc := json.NewEncoder(f)
+	enc.SetIndent("", "  ")
+
+	enc.Encode(src)
+	if err != nil {
+		return errors.New("json encode error: " + err.Error())
+	}
+	return nil
 }

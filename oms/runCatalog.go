@@ -18,7 +18,7 @@ type RunCatalog struct {
 	runTemplates []string                       // list of model run templates
 	mpiTemplates []string                       // list of model MPI run templates
 	presets      []RunOptionsPreset             // list of preset run options
-	runLst       *list.List                     // list of model runs state (runStateLog) submitted through the service
+	runLst       *list.List                     // list of model runs state (runStateLog)
 	modelLogs    map[string]map[string]RunState // map each model digest to run stamps to run state and run log path
 }
 
@@ -186,8 +186,7 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string) error {
 	rLst := list.New()
 
 	if rsc.runLst != nil {
-		n := 0
-		for re := rsc.runLst.Front(); n < theCfg.runHistoryMaxSize && re != nil; re = re.Next() {
+		for re := rsc.runLst.Front(); re != nil; re = re.Next() {
 
 			rs, ok := re.Value.(*runStateLog) // model run state expected
 			if !ok || rs == nil {
@@ -195,7 +194,6 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string) error {
 			}
 			if _, ok = rbs[rs.ModelDigest]; ok { // copy existing run history
 				rLst.PushBack(rs)
-				n++
 			}
 		}
 	}

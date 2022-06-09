@@ -78,7 +78,7 @@ func (rsc *RunCatalog) postRunStateLog(digest string, runState RunState, logLine
 	// update model run state and append log message
 	var rs *runStateLog
 	var ok bool
-	for re := rsc.runLst.Back(); re != nil; re = re.Prev() {
+	for re := rsc.runLst.Front(); re != nil; re = re.Next() {
 
 		rs, ok = re.Value.(*runStateLog)
 		if !ok || rs == nil {
@@ -97,7 +97,7 @@ func (rsc *RunCatalog) postRunStateLog(digest string, runState RunState, logLine
 			rs.logLineLst = logLines
 		}
 	} else {
-		rsc.runLst.PushBack(
+		rsc.runLst.PushFront(
 			&runStateLog{
 				RunState:   runState,
 				logLineLst: logLines,
@@ -328,6 +328,9 @@ func scanModelLogDirs(doneC <-chan bool) {
 			theRunCatalog.addModelLogs(dgst, rsLst)
 		}
 
+		// clear old entries entries in run state list
+		theRunCatalog.clearRunStateList()
+
 		// wait for doneC or sleep
 		select {
 		case <-doneC:
@@ -348,6 +351,28 @@ func (rsc *RunCatalog) addModelLogs(digest string, runStateLst []RunState) {
 
 		if ml, ok := rsc.modelLogs[digest]; ok { // skip model if not exist
 			ml[r.RunStamp] = r
+		}
+	}
+}
+
+// remove least recent used entries from run state list
+func (rsc *RunCatalog) clearRunStateList() {
+	rsc.rscLock.Lock()
+	defer rsc.rscLock.Unlock()
+
+	// remove old run state if status is final (if run completed)
+	n := 0
+	for re := rsc.runLst.Front(); re != nil && rsc.runLst.Len() > theCfg.runHistoryMaxSize; re = re.Next() {
+
+		rs, ok := re.Value.(*runStateLog) // model run state expected
+
+		if !ok || rs == nil || !rs.IsFinal { // skip if run is not completed
+			continue
+		}
+
+		n++
+		if n > theCfg.runHistoryMaxSize {
+			rsc.runLst.Remove(re)
 		}
 	}
 }

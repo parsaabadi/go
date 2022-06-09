@@ -89,7 +89,7 @@ By default float and double values converted into text with "%.15g" format.
 It is used only for compatibility with old Windows files.
 
   -oms.MaxRunHistory 100
-max number of model runs to keep in run list history, default: 100.
+max number of completed model runs to keep in run list history, default: 100.
 
 Also oms support OpenM++ standard log settings (described in openM++ wiki):
   -OpenM.LogToConsole:     if true then log to standard output, default: true
@@ -143,11 +143,11 @@ const (
 	uiLangsArgKey        = "oms.Languages"     // list of supported languages
 	encodingArgKey       = "oms.CodePage"      // code page for converting source files, e.g. windows-1252
 	pageSizeAgrKey       = "oms.MaxRowCount"   // max number of rows to return from read parameters or output tables
-	runHistorySizeAgrKey = "oms.MaxRunHistory" // max number of model runs to keep in run list history
+	runHistorySizeAgrKey = "oms.MaxRunHistory" // max number of completed model runs to keep in run list history
 	doubleFormatArgKey   = "oms.DoubleFormat"  // format to convert float or double value to string, e.g. %.15g
 )
 
-// max number of model run states to keep in run list history
+// max number of completed model run states to keep in run list history
 const runHistoryDefaultSize int = 100
 
 // server run configuration
@@ -165,7 +165,7 @@ var theCfg = struct {
 	omsName           string            // oms instance name, if empty then derived from address to listen
 	dbcopyPath        string            // if download or upload allowed then it is path to dbcopy.exe
 	pageMaxSize       int64             // default "page" size: row count to read parameters or output tables
-	runHistoryMaxSize int               // max number of model run states to keep in run list history
+	runHistoryMaxSize int               // max number of completed model run states to keep in run list history
 	doubleFmt         string            // format to convert float or double value to string
 	env               map[string]string // server config environmemt variables
 }{
@@ -367,7 +367,7 @@ func mainBody(args []string) error {
 
 	// check if job control is required:
 	theCfg.jobDir = runOpts.String(jobDirArgKey)
-	if err := isJobDirValid(theCfg.jobDir); err != nil {
+	if err := jobDirValid(theCfg.jobDir); err != nil {
 		return errors.New("Error: invalid job control directory: " + err.Error())
 	}
 	theCfg.isJobControl = theCfg.jobDir != ""

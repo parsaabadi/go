@@ -29,11 +29,11 @@ type RunJob struct {
 // timeout in msec, sleep interval between scanning job directory
 const jobScanInterval = 5021
 
-// isJobDirValid checking job control configuration.
+// jobDirValid checking job control configuration.
 // if job control directory is empty then job control disabled.
 // if job control directory not empty then it must have active, queue and history subdirectories.
 // if state.json exists then it must be a valid configuration file.
-func isJobDirValid(jobDir string) error {
+func jobDirValid(jobDir string) error {
 
 	if jobDir == "" {
 		return nil // job control disabled
@@ -134,7 +134,7 @@ func addJobToQueue(stamp string, req *RunRequest) error {
 
 	fn := jobQueuePath(stamp, req.ModelName, req.ModelDigest)
 
-	err := helper.ToJsonFile(fn,
+	err := helper.ToJsonIndentFile(fn,
 		&RunJob{
 			SubmitStamp: stamp,
 			RunRequest:  *req,
@@ -175,7 +175,7 @@ func moveJobToActive(submitStamp, modelName, modelDigest, runStamp string, pid i
 
 	fileDleteAndLog(false, src) // remove job control file from queue
 
-	err = helper.ToJsonFile(dst, &jc)
+	err = helper.ToJsonIndentFile(dst, &jc)
 	if err != nil {
 		omppLog.Log(err)
 		fileDleteAndLog(true, dst) // on error remove file, if any file created
@@ -231,7 +231,7 @@ func moveJobQueueToFailed(submitStamp, modelName, modelDigest string) bool {
 	return true
 }
 
-// find model run state by model digest and submission stamp
+// find model run state by model digest and submission stamp, if not found then return false and empty RunState
 func (rsc *RunCatalog) getRunStateBySubmitStamp(digest, stamp string) (bool, RunState) {
 	if digest == "" || stamp == "" {
 		return false, RunState{}
@@ -270,9 +270,6 @@ func (rsc *RunCatalog) createRunStateLog(rState *RunState) {
 			RunState:   *rState,
 			logLineLst: make([]string, 0, 128),
 		})
-	for rsc.runLst.Len() > theCfg.runHistoryMaxSize { // remove old run state from history
-		rsc.runLst.Remove(rsc.runLst.Back())
-	}
 
 	// create log file or truncate existing
 	if rState.IsLog {
@@ -310,8 +307,13 @@ func (rsc *RunCatalog) updateRunStateProcess(rState *RunState, isFinal bool, cmd
 			break
 		}
 	}
+	// if model run state not found: add new run state
 	if !ok || rs == nil {
-		return // model run state not found
+		rs = &runStateLog{
+			RunState:   *rState,
+			logLineLst: make([]string, 0, 128),
+		}
+		rsc.runLst.PushFront(rs)
 	}
 
 	// update run state and set or clear process info
@@ -397,56 +399,6 @@ func (rsc *RunCatalog) updateRunStateLog(rState *RunState, isFinal bool, msg str
 			rs.IsLog = false
 		}
 	}
-}
-
-// stopModelRun kill model run by run stamp or
-// remove run request from the queue by submit stamp or by run stamp
-func (rsc *RunCatalog) stopModelRun(modelDigest string, stamp string) bool {
-
-	dtNow := time.Now()
-
-	rsc.rscLock.Lock()
-	defer rsc.rscLock.Unlock()
-
-	// find model run state by digest and run stamp
-	// update model run state and append log message
-	var rs *runStateLog
-	var rsSubmit *runStateLog
-	var ok bool
-	for re := rsc.runLst.Front(); re != nil; re = re.Next() {
-
-		rs, ok = re.Value.(*runStateLog)
-		if !ok || rs == nil {
-			continue
-		}
-		ok = rs.ModelDigest == modelDigest && rs.RunStamp == stamp
-		if ok {
-			break
-		}
-		ok = rs.ModelDigest == modelDigest && rs.SubmitStamp == stamp
-		if ok {
-			rsSubmit = rs
-		}
-	}
-	// if model run stamp not found then check if submit stamp found
-	if !ok || rs == nil {
-		if rsSubmit == nil {
-			return false // no model run stamp and no submit stamp found
-		}
-		rs = rsSubmit // submit stamp found
-	}
-	rs.UpdateDateTime = helper.MakeDateTime(dtNow)
-
-	// kill model run if model is running
-	if rs.killC != nil {
-		rs.killC <- true
-		return true
-	}
-	// else remove request from the queue
-	rs.IsFinal = true
-	moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
-
-	return true
 }
 
 /*

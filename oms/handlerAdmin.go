@@ -16,7 +16,7 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 	st := struct {
 		OmsName           string             // server instance name
 		RowPageMaxSize    int64              // default "page" size: row count to read parameters or output tables
-		RunHistoryMaxSize int                // max number of model run states to keep in run list history
+		RunHistoryMaxSize int                // max number of completed model run states to keep in run list history
 		DoubleFmt         string             // format to convert float or double value to string
 		LoginUrl          string             // user login URL for UI
 		LogoutUrl         string             // user logout URL for UI
