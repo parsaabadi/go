@@ -15,8 +15,7 @@ import (
 // GET /api/model/:model/workset/:set/parameter/:name/csv
 // Dimension(s) and enum-based parameters returned as enum codes.
 func worksetParameterCsvGetHandler(w http.ResponseWriter, r *http.Request) {
-	isBom, _ := getBoolRequestParam(r, "bom") // is utf-8 bom required
-	doParameterGetCsvHandler(w, r, "set", true, true, isBom)
+	doParameterGetCsvHandler(w, r, "set", true, true, false)
 }
 
 // worksetParameterCsvBomGetHandler read a parameter values from workset and write it as csv response.
@@ -31,8 +30,7 @@ func worksetParameterCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
 // GET /api/model/:model/workset/:set/parameter/:name/csv-id
 // Dimension(s) and enum-based parameters returned as enum id's.
 func worksetParameterIdCsvGetHandler(w http.ResponseWriter, r *http.Request) {
-	isBom, _ := getBoolRequestParam(r, "bom") // is utf-8 bom required
-	doParameterGetCsvHandler(w, r, "set", true, false, isBom)
+	doParameterGetCsvHandler(w, r, "set", true, false, false)
 }
 
 // worksetParameterIdCsvBomGetHandler read a parameter values from workset and write it as csv response.
@@ -47,8 +45,7 @@ func worksetParameterIdCsvBomGetHandler(w http.ResponseWriter, r *http.Request) 
 // GET /api/model/:model/run/:run/parameter/:name/csv
 // Dimension(s) and enum-based parameters returned as enum codes.
 func runParameterCsvGetHandler(w http.ResponseWriter, r *http.Request) {
-	isBom, _ := getBoolRequestParam(r, "bom") // is utf-8 bom required
-	doParameterGetCsvHandler(w, r, "run", false, true, isBom)
+	doParameterGetCsvHandler(w, r, "run", false, true, false)
 }
 
 // runParameterCsvBomGetHandler read a parameter values from model run results and write it as csv response.
@@ -63,8 +60,7 @@ func runParameterCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
 // GET /api/model/:model/run/:run/parameter/:name/csv-id
 // Dimension(s) and enum-based parameters returned as enum id's.
 func runParameterIdCsvGetHandler(w http.ResponseWriter, r *http.Request) {
-	isBom, _ := getBoolRequestParam(r, "bom") // is utf-8 bom required
-	doParameterGetCsvHandler(w, r, "run", false, false, isBom)
+	doParameterGetCsvHandler(w, r, "run", false, false, false)
 }
 
 // runParameterIdCsvBomGetHandler read a parameter values from model run results and write it as csv response.
@@ -141,8 +137,7 @@ func doParameterGetCsvHandler(w http.ResponseWriter, r *http.Request, srcArg str
 // GET /api/model/:model/run/:run/table/:name/expr/csv
 // Dimension(s) returned as enum codes.
 func runTableExprCsvGetHandler(w http.ResponseWriter, r *http.Request) {
-	isBom, _ := getBoolRequestParam(r, "bom") // is utf-8 bom required
-	doTableGetCsvHandler(w, r, false, false, true, isBom)
+	doTableGetCsvHandler(w, r, false, false, true, false)
 }
 
 // runTableExprCsvBomGetHandler read table expression(s) values from model run results and write it as csv response.
@@ -157,8 +152,7 @@ func runTableExprCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
 // GET /api/model/:model/run/:run/table/:name/expr/csv-id
 // Dimension(s) returned as enum id's.
 func runTableExprIdCsvGetHandler(w http.ResponseWriter, r *http.Request) {
-	isBom, _ := getBoolRequestParam(r, "bom") // is utf-8 bom required
-	doTableGetCsvHandler(w, r, false, false, false, isBom)
+	doTableGetCsvHandler(w, r, false, false, false, false)
 }
 
 // runTableExprIdCsvBomGetHandler read table expression(s) values from model run results and write it as csv response.
@@ -173,8 +167,7 @@ func runTableExprIdCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
 // GET /api/model/:model/run/:run/table/:name/acc/csv
 // Dimension(s) returned as enum codes.
 func runTableAccCsvGetHandler(w http.ResponseWriter, r *http.Request) {
-	isBom, _ := getBoolRequestParam(r, "bom") // is utf-8 bom required
-	doTableGetCsvHandler(w, r, true, false, true, isBom)
+	doTableGetCsvHandler(w, r, true, false, true, false)
 }
 
 // runTableAccCsvBomGetHandler read table accumultor(s) values from model run results and write it as csv response.
@@ -189,8 +182,7 @@ func runTableAccCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
 // GET /api/model/:model/run/:run/table/:name/acc/csv-id
 // Dimension(s) returned as enum id's.
 func runTableAccIdCsvGetHandler(w http.ResponseWriter, r *http.Request) {
-	isBom, _ := getBoolRequestParam(r, "bom") // is utf-8 bom required
-	doTableGetCsvHandler(w, r, true, false, false, isBom)
+	doTableGetCsvHandler(w, r, true, false, false, false)
 }
 
 // runTableAccIdCsvBomGetHandler read table accumultor(s) values from model run results and write it as csv response.
@@ -206,8 +198,7 @@ func runTableAccIdCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
 // GET /api/model/:model/run/:run/table/:name/all-acc/csv
 // Dimension(s) returned as enum codes.
 func runTableAllAccCsvGetHandler(w http.ResponseWriter, r *http.Request) {
-	isBom, _ := getBoolRequestParam(r, "bom") // is utf-8 bom required
-	doTableGetCsvHandler(w, r, true, true, true, isBom)
+	doTableGetCsvHandler(w, r, true, true, true, false)
 }
 
 // runTableAllAccCsvBomGetHandler read table "all-accumulators" values
@@ -224,8 +215,7 @@ func runTableAllAccCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
 // GET /api/model/:model/run/:run/table/:name/all-acc/csv-id
 // Dimension(s) returned as enum id's.
 func runTableAllAccIdCsvGetHandler(w http.ResponseWriter, r *http.Request) {
-	isBom, _ := getBoolRequestParam(r, "bom") // is utf-8 bom required
-	doTableGetCsvHandler(w, r, true, true, false, isBom)
+	doTableGetCsvHandler(w, r, true, true, false, false)
 }
 
 // runTableAllAccIdCsvBomGetHandler read table "all-accumulators" values
@@ -246,7 +236,7 @@ func doTableGetCsvHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllAc
 	// url or query parameters
 	dn := getRequestParam(r, "model")  // model digest-or-name
 	rdsn := getRequestParam(r, "run")  // run digest-or-stamp-or-name
-	name := getRequestParam(r, "name") // parameter name
+	name := getRequestParam(r, "name") // output table name
 
 	// read output table values, page size =0: read all values
 	layout := db.ReadTableLayout{
