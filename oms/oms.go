@@ -286,7 +286,7 @@ func mainBody(args []string) error {
 	if modelDir == "" || modelDir == "." {
 		return errors.New("Error: model directory argument cannot be empty or . dot")
 	}
-	omppLog.Log("Model directory: ", modelDir)
+	omppLog.Log("Models directory:    ", modelDir)
 
 	if err := theCatalog.refreshSqlite(modelDir, modelLogDir); err != nil {
 		return err
@@ -300,7 +300,7 @@ func mainBody(args []string) error {
 		}
 		theCfg.isHome = theCfg.homeDir != ""
 		if theCfg.isHome {
-			omppLog.Log("User directory: ", theCfg.homeDir)
+			omppLog.Log("User directory:      ", theCfg.homeDir)
 		}
 	}
 
@@ -338,6 +338,8 @@ func mainBody(args []string) error {
 		if !isDownload {
 			theCfg.downloadDir = ""
 			omppLog.Log("Warning: user home download directory not found or dbcopy not found, download disabled")
+		} else {
+			omppLog.Log("Download directory:  ", theCfg.downloadDir)
 		}
 	}
 	if runOpts.Bool(isUploadArgKey) {
@@ -353,6 +355,8 @@ func mainBody(args []string) error {
 		if !isUpload {
 			theCfg.uploadDir = ""
 			omppLog.Log("Warning: user home upload directory not found or dbcopy not found, upload disabled")
+		} else {
+			omppLog.Log("Upload directory:    ", theCfg.downloadDir)
 		}
 	}
 
@@ -362,6 +366,8 @@ func mainBody(args []string) error {
 		if err := dirExist(theCfg.htmlDir); err != nil {
 			isApiOnly = true
 			omppLog.Log("Warning: serving API only because UI directory not found: ", theCfg.htmlDir)
+		} else {
+			omppLog.Log("HTML UI directory:   ", theCfg.htmlDir)
 		}
 	}
 
@@ -372,13 +378,15 @@ func mainBody(args []string) error {
 	}
 	theCfg.isJobControl = theCfg.jobDir != ""
 	if theCfg.isJobControl {
-		omppLog.Log("Job directory: ", theCfg.jobDir)
+		omppLog.Log("Jobs directory:      ", theCfg.jobDir)
 	}
 
 	// etc subdirectory required to run MPI models
 	theCfg.etcDir = runOpts.String(etcDirArgKey)
 	if err := dirExist(theCfg.etcDir); err != nil {
 		omppLog.Log("Warning: configuration files directory not found, it is required to run models on MPI cluster: ", filepath.Join(theCfg.etcDir))
+	} else {
+		omppLog.Log("Etc directory:       ", theCfg.etcDir)
 	}
 
 	// refresh run state catalog and start scanning model log files
@@ -396,9 +404,13 @@ func mainBody(args []string) error {
 		theCfg.omsName = runOpts.String(listenArgKey)
 	}
 	theCfg.omsName = helper.CleanPath(theCfg.omsName)
+	omppLog.Log("Oms instance name:   ", theCfg.omsName)
+
+	doneActiveJobScanC := make(chan bool)
+	go scanActiveJobs(doneActiveJobScanC)
 
 	doneJobScanC := make(chan bool)
-	go scanActiveJobs(doneJobScanC)
+	go scanJobs(doneJobScanC)
 
 	// set UI languages to find model text in browser language
 	ll := strings.Split(runOpts.String(uiLangsArgKey), ",")
@@ -435,7 +447,7 @@ func mainBody(args []string) error {
 	apiUpdateRoutes(router)   // web-service /api routes to update metadata
 	apiRunModelRoutes(router) // web-service /api routes to run the model
 	apiUserRoutes(router)     // web-service /api routes for user-specific requests
-	apiAdminRoutes(router)    // web-service /api routes for administrative tasks
+	apiAdminRoutes(router)    // web-service /api routes for service state and administrative tasks
 
 	// serve static content from home/io/download folder
 	if isDownload {
@@ -525,8 +537,9 @@ func mainBody(args []string) error {
 		}
 	}
 
-	doneLogScanC <- true
+	doneActiveJobScanC <- true
 	doneJobScanC <- true
+	doneLogScanC <- true
 	return err
 }
 
@@ -967,12 +980,12 @@ func apiRunModelRoutes(router *vestigo.Router) {
 
 	// GET /api/run/log/model/:model/stamp/:stamp
 	// GET /api/run/log/model/:model/stamp/:stamp/start/:start/count/:count
-	router.Get("/api/run/log/model/:model/stamp/:stamp", runModelLogPageHandler, logRequest)
-	router.Get("/api/run/log/model/:model/stamp/:stamp/start/:start", runModelLogPageHandler, logRequest)
-	router.Get("/api/run/log/model/:model/stamp/:stamp/start/:start/count/:count", runModelLogPageHandler, logRequest)
+	router.Get("/api/run/log/model/:model/stamp/:stamp", runLogPageHandler, logRequest)
+	router.Get("/api/run/log/model/:model/stamp/:stamp/start/:start", runLogPageHandler, logRequest)
+	router.Get("/api/run/log/model/:model/stamp/:stamp/start/:start/count/:count", runLogPageHandler, logRequest)
 
 	// PUT /api/run/stop/model/:model/stamp/:stamp
-	router.Put("/api/run/stop/model/:model/stamp/:stamp", runModelStopHandler, logRequest)
+	router.Put("/api/run/stop/model/:model/stamp/:stamp", stopModelHandler, logRequest)
 
 	// reject run log if request ill-formed
 	router.Get("/api/run/log/model/", http.NotFound)
@@ -1092,14 +1105,14 @@ func apiUserRoutes(router *vestigo.Router) {
 	router.Delete("/api/user/view/model/:model", userViewDeleteHandler, logRequest)
 }
 
-// add web-service /api routes for administrative tasks
+// add web-service /api routes for service state and  administrative tasks
 func apiAdminRoutes(router *vestigo.Router) {
 
 	// GET /api/service/config
 	router.Get("/api/service/config", serviceConfigHandler, logRequest)
 
 	// GET /api/service/state
-	router.Get("/api/service/state", http.NotFound)
+	router.Get("/api/service/state", serviceStateHandler, logRequest)
 
 	// POST /api/admin/all-models/refresh
 	router.Post("/api/admin/all-models/refresh", allModelsRefreshHandler, logRequest)

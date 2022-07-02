@@ -7,6 +7,7 @@ import (
 	"container/list"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 )
 
@@ -20,6 +21,12 @@ type RunCatalog struct {
 	presets      []RunOptionsPreset             // list of preset run options
 	runLst       *list.List                     // list of model runs state (runStateLog)
 	modelLogs    map[string]map[string]RunState // map each model digest to run stamps to run state and run log path
+	queueKeys    []string                       // run job keys of model runs waiting in the queue
+	activeKeys   []string                       // job keys of active (currently running) model runs
+	historyKeys  []string                       // job keys of models run history
+	queueJobs    map[string]runJobFile          // model run jobs waiting in the queue
+	activeJobs   map[string]runJobFile          // active (currently running) model run jobs
+	historyJobs  map[string]historyJobFile      // models run jobs history
 }
 
 var theRunCatalog RunCatalog // list of most recent state of model run for each model.
@@ -56,6 +63,7 @@ type RunRequest struct {
 	Dir         string            // working directory to run the model, if relative then must be relative to oms root directory
 	Opts        map[string]string // model run options
 	Env         map[string]string // environment variables to set
+	Threads     int               // number of modelling threads
 	Mpi         struct {
 		Np int // if non-zero then number of MPI processes
 	}
@@ -65,6 +73,35 @@ type RunRequest struct {
 		LangCode string // model language code
 		Note     string // run notes
 	}
+}
+
+// RunJob is model run request and run job control: submission stamp and model process id
+type RunJob struct {
+	SubmitStamp string // submission timestamp
+	Pid         int    // process id
+	CmdPath     string // executable path
+	RunRequest         // model run request: model name, digest and run options
+	LogFileName string // log file name
+}
+
+// run job control file info
+type runJobFile struct {
+	omsName  string // oms instance name
+	filePath string // job control file path
+	isError  bool   // if true then ignore that file due to error
+	RunJob          // job control file content
+}
+
+// job control file info for history job: parts of file name
+type historyJobFile struct {
+	omsName     string // oms instance name
+	filePath    string // job control file path
+	isError     bool   // if true then ignore that file due to error
+	SubmitStamp string // submission timestamp
+	ModelName   string // model name
+	ModelDigest string // model digest
+	RunStamp    string // run stamp, if empty then auto-generated as timestamp
+	Status      string // model run status
 }
 
 // RunState is model run state.
@@ -107,9 +144,6 @@ const logTickTimeout = 7
 
 // file name of MPI model run template by default
 const defaultMpiTemplate = "mpi.ModelRun.template.txt"
-
-// timeout in msec, sleep interval between scanning log directory
-const logScanInterval = 4021
 
 // RefreshCatalog reset state of most recent model run for each model.
 func (rsc *RunCatalog) refreshCatalog(etcDir string) error {
@@ -217,6 +251,14 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string) error {
 	}
 	rsc.models = rbs
 
+	// cleanup jobs control files info
+	rsc.queueKeys = make([]string, 0, theCfg.runHistoryMaxSize)
+	rsc.activeKeys = make([]string, 0, theCfg.runHistoryMaxSize)
+	rsc.historyKeys = make([]string, 0, theCfg.runHistoryMaxSize)
+	rsc.queueJobs = make(map[string]runJobFile, theCfg.runHistoryMaxSize)
+	rsc.activeJobs = make(map[string]runJobFile, theCfg.runHistoryMaxSize)
+	rsc.historyJobs = make(map[string]historyJobFile, theCfg.runHistoryMaxSize)
+
 	return nil
 }
 
@@ -250,4 +292,101 @@ func (rsc *RunCatalog) allModels() map[string]modelRunBasic {
 		rbs[key] = val
 	}
 	return rbs
+}
+
+// update run catalog with current job control files
+func (rsc *RunCatalog) updateRunJobs(queueJobs map[string]runJobFile, activeJobs map[string]runJobFile, historyJobs map[string]historyJobFile) {
+
+	rsc.rscLock.Lock()
+	defer rsc.rscLock.Unlock()
+
+	// update queue with current list of job control files
+	n := len(queueJobs)
+	if n < theCfg.runHistoryMaxSize {
+		n = theCfg.runHistoryMaxSize
+	}
+	rsc.queueJobs = make(map[string]runJobFile, n)
+
+	if n < cap(rsc.queueKeys) {
+		n = cap(rsc.queueKeys)
+	}
+	rsc.queueKeys = make([]string, 0, n)
+
+	for jobKey, jf := range queueJobs {
+		rsc.queueJobs[jobKey] = jf
+		if !jf.isError && jf.omsName == theCfg.omsName {
+			rsc.queueKeys = append(rsc.queueKeys, jobKey)
+		}
+	}
+	sort.Strings(rsc.queueKeys)
+
+	// update active model run jobs
+	n = len(activeJobs)
+	if n < theCfg.runHistoryMaxSize {
+		n = theCfg.runHistoryMaxSize
+	}
+	rsc.activeJobs = make(map[string]runJobFile, n)
+
+	if n < cap(rsc.activeKeys) {
+		n = cap(rsc.activeKeys)
+	}
+	rsc.activeKeys = make([]string, 0, n)
+
+	for jobKey, jf := range activeJobs {
+		rsc.activeJobs[jobKey] = jf
+		if !jf.isError && jf.omsName == theCfg.omsName {
+			rsc.activeKeys = append(rsc.activeKeys, jobKey)
+		}
+	}
+	sort.Strings(rsc.activeKeys)
+
+	// update model run job history
+	n = len(historyJobs)
+	if n < theCfg.runHistoryMaxSize {
+		n = theCfg.runHistoryMaxSize
+	}
+	rsc.historyJobs = make(map[string]historyJobFile, n)
+
+	if n < cap(rsc.historyKeys) {
+		n = cap(rsc.historyKeys)
+	}
+	rsc.historyKeys = make([]string, 0, n)
+
+	for jobKey, jh := range historyJobs {
+		rsc.historyJobs[jobKey] = jh
+		if !jh.isError && jh.omsName == theCfg.omsName {
+			rsc.historyKeys = append(rsc.historyKeys, jobKey)
+		}
+	}
+	sort.Strings(rsc.historyKeys)
+}
+
+// return copy of job keys and job control items for queue, active and history model run jobs
+func (rsc *RunCatalog) getRunJobs() ([]string, []RunJob, []string, []RunJob, []string, []historyJobFile) {
+
+	rsc.rscLock.Lock()
+	defer rsc.rscLock.Unlock()
+
+	qKeys := make([]string, len(rsc.queueKeys))
+	qJobs := make([]RunJob, len(rsc.queueKeys))
+	for k, jobKey := range rsc.queueKeys {
+		qKeys[k] = jobKey
+		qJobs[k] = rsc.queueJobs[jobKey].RunJob
+	}
+
+	aKeys := make([]string, len(rsc.activeKeys))
+	aJobs := make([]RunJob, len(rsc.activeKeys))
+	for k, jobKey := range rsc.activeKeys {
+		aKeys[k] = jobKey
+		aJobs[k] = rsc.activeJobs[jobKey].RunJob
+	}
+
+	hKeys := make([]string, len(rsc.historyKeys))
+	hJobs := make([]historyJobFile, len(rsc.historyKeys))
+	for k, jobKey := range rsc.historyKeys {
+		hKeys[k] = jobKey
+		hJobs[k] = rsc.historyJobs[jobKey]
+	}
+
+	return qKeys, qJobs, aKeys, aJobs, hKeys, hJobs
 }

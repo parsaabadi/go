@@ -19,7 +19,7 @@ import (
 	"unicode"
 )
 
-const TimeStampLength = len("2012_08_17_16_04_59_148") // length of timestap string
+const TimeStampLength = len("2012_08_17_16_04_59_123") // length of timestap string
 
 // UnQuote trim spaces and remove "double" or 'single' quotes around string
 func UnQuote(src string) string {
@@ -46,6 +46,110 @@ func MakeTimeStamp(t time.Time) string {
 	ms := int(time.Duration(t.Nanosecond()) / time.Millisecond)
 
 	return fmt.Sprintf("%04d_%02d_%02d_%02d_%02d_%02d_%03d", y, mm, dd, h, mi, s, ms)
+}
+
+// IsUnderscoreTimeStamp return true if src is timestamp string: 2021_07_16_13_40_53_882
+func IsUnderscoreTimeStamp(src string) bool {
+
+	if len(src) != TimeStampLength {
+		return false
+	}
+	for k, r := range src {
+		switch {
+		case k == 4 || k == 7 || k == 10 || k == 13 || k == 16 || k == 19:
+			if r != '_' {
+				return false
+			}
+		default:
+			if !unicode.IsDigit(r) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// ToUnderscoreTimeStamp converts date-time string to timestamp string: 2021-07-16 13:40:53.882 into 2021_07_16_13_40_53_882
+// If source string is not a date-time string then return empty "" string
+func ToUnderscoreTimeStamp(src string) string {
+
+	if len(src) != TimeStampLength {
+		return ""
+	}
+
+	dst := ""
+	for k, r := range src {
+		switch {
+		case k == 4 || k == 7:
+			if r != '-' {
+				return ""
+			}
+			dst += "_"
+		case k == 10:
+			if r != '\x20' {
+				return ""
+			}
+			dst += "_"
+		case k == 13 || k == 16:
+			if r != ':' {
+				return ""
+			}
+			dst += "_"
+		case k == 19:
+			if r != '.' {
+				return ""
+			}
+			dst += "_"
+		default:
+			if !unicode.IsDigit(r) {
+				return ""
+			}
+			dst += string(r)
+		}
+	}
+	return dst
+}
+
+// FromUnderscoreTimeStamp converts timestamp string to date-time string: 2021_07_16_13_40_53_882 into 2021-07-16 13:40:53.882
+// If source string is not a date-time string then return empty "" string
+func FromUnderscoreTimeStamp(src string) string {
+
+	if len(src) != TimeStampLength {
+		return ""
+	}
+
+	dst := ""
+	for k, r := range src {
+
+		switch {
+		case k == 4 || k == 7:
+			if r != '_' {
+				return ""
+			}
+			dst += "-"
+		case k == 10:
+			if r != '_' {
+				return ""
+			}
+			dst += "\x20"
+		case k == 13 || k == 16:
+			if r != '_' {
+				return ""
+			}
+			dst += ":"
+		case k == 19:
+			if r != '_' {
+				return ""
+			}
+			dst += "."
+		default:
+			if !unicode.IsDigit(r) {
+				return ""
+			}
+			dst += string(r)
+		}
+	}
+	return dst
 }
 
 // CleanPath replace special file path characters: "'`:*?><|$}{@&^;/\ by _ underscore

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
@@ -108,6 +109,10 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 		if strings.EqualFold(key, "-OpenM.TaskRunName") {
 			rs.TaskRunName = val
 		}
+		// thread count MUST be specified using options
+		if strings.EqualFold(key, "-OpenM.Threads") {
+			continue // skip number of threads option: use request Threads value instead
+		}
 		if strings.EqualFold(key, "-OpenM.LogToConsole") {
 			continue // skip log to console input run option: it is already on
 		}
@@ -125,6 +130,11 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 		}
 
 		mArgs = append(mArgs, key, val) // append command line argument key and value
+	}
+
+	// append threads number if required
+	if req.Threads > 1 {
+		mArgs = append(mArgs, "-OpenM.Threads", strconv.Itoa(req.Threads))
 	}
 
 	// if list of tables to retain is not empty then put the list into ini-file:
@@ -225,7 +235,8 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 	// start the model
 	omppLog.Log("Run model: ", mExe, " in directory: ", wDir)
 	omppLog.Log(strings.Join(cmd.Args, " "))
-	rsc.updateRunStateProcess(rs, false, cmd.Path, 0, killC)
+	rs.cmdPath = cmd.Path
+	rsc.updateRunStateProcess(rs, false, killC)
 
 	err = cmd.Start()
 	if err != nil {
@@ -236,8 +247,9 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 		return rs, err // exit with error: model failed to start
 	}
 	// else model started
-	rsc.updateRunStateProcess(rs, false, cmd.Path, cmd.Process.Pid, killC)
-	moveJobToActive(rs.SubmitStamp, rs.ModelName, rs.ModelDigest, rStamp, cmd.Process.Pid, cmd.Path)
+	rs.pid = cmd.Process.Pid
+	rsc.updateRunStateProcess(rs, false, killC)
+	moveJobToActive(rs, rStamp)
 
 	//  wait until run completed or terminated
 	go func(rState *RunState, cmd *exec.Cmd) {
@@ -416,9 +428,10 @@ func (rsc *RunCatalog) makeCommand(mExe, binDir, workDir, dbPath string, mArgs [
 	return cmd, nil
 }
 
-// stopModelRun kill model run by run stamp or
-// remove run request from the queue by submit stamp or by run stamp
-func (rsc *RunCatalog) stopModelRun(modelDigest string, stamp string) bool {
+// stopModelRun kill model run by run stamp
+//  or remove run request from the queue by submit stamp or by run stamp
+// return submission stamp and two flags: if model run found and if model is runniing now
+func (rsc *RunCatalog) stopModelRun(modelDigest string, stamp string) (bool, string, bool) {
 
 	dtNow := time.Now()
 
@@ -448,7 +461,7 @@ func (rsc *RunCatalog) stopModelRun(modelDigest string, stamp string) bool {
 	// if model run stamp not found then check if submit stamp found
 	if !ok || rs == nil {
 		if rsSubmit == nil {
-			return false // no model run stamp and no submit stamp found
+			return false, "", false // no model run stamp and no submit stamp found
 		}
 		rs = rsSubmit // submit stamp found
 	}
@@ -457,11 +470,10 @@ func (rsc *RunCatalog) stopModelRun(modelDigest string, stamp string) bool {
 	// kill model run if model is running
 	if rs.killC != nil {
 		rs.killC <- true
-		return true
+		return true, rs.SubmitStamp, true
 	}
 	// else remove request from the queue
 	rs.IsFinal = true
-	moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
 
-	return true
+	return true, rs.SubmitStamp, false
 }

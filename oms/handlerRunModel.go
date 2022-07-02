@@ -6,6 +6,7 @@ package main
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"golang.org/x/text/language"
 
@@ -47,6 +48,25 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 	req.ModelDigest = m.Digest
 	req.ModelName = m.Name
 
+	// backward compatibility: check if number of threads specified using run options
+	if req.Threads <= 1 {
+
+		for krq, val := range req.Opts {
+			if !strings.EqualFold(krq, "-OpenM.Threads") && !strings.EqualFold(krq, "OpenM.Threads") {
+				continue // skip option: it is not a number of threads
+			}
+
+			n, e := strconv.Atoi(val) // must be >= 1
+			if e != nil || n < 1 {
+				omppLog.Log(e)
+				http.Error(w, "Model start failed: "+dn, http.StatusBadRequest)
+				return
+			}
+			req.Threads = n // store number of threads explicitly
+			break
+		}
+	}
+
 	// if job control enabled then add model run to queue
 	submitStamp, _ := theCatalog.getNewTimeStamp()
 
@@ -69,10 +89,10 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, r, prs)
 }
 
-// runModelStopHandler kill model run by model digest-or-name and run stamp or remove model run request from queue by submit stamp.
+// stopModelHandler kill model run by model digest-or-name and run stamp or remove model run request from queue by submit stamp.
 // PUT /api/run/stop/model/:model/stamp/:stamp
 // If multiple models with same name exist then result is undefined.
-func runModelStopHandler(w http.ResponseWriter, r *http.Request) {
+func stopModelHandler(w http.ResponseWriter, r *http.Request) {
 
 	// url or query parameters:  model digest-or-name, page offset and page size
 	dn := getRequestParam(r, "model")
@@ -88,20 +108,24 @@ func runModelStopHandler(w http.ResponseWriter, r *http.Request) {
 
 	// kill model run by run stamp or
 	// remove run request from the queue by submit stamp or by run stamp
-	isDone := theRunCatalog.stopModelRun(modelDigest, stamp)
+	isFound, submitStamp, isRunning := theRunCatalog.stopModelRun(modelDigest, stamp)
+
+	if !isRunning {
+		moveJobQueueToFailed(submitStamp, m.Name, modelDigest) // model was not running, move job control file to history
+	}
 
 	// write new model run key and json response
-	w.Header().Set("Content-Location", "/api/model/"+modelDigest+"/run/"+stamp+"/"+strconv.FormatBool(isDone))
+	w.Header().Set("Content-Location", "/api/model/"+modelDigest+"/run/"+stamp+"/"+strconv.FormatBool(isFound))
 }
 
-// runModelLogPageHandler return model run status and log by model digest-or-name and run stamp.
+// runLogPageHandler return model run status and log by model digest-or-name and run stamp.
 // GET /api/run/log/model/:model/stamp/:stamp
 // GET /api/run/log/model/:model/stamp/:stamp/start/:start/count/:count
 // If multiple models with same name exist then result is undefined.
 // Model run log is same as console output and include stdout and stderr.
 // Run log can be returned by page defined by zero-based "start" line and line count.
 // If count <= 0 then all log lines until eof returned, complete current log: start=0, count=0
-func runModelLogPageHandler(w http.ResponseWriter, r *http.Request) {
+func runLogPageHandler(w http.ResponseWriter, r *http.Request) {
 
 	// url or query parameters:  model digest-or-name, page offset and page size
 	dn := getRequestParam(r, "model")

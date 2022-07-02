@@ -41,6 +41,56 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, r, st)
 }
 
+// serviceStateHandler return service and model runs state: queue, active runs and run history
+// GET /api/service/state
+func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
+
+	// run job item
+	type rj struct {
+		JobKey string // job key to find the job
+		RunJob        // model run job control info
+	}
+	// history job item
+	type hj struct {
+		JobKey         string // job key to find the job
+		historyJobFile        // job control file info for history job
+	}
+	// service state: model run jobs queue, active jobs and history
+	st := struct {
+		IsJobControl bool // if true then job control enabled
+		Queue        []rj // list of model run jobs in the queue
+		Active       []rj // list of active (currently running) model run jobs
+		History      []hj // history of model runs
+	}{
+		IsJobControl: theCfg.isJobControl,
+		Queue:        []rj{},
+		Active:       []rj{},
+		History:      []hj{},
+	}
+
+	if theCfg.isJobControl {
+		qKeys, qJobs, aKeys, aJobs, hKeys, hJobs := theRunCatalog.getRunJobs()
+
+		st.Queue = make([]rj, len(qKeys))
+		for k := range qKeys {
+			st.Queue[k] = rj{JobKey: qKeys[k], RunJob: qJobs[k]}
+		}
+
+		st.Active = make([]rj, len(aKeys))
+		for k := range aKeys {
+			st.Active[k] = rj{JobKey: aKeys[k], RunJob: aJobs[k]}
+			st.Active[k].Pid = 0
+			st.Active[k].CmdPath = ""
+		}
+
+		st.History = make([]hj, len(hKeys))
+		for k := range hKeys {
+			st.History[k] = hj{JobKey: hKeys[k], historyJobFile: hJobs[k]}
+		}
+	}
+	jsonResponse(w, r, st)
+}
+
 // allModelsRefreshHandler reload models catalog: rescan models directory tree and reload model.sqlite.
 // POST /api/admin/all-models/refresh
 func allModelsRefreshHandler(w http.ResponseWriter, r *http.Request) {

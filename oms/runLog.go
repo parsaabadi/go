@@ -14,8 +14,12 @@ import (
 	"unicode"
 
 	"github.com/openmpp/go/ompp/db"
+	"github.com/openmpp/go/ompp/helper"
 	"github.com/openmpp/go/ompp/omppLog"
 )
+
+// timeout in msec, sleep interval between scanning log directory
+const logScanInterval = 4021
 
 // get current run status and page of log file lines
 func (rsc *RunCatalog) readModelRunLog(digest, runStamp string, start, count int) (*RunStateLogPage, error) {
@@ -231,6 +235,7 @@ func scanModelLogDirs(doneC <-chan bool) {
 		runName     string // model run name
 		isCompleted bool   // if true then run completed
 		updateDt    string // last update date-time
+		submitStamp string // approximate submission stamp
 	}
 
 	for {
@@ -273,16 +278,16 @@ func scanModelLogDirs(doneC <-chan bool) {
 					isCompleted: db.IsRunCompleted(rl[k].Status),
 					updateDt:    rl[k].UpdateDateTime,
 				}
+				if helper.IsUnderscoreTimeStamp(rl[k].RunStamp) {
+					logLst[k].submitStamp = rl[k].RunStamp
+				} else {
+					logLst[k].submitStamp = helper.ToUnderscoreTimeStamp(rl[k].CreateDateTime)
+				}
 			}
 
 			// get list of model run log files
 			ptrn := it.logDir + "/" + it.name + "." + "*.log"
-
-			fLst, err := filepath.Glob(ptrn)
-			if err != nil {
-				omppLog.Log("Error at log files search: ", ptrn)
-				continue
-			}
+			fLst := filesByPattern(ptrn, "Error at log files search")
 
 			// replace path separators by / and sort file paths list
 			for k := range fLst {
@@ -313,6 +318,7 @@ func scanModelLogDirs(doneC <-chan bool) {
 							ModelName:      it.name,
 							ModelDigest:    dgst,
 							RunStamp:       logLst[k].runStamp,
+							SubmitStamp:    logLst[k].submitStamp,
 							IsFinal:        logLst[k].isCompleted,
 							UpdateDateTime: logLst[k].updateDt,
 							RunName:        logLst[k].runName,
@@ -332,10 +338,8 @@ func scanModelLogDirs(doneC <-chan bool) {
 		theRunCatalog.clearRunStateList()
 
 		// wait for doneC or sleep
-		select {
-		case <-doneC:
+		if doExitSleep(logScanInterval, doneC) {
 			return
-		case <-time.After(logScanInterval * time.Millisecond):
 		}
 	}
 }
@@ -375,4 +379,25 @@ func (rsc *RunCatalog) clearRunStateList() {
 			rsc.runLst.Remove(re)
 		}
 	}
+}
+
+// wait for doneC or sleep, return true on doneC read or false at the end of sleep
+func doExitSleep(ms time.Duration, doneC <-chan bool) bool {
+	select {
+	case <-doneC:
+		return true
+	case <-time.After(ms * time.Millisecond):
+	}
+	return false
+}
+
+// return list of files by pattern, on error log error message
+func filesByPattern(ptrn string, msg string) []string {
+
+	fLst, err := filepath.Glob(ptrn)
+	if err != nil {
+		omppLog.Log(msg, ": ", ptrn)
+		return []string{}
+	}
+	return fLst
 }

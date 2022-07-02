@@ -4,12 +4,10 @@
 package main
 
 import (
-	"os"
 	"path/filepath"
-	"runtime"
+	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/openmpp/go/ompp/db"
 	"github.com/openmpp/go/ompp/helper"
@@ -18,16 +16,8 @@ import (
 	ps "github.com/keybase/go-ps"
 )
 
-// RunJob is model run request and run job control: submission stamp and model process id
-type RunJob struct {
-	SubmitStamp string // submission timestamp
-	Pid         int    // process id
-	CmdPath     string // executable path
-	RunRequest         // model run request: model name, digest and run options
-}
-
-// timeout in msec, sleep interval between scanning job directory
-const jobScanInterval = 5021
+const jobScanInterval = 1123       // timeout in msec, sleep interval between scanning all job directories
+const jobActiveScanInterval = 5021 // timeout in msec, sleep interval between scanning active job directory
 
 // jobDirValid checking job control configuration.
 // if job control directory is empty then job control disabled.
@@ -56,12 +46,12 @@ func jobDirValid(jobDir string) error {
 
 // retrun path job control file path if model run standing is queue
 func jobQueuePath(submitStamp, modelName, modelDigest string) string {
-	return filepath.Join(theCfg.jobDir, "queue", submitStamp+"."+theCfg.omsName+"."+modelName+"."+modelDigest+".json")
+	return filepath.Join(theCfg.jobDir, "queue", submitStamp+"{"+theCfg.omsName+"}"+modelName+"."+modelDigest+".json")
 }
 
 // retrun job control file path if model is running now
 func jobActivePath(submitStamp, modelName, modelDigest string, pid int) string {
-	return filepath.Join(theCfg.jobDir, "active", submitStamp+"."+theCfg.omsName+"."+modelName+"."+modelDigest+"."+strconv.Itoa(pid)+".json")
+	return filepath.Join(theCfg.jobDir, "active", submitStamp+"{"+theCfg.omsName+"}"+modelName+"."+modelDigest+"."+strconv.Itoa(pid)+".json")
 }
 
 // retrun job control file path to completed model with run status suffix, e.g.: .success. or .error.
@@ -69,61 +59,109 @@ func jobHistoryPath(status, submitStamp, modelName, modelDigest, runStamp string
 	return filepath.Join(
 		theCfg.jobDir,
 		"history",
-		submitStamp+"."+theCfg.omsName+"."+modelName+"."+modelDigest+"."+runStamp+"."+db.NameOfRunStatus(status)+".json")
+		submitStamp+"{"+theCfg.omsName+"}"+modelName+"."+modelDigest+"{"+runStamp+"}"+db.NameOfRunStatus(status)+".json")
 }
 
-// parse active file path or active file name and return submission stamp, model name, digest and process id
-func parseActivePath(srcPath string) (string, string, string, int) {
+// parse job file file path or job file name:
+// remove .json extension and directory prefix
+// return submission stamp, oms instance name and the rest of the file name
+func parseJobPath(srcPath string) (string, string, string) {
 
-	// source file extension must be .json
-	if !strings.HasSuffix(srcPath, ".json") {
-		return "", "", "", 0
+	// remove job directory and extension, file extension must be .json
+	if filepath.Ext(srcPath) != ".json" {
+		return "", "", ""
 	}
-	p := srcPath[:len(srcPath)-len(".json")]
+	p := filepath.Base(srcPath)
+	p = p[:len(p)-len(".json")]
 
-	// trim job/dir/active/ prefix if path starts with that prefix
-	n1 := len(theCfg.jobDir)
-	n2 := len(theCfg.jobDir) + 1 + len("active")
-	if len(p) > n2 &&
-		strings.HasPrefix(p, theCfg.jobDir) && (p[n1] == '/' || p[n1] == '\\') &&
-		p[n1+1:n2] == "active" && (p[n2] == '/' || p[n2] == '\\') {
-		p = p[n2+1:]
-	}
-
-	// check active job file name length and prefix: submission stamp and oms server name
-	sn := "." + theCfg.omsName + "."
-	nts := helper.TimeStampLength + len(sn)
-
-	if len(p) < nts+len("m.d.1") {
-		return "", "", "", 0 // source file path is not active job file: name is too short
-	}
-	if p[helper.TimeStampLength:nts] != sn {
-		return "", "", "", 0 // source file path is not active job file: incorrect file name
+	// check job file name length and prefix: submission stamp and oms server name
+	n1 := strings.Index(p, "{")
+	n2 := strings.Index(p, "}")
+	if len(p) < helper.TimeStampLength+len("{s}") || n1 < helper.TimeStampLength || n2 < n1+2 || n2 >= len(p)-1 {
+		return "", "", "" // source file path is not job file: name is too short
 	}
 
-	// get submission stamp and process id
-	stamp := p[:helper.TimeStampLength]
+	// retrun submission stamp, oms instance name and the rest of file name
+	return p[:helper.TimeStampLength], p[n1+1 : n2], p[n2+1:]
+}
+
+// parse history file path or history file name and
+// return submission stamp, oms instance name, model name, digest, run stamp and run status
+func parseHistoryPath(srcPath string) (string, string, string, string, string, string) {
+
+	// parse common job file part and get get sumbmission stamp and oms instance name
+	subStamp, oms, p := parseJobPath(srcPath)
+
+	if subStamp == "" || oms == "" || p == "" || len(p) < len("m.d{r}s") {
+		return subStamp, oms, "", "", "", "" // source file path is not history job file
+	}
+
+	// get status and run stamp
+	n1 := strings.LastIndex(p, "{")
+	n2 := strings.LastIndex(p, "}")
+	if n1 < len("m.d") || n2 < n1+len("{r") || n2 >= len(p)-1 {
+		return subStamp, oms, "", "", "", "" // source file path is not history job file
+	}
+	rStamp := p[n1+1 : n2]
+	status := p[n2+1:]
+	p = p[:n1]
+
+	// split the rest by model name and digest
+	nd := strings.LastIndex(p, ".")
+	if nd < 1 || nd >= len(p)-1 {
+		return subStamp, oms, "", "", "", "" // source file path is not history job file
+	}
+
+	return subStamp, oms, p[:nd], p[nd+1:], rStamp, status
+}
+
+// parse queue file path or queue file name and return submission stamp, oms instance name, model name and digest
+func parseQueuePath(srcPath string) (string, string, string, string) {
+
+	// parse common job file part and get get sumbmission stamp and oms instance name
+	stamp, oms, p := parseJobPath(srcPath)
+
+	if stamp == "" || oms == "" || p == "" || len(p) < len("m.d") {
+		return stamp, oms, "", "" // source file path is not queue job file
+	}
+
+	// split the rest by model name and digest
+	nd := strings.LastIndex(p, ".")
+	if nd < 1 || nd >= len(p)-1 {
+		return stamp, oms, "", "" // source file path is not queue job file
+	}
+
+	return stamp, oms, p[:nd], p[nd+1:]
+}
+
+// parse active file path or active file name and return submission stamp, oms instance name, model name, digest and process id
+func parseActivePath(srcPath string) (string, string, string, string, int) {
+
+	// parse common job file part and get get sumbmission stamp and oms instance name
+	stamp, oms, p := parseJobPath(srcPath)
+
+	if stamp == "" || oms == "" || p == "" || len(p) < len("m.d.1") {
+		return stamp, oms, "", "", 0 // source file path is not active job file
+	}
 
 	// file name ends with .pid, convert process id
 	np := strings.LastIndex(p, ".")
-	if np < nts || np >= len(p)-1 {
-		return "", "", "", 0 // pid not found
+	if np < len("m.d.") || np >= len(p)-1 {
+		return stamp, oms, "", "", 0 // pid not found
 	}
 	pid, err := strconv.Atoi(p[np+1:])
 	if err != nil || pid <= 0 {
-		return "", "", "", 0 // pid must be positive integer
+		return stamp, oms, "", "", 0 // pid must be positive integer
 	}
+	p = p[:np]
 
-	// get model name and model digest parts of file name
-	p = p[nts:np]
+	// split the rest by model name and digest
 	nd := strings.LastIndex(p, ".")
 	if nd < 1 || nd >= len(p)-1 {
-		return "", "", "", 0 // model digest not found
+		return stamp, oms, "", "", 0 // source file path is not active job file
 	}
-	mn := p[:nd]
-	dgst := p[nd+1:]
 
-	return stamp, mn, dgst, pid
+	return stamp, oms, p[:nd], p[nd+1:], pid
 }
 
 // add new run request to job queue
@@ -148,13 +186,13 @@ func addJobToQueue(stamp string, req *RunRequest) error {
 }
 
 // move run job to active state from queue
-func moveJobToActive(submitStamp, modelName, modelDigest, runStamp string, pid int, cmdPath string) bool {
-	if !theCfg.isJobControl {
+func moveJobToActive(rState *RunState, runStamp string) bool {
+	if !theCfg.isJobControl || rState == nil {
 		return true // job control disabled
 	}
 
 	// read run request from job queue
-	src := jobQueuePath(submitStamp, modelName, modelDigest)
+	src := jobQueuePath(rState.SubmitStamp, rState.ModelName, rState.ModelDigest)
 
 	var jc RunJob
 	isOk, err := helper.FromJsonFile(src, &jc)
@@ -168,10 +206,11 @@ func moveJobToActive(submitStamp, modelName, modelDigest, runStamp string, pid i
 
 	// add run stamp, process info and move job control file into active
 	jc.RunStamp = runStamp
-	jc.Pid = pid
-	jc.CmdPath = cmdPath
+	jc.Pid = rState.pid
+	jc.CmdPath = rState.cmdPath
+	jc.LogFileName = rState.LogFileName
 
-	dst := jobActivePath(submitStamp, modelName, modelDigest, pid)
+	dst := jobActivePath(rState.SubmitStamp, rState.ModelName, rState.ModelDigest, rState.pid)
 
 	fileDleteAndLog(false, src) // remove job control file from queue
 
@@ -231,176 +270,6 @@ func moveJobQueueToFailed(submitStamp, modelName, modelDigest string) bool {
 	return true
 }
 
-// find model run state by model digest and submission stamp, if not found then return false and empty RunState
-func (rsc *RunCatalog) getRunStateBySubmitStamp(digest, stamp string) (bool, RunState) {
-	if digest == "" || stamp == "" {
-		return false, RunState{}
-	}
-	rsc.rscLock.Lock()
-	defer rsc.rscLock.Unlock()
-
-	// find model run state
-	var rsl *runStateLog
-	var ok bool
-	for re := rsc.runLst.Front(); re != nil; re = re.Next() {
-
-		rsl, ok = re.Value.(*runStateLog)
-		if !ok || rsl == nil {
-			continue
-		}
-		ok = rsl.ModelDigest == digest && rsl.SubmitStamp == stamp
-		if ok {
-			return true, rsl.RunState
-		}
-	}
-	// model run state not found
-	return false, RunState{}
-}
-
-// add new model run state into run state list and create model run log file
-func (rsc *RunCatalog) createRunStateLog(rState *RunState) {
-	if rState == nil {
-		return
-	}
-	rsc.rscLock.Lock()
-	defer rsc.rscLock.Unlock()
-
-	rsc.runLst.PushFront(
-		&runStateLog{
-			RunState:   *rState,
-			logLineLst: make([]string, 0, 128),
-		})
-
-	// create log file or truncate existing
-	if rState.IsLog {
-		f, err := os.Create(rState.logPath)
-		if err != nil {
-			rState.IsLog = false
-			return
-		}
-		defer f.Close()
-	}
-}
-
-// updateRunStateProcess set process info if isFinal is false or clear it if isFinal is true
-func (rsc *RunCatalog) updateRunStateProcess(rState *RunState, isFinal bool, cmdPath string, pid int, killC chan bool) {
-	if rState == nil {
-		return
-	}
-	dtNow := time.Now()
-
-	rsc.rscLock.Lock()
-	defer rsc.rscLock.Unlock()
-
-	// find model run state by digest and run stamp
-	// update model run state and append log message
-	var rs *runStateLog
-	var ok bool
-	for re := rsc.runLst.Front(); re != nil; re = re.Next() {
-
-		rs, ok = re.Value.(*runStateLog)
-		if !ok || rs == nil {
-			continue
-		}
-		ok = rs.ModelDigest == rState.ModelDigest && rs.RunStamp == rState.RunStamp
-		if ok {
-			break
-		}
-	}
-	// if model run state not found: add new run state
-	if !ok || rs == nil {
-		rs = &runStateLog{
-			RunState:   *rState,
-			logLineLst: make([]string, 0, 128),
-		}
-		rsc.runLst.PushFront(rs)
-	}
-
-	// update run state and set or clear process info
-	rs.UpdateDateTime = helper.MakeDateTime(dtNow)
-	rs.IsFinal = isFinal
-
-	if cmdPath != "" {
-		rs.cmdPath = cmdPath
-		rState.cmdPath = cmdPath
-	}
-	if isFinal {
-		rs.killC = nil
-	} else {
-		rs.killC = killC
-		rs.pid = pid
-		rState.pid = pid
-	}
-}
-
-// updateRunStateLog does model run state update and append to model log lines array
-func (rsc *RunCatalog) updateRunStateLog(rState *RunState, isFinal bool, msg string) {
-	if rState == nil {
-		return
-	}
-	dtNow := time.Now()
-
-	rsc.rscLock.Lock()
-	defer rsc.rscLock.Unlock()
-
-	// find model run state by digest and run stamp
-	// update model run state and append log message
-	var rs *runStateLog
-	var ok bool
-	for re := rsc.runLst.Front(); re != nil; re = re.Next() {
-
-		rs, ok = re.Value.(*runStateLog)
-		if !ok || rs == nil {
-			continue
-		}
-		ok = rs.ModelDigest == rState.ModelDigest && rs.RunStamp == rState.RunStamp
-		if ok {
-			break
-		}
-	}
-	// if model run state not found: add new run state
-	if !ok || rs == nil {
-		rs = &runStateLog{
-			RunState:   *rState,
-			logLineLst: make([]string, 0, 128),
-		}
-		rsc.runLst.PushFront(rs)
-	}
-
-	// update run state and append new log line if not empty
-	rs.UpdateDateTime = helper.MakeDateTime(dtNow)
-	rs.IsFinal = isFinal
-	if isFinal {
-		rs.killC = nil
-	}
-	if msg != "" {
-		rs.logLineLst = append(rs.logLineLst, msg)
-	}
-
-	// write into model console log file
-	if rs.IsLog && msg != "" {
-
-		f, err := os.OpenFile(rs.logPath, os.O_APPEND|os.O_WRONLY, 0644)
-		if err != nil {
-			rs.IsLog = false
-			return
-		}
-		defer f.Close()
-
-		_, err = f.WriteString(msg)
-		if err == nil {
-			if runtime.GOOS == "windows" { // adjust newline for windows
-				_, err = f.WriteString("\r\n")
-			} else {
-				_, err = f.WriteString("\n")
-			}
-		}
-		if err != nil {
-			rs.IsLog = false
-		}
-	}
-}
-
 /*
 scan active job directory to find active model run files without run state.
 It can be a result of oms restart or server reboot.
@@ -429,33 +298,16 @@ func scanActiveJobs(doneC <-chan bool) {
 
 	activeDir := filepath.Join(theCfg.jobDir, "active")
 	nActive := len(activeDir)
-	ptrn := activeDir + string(filepath.Separator) + "*." + theCfg.omsName + ".*.json"
-
-	// wait for doneC or sleep
-	doExitSleep := func() bool {
-		select {
-		case <-doneC:
-			return true
-		case <-time.After(jobScanInterval * time.Millisecond):
-		}
-		return false
-	}
+	ptrn := activeDir + string(filepath.Separator) + "*{" + theCfg.omsName + "}*.json"
 
 	for {
 		// find active job files
-		fLst, err := filepath.Glob(ptrn)
-		if err != nil {
-			omppLog.Log("Error at active job files search: ", ptrn)
-			if doExitSleep() {
-				return
-			}
-			continue
-		}
+		fLst := filesByPattern(ptrn, "Error at active job files search")
 		if len(fLst) <= 0 {
-			if doExitSleep() {
+			if doExitSleep(jobActiveScanInterval, doneC) {
 				return
 			}
-			continue // no active jobs for that model
+			continue // no active jobs
 		}
 
 		// find new active jobs since last scan which do not exist in run state list of RunCatalog
@@ -466,8 +318,8 @@ func scanActiveJobs(doneC <-chan bool) {
 				continue // this file already in the outer jobs list
 			}
 
-			// get submission stamp, model digest and process id from active job file name
-			stamp, mName, mDgst, pid := parseActivePath(fn)
+			// get submission stamp, model name, digest and process id from active job file name
+			stamp, _, mName, mDgst, pid := parseActivePath(fn)
 			if stamp == "" || mName == "" || mDgst == "" || pid <= 0 {
 				continue // file name is not an active job file name
 			}
@@ -530,7 +382,137 @@ func scanActiveJobs(doneC <-chan bool) {
 		}
 
 		// wait for doneC or sleep
-		if doExitSleep() {
+		if doExitSleep(jobActiveScanInterval, doneC) {
+			return
+		}
+	}
+}
+
+// scan job control directories to read and update job lists: queue, active and history
+func scanJobs(doneC <-chan bool) {
+	if !theCfg.isJobControl {
+		return // job control disabled
+	}
+
+	queuePtrn := filepath.Join(theCfg.jobDir, "queue") + string(filepath.Separator) + "*{" + theCfg.omsName + "}*.json"
+	activePtrn := filepath.Join(theCfg.jobDir, "active") + string(filepath.Separator) + "*{" + theCfg.omsName + "}*.json"
+	historyPtrn := filepath.Join(theCfg.jobDir, "history") + string(filepath.Separator) + "*{" + theCfg.omsName + "}*.json"
+
+	// map job file key (submission stamp and oms instance name) to file content (run job)
+	toJobMap := func(fLst []string, jobMap map[string]runJobFile) []string {
+
+		jKeys := make([]string, 0, len(fLst)) // list of jobs key
+
+		for _, f := range fLst {
+
+			// get submission stamp and oms instance
+			stamp, oms, _ := parseJobPath(f)
+			if stamp == "" || oms == "" {
+				continue // file name is not a job file name
+			}
+			jobKey := stamp + "{" + oms + "}"
+			jKeys = append(jKeys, jobKey)
+
+			if _, ok := jobMap[jobKey]; ok {
+				continue // this file already in the jobs list
+			}
+
+			// create run state from job file
+			var jc RunJob
+			isOk, err := helper.FromJsonFile(f, &jc)
+			if err != nil {
+				omppLog.Log(err)
+				jobMap[jobKey] = runJobFile{omsName: oms, filePath: f, isError: true}
+			}
+			if !isOk || err != nil {
+				continue // file not exist or invalid
+			}
+
+			jobMap[jobKey] = runJobFile{RunJob: jc, omsName: oms, filePath: f} // add job into jobs list
+		}
+		return jKeys
+	}
+
+	queueJobs := map[string]runJobFile{}
+	activeJobs := map[string]runJobFile{}
+	historyJobs := map[string]historyJobFile{}
+
+	for {
+		queueFiles := filesByPattern(queuePtrn, "Error at queue job files search")
+		activeFiles := filesByPattern(activePtrn, "Error at active job files search")
+		historyFiles := filesByPattern(historyPtrn, "Error at history job files search")
+
+		qKeys := toJobMap(queueFiles, queueJobs)
+		aKeys := toJobMap(activeFiles, activeJobs)
+
+		// parse history files list
+		hKeys := make([]string, 0, len(historyFiles))
+
+		for _, f := range historyFiles {
+
+			// get submission stamp and oms instance
+			subStamp, oms, mn, dgst, rStamp, status := parseHistoryPath(f)
+			if subStamp == "" || oms == "" {
+				continue // file name is not a job file name
+			}
+			jobKey := subStamp + "{" + oms + "}"
+			hKeys = append(hKeys, jobKey)
+
+			if _, ok := historyJobs[jobKey]; ok {
+				continue // this file already in the history jobs list
+			}
+
+			// add job into history jobs list
+			historyJobs[jobKey] = historyJobFile{
+				omsName:     oms,
+				filePath:    f,
+				isError:     (mn == "" || dgst == "" || rStamp == "" || status == ""),
+				SubmitStamp: subStamp,
+				ModelName:   mn,
+				ModelDigest: dgst,
+				RunStamp:    rStamp,
+				Status:      status,
+			}
+		}
+
+		// remove from map queue files or active files which are in history
+		// remove from map queue files which are in active
+		for jobKey := range historyJobs {
+			delete(queueJobs, jobKey)
+			delete(activeJobs, jobKey)
+		}
+		for jobKey := range activeJobs {
+			delete(queueJobs, jobKey)
+		}
+
+		// remove entries from job maps where files no longer exist
+		sort.Strings(qKeys)
+		for jobKey := range queueJobs {
+			k := sort.SearchStrings(qKeys, jobKey)
+			if k < 0 || k >= len(qKeys) || qKeys[k] != jobKey {
+				delete(queueJobs, jobKey)
+			}
+		}
+		sort.Strings(aKeys)
+		for jobKey := range activeJobs {
+			k := sort.SearchStrings(aKeys, jobKey)
+			if k < 0 || k >= len(aKeys) || aKeys[k] != jobKey {
+				delete(activeJobs, jobKey)
+			}
+		}
+		sort.Strings(hKeys)
+		for jobKey := range historyJobs {
+			k := sort.SearchStrings(hKeys, jobKey)
+			if k < 0 || k >= len(hKeys) || hKeys[k] != jobKey {
+				delete(historyJobs, jobKey)
+			}
+		}
+
+		// update run catalog with current job control files
+		theRunCatalog.updateRunJobs(queueJobs, activeJobs, historyJobs)
+
+		// wait for doneC or sleep
+		if doExitSleep(jobScanInterval, doneC) {
 			return
 		}
 	}
