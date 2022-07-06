@@ -23,6 +23,7 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 		AllowUserHome     bool               // if true then store user settings in home directory
 		AllowDownload     bool               // if true then allow download from home/io/download directory
 		AllowUpload       bool               // if true then allow upload from home/io/upload directory
+		IsJobControl      bool               // if true then job control enabled
 		Env               map[string]string  // server config environmemt variables
 		ModelCatalog      ModelCatalogConfig // "public" state of model catalog
 		RunCatalog        RunCatalogConfig   // "public" state of model run catalog
@@ -34,6 +35,7 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 		AllowUserHome:     theCfg.isHome,
 		AllowDownload:     theCfg.downloadDir != "",
 		AllowUpload:       theCfg.uploadDir != "",
+		IsJobControl:      theCfg.isJobControl,
 		Env:               theCfg.env,
 		ModelCatalog:      *theCatalog.toPublicConfig(),
 		RunCatalog:        *theRunCatalog.toPublicConfig(),
@@ -57,10 +59,11 @@ func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// service state: model run jobs queue, active jobs and history
 	st := struct {
-		IsJobControl bool // if true then job control enabled
-		Queue        []rj // list of model run jobs in the queue
-		Active       []rj // list of active (currently running) model run jobs
-		History      []hj // history of model runs
+		IsJobControl   bool   // if true then job control enabled
+		UpdateDateTime string // last date-time jobs list updated
+		Queue          []rj   // list of model run jobs in the queue
+		Active         []rj   // list of active (currently running) model run jobs
+		History        []hj   // history of model runs
 	}{
 		IsJobControl: theCfg.isJobControl,
 		Queue:        []rj{},
@@ -69,7 +72,7 @@ func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if theCfg.isJobControl {
-		qKeys, qJobs, aKeys, aJobs, hKeys, hJobs := theRunCatalog.getRunJobs()
+		updateDt, qKeys, qJobs, aKeys, aJobs, hKeys, hJobs := theRunCatalog.getRunJobs()
 
 		st.Queue = make([]rj, len(qKeys))
 		for k := range qKeys {
@@ -87,6 +90,7 @@ func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
 		for k := range hKeys {
 			st.History[k] = hj{JobKey: hKeys[k], historyJobFile: hJobs[k]}
 		}
+		st.UpdateDateTime = updateDt
 	}
 	jsonResponse(w, r, st)
 }

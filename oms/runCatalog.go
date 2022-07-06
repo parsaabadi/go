@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"time"
+
+	"github.com/openmpp/go/ompp/helper"
 )
 
 // RunCatalog is a most recent state of model run for each model.
@@ -21,6 +24,7 @@ type RunCatalog struct {
 	presets      []RunOptionsPreset             // list of preset run options
 	runLst       *list.List                     // list of model runs state (runStateLog)
 	modelLogs    map[string]map[string]RunState // map each model digest to run stamps to run state and run log path
+	jobsUpdateDt string                         // last date-time jobs list updated
 	queueKeys    []string                       // run job keys of model runs waiting in the queue
 	activeKeys   []string                       // job keys of active (currently running) model runs
 	historyKeys  []string                       // job keys of models run history
@@ -252,6 +256,7 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string) error {
 	rsc.models = rbs
 
 	// cleanup jobs control files info
+	rsc.jobsUpdateDt = helper.MakeDateTime(time.Now())
 	rsc.queueKeys = make([]string, 0, theCfg.runHistoryMaxSize)
 	rsc.activeKeys = make([]string, 0, theCfg.runHistoryMaxSize)
 	rsc.historyKeys = make([]string, 0, theCfg.runHistoryMaxSize)
@@ -301,6 +306,8 @@ func (rsc *RunCatalog) updateRunJobs(queueJobs map[string]runJobFile, activeJobs
 	defer rsc.rscLock.Unlock()
 
 	// update queue with current list of job control files
+	rsc.jobsUpdateDt = helper.MakeDateTime(time.Now())
+
 	n := len(queueJobs)
 	if n < theCfg.runHistoryMaxSize {
 		n = theCfg.runHistoryMaxSize
@@ -362,7 +369,7 @@ func (rsc *RunCatalog) updateRunJobs(queueJobs map[string]runJobFile, activeJobs
 }
 
 // return copy of job keys and job control items for queue, active and history model run jobs
-func (rsc *RunCatalog) getRunJobs() ([]string, []RunJob, []string, []RunJob, []string, []historyJobFile) {
+func (rsc *RunCatalog) getRunJobs() (string, []string, []RunJob, []string, []RunJob, []string, []historyJobFile) {
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
@@ -388,5 +395,5 @@ func (rsc *RunCatalog) getRunJobs() ([]string, []RunJob, []string, []RunJob, []s
 		hJobs[k] = rsc.historyJobs[jobKey]
 	}
 
-	return qKeys, qJobs, aKeys, aJobs, hKeys, hJobs
+	return rsc.jobsUpdateDt, qKeys, qJobs, aKeys, aJobs, hKeys, hJobs
 }

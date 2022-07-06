@@ -475,8 +475,8 @@ func scanJobs(doneC <-chan bool) {
 			}
 		}
 
-		// remove from map queue files or active files which are in history
-		// remove from map queue files which are in active
+		// remove from queue files or active files which are in history
+		// remove from queue files which are in active
 		for jobKey := range historyJobs {
 			delete(queueJobs, jobKey)
 			delete(activeJobs, jobKey)
@@ -485,7 +485,7 @@ func scanJobs(doneC <-chan bool) {
 			delete(queueJobs, jobKey)
 		}
 
-		// remove entries from job maps where files no longer exist
+		// remove existing job entries where files are no longer exist
 		sort.Strings(qKeys)
 		for jobKey := range queueJobs {
 			k := sort.SearchStrings(qKeys, jobKey)

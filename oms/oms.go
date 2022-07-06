@@ -356,7 +356,7 @@ func mainBody(args []string) error {
 			theCfg.uploadDir = ""
 			omppLog.Log("Warning: user home upload directory not found or dbcopy not found, upload disabled")
 		} else {
-			omppLog.Log("Upload directory:    ", theCfg.downloadDir)
+			omppLog.Log("Upload directory:    ", theCfg.uploadDir)
 		}
 	}
 
