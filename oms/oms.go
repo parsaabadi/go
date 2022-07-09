@@ -447,7 +447,8 @@ func mainBody(args []string) error {
 	apiUpdateRoutes(router)   // web-service /api routes to update metadata
 	apiRunModelRoutes(router) // web-service /api routes to run the model
 	apiUserRoutes(router)     // web-service /api routes for user-specific requests
-	apiAdminRoutes(router)    // web-service /api routes for service state and administrative tasks
+	apiServiceRoutes(router)  // web-service /api routes for service state
+	apiAdminRoutes(router)    // web-service /api routes for administrative tasks
 
 	// serve static content from home/io/download folder
 	if isDownload {
@@ -1105,14 +1106,25 @@ func apiUserRoutes(router *vestigo.Router) {
 	router.Delete("/api/user/view/model/:model", userViewDeleteHandler, logRequest)
 }
 
-// add web-service /api routes for service state and  administrative tasks
-func apiAdminRoutes(router *vestigo.Router) {
+// add web-service /api routes service state
+func apiServiceRoutes(router *vestigo.Router) {
 
 	// GET /api/service/config
 	router.Get("/api/service/config", serviceConfigHandler, logRequest)
 
 	// GET /api/service/state
 	router.Get("/api/service/state", serviceStateHandler, logRequest)
+
+	// GET /api/service/job/active/:job
+	// GET /api/service/job/queue/:job
+	// GET /api/service/job/history/:job
+	router.Get("/api/service/job/active/:job", jobActiveHandler, logRequest)
+	router.Get("/api/service/job/queue/:job", jobQueueHandler, logRequest)
+	router.Get("/api/service/job/history/:job", jobHistoryHandler, logRequest)
+}
+
+// add web-service /api routes for administrative tasks
+func apiAdminRoutes(router *vestigo.Router) {
 
 	// POST /api/admin/all-models/refresh
 	router.Post("/api/admin/all-models/refresh", allModelsRefreshHandler, logRequest)

@@ -209,6 +209,7 @@ func moveJobToActive(rState *RunState, runStamp string) bool {
 	jc.Pid = rState.pid
 	jc.CmdPath = rState.cmdPath
 	jc.LogFileName = rState.LogFileName
+	jc.LogPath = rState.logPath
 
 	dst := jobActivePath(rState.SubmitStamp, rState.ModelName, rState.ModelDigest, rState.pid)
 
@@ -471,7 +472,7 @@ func scanJobs(doneC <-chan bool) {
 				ModelName:   mn,
 				ModelDigest: dgst,
 				RunStamp:    rStamp,
-				Status:      status,
+				JobStatus:   status,
 			}
 		}
 

@@ -127,7 +127,7 @@ func stopModelHandler(w http.ResponseWriter, r *http.Request) {
 // If count <= 0 then all log lines until eof returned, complete current log: start=0, count=0
 func runLogPageHandler(w http.ResponseWriter, r *http.Request) {
 
-	// url or query parameters:  model digest-or-name, page offset and page size
+	// url or query parameters: model digest-or-name, page offset and page size
 	dn := getRequestParam(r, "model")
 	runStamp := getRequestParam(r, "stamp")
 

@@ -86,6 +86,7 @@ type RunJob struct {
 	CmdPath     string // executable path
 	RunRequest         // model run request: model name, digest and run options
 	LogFileName string // log file name
+	LogPath     string // log file path: log/dir/modelName.RunStamp.console.log
 }
 
 // run job control file info
@@ -105,7 +106,7 @@ type historyJobFile struct {
 	ModelName   string // model name
 	ModelDigest string // model digest
 	RunStamp    string // run stamp, if empty then auto-generated as timestamp
-	Status      string // model run status
+	JobStatus   string // run status
 }
 
 // RunState is model run state.
@@ -396,4 +397,52 @@ func (rsc *RunCatalog) getRunJobs() (string, []string, []RunJob, []string, []Run
 	}
 
 	return rsc.jobsUpdateDt, qKeys, qJobs, aKeys, aJobs, hKeys, hJobs
+}
+
+// return active or queue job control item and is found boolean flag
+func (rsc *RunCatalog) getActiveJobItem(jobKey string) (runJobFile, bool) {
+
+	if jobKey == "" {
+		return runJobFile{}, false // empty job key: return empty result
+	}
+
+	rsc.rscLock.Lock()
+	defer rsc.rscLock.Unlock()
+
+	if aj, ok := rsc.activeJobs[jobKey]; ok {
+		return aj, true
+	}
+	return runJobFile{}, false // not found
+}
+
+// return active or queue job control item and is found boolean flag
+func (rsc *RunCatalog) getQueueJobItem(jobKey string) (runJobFile, bool) {
+
+	if jobKey == "" {
+		return runJobFile{}, false // empty job key: return empty result
+	}
+
+	rsc.rscLock.Lock()
+	defer rsc.rscLock.Unlock()
+
+	if qj, ok := rsc.activeJobs[jobKey]; ok {
+		return qj, true
+	}
+	return runJobFile{}, false // not found
+}
+
+// return history job control item and is found boolean flag
+func (rsc *RunCatalog) getHistoryJobItem(jobKey string) (historyJobFile, bool) {
+
+	if jobKey == "" {
+		return historyJobFile{}, false // empty job key: return empty result
+	}
+
+	rsc.rscLock.Lock()
+	defer rsc.rscLock.Unlock()
+
+	if hj, ok := rsc.historyJobs[jobKey]; ok {
+		return hj, true
+	}
+	return historyJobFile{}, false // not found
 }
