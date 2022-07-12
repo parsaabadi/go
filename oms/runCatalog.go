@@ -425,7 +425,7 @@ func (rsc *RunCatalog) getQueueJobItem(jobKey string) (runJobFile, bool) {
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
-	if qj, ok := rsc.activeJobs[jobKey]; ok {
+	if qj, ok := rsc.queueJobs[jobKey]; ok {
 		return qj, true
 	}
 	return runJobFile{}, false // not found
