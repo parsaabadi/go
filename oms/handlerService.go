@@ -140,6 +140,7 @@ func jobActiveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// find job state in run catalog
+	jKey = jobKeyFromStamp(jKey)
 	aj, isOk := theRunCatalog.getActiveJobItem(jKey)
 
 	if !isOk || aj.isError {
@@ -170,6 +171,7 @@ func jobQueueHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// find job state in run catalog
+	jKey = jobKeyFromStamp(jKey)
 	qj, isOk := theRunCatalog.getQueueJobItem(jKey)
 
 	if !isOk || qj.isError {
@@ -200,6 +202,7 @@ func jobHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// find job state in run catalog
+	jKey = jobKeyFromStamp(jKey)
 	hj, isOk := theRunCatalog.getHistoryJobItem(jKey)
 
 	if !isOk || hj.isError {
