@@ -108,10 +108,10 @@ func stopModelHandler(w http.ResponseWriter, r *http.Request) {
 
 	// kill model run by run stamp or
 	// remove run request from the queue by submit stamp or by run stamp
-	isFound, submitStamp, isRunning := theRunCatalog.stopModelRun(modelDigest, stamp)
+	isFound, _, isRunning := theRunCatalog.stopModelRun(modelDigest, stamp)
 
 	if !isRunning {
-		moveJobQueueToFailed(submitStamp, m.Name, modelDigest) // model was not running, move job control file to history
+		moveJobQueueToFailed(stamp, m.Name, modelDigest) // model was not running, move job control file to history
 	}
 
 	// write new model run key and json response

@@ -264,7 +264,7 @@ func moveJobQueueToFailed(submitStamp, modelName, modelDigest string) bool {
 	src := jobQueuePath(submitStamp, modelName, modelDigest)
 	dst := jobHistoryPath(db.ErrorRunStatus, submitStamp, modelName, modelDigest, "no-run-time-stamp")
 
-	if !fileMoveAndLog(false, src, dst) {
+	if !fileMoveAndLog(true, src, dst) {
 		fileDleteAndLog(true, src) // if move failed then delete job control file from queue
 		return false
 	}
@@ -313,14 +313,13 @@ func scanActiveJobs(doneC <-chan bool) {
 
 		// find new active jobs since last scan which do not exist in run state list of RunCatalog
 		for k := range fLst {
-			fn := fLst[k][nActive+1:] // remove directory prefix and / separator
 
-			if _, ok := outerJobs[fn]; ok {
+			if _, ok := outerJobs[fLst[k]]; ok {
 				continue // this file already in the outer jobs list
 			}
 
 			// get submission stamp, model name, digest and process id from active job file name
-			stamp, _, mName, mDgst, pid := parseActivePath(fn)
+			stamp, _, mName, mDgst, pid := parseActivePath(fLst[k][nActive+1:])
 			if stamp == "" || mName == "" || mDgst == "" || pid <= 0 {
 				continue // file name is not an active job file name
 			}
