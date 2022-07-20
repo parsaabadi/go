@@ -16,8 +16,9 @@ import (
 	ps "github.com/keybase/go-ps"
 )
 
-const jobScanInterval = 1123       // timeout in msec, sleep interval between scanning all job directories
-const jobActiveScanInterval = 5021 // timeout in msec, sleep interval between scanning active job directory
+const jobScanInterval = 1123             // timeout in msec, sleep interval between scanning all job directories
+const jobActiveScanInterval = 5021       // timeout in msec, sleep interval between scanning active job directory
+const JOB_STATE_FILE_NAME = "state.json" // file to store jobs control state
 
 // jobDirValid checking job control configuration.
 // if job control directory is empty then job control disabled.
@@ -47,20 +48,20 @@ func jobDirValid(jobDir string) error {
 // if source is a submission stamp then return job key as stamp-#-oms else return source string as is
 func jobKeyFromStamp(stamp string) string {
 
-	if strings.Index(stamp, "-#-") < 0 && helper.IsUnderscoreTimeStamp(stamp) {
+	if !strings.Contains(stamp, "-#-") && helper.IsUnderscoreTimeStamp(stamp) {
 		return stamp + "-#-" + theCfg.omsName
 	}
 	return stamp
 }
 
-// retrun path job control file path if model run standing is queue, e.g.: 2022_07_05_19_55_38_111-#-_4040-#-RiskPaths-#-d90e1e9a.json
-func jobQueuePath(submitStamp, modelName, modelDigest string) string {
-	return filepath.Join(theCfg.jobDir, "queue", submitStamp+"-#-"+theCfg.omsName+"-#-"+modelName+"-#-"+modelDigest+".json")
-}
-
 // retrun job control file path if model is running now, e.g.: 2022_07_08_23_03_27_555-#-_4040-#-RiskPaths-#-d90e1e9a-#-8888.json
 func jobActivePath(submitStamp, modelName, modelDigest string, pid int) string {
 	return filepath.Join(theCfg.jobDir, "active", submitStamp+"-#-"+theCfg.omsName+"-#-"+modelName+"-#-"+modelDigest+"-#-"+strconv.Itoa(pid)+".json")
+}
+
+// retrun path job control file path if model run standing is queue, e.g.: 2022_07_05_19_55_38_111-#-_4040-#-RiskPaths-#-d90e1e9a.json
+func jobQueuePath(submitStamp, modelName, modelDigest string) string {
+	return filepath.Join(theCfg.jobDir, "queue", submitStamp+"-#-"+theCfg.omsName+"-#-"+modelName+"-#-"+modelDigest+".json")
 }
 
 // retrun job control file path to completed model with run status suffix.
@@ -96,6 +97,39 @@ func parseJobPath(srcPath string) (string, string, string, string, string) {
 	return sp[0], sp[1], sp[2], sp[3], sp[4]
 }
 
+// parse active file path or active file name and return submission stamp, oms instance name, model name, digest and process id.
+// For example: 2022_07_08_23_03_27_555-#-_4040-#-RiskPaths-#-d90e1e9a-#-8888.json
+func parseActivePath(srcPath string) (string, string, string, string, int) {
+
+	// parse common job file part
+	subStamp, oms, mn, dgst, p := parseJobPath(srcPath)
+
+	if subStamp == "" || oms == "" || mn == "" || dgst == "" || p == "" {
+		return subStamp, oms, "", "", 0 // source file path is not active job file
+	}
+
+	// file name ends with pid, convert process id
+	pid, err := strconv.Atoi(p)
+	if err != nil || pid <= 0 {
+		return subStamp, oms, "", "", 0 // pid must be positive integer
+	}
+	return subStamp, oms, mn, dgst, pid
+}
+
+// parse queue file path or queue file name and return submission stamp, oms instance name, model name and digest.
+// For example: 2022_07_05_19_55_38_111-#-_4040-#-RiskPaths-#-d90e1e9a.json
+func parseQueuePath(srcPath string) (string, string, string, string) {
+
+	// parse common job file part
+	subStamp, oms, mn, dgst, p := parseJobPath(srcPath)
+
+	if subStamp == "" || oms == "" || mn == "" || dgst == "" || p != "" {
+		return subStamp, oms, "", "" // source file path is not queue job file
+	}
+
+	return subStamp, oms, mn, dgst
+}
+
 // parse history file path or history file name and
 // return submission stamp, oms instance name, model name, digest, run stamp and run status.
 // For example: 2022_07_04_20_06_10_817-#-_4040-#-RiskPaths-#-d90e1e9a-#-2022_07_04_20_06_10_818-#-success.json
@@ -115,38 +149,6 @@ func parseHistoryPath(srcPath string) (string, string, string, string, string, s
 	}
 
 	return subStamp, oms, mn, dgst, sp[0], sp[1]
-}
-
-// parse queue file path or queue file name and return submission stamp, oms instance name, model name and digest.
-func parseQueuePath(srcPath string) (string, string, string, string) {
-
-	// parse common job file part
-	subStamp, oms, mn, dgst, p := parseJobPath(srcPath)
-
-	if subStamp == "" || oms == "" || mn == "" || dgst == "" || p != "" {
-		return subStamp, oms, "", "" // source file path is not queue job file
-	}
-
-	return subStamp, oms, mn, dgst
-}
-
-// parse active file path or active file name and return submission stamp, oms instance name, model name, digest and process id
-// For example: 2022_07_08_23_03_27_555-#-_4040-#-RiskPaths-#-d90e1e9a-#-8888.json
-func parseActivePath(srcPath string) (string, string, string, string, int) {
-
-	// parse common job file part
-	subStamp, oms, mn, dgst, p := parseJobPath(srcPath)
-
-	if subStamp == "" || oms == "" || mn == "" || dgst == "" || p == "" {
-		return subStamp, oms, "", "", 0 // source file path is not active job file
-	}
-
-	// file name ends with pid, convert process id
-	pid, err := strconv.Atoi(p)
-	if err != nil || pid <= 0 {
-		return subStamp, oms, "", "", 0 // pid must be positive integer
-	}
-	return subStamp, oms, mn, dgst, pid
 }
 
 // add new run request to job queue
@@ -379,9 +381,12 @@ func scanJobs(doneC <-chan bool) {
 		return // job control disabled
 	}
 
+	nJobStateErrCount := 0
+
 	queuePtrn := filepath.Join(theCfg.jobDir, "queue") + string(filepath.Separator) + "*-#-" + theCfg.omsName + "-#-*.json"
 	activePtrn := filepath.Join(theCfg.jobDir, "active") + string(filepath.Separator) + "*-#-" + theCfg.omsName + "-#-*.json"
 	historyPtrn := filepath.Join(theCfg.jobDir, "history") + string(filepath.Separator) + "*-#-" + theCfg.omsName + "-#-*.json"
+	statePath := filepath.Join(theCfg.jobDir, JOB_STATE_FILE_NAME)
 
 	// map job file key (submission stamp and oms instance name) to file content (run job)
 	toJobMap := func(fLst []string, jobMap map[string]runJobFile) []string {
@@ -391,8 +396,8 @@ func scanJobs(doneC <-chan bool) {
 		for _, f := range fLst {
 
 			// get submission stamp and oms instance
-			stamp, oms, _, _, _ := parseJobPath(f)
-			if stamp == "" || oms == "" {
+			stamp, oms, mn, dgst, _ := parseJobPath(f)
+			if stamp == "" || oms == "" || mn == "" || dgst == "" {
 				continue // file name is not a job file name
 			}
 			jobKey := stamp + "-#-" + oms
@@ -494,11 +499,37 @@ func scanJobs(doneC <-chan bool) {
 		}
 
 		// update run catalog with current job control files
-		theRunCatalog.updateRunJobs(queueJobs, activeJobs, historyJobs)
+		jsc := theRunCatalog.updateRunJobs(queueJobs, activeJobs, historyJobs)
+
+		// save persistent part of jobs state
+		if nJobStateErrCount < 8 {
+
+			err := helper.ToJsonIndentFile(statePath, jsc)
+			if err != nil {
+				omppLog.Log(err)
+				nJobStateErrCount++
+			} else {
+				nJobStateErrCount = 0
+			}
+		}
 
 		// wait for doneC or sleep
 		if doExitSleep(jobScanInterval, doneC) {
 			return
 		}
 	}
+}
+
+// read job control state from the file, return empty state on error or if state file not exist
+func jobStateRead() (*jobControlState, bool) {
+
+	var jcs jobControlState
+	isOk, err := helper.FromJsonFile(filepath.Join(theCfg.jobDir, JOB_STATE_FILE_NAME), &jcs)
+	if err != nil {
+		omppLog.Log(err)
+	}
+	if !isOk || err != nil {
+		return &jobControlState{Queue: []string{}}, false
+	}
+	return &jcs, true
 }

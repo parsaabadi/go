@@ -25,6 +25,7 @@ type RunCatalog struct {
 	runLst       *list.List                     // list of model runs state (runStateLog)
 	modelLogs    map[string]map[string]RunState // map each model digest to run stamps to run state and run log path
 	jobsUpdateDt string                         // last date-time jobs list updated
+	isPaused     bool                           // if true then job queue is paused, jobs are not selected from queue
 	queueKeys    []string                       // run job keys of model runs waiting in the queue
 	activeKeys   []string                       // job keys of active (currently running) model runs
 	historyKeys  []string                       // job keys of models run history
@@ -109,6 +110,12 @@ type historyJobFile struct {
 	JobStatus   string // run status
 }
 
+// job control state
+type jobControlState struct {
+	Paused bool     // if true then job queue paused
+	Queue  []string // jobs queue
+}
+
 // RunState is model run state.
 // Model run console output redirected to log file: modelName.YYYY_MM_DD_hh_mm_ss_SSS.console.log
 type RunState struct {
@@ -151,7 +158,7 @@ const logTickTimeout = 7
 const defaultMpiTemplate = "mpi.ModelRun.template.txt"
 
 // RefreshCatalog reset state of most recent model run for each model.
-func (rsc *RunCatalog) refreshCatalog(etcDir string) error {
+func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error {
 
 	// get list of template files
 	rsc.runTemplates = []string{}
@@ -258,12 +265,20 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string) error {
 
 	// cleanup jobs control files info
 	rsc.jobsUpdateDt = helper.MakeDateTime(time.Now())
-	rsc.queueKeys = make([]string, 0, theCfg.runHistoryMaxSize)
 	rsc.activeKeys = make([]string, 0, theCfg.runHistoryMaxSize)
 	rsc.historyKeys = make([]string, 0, theCfg.runHistoryMaxSize)
 	rsc.queueJobs = make(map[string]runJobFile, theCfg.runHistoryMaxSize)
 	rsc.activeJobs = make(map[string]runJobFile, theCfg.runHistoryMaxSize)
 	rsc.historyJobs = make(map[string]historyJobFile, theCfg.runHistoryMaxSize)
+
+	if jsc == nil {
+		rsc.queueKeys = make([]string, 0, theCfg.runHistoryMaxSize)
+	} else {
+		rsc.isPaused = jsc.Paused
+		if len(jsc.Queue) > 0 {
+			rsc.queueKeys = append(rsc.queueKeys, jsc.Queue...)
+		}
+	}
 
 	return nil
 }
@@ -301,7 +316,7 @@ func (rsc *RunCatalog) allModels() map[string]modelRunBasic {
 }
 
 // update run catalog with current job control files
-func (rsc *RunCatalog) updateRunJobs(queueJobs map[string]runJobFile, activeJobs map[string]runJobFile, historyJobs map[string]historyJobFile) {
+func (rsc *RunCatalog) updateRunJobs(queueJobs map[string]runJobFile, activeJobs map[string]runJobFile, historyJobs map[string]historyJobFile) *jobControlState {
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
@@ -318,15 +333,61 @@ func (rsc *RunCatalog) updateRunJobs(queueJobs map[string]runJobFile, activeJobs
 	if n < cap(rsc.queueKeys) {
 		n = cap(rsc.queueKeys)
 	}
-	rsc.queueKeys = make([]string, 0, n)
+	qKeys := make([]string, 0, n)
 
-	for jobKey, jf := range queueJobs {
-		rsc.queueJobs[jobKey] = jf
-		if !jf.isError && jf.omsName == theCfg.omsName {
-			rsc.queueKeys = append(rsc.queueKeys, jobKey)
+	// copy existing queue job keys which still in the queue
+	if len(queueJobs) > 0 {
+		for _, jobKey := range rsc.queueKeys {
+
+			jf, ok := queueJobs[jobKey]
+			if !ok {
+				continue // skip: job is no longer in the queue
+			}
+			if jf.isError || jf.omsName != theCfg.omsName {
+				continue // skip: model job error or it is a different oms instance
+			}
+			if _, ok = rsc.models[jf.ModelDigest]; !ok {
+				continue // skip: model digest is not the models list
+			}
+
+			// check if job already exists in job list
+			isFound := false
+			for k := 0; !isFound && k < len(qKeys); k++ {
+				isFound = qKeys[k] == jobKey
+			}
+			if !isFound {
+				qKeys = append(qKeys, jobKey)
+			}
 		}
 	}
-	sort.Strings(rsc.queueKeys)
+	rsc.queueKeys = qKeys
+
+	// update queue jobs and collect all new job keys
+	qKeys = make([]string, 0, n)
+
+	for jobKey, jf := range queueJobs {
+
+		if _, ok := rsc.models[jf.ModelDigest]; !ok {
+			continue // skip: model digest is not the models list
+		}
+		if jf.isError || jf.omsName != theCfg.omsName {
+			continue // skip: model job error or it is a different oms instance
+		}
+		rsc.queueJobs[jobKey] = jf
+
+		// check if job already exists in job list
+		isFound := false
+		for k := 0; !isFound && k < len(rsc.queueKeys); k++ {
+			isFound = rsc.queueKeys[k] == jobKey
+		}
+		if !isFound {
+			qKeys = append(qKeys, jobKey)
+		}
+	}
+
+	// append new job keys at the end of existing queue
+	sort.Strings(qKeys)
+	rsc.queueKeys = append(rsc.queueKeys, qKeys...)
 
 	// update active model run jobs
 	n = len(activeJobs)
@@ -341,10 +402,14 @@ func (rsc *RunCatalog) updateRunJobs(queueJobs map[string]runJobFile, activeJobs
 	rsc.activeKeys = make([]string, 0, n)
 
 	for jobKey, jf := range activeJobs {
-		rsc.activeJobs[jobKey] = jf
-		if !jf.isError && jf.omsName == theCfg.omsName {
-			rsc.activeKeys = append(rsc.activeKeys, jobKey)
+		if _, ok := rsc.models[jf.ModelDigest]; !ok {
+			continue // skip: model digest is not the models list
 		}
+		if jf.isError || jf.omsName != theCfg.omsName {
+			continue // skip: model job error or it is a different oms instance
+		}
+		rsc.activeJobs[jobKey] = jf
+		rsc.activeKeys = append(rsc.activeKeys, jobKey)
 	}
 	sort.Strings(rsc.activeKeys)
 
@@ -367,6 +432,15 @@ func (rsc *RunCatalog) updateRunJobs(queueJobs map[string]runJobFile, activeJobs
 		}
 	}
 	sort.Strings(rsc.historyKeys)
+
+	// retrun job control state
+	jsc := jobControlState{
+		Paused: rsc.isPaused,
+		Queue:  make([]string, len(rsc.queueKeys)),
+	}
+	copy(jsc.Queue, rsc.queueKeys)
+
+	return &jsc
 }
 
 // return copy of job keys and job control items for queue, active and history model run jobs
@@ -399,7 +473,7 @@ func (rsc *RunCatalog) getRunJobs() (string, []string, []RunJob, []string, []Run
 	return rsc.jobsUpdateDt, qKeys, qJobs, aKeys, aJobs, hKeys, hJobs
 }
 
-// return active or queue job control item and is found boolean flag
+// return active job control item and is found boolean flag
 func (rsc *RunCatalog) getActiveJobItem(jobKey string) (runJobFile, bool) {
 
 	if jobKey == "" {
@@ -415,7 +489,7 @@ func (rsc *RunCatalog) getActiveJobItem(jobKey string) (runJobFile, bool) {
 	return runJobFile{}, false // not found
 }
 
-// return active or queue job control item and is found boolean flag
+// return queue job control item and is found boolean flag
 func (rsc *RunCatalog) getQueueJobItem(jobKey string) (runJobFile, bool) {
 
 	if jobKey == "" {
@@ -445,4 +519,59 @@ func (rsc *RunCatalog) getHistoryJobItem(jobKey string) (historyJobFile, bool) {
 		return hj, true
 	}
 	return historyJobFile{}, false // not found
+}
+
+// move job into the specified queue position.
+// Top of the queue position is zero, negative position treated as zero.
+// If position number exceeds queue length then job moved to the bottom of the queue.
+// Return false if job not found in the queue
+func (rsc *RunCatalog) moveJobInQueue(jobKey string, position int) bool {
+
+	if jobKey == "" {
+		return false // empty job key: return empty result
+	}
+
+	rsc.rscLock.Lock()
+	defer rsc.rscLock.Unlock()
+
+	// find current job position in the queue
+	isFound := false
+	n := 0
+	for n = range rsc.queueKeys {
+		isFound = rsc.queueKeys[n] == jobKey
+		if isFound {
+			break
+		}
+	}
+	if !isFound {
+		return false // job not found in the queue
+	}
+
+	// position must be between zero at the last postion in the queue
+	nPos := position
+	if nPos <= 0 {
+		nPos = 0
+	}
+	if nPos >= len(rsc.queueKeys)-1 {
+		nPos = len(rsc.queueKeys) - 1
+	}
+	if nPos == n {
+		return true // job is already at this position
+	}
+
+	// move down to the queue: shift items up
+	if nPos > n {
+
+		for k := n; k < nPos && k < len(rsc.queueKeys)-1; k++ {
+			rsc.queueKeys[k] = rsc.queueKeys[k+1]
+		}
+	} else { // move up in the queue: shift items down
+
+		for k := n - 1; k >= nPos && k >= 0; k-- {
+			rsc.queueKeys[k+1] = rsc.queueKeys[k]
+		}
+	}
+	rsc.queueKeys[nPos] = jobKey
+
+	return true
 }

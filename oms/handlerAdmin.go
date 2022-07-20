@@ -31,7 +31,7 @@ func allModelsRefreshHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// refresh run state catalog
-	if err := theRunCatalog.refreshCatalog(theCfg.etcDir); err != nil {
+	if err := theRunCatalog.refreshCatalog(theCfg.etcDir, nil); err != nil {
 		omppLog.Log(err)
 		http.Error(w, "Failed to refersh model runs catalog", http.StatusBadRequest)
 		return

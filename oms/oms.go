@@ -390,7 +390,8 @@ func mainBody(args []string) error {
 	}
 
 	// refresh run state catalog and start scanning model log files
-	if err := theRunCatalog.refreshCatalog(theCfg.etcDir); err != nil {
+	jsc, _ := jobStateRead()
+	if err := theRunCatalog.refreshCatalog(theCfg.etcDir, jsc); err != nil {
 		return err
 	}
 
@@ -1121,6 +1122,9 @@ func apiServiceRoutes(router *vestigo.Router) {
 	router.Get("/api/service/job/active/:job", jobActiveHandler, logRequest)
 	router.Get("/api/service/job/queue/:job", jobQueueHandler, logRequest)
 	router.Get("/api/service/job/history/:job", jobHistoryHandler, logRequest)
+
+	// PUT /api/service/job/move/:pos/:job
+	router.Put("/api/service/job/move/:pos/:job", jobMoveHandler, logRequest)
 }
 
 // add web-service /api routes for administrative tasks

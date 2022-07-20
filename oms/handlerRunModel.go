@@ -114,7 +114,7 @@ func stopModelHandler(w http.ResponseWriter, r *http.Request) {
 		moveJobQueueToFailed(stamp, m.Name, modelDigest) // model was not running, move job control file to history
 	}
 
-	// write new model run key and json response
+	// write model run key as response
 	w.Header().Set("Content-Location", "/api/model/"+modelDigest+"/run/"+stamp+"/"+strconv.FormatBool(isFound))
 }
 
@@ -159,6 +159,6 @@ func runLogPageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// write new model run key and json response
+	// return model run status and log content
 	jsonResponse(w, r, lrp)
 }

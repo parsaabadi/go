@@ -5,6 +5,7 @@ package main
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/openmpp/go/ompp/db"
 	"github.com/openmpp/go/ompp/helper"
@@ -136,7 +137,7 @@ func jobActiveHandler(w http.ResponseWriter, r *http.Request) {
 	jKey := getRequestParam(r, "job")
 	if jKey == "" {
 		http.Error(w, "Invalid (empty) job key", http.StatusBadRequest)
-		return // empty result: model digest not found
+		return
 	}
 
 	// find job state in run catalog
@@ -167,7 +168,7 @@ func jobQueueHandler(w http.ResponseWriter, r *http.Request) {
 	jKey := getRequestParam(r, "job")
 	if jKey == "" {
 		http.Error(w, "Invalid (empty) job key", http.StatusBadRequest)
-		return // empty result: model digest not found
+		return
 	}
 
 	// find job state in run catalog
@@ -198,7 +199,7 @@ func jobHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	jKey := getRequestParam(r, "job")
 	if jKey == "" {
 		http.Error(w, "Invalid (empty) job key", http.StatusBadRequest)
-		return // empty result: model digest not found
+		return
 	}
 
 	// find job state in run catalog
@@ -263,4 +264,36 @@ func getJobState(filePath string) (bool, *runJobState) {
 	}
 
 	return true, &st // retrun final result
+}
+
+// jobMoveHandler move job into the specified queue position.
+// Top of the queue position is zero, negative position treated as zero.
+// If position number exceeds queue length then job moved to the bottom of the queue.
+// PUT /api/service/job/move/:pos/:job
+func jobMoveHandler(w http.ResponseWriter, r *http.Request) {
+
+	// url or query parameters: position and job key
+	sp := getRequestParam(r, "pos")
+	nPos, err := strconv.Atoi(sp)
+	if sp == "" || err != nil {
+		http.Error(w, "Invalid (or empty) job queue position", http.StatusBadRequest)
+		return
+	}
+
+	jKey := getRequestParam(r, "job")
+	if jKey == "" {
+		http.Error(w, "Invalid (empty) job key", http.StatusBadRequest)
+		return
+	}
+
+	// move job in the queue
+	jKey = jobKeyFromStamp(jKey)
+	isOk := theRunCatalog.moveJobInQueue(jKey, nPos)
+
+	if !isOk {
+		w.Header().Set("Content-Location", "service/job/move/false/"+sp+"/"+jKey)
+		return
+	}
+	// else: job moved into the spoecified queue position
+	w.Header().Set("Content-Location", "service/job/move/true/"+sp+"/"+jKey)
 }
