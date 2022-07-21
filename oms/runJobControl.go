@@ -17,7 +17,8 @@ import (
 )
 
 const jobScanInterval = 1123             // timeout in msec, sleep interval between scanning all job directories
-const jobActiveScanInterval = 5021       // timeout in msec, sleep interval between scanning active job directory
+const jobQueueScanInterval = 107         // timeout in msec, sleep interval between getting next job from the queue
+const jobOuterScanInterval = 5021        // timeout in msec, sleep interval between scanning active job directory
 const JOB_STATE_FILE_NAME = "state.json" // file to store jobs control state
 
 // jobDirValid checking job control configuration.
@@ -151,25 +152,30 @@ func parseHistoryPath(srcPath string) (string, string, string, string, string, s
 	return subStamp, oms, mn, dgst, sp[0], sp[1]
 }
 
-// add new run request to job queue
-func addJobToQueue(stamp string, req *RunRequest) error {
+// write new run request into job queue file
+func addJobToQueue(stamp string, req *RunRequest) (*runJobFile, error) {
+
+	jc := RunJob{
+		SubmitStamp: stamp,
+		RunRequest:  *req,
+	}
+	rjf := runJobFile{omsName: theCfg.omsName, RunJob: jc}
+
+	// write into job queue file if job control is enabled
 	if !theCfg.isJobControl {
-		return nil // job control disabled
+		return &rjf, nil // job control disabled
 	}
 
-	fn := jobQueuePath(stamp, req.ModelName, req.ModelDigest)
+	rjf.filePath = jobQueuePath(stamp, req.ModelName, req.ModelDigest)
 
-	err := helper.ToJsonIndentFile(fn,
-		&RunJob{
-			SubmitStamp: stamp,
-			RunRequest:  *req,
-		})
+	err := helper.ToJsonIndentFile(rjf.filePath, &jc)
 	if err != nil {
 		omppLog.Log(err)
-		fileDleteAndLog(true, fn) // on error remove file, if any file created
-		return err
+		fileDleteAndLog(true, rjf.filePath) // on error remove file, if any file created
+		return nil, err
 	}
-	return nil
+
+	return &rjf, nil
 }
 
 // move run job to active state from queue
@@ -276,7 +282,7 @@ for each job in the outer list
     if run state is not completed then update run state as error
     and move file to history according to status
 */
-func scanActiveJobs(doneC <-chan bool) {
+func scanOuterJobs(doneC <-chan bool) {
 	if !theCfg.isJobControl {
 		return // job control disabled
 	}
@@ -292,7 +298,7 @@ func scanActiveJobs(doneC <-chan bool) {
 		// find active job files
 		fLst := filesByPattern(ptrn, "Error at active job files search")
 		if len(fLst) <= 0 {
-			if doExitSleep(jobActiveScanInterval, doneC) {
+			if doExitSleep(jobOuterScanInterval, doneC) {
 				return
 			}
 			continue // no active jobs
@@ -369,7 +375,7 @@ func scanActiveJobs(doneC <-chan bool) {
 		}
 
 		// wait for doneC or sleep
-		if doExitSleep(jobActiveScanInterval, doneC) {
+		if doExitSleep(jobOuterScanInterval, doneC) {
 			return
 		}
 	}
@@ -386,7 +392,7 @@ func scanJobs(doneC <-chan bool) {
 	queuePtrn := filepath.Join(theCfg.jobDir, "queue") + string(filepath.Separator) + "*-#-" + theCfg.omsName + "-#-*.json"
 	activePtrn := filepath.Join(theCfg.jobDir, "active") + string(filepath.Separator) + "*-#-" + theCfg.omsName + "-#-*.json"
 	historyPtrn := filepath.Join(theCfg.jobDir, "history") + string(filepath.Separator) + "*-#-" + theCfg.omsName + "-#-*.json"
-	statePath := filepath.Join(theCfg.jobDir, JOB_STATE_FILE_NAME)
+	jobStatePath := filepath.Join(theCfg.jobDir, JOB_STATE_FILE_NAME)
 
 	// map job file key (submission stamp and oms instance name) to file content (run job)
 	toJobMap := func(fLst []string, jobMap map[string]runJobFile) []string {
@@ -504,7 +510,7 @@ func scanJobs(doneC <-chan bool) {
 		// save persistent part of jobs state
 		if nJobStateErrCount < 8 {
 
-			err := helper.ToJsonIndentFile(statePath, jsc)
+			err := helper.ToJsonIndentFile(jobStatePath, jsc)
 			if err != nil {
 				omppLog.Log(err)
 				nJobStateErrCount++
@@ -532,4 +538,24 @@ func jobStateRead() (*jobControlState, bool) {
 		return &jobControlState{Queue: []string{}}, false
 	}
 	return &jcs, true
+}
+
+// scan model run queue and start model runs
+func scanRunJobs(doneC <-chan bool) {
+
+	for {
+		// get job from the queue and run
+		if stamp, req, isFound := theRunCatalog.pullJobFromQueue(); isFound {
+
+			_, e := theRunCatalog.runModel(stamp, req)
+			if e != nil {
+				omppLog.Log(e)
+			}
+		}
+
+		// wait for doneC or sleep
+		if doExitSleep(jobQueueScanInterval, doneC) {
+			return
+		}
+	}
 }

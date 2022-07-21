@@ -10,6 +10,7 @@ import (
 
 	"golang.org/x/text/language"
 
+	"github.com/openmpp/go/ompp/helper"
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
@@ -68,20 +69,32 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// if job control enabled then add model run to queue
-	submitStamp, _ := theCatalog.getNewTimeStamp()
+	submitStamp, dtNow := theCatalog.getNewTimeStamp()
 
-	e := addJobToQueue(submitStamp, &req)
-	if e != nil {
-		http.Error(w, "Model run submission failed: "+dn, http.StatusBadRequest)
-		return
+	prs := &RunState{
+		ModelName:      req.ModelName,
+		ModelDigest:    req.ModelDigest,
+		RunStamp:       helper.CleanPath(req.RunStamp),
+		SubmitStamp:    submitStamp,
+		UpdateDateTime: helper.MakeDateTime(dtNow),
 	}
+	var err error
 
-	// start model run
-	prs, e := theRunCatalog.runModel(submitStamp, &req)
-	if e != nil {
-		omppLog.Log(e)
-		http.Error(w, "Model start failed: "+dn, http.StatusBadRequest)
-		return
+	if theCfg.isJobControl {
+
+		err = theRunCatalog.appendJobToQueue(submitStamp, &req)
+		if err != nil {
+			http.Error(w, "Model run submission failed: "+dn, http.StatusBadRequest)
+			return
+		}
+	} else { // start model run if job control disabled
+
+		prs, err = theRunCatalog.runModel(submitStamp, &req)
+		if err != nil {
+			omppLog.Log(err)
+			http.Error(w, "Model start failed: "+dn, http.StatusBadRequest)
+			return
+		}
 	}
 
 	// write new model run key and json response
@@ -118,7 +131,7 @@ func stopModelHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Location", "/api/model/"+modelDigest+"/run/"+stamp+"/"+strconv.FormatBool(isFound))
 }
 
-// runLogPageHandler return model run status and log by model digest-or-name and run stamp.
+// runLogPageHandler return model run status and log by model digest-or-name and run-or-submit stamp.
 // GET /api/run/log/model/:model/stamp/:stamp
 // GET /api/run/log/model/:model/stamp/:stamp/start/:start/count/:count
 // If multiple models with same name exist then result is undefined.
@@ -129,7 +142,7 @@ func runLogPageHandler(w http.ResponseWriter, r *http.Request) {
 
 	// url or query parameters: model digest-or-name, page offset and page size
 	dn := getRequestParam(r, "model")
-	runStamp := getRequestParam(r, "stamp")
+	stamp := getRequestParam(r, "stamp")
 
 	start, ok := getIntRequestParam(r, "start", 0)
 	if !ok {
@@ -152,7 +165,7 @@ func runLogPageHandler(w http.ResponseWriter, r *http.Request) {
 	modelName := m.Name
 
 	// get current run status and page of log lines
-	lrp, e := theRunCatalog.readModelRunLog(modelDigest, runStamp, start, count)
+	lrp, e := theRunCatalog.readModelRunLog(modelDigest, stamp, start, count)
 	if e != nil {
 		omppLog.Log(e)
 		http.Error(w, "Model run status read failed: "+modelName+": "+dn, http.StatusBadRequest)

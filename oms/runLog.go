@@ -22,10 +22,10 @@ import (
 const logScanInterval = 4021
 
 // get current run status and page of log file lines
-func (rsc *RunCatalog) readModelRunLog(digest, runStamp string, start, count int) (*RunStateLogPage, error) {
+func (rsc *RunCatalog) readModelRunLog(digest, stamp string, start, count int) (*RunStateLogPage, error) {
 
-	// search for run status and log text by model digest and run stamp
-	lrp, isFound, isNewLog := rsc.getRunStateLogPage(digest, runStamp, start, count)
+	// search for run status and log text by model digest and run stamp or submit stamp
+	lrp, isFound, runStamp, isNewLog := rsc.getRunStateLogPage(digest, stamp, start, count)
 	if !isFound {
 		return lrp, nil // model run not found in catalog
 	}
@@ -37,16 +37,18 @@ func (rsc *RunCatalog) readModelRunLog(digest, runStamp string, start, count int
 	// check run status: if not completed then read most recent status from database
 	isUpdated := false
 
-	rl, isOk := theCatalog.RunRowList(digest, runStamp)
-	if isOk && len(rl) > 0 {
+	if runStamp != "" {
+		rl, isOk := theCatalog.RunRowList(digest, runStamp)
+		if isOk && len(rl) > 0 {
 
-		// use most recent run with that run stamp
-		r := rl[len(rl)-1]
+			// use most recent run with that run stamp
+			r := rl[len(rl)-1]
 
-		isUpdated = lrp.RunState.UpdateDateTime != r.UpdateDateTime || lrp.RunState.IsFinal != db.IsRunCompleted(r.Status)
-		if isUpdated {
-			lrp.RunState.UpdateDateTime = r.UpdateDateTime
-			lrp.RunState.IsFinal = db.IsRunCompleted(r.Status)
+			isUpdated = lrp.RunState.UpdateDateTime != r.UpdateDateTime || lrp.RunState.IsFinal != db.IsRunCompleted(r.Status)
+			if isUpdated {
+				lrp.RunState.UpdateDateTime = r.UpdateDateTime
+				lrp.RunState.IsFinal = db.IsRunCompleted(r.Status)
+			}
 		}
 	}
 
@@ -57,7 +59,7 @@ func (rsc *RunCatalog) readModelRunLog(digest, runStamp string, start, count int
 		lines := []string{}
 		if lrp.RunState.IsLog {
 
-			if lines, isOk = readLogFile(lrp.logPath); isOk && len(lines) > 0 {
+			if lines, isOk := readLogFile(lrp.logPath); isOk && len(lines) > 0 {
 				lrp.Offset, lrp.Size, lrp.Lines = getLinesPage(start, count, lines) // make log page to return
 				lrp.TotalSize = len(lines)
 			}
@@ -112,29 +114,37 @@ func (rsc *RunCatalog) postRunStateLog(digest string, runState RunState, logLine
 // get current run status and page of log lines and return true if run status found in catalog.
 // if run found in log history it is neccessary to check run status and may be read log file content.
 // return run state and two flags: first is true if model run found, second is true if model run found in log history.
-func (rsc *RunCatalog) getRunStateLogPage(digest, runStamp string, start, count int) (*RunStateLogPage, bool, bool) {
+func (rsc *RunCatalog) getRunStateLogPage(digest, stamp string, start, count int) (*RunStateLogPage, bool, string, bool) {
 
 	lrp := &RunStateLogPage{
 		Lines: []string{},
 	}
-	if digest == "" || runStamp == "" {
-		return lrp, false, false // empty model digest: exit
+	if digest == "" || stamp == "" {
+		return lrp, false, "", false // empty model digest or stamp (run-or-submit stamp): exit
 	}
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
-	// find model run state by digest and run stamp
+	// find model run state by digest and run-or-submit stamp
 	// return model run state and page from model log
 	var rsl *runStateLog
 	isFound := false
+	runStamp := stamp
+
 	for re := rsc.runLst.Front(); !isFound && re != nil; re = re.Next() {
 
 		rsl, isFound = re.Value.(*runStateLog)
 		if !isFound || rsl == nil {
 			continue
 		}
-		isFound = rsl.ModelDigest == digest && rsl.RunStamp == runStamp
+		isFound = rsl.ModelDigest == digest && rsl.RunStamp == stamp
+
+		if !isFound && rsl.ModelDigest == digest && rsl.SubmitStamp == stamp { // check if it is a submit stamp, not a run stamp
+			isFound = true
+			runStamp = rsl.RunStamp
+			break
+		}
 	}
 	// if not found then try to search log history
 	isNewLog := false
@@ -148,21 +158,21 @@ func (rsc *RunCatalog) getRunStateLogPage(digest, runStamp string, start, count 
 		isNewLog = isFound
 	}
 	if !isFound {
-		return lrp, false, false // not found: return empty result
+		return lrp, false, "", false // not found: return empty result
 	}
 	// run state found
 	lrp.RunState = rsl.RunState
 
 	// if run log lines are empty then it is necceassry to read log file outside of lock
 	if isNewLog || len(rsl.logLineLst) <= 0 {
-		return lrp, true, isNewLog
+		return lrp, true, runStamp, isNewLog
 	}
 
 	// copy log lines
 	lrp.TotalSize = len(rsl.logLineLst)
 	lrp.Offset, lrp.Size, lrp.Lines = getLinesPage(start, count, rsl.logLineLst)
 
-	return lrp, true, isNewLog
+	return lrp, true, runStamp, isNewLog
 }
 
 // read all non-empty text lines from log file.

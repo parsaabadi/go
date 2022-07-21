@@ -389,6 +389,14 @@ func mainBody(args []string) error {
 		omppLog.Log("Etc directory:       ", theCfg.etcDir)
 	}
 
+	// make instance name, use address to listen if name not specified
+	theCfg.omsName = runOpts.String(omsNameArgKey)
+	if theCfg.omsName == "" {
+		theCfg.omsName = runOpts.String(listenArgKey)
+	}
+	theCfg.omsName = helper.CleanPath(theCfg.omsName)
+	omppLog.Log("Oms instance name:   ", theCfg.omsName)
+
 	// refresh run state catalog and start scanning model log files
 	jsc, _ := jobStateRead()
 	if err := theRunCatalog.refreshCatalog(theCfg.etcDir, jsc); err != nil {
@@ -398,20 +406,15 @@ func mainBody(args []string) error {
 	doneLogScanC := make(chan bool)
 	go scanModelLogDirs(doneLogScanC)
 
-	// make instance name, use address to listen if name not specified
-	// start scanning for active jobs
-	theCfg.omsName = runOpts.String(omsNameArgKey)
-	if theCfg.omsName == "" {
-		theCfg.omsName = runOpts.String(listenArgKey)
-	}
-	theCfg.omsName = helper.CleanPath(theCfg.omsName)
-	omppLog.Log("Oms instance name:   ", theCfg.omsName)
-
-	doneActiveJobScanC := make(chan bool)
-	go scanActiveJobs(doneActiveJobScanC)
+	// start scanning for model run jobs
+	doneOuterJobScanC := make(chan bool)
+	go scanOuterJobs(doneOuterJobScanC)
 
 	doneJobScanC := make(chan bool)
 	go scanJobs(doneJobScanC)
+
+	doneRunScanC := make(chan bool)
+	go scanRunJobs(doneRunScanC)
 
 	// set UI languages to find model text in browser language
 	ll := strings.Split(runOpts.String(uiLangsArgKey), ",")
@@ -539,8 +542,9 @@ func mainBody(args []string) error {
 		}
 	}
 
-	doneActiveJobScanC <- true
+	doneRunScanC <- true
 	doneJobScanC <- true
+	doneOuterJobScanC <- true
 	doneLogScanC <- true
 	return err
 }
