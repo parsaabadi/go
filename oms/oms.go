@@ -1139,4 +1139,7 @@ func apiAdminRoutes(router *vestigo.Router) {
 
 	// POST /api/admin/all-models/close
 	router.Post("/api/admin/all-models/close", allModelsCloseHandler, logRequest)
+
+	// POST /api/admin/jobs-pause/:pause
+	router.Post("/api/admin/jobs-pause/:pause", jobsPauseHandler, logRequest)
 }

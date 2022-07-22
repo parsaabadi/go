@@ -449,7 +449,7 @@ func doDeleteInsertParamRows(
 
 	ins += "param_value) VALUES (" + strconv.Itoa(setId) + ", "
 
-	// converter from value into sql string to insert, if parameter type is string the retrun is 'sql quoted value'
+	// converter from value into sql string to insert, if parameter type is string the return is 'sql quoted value'
 	fv := cvtValueToSqlString(param, doubleFmt)
 
 	for {

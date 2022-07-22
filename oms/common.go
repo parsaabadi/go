@@ -359,8 +359,8 @@ func fileStat(filePath string) (fs.FileInfo, error) {
 	return fi, nil
 }
 
-// Delete file and log it if isLog is true, return false on delete error.
-func fileDleteAndLog(isLog bool, path string) bool {
+// Delete file and log path if isLog is true, return false on delete error.
+func fileDeleteAndLog(isLog bool, path string) bool {
 	if isLog {
 		omppLog.Log("Delete: ", path)
 	}
@@ -371,7 +371,7 @@ func fileDleteAndLog(isLog bool, path string) bool {
 	return true
 }
 
-// Delete file and log it if isLog is true, return false on delete error.
+// Move file to new location and log it if isLog is true, return false on move error.
 func fileMoveAndLog(isLog bool, srcPath string, dstPath string) bool {
 	if srcPath == "" || dstPath == "" {
 		return false
@@ -383,6 +383,21 @@ func fileMoveAndLog(isLog bool, srcPath string, dstPath string) bool {
 		omppLog.Log(e)
 		return false
 	}
+	return true
+}
+
+// Create or truncate existing file and log path if isLog is true, return false on create error.
+func fileCreateEmpty(isLog bool, path string) bool {
+	if isLog {
+		omppLog.Log("Create: ", path)
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	if err != nil {
+		omppLog.Log(err)
+		return false
+	}
+	defer f.Close()
+
 	return true
 }
 

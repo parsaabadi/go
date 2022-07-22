@@ -64,6 +64,7 @@ func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
 	st := struct {
 		IsJobControl   bool   // if true then job control enabled
 		UpdateDateTime string // last date-time jobs list updated
+		IsPaused       bool   // if true then jobs queue is paused, jobs are not selected from queue
 		Queue          []rj   // list of model run jobs in the queue
 		Active         []rj   // list of active (currently running) model run jobs
 		History        []hj   // history of model runs
@@ -75,7 +76,10 @@ func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if theCfg.isJobControl {
-		updateDt, qKeys, qJobs, aKeys, aJobs, hKeys, hJobs := theRunCatalog.getRunJobs()
+		updateDt, isPause, qKeys, qJobs, aKeys, aJobs, hKeys, hJobs := theRunCatalog.getRunJobs()
+
+		st.UpdateDateTime = updateDt
+		st.IsPaused = isPause
 
 		st.Queue = make([]rj, len(qKeys))
 		for k := range qKeys {
@@ -96,7 +100,6 @@ func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
 		for k := range hKeys {
 			st.History[k] = hj{JobKey: hKeys[k], historyJobFile: hJobs[k]}
 		}
-		st.UpdateDateTime = updateDt
 	}
 	jsonResponse(w, r, st)
 }
@@ -157,7 +160,7 @@ func jobActiveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	st.JobKey = jKey
 
-	jsonResponse(w, r, st) // retrun final result
+	jsonResponse(w, r, st) // return final result
 }
 
 // jobQueueHandler return queue job state
@@ -188,7 +191,7 @@ func jobQueueHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	st.JobKey = jKey
 
-	jsonResponse(w, r, st) // retrun final result
+	jsonResponse(w, r, st) // return final result
 }
 
 // jobHistoryHandler return history job state, run log file content and, if model run exists in database then also return run progress
@@ -220,7 +223,7 @@ func jobHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	st.JobKey = jKey
 	st.JobStatus = hj.JobStatus
 
-	jsonResponse(w, r, st) // retrun final result
+	jsonResponse(w, r, st) // return final result
 }
 
 // getJobState returns job control file content, run log file content and, if model run exists in database then also return run progress
@@ -263,7 +266,7 @@ func getJobState(filePath string) (bool, *runJobState) {
 		}
 	}
 
-	return true, &st // retrun final result
+	return true, &st // return final result
 }
 
 // jobMoveHandler move job into the specified queue position.
@@ -290,6 +293,7 @@ func jobMoveHandler(w http.ResponseWriter, r *http.Request) {
 	jKey = jobKeyFromStamp(jKey)
 	isOk := theRunCatalog.moveJobInQueue(jKey, nPos)
 
+	w.Header().Set("Content-Type", "text/plain")
 	if !isOk {
 		w.Header().Set("Content-Location", "service/job/move/false/"+sp+"/"+jKey)
 		return

@@ -68,9 +68,22 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// if job control enabled then add model run to queue
-	submitStamp, dtNow := theCatalog.getNewTimeStamp()
+	submitStamp, dtNow := theCatalog.getNewTimeStamp() // create submit stamp
 
+	// if job control disabled the start model run
+	if !theCfg.isJobControl {
+
+		prs, err := theRunCatalog.runModel(submitStamp, &req)
+		if err != nil {
+			omppLog.Log(err)
+			http.Error(w, "Model start failed: "+dn, http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Location", "/api/model/"+req.ModelDigest+"/run/"+prs.RunStamp)
+		jsonResponse(w, r, prs)
+		return
+	}
+	// else append run request to the queue and return submit stamp
 	prs := &RunState{
 		ModelName:      req.ModelName,
 		ModelDigest:    req.ModelDigest,
@@ -78,26 +91,12 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 		SubmitStamp:    submitStamp,
 		UpdateDateTime: helper.MakeDateTime(dtNow),
 	}
-	var err error
 
-	if theCfg.isJobControl {
-
-		err = theRunCatalog.appendJobToQueue(submitStamp, &req)
-		if err != nil {
-			http.Error(w, "Model run submission failed: "+dn, http.StatusBadRequest)
-			return
-		}
-	} else { // start model run if job control disabled
-
-		prs, err = theRunCatalog.runModel(submitStamp, &req)
-		if err != nil {
-			omppLog.Log(err)
-			http.Error(w, "Model start failed: "+dn, http.StatusBadRequest)
-			return
-		}
+	err := theRunCatalog.appendJobToQueue(submitStamp, &req)
+	if err != nil {
+		http.Error(w, "Model run submission failed: "+dn, http.StatusBadRequest)
+		return
 	}
-
-	// write new model run key and json response
 	w.Header().Set("Content-Location", "/api/model/"+req.ModelDigest+"/run/"+prs.RunStamp)
 	jsonResponse(w, r, prs)
 }
@@ -129,6 +128,7 @@ func stopModelHandler(w http.ResponseWriter, r *http.Request) {
 
 	// write model run key as response
 	w.Header().Set("Content-Location", "/api/model/"+modelDigest+"/run/"+stamp+"/"+strconv.FormatBool(isFound))
+	w.Header().Set("Content-Type", "text/plain")
 }
 
 // runLogPageHandler return model run status and log by model digest-or-name and run-or-submit stamp.

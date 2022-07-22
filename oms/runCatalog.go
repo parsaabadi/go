@@ -24,7 +24,7 @@ type RunCatalog struct {
 	runLst       *list.List                     // list of model runs state (runStateLog)
 	modelLogs    map[string]map[string]RunState // map each model digest to run stamps to run state and run log path
 	jobsUpdateDt string                         // last date-time jobs list updated
-	isPaused     bool                           // if true then job queue is paused, jobs are not selected from queue
+	isPaused     bool                           // if true then jobs queue is paused, jobs are not selected from queue
 	queueKeys    []string                       // run job keys of model runs waiting in the queue
 	activeKeys   []string                       // job keys of active (currently running) model runs
 	historyKeys  []string                       // job keys of models run history
@@ -111,8 +111,7 @@ type historyJobFile struct {
 
 // job control state
 type jobControlState struct {
-	Paused bool     // if true then job queue paused
-	Queue  []string // jobs queue
+	Queue []string // jobs queue
 }
 
 // RunState is model run state.
@@ -220,12 +219,15 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error
 		}
 	}
 
+	isPaused := isPausedJobState() // check if job queue is paused
+
 	// lock and update run state catalog
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
 	// update etc directory and list of templates
 	rsc.etcDir = etcDir
+	rsc.isPaused = isPaused
 
 	// copy existing models run history
 	rLst := list.New()
@@ -272,7 +274,6 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error
 	rsc.historyJobs = make(map[string]historyJobFile, theCfg.runHistoryMaxSize)
 
 	if jsc != nil {
-		rsc.isPaused = jsc.Paused
 		if len(jsc.Queue) > 0 {
 			rsc.queueKeys = append(rsc.queueKeys, jsc.Queue...)
 		}

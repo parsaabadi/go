@@ -17,9 +17,10 @@ func (rsc *RunCatalog) pullJobFromQueue() (string, *RunRequest, bool) {
 	defer rsc.rscLock.Unlock()
 
 	// find first job request in the queue
-	if len(rsc.queueKeys) <= 0 {
-		return "", nil, false // queue is empty
+	if rsc.isPaused || len(rsc.queueKeys) <= 0 {
+		return "", nil, false // queue is paused or empty
 	}
+
 	jKey := ""
 	for k := range rsc.queueKeys {
 		jc, ok := rsc.queueJobs[rsc.queueKeys[k]]
@@ -69,6 +70,8 @@ func (rsc *RunCatalog) appendJobToQueue(stamp string, req *RunRequest) error {
 	if err != nil {
 		return err
 	}
+
+	// append job to the queue immediately to avoid job scan delay
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
@@ -100,14 +103,17 @@ func (rsc *RunCatalog) appendJobToQueue(stamp string, req *RunRequest) error {
 }
 
 // update run catalog with current job control files
-func (rsc *RunCatalog) updateRunJobs(queueJobs map[string]runJobFile, activeJobs map[string]runJobFile, historyJobs map[string]historyJobFile) *jobControlState {
+func (rsc *RunCatalog) updateRunJobs(
+	queueJobs map[string]runJobFile, isPaused bool, activeJobs map[string]runJobFile, historyJobs map[string]historyJobFile,
+) *jobControlState {
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
-	// update queue with current list of job control files
+	rsc.isPaused = isPaused
 	rsc.jobsUpdateDt = helper.MakeDateTime(time.Now())
 
+	// update queue with current list of job control files
 	n := len(queueJobs)
 	if n < cap(rsc.queueKeys) {
 		n = cap(rsc.queueKeys)
@@ -205,10 +211,9 @@ func (rsc *RunCatalog) updateRunJobs(queueJobs map[string]runJobFile, activeJobs
 	}
 	sort.Strings(rsc.historyKeys)
 
-	// retrun job control state
+	// return job control state
 	jsc := jobControlState{
-		Paused: rsc.isPaused,
-		Queue:  make([]string, len(rsc.queueKeys)),
+		Queue: make([]string, len(rsc.queueKeys)),
 	}
 	copy(jsc.Queue, rsc.queueKeys)
 
@@ -216,7 +221,7 @@ func (rsc *RunCatalog) updateRunJobs(queueJobs map[string]runJobFile, activeJobs
 }
 
 // return copy of job keys and job control items for queue, active and history model run jobs
-func (rsc *RunCatalog) getRunJobs() (string, []string, []RunJob, []string, []RunJob, []string, []historyJobFile) {
+func (rsc *RunCatalog) getRunJobs() (string, bool, []string, []RunJob, []string, []RunJob, []string, []historyJobFile) {
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
@@ -242,7 +247,7 @@ func (rsc *RunCatalog) getRunJobs() (string, []string, []RunJob, []string, []Run
 		hJobs[k] = rsc.historyJobs[jobKey]
 	}
 
-	return rsc.jobsUpdateDt, qKeys, qJobs, aKeys, aJobs, hKeys, hJobs
+	return rsc.jobsUpdateDt, rsc.isPaused, qKeys, qJobs, aKeys, aJobs, hKeys, hJobs
 }
 
 // return active job control item and is found boolean flag

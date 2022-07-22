@@ -16,10 +16,9 @@ import (
 	ps "github.com/keybase/go-ps"
 )
 
-const jobScanInterval = 1123             // timeout in msec, sleep interval between scanning all job directories
-const jobQueueScanInterval = 107         // timeout in msec, sleep interval between getting next job from the queue
-const jobOuterScanInterval = 5021        // timeout in msec, sleep interval between scanning active job directory
-const JOB_STATE_FILE_NAME = "state.json" // file to store jobs control state
+const jobScanInterval = 1123      // timeout in msec, sleep interval between scanning all job directories
+const jobQueueScanInterval = 107  // timeout in msec, sleep interval between getting next job from the queue
+const jobOuterScanInterval = 5021 // timeout in msec, sleep interval between scanning active job directory
 
 // jobDirValid checking job control configuration.
 // if job control directory is empty then job control disabled.
@@ -43,6 +42,9 @@ func jobDirValid(jobDir string) error {
 	if err := dirExist(filepath.Join(jobDir, "history")); err != nil {
 		return err
 	}
+	if err := dirExist(filepath.Join(jobDir, "state")); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -55,23 +57,33 @@ func jobKeyFromStamp(stamp string) string {
 	return stamp
 }
 
-// retrun job control file path if model is running now, e.g.: 2022_07_08_23_03_27_555-#-_4040-#-RiskPaths-#-d90e1e9a-#-8888.json
+// return job control file path if model is running now, e.g.: 2022_07_08_23_03_27_555-#-_4040-#-RiskPaths-#-d90e1e9a-#-8888.json
 func jobActivePath(submitStamp, modelName, modelDigest string, pid int) string {
 	return filepath.Join(theCfg.jobDir, "active", submitStamp+"-#-"+theCfg.omsName+"-#-"+modelName+"-#-"+modelDigest+"-#-"+strconv.Itoa(pid)+".json")
 }
 
-// retrun path job control file path if model run standing is queue, e.g.: 2022_07_05_19_55_38_111-#-_4040-#-RiskPaths-#-d90e1e9a.json
+// return path job control file path if model run standing is queue, e.g.: 2022_07_05_19_55_38_111-#-_4040-#-RiskPaths-#-d90e1e9a.json
 func jobQueuePath(submitStamp, modelName, modelDigest string) string {
 	return filepath.Join(theCfg.jobDir, "queue", submitStamp+"-#-"+theCfg.omsName+"-#-"+modelName+"-#-"+modelDigest+".json")
 }
 
-// retrun job control file path to completed model with run status suffix.
+// return job control file path to completed model with run status suffix.
 // For example: 2022_07_04_20_06_10_817-#-_4040-#-RiskPaths-#-d90e1e9a-#-2022_07_04_20_06_10_818-#-success.json
 func jobHistoryPath(status, submitStamp, modelName, modelDigest, runStamp string) string {
 	return filepath.Join(
 		theCfg.jobDir,
 		"history",
 		submitStamp+"-#-"+theCfg.omsName+"-#-"+modelName+"-#-"+modelDigest+"-#-"+runStamp+"-#-"+db.NameOfRunStatus(status)+".json")
+}
+
+// return job state file path e.g.: /job/state/_4040.json
+func jobStatePath() string {
+	return filepath.Join(theCfg.jobDir, "state", theCfg.omsName+".json")
+}
+
+// return job queue paused file path e.g.: /job/state/jobs.queue.paused
+func jobPausedPath() string {
+	return filepath.Join(theCfg.jobDir, "state", "jobs.queue.paused")
 }
 
 // parse job file file path or job file name:
@@ -171,7 +183,7 @@ func addJobToQueue(stamp string, req *RunRequest) (*runJobFile, error) {
 	err := helper.ToJsonIndentFile(rjf.filePath, &jc)
 	if err != nil {
 		omppLog.Log(err)
-		fileDleteAndLog(true, rjf.filePath) // on error remove file, if any file created
+		fileDeleteAndLog(true, rjf.filePath) // on error remove file, if any file created
 		return nil, err
 	}
 
@@ -193,7 +205,7 @@ func moveJobToActive(rState *RunState, runStamp string) bool {
 		omppLog.Log(err)
 	}
 	if !isOk || err != nil {
-		fileDleteAndLog(true, src) // invalid file content: remove job control file from queue
+		fileDeleteAndLog(true, src) // invalid file content: remove job control file from queue
 		return false
 	}
 
@@ -206,12 +218,12 @@ func moveJobToActive(rState *RunState, runStamp string) bool {
 
 	dst := jobActivePath(rState.SubmitStamp, rState.ModelName, rState.ModelDigest, rState.pid)
 
-	fileDleteAndLog(false, src) // remove job control file from queue
+	fileDeleteAndLog(false, src) // remove job control file from queue
 
 	err = helper.ToJsonIndentFile(dst, &jc)
 	if err != nil {
 		omppLog.Log(err)
-		fileDleteAndLog(true, dst) // on error remove file, if any file created
+		fileDeleteAndLog(true, dst) // on error remove file, if any file created
 		return false
 	}
 	return true
@@ -227,7 +239,7 @@ func moveJobToHistory(status, submitStamp, modelName, modelDigest, runStamp stri
 	dst := jobHistoryPath(status, submitStamp, modelName, modelDigest, runStamp)
 
 	if !fileMoveAndLog(false, src, dst) {
-		fileDleteAndLog(true, src) // if move failed then delete job control file from active list
+		fileDeleteAndLog(true, src) // if move failed then delete job control file from active list
 		return false
 	}
 	return true
@@ -242,7 +254,7 @@ func moveOuterJobToHistory(srcPath string, status, submitStamp, modelName, model
 	dst := jobHistoryPath(status, submitStamp, modelName, modelDigest, runStamp)
 
 	if !fileMoveAndLog(true, srcPath, dst) {
-		fileDleteAndLog(true, srcPath) // if move failed then delete job control file from active list
+		fileDeleteAndLog(true, srcPath) // if move failed then delete job control file from active list
 		return false
 	}
 	return true
@@ -258,10 +270,29 @@ func moveJobQueueToFailed(submitStamp, modelName, modelDigest string) bool {
 	dst := jobHistoryPath(db.ErrorRunStatus, submitStamp, modelName, modelDigest, "no-run-time-stamp")
 
 	if !fileMoveAndLog(true, src, dst) {
-		fileDleteAndLog(true, src) // if move failed then delete job control file from queue
+		fileDeleteAndLog(true, src) // if move failed then delete job control file from queue
 		return false
 	}
 	return true
+}
+
+// read job control state from the file, return empty state on error or if state file not exist
+func jobStateRead() (*jobControlState, bool) {
+
+	var jcs jobControlState
+	isOk, err := helper.FromJsonFile(jobStatePath(), &jcs)
+	if err != nil {
+		omppLog.Log(err)
+	}
+	if !isOk || err != nil {
+		return &jobControlState{Queue: []string{}}, false
+	}
+	return &jcs, true
+}
+
+// return true if jobs queue processing is paused
+func isPausedJobState() bool {
+	return fileExist(jobPausedPath()) == nil
 }
 
 /*
@@ -387,12 +418,12 @@ func scanJobs(doneC <-chan bool) {
 		return // job control disabled
 	}
 
-	nJobStateErrCount := 0
-
 	queuePtrn := filepath.Join(theCfg.jobDir, "queue") + string(filepath.Separator) + "*-#-" + theCfg.omsName + "-#-*.json"
 	activePtrn := filepath.Join(theCfg.jobDir, "active") + string(filepath.Separator) + "*-#-" + theCfg.omsName + "-#-*.json"
 	historyPtrn := filepath.Join(theCfg.jobDir, "history") + string(filepath.Separator) + "*-#-" + theCfg.omsName + "-#-*.json"
-	jobStatePath := filepath.Join(theCfg.jobDir, JOB_STATE_FILE_NAME)
+
+	jobStatePath := jobStatePath()
+	nJobStateErrCount := 0
 
 	// map job file key (submission stamp and oms instance name) to file content (run job)
 	toJobMap := func(fLst []string, jobMap map[string]runJobFile) []string {
@@ -505,10 +536,10 @@ func scanJobs(doneC <-chan bool) {
 		}
 
 		// update run catalog with current job control files
-		jsc := theRunCatalog.updateRunJobs(queueJobs, activeJobs, historyJobs)
+		jsc := theRunCatalog.updateRunJobs(queueJobs, isPausedJobState(), activeJobs, historyJobs)
 
 		// save persistent part of jobs state
-		if nJobStateErrCount < 8 {
+		if nJobStateErrCount < 16 {
 
 			err := helper.ToJsonIndentFile(jobStatePath, jsc)
 			if err != nil {
@@ -526,22 +557,11 @@ func scanJobs(doneC <-chan bool) {
 	}
 }
 
-// read job control state from the file, return empty state on error or if state file not exist
-func jobStateRead() (*jobControlState, bool) {
-
-	var jcs jobControlState
-	isOk, err := helper.FromJsonFile(filepath.Join(theCfg.jobDir, JOB_STATE_FILE_NAME), &jcs)
-	if err != nil {
-		omppLog.Log(err)
-	}
-	if !isOk || err != nil {
-		return &jobControlState{Queue: []string{}}, false
-	}
-	return &jcs, true
-}
-
 // scan model run queue and start model runs
 func scanRunJobs(doneC <-chan bool) {
+	if !theCfg.isJobControl {
+		return // job control disabled: no queue
+	}
 
 	for {
 		// get job from the queue and run

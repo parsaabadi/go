@@ -5,6 +5,7 @@ package main
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/openmpp/go/ompp/omppLog"
 )
@@ -54,5 +55,32 @@ func allModelsCloseHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Location", "/api/admin/all-models/close/"+modelDir)
+	w.Header().Set("Content-Type", "text/plain")
+}
+
+// jobsPauseHandler pause or resume jobs queue processing
+// POST /api/admin/jobs-pause/:pause
+func jobsPauseHandler(w http.ResponseWriter, r *http.Request) {
+
+	// url or query parameters: pause or resume boolean flag
+	sp := getRequestParam(r, "pause")
+	isPause, err := strconv.ParseBool(sp)
+	if sp == "" || err != nil {
+		http.Error(w, "Invalid (or empty) jobs pause flag, expected true or false", http.StatusBadRequest)
+		return
+	}
+
+	// create jobs paused state file or remove it to resume queue processing
+	isOk := false
+	if isPause {
+		isOk = fileCreateEmpty(false, jobPausedPath())
+	} else {
+		isOk = fileDeleteAndLog(false, jobPausedPath())
+	}
+	if !isOk {
+		isPause = !isPause // operation failed
+	}
+
+	w.Header().Set("Content-Location", "/api/admin/jobs-pause/"+strconv.FormatBool(isPause))
 	w.Header().Set("Content-Type", "text/plain")
 }
