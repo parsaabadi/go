@@ -165,22 +165,18 @@ func parseHistoryPath(srcPath string) (string, string, string, string, string, s
 }
 
 // write new run request into job queue file
-func addJobToQueue(stamp string, req *RunRequest) (*runJobFile, error) {
+func addJobToQueue(job *RunJob) (*runJobFile, error) {
 
-	jc := RunJob{
-		SubmitStamp: stamp,
-		RunRequest:  *req,
-	}
-	rjf := runJobFile{omsName: theCfg.omsName, RunJob: jc}
+	rjf := runJobFile{omsName: theCfg.omsName, RunJob: *job}
 
 	// write into job queue file if job control is enabled
 	if !theCfg.isJobControl {
 		return &rjf, nil // job control disabled
 	}
 
-	rjf.filePath = jobQueuePath(stamp, req.ModelName, req.ModelDigest)
+	rjf.filePath = jobQueuePath(job.SubmitStamp, job.ModelName, job.ModelDigest)
 
-	err := helper.ToJsonIndentFile(rjf.filePath, &jc)
+	err := helper.ToJsonIndentFile(rjf.filePath, job)
 	if err != nil {
 		omppLog.Log(err)
 		fileDeleteAndLog(true, rjf.filePath) // on error remove file, if any file created
@@ -565,7 +561,7 @@ func scanRunJobs(doneC <-chan bool) {
 
 	for {
 		// get job from the queue and run
-		if stamp, req, isFound := theRunCatalog.pullJobFromQueue(); isFound {
+		if stamp, req, isFound := theRunCatalog.getJobFromQueue(); isFound {
 
 			_, e := theRunCatalog.runModel(stamp, req)
 			if e != nil {

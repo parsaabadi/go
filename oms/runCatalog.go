@@ -26,11 +26,10 @@ type RunCatalog struct {
 	jobsUpdateDt string                         // last date-time jobs list updated
 	isPaused     bool                           // if true then jobs queue is paused, jobs are not selected from queue
 	queueKeys    []string                       // run job keys of model runs waiting in the queue
-	activeKeys   []string                       // job keys of active (currently running) model runs
-	historyKeys  []string                       // job keys of models run history
 	queueJobs    map[string]runJobFile          // model run jobs waiting in the queue
 	activeJobs   map[string]runJobFile          // active (currently running) model run jobs
 	historyJobs  map[string]historyJobFile      // models run jobs history
+	selectedKeys []string                       // jobs selected from queue to run now
 }
 
 var theRunCatalog RunCatalog // list of most recent state of model run for each model.
@@ -85,6 +84,10 @@ type RunJob struct {
 	Pid         int    // process id
 	CmdPath     string // executable path
 	RunRequest         // model run request: model name, digest and run options
+	Res         struct {
+		Cpu int // model run cpu count
+		Mem int // if not zero then memory size in gigbytes
+	}
 	LogFileName string // log file name
 	LogPath     string // log file path: log/dir/modelName.RunStamp.console.log
 }
@@ -266,12 +269,14 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error
 
 	// cleanup jobs control files info
 	rsc.jobsUpdateDt = helper.MakeDateTime(time.Now())
-	rsc.activeKeys = []string{}
 	rsc.queueKeys = []string{}
-	rsc.historyKeys = make([]string, 0, theCfg.runHistoryMaxSize)
 	rsc.activeJobs = map[string]runJobFile{}
 	rsc.queueJobs = map[string]runJobFile{}
 	rsc.historyJobs = make(map[string]historyJobFile, theCfg.runHistoryMaxSize)
+
+	if rsc.selectedKeys == nil {
+		rsc.selectedKeys = []string{}
+	}
 
 	if jsc != nil {
 		if len(jsc.Queue) > 0 {

@@ -10,8 +10,8 @@ import (
 	"github.com/openmpp/go/ompp/helper"
 )
 
-// get model run request and remove it from the queue
-func (rsc *RunCatalog) pullJobFromQueue() (string, *RunRequest, bool) {
+// get model run request from the queue
+func (rsc *RunCatalog) getJobFromQueue() (string, *RunRequest, bool) {
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
@@ -24,19 +24,25 @@ func (rsc *RunCatalog) pullJobFromQueue() (string, *RunRequest, bool) {
 	jKey := ""
 	for k := range rsc.queueKeys {
 		jc, ok := rsc.queueJobs[rsc.queueKeys[k]]
-		if ok && !jc.isError {
-			jKey = rsc.queueKeys[k]
-			rsc.queueKeys = append(rsc.queueKeys[:k], rsc.queueKeys[k+1:]...)
+		if !ok || jc.isError {
+			continue
+		}
+		isSel := false
+		for j := 0; !isSel && j < len(rsc.selectedKeys); j++ {
+			isSel = rsc.selectedKeys[j] == rsc.queueKeys[k]
+		}
+		if !isSel {
+			jKey = rsc.queueKeys[k] // first job in queue which not yet selected to run
 			break
 		}
 	}
 	if jKey == "" {
-		return "", nil, false // queue is empty
+		return "", nil, false // queue is empty or all jobs already selected to run
 	}
-	qj := rsc.queueJobs[jKey]
-	delete(rsc.queueJobs, jKey)
 
-	// copy run request from the queue
+	// job found: copy run request from the queue
+	rsc.selectedKeys = append(rsc.selectedKeys, jKey)
+	qj := rsc.queueJobs[jKey]
 	req := qj.RunRequest
 
 	req.Opts = make(map[string]string, len(qj.Opts))
@@ -61,45 +67,6 @@ func (rsc *RunCatalog) pullJobFromQueue() (string, *RunRequest, bool) {
 	copy(req.RunNotes, qj.RunNotes)
 
 	return qj.SubmitStamp, &req, true
-}
-
-// add new model run request to the queue
-func (rsc *RunCatalog) appendJobToQueue(stamp string, req *RunRequest) error {
-
-	rjf, err := addJobToQueue(stamp, req)
-	if err != nil {
-		return err
-	}
-
-	// append job to the queue immediately to avoid job scan delay
-	rsc.rscLock.Lock()
-	defer rsc.rscLock.Unlock()
-
-	// check if job is not already in queue, active or history
-	jKey := jobKeyFromStamp(stamp)
-
-	if _, ok := rsc.queueJobs[jKey]; ok {
-		return nil // job already in the queue
-	}
-	if _, ok := rsc.activeJobs[jKey]; ok {
-		return nil // job already active: model is running
-	}
-	if _, ok := rsc.historyJobs[jKey]; ok {
-		return nil // job already in the history: run completed or failed
-	}
-
-	// append job into the queue
-	rsc.queueJobs[jKey] = *rjf
-
-	for _, qKey := range rsc.queueKeys {
-		if qKey == jKey {
-			return nil // job key already in the queue
-		}
-	}
-	rsc.queueKeys = append(rsc.queueKeys, jKey)
-
-	rsc.jobsUpdateDt = helper.MakeDateTime(time.Now())
-	return nil
 }
 
 // update run catalog with current job control files
@@ -159,6 +126,7 @@ func (rsc *RunCatalog) updateRunJobs(
 		if jf.isError || jf.omsName != theCfg.omsName {
 			continue // skip: model job error or it is a different oms instance
 		}
+
 		rsc.queueJobs[jobKey] = jf
 
 		// check if job already exists in job list
@@ -176,12 +144,12 @@ func (rsc *RunCatalog) updateRunJobs(
 	rsc.queueKeys = append(rsc.queueKeys, qKeys...)
 
 	// update active model run jobs
-	n = len(activeJobs)
-	if n < cap(rsc.activeKeys) {
-		n = cap(rsc.activeKeys)
+	for jobKey := range rsc.activeJobs {
+		jf, ok := activeJobs[jobKey]
+		if !ok || jf.isError {
+			delete(rsc.activeJobs, jobKey) // remove: job file not exists
+		}
 	}
-	rsc.activeKeys = make([]string, 0, n)
-	rsc.activeJobs = make(map[string]runJobFile, n)
 
 	for jobKey, jf := range activeJobs {
 		if _, ok := rsc.models[jf.ModelDigest]; !ok {
@@ -191,25 +159,31 @@ func (rsc *RunCatalog) updateRunJobs(
 			continue // skip: model job error or it is a different oms instance
 		}
 		rsc.activeJobs[jobKey] = jf
-		rsc.activeKeys = append(rsc.activeKeys, jobKey)
 	}
-	sort.Strings(rsc.activeKeys)
 
 	// update model run job history
-	n = len(historyJobs)
-	if n < cap(rsc.historyKeys) {
-		n = cap(rsc.historyKeys)
-	}
-	rsc.historyKeys = make([]string, 0, n)
-	rsc.historyJobs = make(map[string]historyJobFile, n)
-
-	for jobKey, jh := range historyJobs {
-		rsc.historyJobs[jobKey] = jh
-		if !jh.isError && jh.omsName == theCfg.omsName {
-			rsc.historyKeys = append(rsc.historyKeys, jobKey)
+	for jobKey := range rsc.historyJobs {
+		jh, ok := historyJobs[jobKey]
+		if !ok || jh.isError {
+			delete(rsc.historyJobs, jobKey) // remove: job file not exist
 		}
 	}
-	sort.Strings(rsc.historyKeys)
+
+	for jobKey, jh := range historyJobs {
+		if !jh.isError && jh.omsName == theCfg.omsName {
+			rsc.historyJobs[jobKey] = jh
+		}
+	}
+
+	// cleanup selected to run jobs list: remove if job key not exist in queue files list
+	n = 0
+	for _, jKey := range rsc.selectedKeys {
+		if _, ok := queueJobs[jKey]; ok {
+			rsc.selectedKeys[n] = jKey // job file still exist in the queue
+			n++
+		}
+	}
+	rsc.selectedKeys = rsc.selectedKeys[:n]
 
 	// return job control state
 	jsc := jobControlState{
@@ -226,25 +200,40 @@ func (rsc *RunCatalog) getRunJobs() (string, bool, []string, []RunJob, []string,
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
+	// jobs queue: sort in order of keys, which user may change through UI
 	qKeys := make([]string, len(rsc.queueKeys))
 	qJobs := make([]RunJob, len(rsc.queueKeys))
-	for k, jobKey := range rsc.queueKeys {
-		qKeys[k] = jobKey
-		qJobs[k] = rsc.queueJobs[jobKey].RunJob
+	for k, jKey := range rsc.queueKeys {
+		qKeys[k] = jKey
+		qJobs[k] = rsc.queueJobs[jKey].RunJob
 	}
 
-	aKeys := make([]string, len(rsc.activeKeys))
-	aJobs := make([]RunJob, len(rsc.activeKeys))
-	for k, jobKey := range rsc.activeKeys {
-		aKeys[k] = jobKey
-		aJobs[k] = rsc.activeJobs[jobKey].RunJob
+	// active jobs: sort by submission time
+	aKeys := make([]string, len(rsc.activeJobs))
+	n := 0
+	for jKey := range rsc.activeJobs {
+		aKeys[n] = jKey
+		n++
+	}
+	sort.Strings(aKeys)
+
+	aJobs := make([]RunJob, len(aKeys))
+	for k, jKey := range aKeys {
+		aJobs[k] = rsc.activeJobs[jKey].RunJob
 	}
 
-	hKeys := make([]string, len(rsc.historyKeys))
-	hJobs := make([]historyJobFile, len(rsc.historyKeys))
-	for k, jobKey := range rsc.historyKeys {
-		hKeys[k] = jobKey
-		hJobs[k] = rsc.historyJobs[jobKey]
+	// history jobs: sort by submission time
+	hKeys := make([]string, len(rsc.historyJobs))
+	n = 0
+	for jKey := range rsc.historyJobs {
+		hKeys[n] = jKey
+		n++
+	}
+	sort.Strings(hKeys)
+
+	hJobs := make([]historyJobFile, len(hKeys))
+	for k, jKey := range hKeys {
+		hJobs[k] = rsc.historyJobs[jKey]
 	}
 
 	return rsc.jobsUpdateDt, rsc.isPaused, qKeys, qJobs, aKeys, aJobs, hKeys, hJobs

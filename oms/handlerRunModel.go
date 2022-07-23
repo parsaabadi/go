@@ -49,56 +49,103 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 	req.ModelDigest = m.Digest
 	req.ModelName = m.Name
 
-	// backward compatibility: check if number of threads specified using run options
-	if req.Threads <= 1 {
-
-		for krq, val := range req.Opts {
-			if !strings.EqualFold(krq, "-OpenM.Threads") && !strings.EqualFold(krq, "OpenM.Threads") {
-				continue // skip option: it is not a number of threads
-			}
-
-			n, e := strconv.Atoi(val) // must be >= 1
-			if e != nil || n < 1 {
-				omppLog.Log(e)
-				http.Error(w, "Model start failed: "+dn, http.StatusBadRequest)
-				return
-			}
-			req.Threads = n // store number of threads explicitly
-			break
-		}
+	// get number of modelling cpu and for backward compatibility: check if number of threads specified using run options
+	nCpu, _, _, nTh, err := cpuRequest(req)
+	if err != nil {
+		omppLog.Log(err)
+		http.Error(w, "Model start failed: "+dn, http.StatusBadRequest)
+		return
 	}
-
-	submitStamp, dtNow := theCatalog.getNewTimeStamp() // create submit stamp
+	req.Threads = nTh
 
 	// if job control disabled the start model run
+	submitStamp, dtNow := theCatalog.getNewTimeStamp() // create submit stamp
+
 	if !theCfg.isJobControl {
 
-		prs, err := theRunCatalog.runModel(submitStamp, &req)
+		rs, err := theRunCatalog.runModel(submitStamp, &req)
 		if err != nil {
 			omppLog.Log(err)
 			http.Error(w, "Model start failed: "+dn, http.StatusBadRequest)
 			return
 		}
-		w.Header().Set("Content-Location", "/api/model/"+req.ModelDigest+"/run/"+prs.RunStamp)
-		jsonResponse(w, r, prs)
+		w.Header().Set("Content-Location", "/api/model/"+req.ModelDigest+"/run/"+rs.RunStamp)
+		jsonResponse(w, r, rs)
 		return
 	}
 	// else append run request to the queue and return submit stamp
-	prs := &RunState{
-		ModelName:      req.ModelName,
-		ModelDigest:    req.ModelDigest,
-		RunStamp:       helper.CleanPath(req.RunStamp),
-		SubmitStamp:    submitStamp,
-		UpdateDateTime: helper.MakeDateTime(dtNow),
+	jc := RunJob{
+		SubmitStamp: submitStamp,
+		RunRequest:  req,
 	}
+	jc.Res.Cpu = nCpu
 
-	err := theRunCatalog.appendJobToQueue(submitStamp, &req)
+	_, err = addJobToQueue(&jc)
 	if err != nil {
 		http.Error(w, "Model run submission failed: "+dn, http.StatusBadRequest)
 		return
 	}
-	w.Header().Set("Content-Location", "/api/model/"+req.ModelDigest+"/run/"+prs.RunStamp)
-	jsonResponse(w, r, prs)
+	rStamp := helper.CleanPath(req.RunStamp)
+
+	w.Header().Set("Content-Location", "/api/model/"+req.ModelDigest+"/run/"+rStamp)
+	jsonResponse(w, r,
+		&RunState{
+			ModelName:      req.ModelName,
+			ModelDigest:    req.ModelDigest,
+			RunStamp:       rStamp,
+			SubmitStamp:    submitStamp,
+			UpdateDateTime: helper.MakeDateTime(dtNow),
+		})
+}
+
+// return cpu modelling count, MPI not-on-root flag, number of processes and modelling threads per process
+func cpuRequest(req RunRequest) (int, bool, int, int, error) {
+
+	// get number of threads and MPI NotOnRoot flag
+	nTh := req.Threads
+	isNotOnRoot := false
+
+	for krq, val := range req.Opts {
+
+		// backward compatibility: check if number of threads specified using run options
+		var err error
+
+		if req.Threads <= 1 &&
+			(strings.EqualFold(krq, "-OpenM.Threads") || strings.EqualFold(krq, "OpenM.Threads")) {
+
+			nTh, err = strconv.Atoi(val) // must be >= 1
+			if err != nil || nTh < 1 {
+				omppLog.Log(err)
+				return 0, false, 0, 0, err
+			}
+		}
+
+		// get MPI "not on root" flag: do not run modelling on root MPI process
+		if strings.EqualFold(krq, "-OpenM.NotOnRoot") || strings.EqualFold(krq, "OpenM.NotOnRoot") {
+
+			if val == "" {
+				isNotOnRoot = true // empty boolean option value treated as true
+			}
+			isNotOnRoot, err = strconv.ParseBool(val)
+			if err != nil {
+				omppLog.Log(err)
+				return 0, false, 0, 0, err
+			}
+		}
+	}
+
+	// number of modelling processes and requested cpu count
+	nProc := req.Mpi.Np
+	if nProc <= 0 {
+		nProc = 1
+	}
+	np := nProc
+	if np > 1 && isNotOnRoot {
+		np--
+	}
+	nCpu := np * nTh
+
+	return nCpu, isNotOnRoot, np, nTh, nil
 }
 
 // stopModelHandler kill model run by model digest-or-name and run stamp or remove model run request from queue by submit stamp.
