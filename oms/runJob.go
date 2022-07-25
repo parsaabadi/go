@@ -69,131 +69,6 @@ func (rsc *RunCatalog) getJobFromQueue() (string, *RunRequest, bool) {
 	return qj.SubmitStamp, &req, true
 }
 
-// update run catalog with current job control files
-func (rsc *RunCatalog) updateRunJobs(
-	queueJobs map[string]runJobFile, isPaused bool, activeJobs map[string]runJobFile, historyJobs map[string]historyJobFile,
-) *jobControlState {
-
-	rsc.rscLock.Lock()
-	defer rsc.rscLock.Unlock()
-
-	rsc.isPaused = isPaused
-	rsc.jobsUpdateDt = helper.MakeDateTime(time.Now())
-
-	// update queue with current list of job control files
-	n := len(queueJobs)
-	if n < cap(rsc.queueKeys) {
-		n = cap(rsc.queueKeys)
-	}
-	qKeys := make([]string, 0, n)
-	rsc.queueJobs = make(map[string]runJobFile, n)
-
-	// copy existing queue job keys which still in the queue
-	if len(queueJobs) > 0 {
-		for _, jobKey := range rsc.queueKeys {
-
-			jf, ok := queueJobs[jobKey]
-			if !ok {
-				continue // skip: job is no longer in the queue
-			}
-			if jf.isError || jf.omsName != theCfg.omsName {
-				continue // skip: model job error or it is a different oms instance
-			}
-			if _, ok = rsc.models[jf.ModelDigest]; !ok {
-				continue // skip: model digest is not the models list
-			}
-
-			// check if job already exists in job list
-			isFound := false
-			for k := 0; !isFound && k < len(qKeys); k++ {
-				isFound = qKeys[k] == jobKey
-			}
-			if !isFound {
-				qKeys = append(qKeys, jobKey)
-			}
-		}
-	}
-	rsc.queueKeys = qKeys
-
-	// update queue jobs and collect all new job keys
-	qKeys = make([]string, 0, n)
-
-	for jobKey, jf := range queueJobs {
-
-		if _, ok := rsc.models[jf.ModelDigest]; !ok {
-			continue // skip: model digest is not the models list
-		}
-		if jf.isError || jf.omsName != theCfg.omsName {
-			continue // skip: model job error or it is a different oms instance
-		}
-
-		rsc.queueJobs[jobKey] = jf
-
-		// check if job already exists in job list
-		isFound := false
-		for k := 0; !isFound && k < len(rsc.queueKeys); k++ {
-			isFound = rsc.queueKeys[k] == jobKey
-		}
-		if !isFound {
-			qKeys = append(qKeys, jobKey)
-		}
-	}
-
-	// append new job keys at the end of existing queue
-	sort.Strings(qKeys)
-	rsc.queueKeys = append(rsc.queueKeys, qKeys...)
-
-	// update active model run jobs
-	for jobKey := range rsc.activeJobs {
-		jf, ok := activeJobs[jobKey]
-		if !ok || jf.isError {
-			delete(rsc.activeJobs, jobKey) // remove: job file not exists
-		}
-	}
-
-	for jobKey, jf := range activeJobs {
-		if _, ok := rsc.models[jf.ModelDigest]; !ok {
-			continue // skip: model digest is not the models list
-		}
-		if jf.isError || jf.omsName != theCfg.omsName {
-			continue // skip: model job error or it is a different oms instance
-		}
-		rsc.activeJobs[jobKey] = jf
-	}
-
-	// update model run job history
-	for jobKey := range rsc.historyJobs {
-		jh, ok := historyJobs[jobKey]
-		if !ok || jh.isError {
-			delete(rsc.historyJobs, jobKey) // remove: job file not exist
-		}
-	}
-
-	for jobKey, jh := range historyJobs {
-		if !jh.isError && jh.omsName == theCfg.omsName {
-			rsc.historyJobs[jobKey] = jh
-		}
-	}
-
-	// cleanup selected to run jobs list: remove if job key not exist in queue files list
-	n = 0
-	for _, jKey := range rsc.selectedKeys {
-		if _, ok := queueJobs[jKey]; ok {
-			rsc.selectedKeys[n] = jKey // job file still exist in the queue
-			n++
-		}
-	}
-	rsc.selectedKeys = rsc.selectedKeys[:n]
-
-	// return job control state
-	jsc := jobControlState{
-		Queue: make([]string, len(rsc.queueKeys)),
-	}
-	copy(jsc.Queue, rsc.queueKeys)
-
-	return &jsc
-}
-
 // return copy of job keys and job control items for queue, active and history model run jobs
 func (rsc *RunCatalog) getRunJobs() (string, bool, []string, []RunJob, []string, []RunJob, []string, []historyJobFile) {
 
@@ -340,4 +215,117 @@ func (rsc *RunCatalog) moveJobInQueue(jobKey string, position int) bool {
 	rsc.queueKeys[nPos] = jobKey
 
 	return true
+}
+
+// update run catalog with current job control files
+func (rsc *RunCatalog) updateRunJobs(
+	queueJobs map[string]runJobFile, isPaused bool, activeJobs map[string]runJobFile, historyJobs map[string]historyJobFile,
+) *jobControlState {
+
+	rsc.rscLock.Lock()
+	defer rsc.rscLock.Unlock()
+
+	rsc.isPaused = isPaused
+	rsc.jobsUpdateDt = helper.MakeDateTime(time.Now())
+
+	// update queue jobs and collect all new job keys
+	for jobKey := range rsc.queueJobs {
+		jf, ok := queueJobs[jobKey]
+		if !ok || jf.isError {
+			delete(rsc.queueJobs, jobKey) // remove: job file not exists
+		}
+	}
+
+	for jobKey, jf := range queueJobs {
+		if _, ok := rsc.models[jf.ModelDigest]; !ok {
+			continue // skip: model digest is not the models list
+		}
+		if jf.isError || jf.omsName != theCfg.omsName {
+			continue // skip: model job error or it is a different oms instance
+		}
+		rsc.queueJobs[jobKey] = jf
+	}
+
+	// remove queue job keys which are no longer exists in the queue
+	n := 0
+	for _, jobKey := range rsc.queueKeys {
+		if _, ok := queueJobs[jobKey]; ok {
+			rsc.queueKeys[n] = jobKey
+			n++
+		}
+	}
+	rsc.queueKeys = rsc.queueKeys[:n]
+
+	// find new job keys from the queue
+	n = len(queueJobs) - n
+	if n > 0 {
+
+		qKeys := make([]string, n)
+		k := 0
+		for jobKey := range queueJobs {
+
+			isFound := false
+			for j := 0; !isFound && j < len(rsc.queueKeys); j++ {
+				isFound = rsc.queueKeys[j] == jobKey
+			}
+			if !isFound {
+				qKeys[k] = jobKey
+				k++
+			}
+		}
+
+		// // sort new jobs by time stamps: first come forst served and append at the end of existing queue
+		sort.Strings(qKeys)
+		rsc.queueKeys = append(rsc.queueKeys, qKeys...)
+	}
+
+	// update active model run jobs
+	for jobKey := range rsc.activeJobs {
+		jf, ok := activeJobs[jobKey]
+		if !ok || jf.isError {
+			delete(rsc.activeJobs, jobKey) // remove: job file not exists
+		}
+	}
+
+	for jobKey, jf := range activeJobs {
+		if _, ok := rsc.models[jf.ModelDigest]; !ok {
+			continue // skip: model digest is not the models list
+		}
+		if jf.isError || jf.omsName != theCfg.omsName {
+			continue // skip: model job error or it is a different oms instance
+		}
+		rsc.activeJobs[jobKey] = jf
+	}
+
+	// update model run job history
+	for jobKey := range rsc.historyJobs {
+		jh, ok := historyJobs[jobKey]
+		if !ok || jh.isError {
+			delete(rsc.historyJobs, jobKey) // remove: job file not exist
+		}
+	}
+
+	for jobKey, jh := range historyJobs {
+		if !jh.isError && jh.omsName == theCfg.omsName {
+			rsc.historyJobs[jobKey] = jh
+		}
+	}
+
+	// cleanup selected to run jobs list: remove if job key not exist in queue files list
+	n = 0
+	for _, jKey := range rsc.selectedKeys {
+		if _, ok := queueJobs[jKey]; ok {
+			rsc.selectedKeys[n] = jKey // job file still exist in the queue
+			n++
+		}
+	}
+	rsc.selectedKeys = rsc.selectedKeys[:n]
+
+	// return job control state
+	jsc := jobControlState{
+		Queue: make([]string, len(rsc.queueKeys)),
+	}
+	copy(jsc.Queue, rsc.queueKeys)
+
+	return &jsc
 }
