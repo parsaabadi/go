@@ -21,7 +21,7 @@ func (rsc *RunCatalog) getJobFromQueue() (string, *RunRequest, bool) {
 		return "", nil, false // queue is paused or empty
 	}
 
-	jKey := ""
+	stamp := ""
 	for k := range rsc.queueKeys {
 		jc, ok := rsc.queueJobs[rsc.queueKeys[k]]
 		if !ok || jc.isError {
@@ -32,17 +32,17 @@ func (rsc *RunCatalog) getJobFromQueue() (string, *RunRequest, bool) {
 			isSel = rsc.selectedKeys[j] == rsc.queueKeys[k]
 		}
 		if !isSel {
-			jKey = rsc.queueKeys[k] // first job in queue which not yet selected to run
+			stamp = rsc.queueKeys[k] // first job in queue which not yet selected to run
 			break
 		}
 	}
-	if jKey == "" {
+	if stamp == "" {
 		return "", nil, false // queue is empty or all jobs already selected to run
 	}
 
 	// job found: copy run request from the queue
-	rsc.selectedKeys = append(rsc.selectedKeys, jKey)
-	qj := rsc.queueJobs[jKey]
+	rsc.selectedKeys = append(rsc.selectedKeys, stamp)
+	qj := rsc.queueJobs[stamp]
 	req := qj.RunRequest
 
 	req.Opts = make(map[string]string, len(qj.Opts))
@@ -69,94 +69,94 @@ func (rsc *RunCatalog) getJobFromQueue() (string, *RunRequest, bool) {
 	return qj.SubmitStamp, &req, true
 }
 
-// return copy of job keys and job control items for queue, active and history model run jobs
+// return copy of submission stamps and job control items for queue, active and history model run jobs
 func (rsc *RunCatalog) getRunJobs() (string, bool, []string, []RunJob, []string, []RunJob, []string, []historyJobFile) {
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
-	// jobs queue: sort in order of keys, which user may change through UI
+	// jobs queue: sort in order of submission stamps, which user may change through UI
 	qKeys := make([]string, len(rsc.queueKeys))
 	qJobs := make([]RunJob, len(rsc.queueKeys))
-	for k, jKey := range rsc.queueKeys {
-		qKeys[k] = jKey
-		qJobs[k] = rsc.queueJobs[jKey].RunJob
+	for k, stamp := range rsc.queueKeys {
+		qKeys[k] = stamp
+		qJobs[k] = rsc.queueJobs[stamp].RunJob
 	}
 
 	// active jobs: sort by submission time
 	aKeys := make([]string, len(rsc.activeJobs))
 	n := 0
-	for jKey := range rsc.activeJobs {
-		aKeys[n] = jKey
+	for stamp := range rsc.activeJobs {
+		aKeys[n] = stamp
 		n++
 	}
 	sort.Strings(aKeys)
 
 	aJobs := make([]RunJob, len(aKeys))
-	for k, jKey := range aKeys {
-		aJobs[k] = rsc.activeJobs[jKey].RunJob
+	for k, stamp := range aKeys {
+		aJobs[k] = rsc.activeJobs[stamp].RunJob
 	}
 
 	// history jobs: sort by submission time
 	hKeys := make([]string, len(rsc.historyJobs))
 	n = 0
-	for jKey := range rsc.historyJobs {
-		hKeys[n] = jKey
+	for stamp := range rsc.historyJobs {
+		hKeys[n] = stamp
 		n++
 	}
 	sort.Strings(hKeys)
 
 	hJobs := make([]historyJobFile, len(hKeys))
-	for k, jKey := range hKeys {
-		hJobs[k] = rsc.historyJobs[jKey]
+	for k, stamp := range hKeys {
+		hJobs[k] = rsc.historyJobs[stamp]
 	}
 
 	return rsc.jobsUpdateDt, rsc.isPaused, qKeys, qJobs, aKeys, aJobs, hKeys, hJobs
 }
 
 // return active job control item and is found boolean flag
-func (rsc *RunCatalog) getActiveJobItem(jobKey string) (runJobFile, bool) {
+func (rsc *RunCatalog) getActiveJobItem(submitStamp string) (runJobFile, bool) {
 
-	if jobKey == "" {
-		return runJobFile{}, false // empty job key: return empty result
+	if submitStamp == "" {
+		return runJobFile{}, false // empty job submission stamp: return empty result
 	}
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
-	if aj, ok := rsc.activeJobs[jobKey]; ok {
+	if aj, ok := rsc.activeJobs[submitStamp]; ok {
 		return aj, true
 	}
 	return runJobFile{}, false // not found
 }
 
 // return queue job control item and is found boolean flag
-func (rsc *RunCatalog) getQueueJobItem(jobKey string) (runJobFile, bool) {
+func (rsc *RunCatalog) getQueueJobItem(submitStamp string) (runJobFile, bool) {
 
-	if jobKey == "" {
-		return runJobFile{}, false // empty job key: return empty result
+	if submitStamp == "" {
+		return runJobFile{}, false // empty job submission stamp: return empty result
 	}
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
-	if qj, ok := rsc.queueJobs[jobKey]; ok {
+	if qj, ok := rsc.queueJobs[submitStamp]; ok {
 		return qj, true
 	}
 	return runJobFile{}, false // not found
 }
 
 // return history job control item and is found boolean flag
-func (rsc *RunCatalog) getHistoryJobItem(jobKey string) (historyJobFile, bool) {
+func (rsc *RunCatalog) getHistoryJobItem(submitStamp string) (historyJobFile, bool) {
 
-	if jobKey == "" {
-		return historyJobFile{}, false // empty job key: return empty result
+	if submitStamp == "" {
+		return historyJobFile{}, false // empty job submission stamp: return empty result
 	}
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
-	if hj, ok := rsc.historyJobs[jobKey]; ok {
+	if hj, ok := rsc.historyJobs[submitStamp]; ok {
 		return hj, true
 	}
 	return historyJobFile{}, false // not found
@@ -166,10 +166,10 @@ func (rsc *RunCatalog) getHistoryJobItem(jobKey string) (historyJobFile, bool) {
 // Top of the queue position is zero, negative position treated as zero.
 // If position number exceeds queue length then job moved to the bottom of the queue.
 // Return false if job not found in the queue
-func (rsc *RunCatalog) moveJobInQueue(jobKey string, position int) bool {
+func (rsc *RunCatalog) moveJobInQueue(submitStamp string, position int) bool {
 
-	if jobKey == "" {
-		return false // empty job key: return empty result
+	if submitStamp == "" {
+		return false // empty job submission stamp: return empty result
 	}
 
 	rsc.rscLock.Lock()
@@ -179,7 +179,7 @@ func (rsc *RunCatalog) moveJobInQueue(jobKey string, position int) bool {
 	isFound := false
 	n := 0
 	for n = range rsc.queueKeys {
-		isFound = rsc.queueKeys[n] == jobKey
+		isFound = rsc.queueKeys[n] == submitStamp
 		if isFound {
 			break
 		}
@@ -212,7 +212,7 @@ func (rsc *RunCatalog) moveJobInQueue(jobKey string, position int) bool {
 			rsc.queueKeys[k+1] = rsc.queueKeys[k]
 		}
 	}
-	rsc.queueKeys[nPos] = jobKey
+	rsc.queueKeys[nPos] = submitStamp
 
 	return true
 }
@@ -228,48 +228,48 @@ func (rsc *RunCatalog) updateRunJobs(
 	rsc.isPaused = isPaused
 	rsc.jobsUpdateDt = helper.MakeDateTime(time.Now())
 
-	// update queue jobs and collect all new job keys
-	for jobKey := range rsc.queueJobs {
-		jf, ok := queueJobs[jobKey]
+	// update queue jobs and collect all new submission stamps
+	for stamp := range rsc.queueJobs {
+		jf, ok := queueJobs[stamp]
 		if !ok || jf.isError {
-			delete(rsc.queueJobs, jobKey) // remove: job file not exists
+			delete(rsc.queueJobs, stamp) // remove: job file not exists
 		}
 	}
 
-	for jobKey, jf := range queueJobs {
+	for stamp, jf := range queueJobs {
 		if _, ok := rsc.models[jf.ModelDigest]; !ok {
 			continue // skip: model digest is not the models list
 		}
-		if jf.isError || jf.omsName != theCfg.omsName {
-			continue // skip: model job error or it is a different oms instance
+		if jf.isError {
+			continue // skip: model job error
 		}
-		rsc.queueJobs[jobKey] = jf
+		rsc.queueJobs[stamp] = jf
 	}
 
-	// remove queue job keys which are no longer exists in the queue
+	// remove queue submission stamps which are no longer exists in the queue
 	n := 0
-	for _, jobKey := range rsc.queueKeys {
-		if _, ok := queueJobs[jobKey]; ok {
-			rsc.queueKeys[n] = jobKey
+	for _, stamp := range rsc.queueKeys {
+		if _, ok := queueJobs[stamp]; ok {
+			rsc.queueKeys[n] = stamp
 			n++
 		}
 	}
 	rsc.queueKeys = rsc.queueKeys[:n]
 
-	// find new job keys from the queue
+	// find new submission stamps from the queue
 	n = len(queueJobs) - n
 	if n > 0 {
 
 		qKeys := make([]string, n)
 		k := 0
-		for jobKey := range queueJobs {
+		for stamp := range queueJobs {
 
 			isFound := false
 			for j := 0; !isFound && j < len(rsc.queueKeys); j++ {
-				isFound = rsc.queueKeys[j] == jobKey
+				isFound = rsc.queueKeys[j] == stamp
 			}
 			if !isFound {
-				qKeys[k] = jobKey
+				qKeys[k] = stamp
 				k++
 			}
 		}
@@ -280,42 +280,42 @@ func (rsc *RunCatalog) updateRunJobs(
 	}
 
 	// update active model run jobs
-	for jobKey := range rsc.activeJobs {
-		jf, ok := activeJobs[jobKey]
+	for stamp := range rsc.activeJobs {
+		jf, ok := activeJobs[stamp]
 		if !ok || jf.isError {
-			delete(rsc.activeJobs, jobKey) // remove: job file not exists
+			delete(rsc.activeJobs, stamp) // remove: job file not exists
 		}
 	}
 
-	for jobKey, jf := range activeJobs {
+	for stamp, jf := range activeJobs {
 		if _, ok := rsc.models[jf.ModelDigest]; !ok {
 			continue // skip: model digest is not the models list
 		}
-		if jf.isError || jf.omsName != theCfg.omsName {
-			continue // skip: model job error or it is a different oms instance
+		if jf.isError {
+			continue // skip: model job error or
 		}
-		rsc.activeJobs[jobKey] = jf
+		rsc.activeJobs[stamp] = jf
 	}
 
 	// update model run job history
-	for jobKey := range rsc.historyJobs {
-		jh, ok := historyJobs[jobKey]
+	for stamp := range rsc.historyJobs {
+		jh, ok := historyJobs[stamp]
 		if !ok || jh.isError {
-			delete(rsc.historyJobs, jobKey) // remove: job file not exist
+			delete(rsc.historyJobs, stamp) // remove: job file not exist
 		}
 	}
 
-	for jobKey, jh := range historyJobs {
-		if !jh.isError && jh.omsName == theCfg.omsName {
-			rsc.historyJobs[jobKey] = jh
+	for stamp, jh := range historyJobs {
+		if !jh.isError {
+			rsc.historyJobs[stamp] = jh
 		}
 	}
 
-	// cleanup selected to run jobs list: remove if job key not exist in queue files list
+	// cleanup selected to run jobs list: remove if submission stamp not exist in queue files list
 	n = 0
-	for _, jKey := range rsc.selectedKeys {
-		if _, ok := queueJobs[jKey]; ok {
-			rsc.selectedKeys[n] = jKey // job file still exist in the queue
+	for _, stamp := range rsc.selectedKeys {
+		if _, ok := queueJobs[stamp]; ok {
+			rsc.selectedKeys[n] = stamp // job file still exist in the queue
 			n++
 		}
 	}

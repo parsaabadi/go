@@ -25,7 +25,7 @@ type RunCatalog struct {
 	modelLogs    map[string]map[string]RunState // map each model digest to run stamps to run state and run log path
 	jobsUpdateDt string                         // last date-time jobs list updated
 	isPaused     bool                           // if true then jobs queue is paused, jobs are not selected from queue
-	queueKeys    []string                       // run job keys of model runs waiting in the queue
+	queueKeys    []string                       // run submission stamps of model runs waiting in the queue
 	queueJobs    map[string]runJobFile          // model run jobs waiting in the queue
 	activeJobs   map[string]runJobFile          // active (currently running) model run jobs
 	historyJobs  map[string]historyJobFile      // models run jobs history
@@ -94,7 +94,6 @@ type RunJob struct {
 
 // run job control file info
 type runJobFile struct {
-	omsName  string // oms instance name
 	filePath string // job control file path
 	isError  bool   // if true then ignore that file due to error
 	RunJob          // job control file content
@@ -102,7 +101,6 @@ type runJobFile struct {
 
 // job control file info for history job: parts of file name
 type historyJobFile struct {
-	omsName     string // oms instance name
 	filePath    string // job control file path
 	isError     bool   // if true then ignore that file due to error
 	SubmitStamp string // submission timestamp

@@ -50,29 +50,19 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 // GET /api/service/state
 func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
 
-	// run job item
-	type rj struct {
-		JobKey string // job key to find the job
-		RunJob        // model run job control info
-	}
-	// history job item
-	type hj struct {
-		JobKey         string // job key to find the job
-		historyJobFile        // job control file info for history job
-	}
 	// service state: model run jobs queue, active jobs and history
 	st := struct {
-		IsJobControl   bool   // if true then job control enabled
-		UpdateDateTime string // last date-time jobs list updated
-		IsPaused       bool   // if true then jobs queue is paused, jobs are not selected from queue
-		Queue          []rj   // list of model run jobs in the queue
-		Active         []rj   // list of active (currently running) model run jobs
-		History        []hj   // history of model runs
+		IsJobControl   bool             // if true then job control enabled
+		UpdateDateTime string           // last date-time jobs list updated
+		IsPaused       bool             // if true then jobs queue is paused, jobs are not selected from queue
+		Queue          []RunJob         // list of model run jobs in the queue
+		Active         []RunJob         // list of active (currently running) model run jobs
+		History        []historyJobFile // history of model runs
 	}{
 		IsJobControl: theCfg.isJobControl,
-		Queue:        []rj{},
-		Active:       []rj{},
-		History:      []hj{},
+		Queue:        []RunJob{},
+		Active:       []RunJob{},
+		History:      []historyJobFile{},
 	}
 
 	if theCfg.isJobControl {
@@ -81,24 +71,24 @@ func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
 		st.UpdateDateTime = updateDt
 		st.IsPaused = isPause
 
-		st.Queue = make([]rj, len(qKeys))
+		st.Queue = make([]RunJob, len(qKeys))
 		for k := range qKeys {
-			st.Queue[k] = rj{JobKey: qKeys[k], RunJob: qJobs[k]}
+			st.Queue[k] = qJobs[k]
 			st.Queue[k].Env = map[string]string{}
 		}
 
-		st.Active = make([]rj, len(aKeys))
+		st.Active = make([]RunJob, len(aKeys))
 		for k := range aKeys {
-			st.Active[k] = rj{JobKey: aKeys[k], RunJob: aJobs[k]}
+			st.Active[k] = aJobs[k]
 			st.Active[k].Pid = 0
 			st.Active[k].CmdPath = ""
 			st.Active[k].LogPath = ""
 			st.Active[k].Env = map[string]string{}
 		}
 
-		st.History = make([]hj, len(hKeys))
+		st.History = make([]historyJobFile, len(hKeys))
 		for k := range hKeys {
-			st.History[k] = hj{JobKey: hKeys[k], historyJobFile: hJobs[k]}
+			st.History[k] = hJobs[k]
 		}
 	}
 	jsonResponse(w, r, st)
@@ -106,7 +96,6 @@ func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
 
 // job control state, log file content and run progress
 type runJobState struct {
-	JobKey    string      // if empty then job not found
 	JobStatus string      // if not empty then job run status name: success, error, exit
 	RunJob                // job control state: job control file content
 	RunStatus []db.RunPub // if not empty then run_lst and run_progerss from db
@@ -114,10 +103,10 @@ type runJobState struct {
 }
 
 // return empty value of job control state
-func emptyRunJobState(jKey string) runJobState {
+func emptyRunJobState(submitStamp string) runJobState {
 	return runJobState{
-		JobKey: jKey,
 		RunJob: RunJob{
+			SubmitStamp: submitStamp,
 			RunRequest: RunRequest{
 				Opts:   map[string]string{},
 				Env:    map[string]string{},
@@ -136,29 +125,27 @@ func emptyRunJobState(jKey string) runJobState {
 // GET /api/service/job/active/:job
 func jobActiveHandler(w http.ResponseWriter, r *http.Request) {
 
-	// url or query parameters: job key
-	jKey := getRequestParam(r, "job")
-	if jKey == "" {
-		http.Error(w, "Invalid (empty) job key", http.StatusBadRequest)
+	// url or query parameters: submission stamp
+	submitStamp := getRequestParam(r, "job")
+	if submitStamp == "" {
+		http.Error(w, "Invalid (empty) submission stamp", http.StatusBadRequest)
 		return
 	}
 
 	// find job state in run catalog
-	jKey = jobKeyFromStamp(jKey)
-	aj, isOk := theRunCatalog.getActiveJobItem(jKey)
+	aj, isOk := theRunCatalog.getActiveJobItem(submitStamp)
 
 	if !isOk || aj.isError {
-		jsonResponse(w, r, emptyRunJobState(jKey)) // job not found or job control file error
+		jsonResponse(w, r, emptyRunJobState(submitStamp)) // job not found or job control file error
 		return
 	}
 
 	// get job control state, read log file and run progress, if it is available
 	isOk, st := getJobState(aj.filePath)
 	if !isOk {
-		jsonResponse(w, r, emptyRunJobState(jKey)) // unable to read job control file
+		jsonResponse(w, r, emptyRunJobState(submitStamp)) // unable to read job control file
 		return
 	}
-	st.JobKey = jKey
 
 	jsonResponse(w, r, st) // return final result
 }
@@ -167,29 +154,27 @@ func jobActiveHandler(w http.ResponseWriter, r *http.Request) {
 // GET /api/service/job/queue/:job
 func jobQueueHandler(w http.ResponseWriter, r *http.Request) {
 
-	// url or query parameters: job key
-	jKey := getRequestParam(r, "job")
-	if jKey == "" {
-		http.Error(w, "Invalid (empty) job key", http.StatusBadRequest)
+	// url or query parameters: submission stamp
+	submitStamp := getRequestParam(r, "job")
+	if submitStamp == "" {
+		http.Error(w, "Invalid (empty) submission stamp", http.StatusBadRequest)
 		return
 	}
 
 	// find job state in run catalog
-	jKey = jobKeyFromStamp(jKey)
-	qj, isOk := theRunCatalog.getQueueJobItem(jKey)
+	qj, isOk := theRunCatalog.getQueueJobItem(submitStamp)
 
 	if !isOk || qj.isError {
-		jsonResponse(w, r, emptyRunJobState(jKey)) // job not found or job control file error
+		jsonResponse(w, r, emptyRunJobState(submitStamp)) // job not found or job control file error
 		return
 	}
 
 	// get job control state, log file and run progress are always empty
 	isOk, st := getJobState(qj.filePath)
 	if !isOk {
-		jsonResponse(w, r, emptyRunJobState(jKey)) // unable to read job control file
+		jsonResponse(w, r, emptyRunJobState(submitStamp)) // unable to read job control file
 		return
 	}
-	st.JobKey = jKey
 
 	jsonResponse(w, r, st) // return final result
 }
@@ -198,29 +183,27 @@ func jobQueueHandler(w http.ResponseWriter, r *http.Request) {
 // GET /api/service/job/history/:job
 func jobHistoryHandler(w http.ResponseWriter, r *http.Request) {
 
-	// url or query parameters: job key
-	jKey := getRequestParam(r, "job")
-	if jKey == "" {
-		http.Error(w, "Invalid (empty) job key", http.StatusBadRequest)
+	// url or query parameters: submission stamp
+	submitStamp := getRequestParam(r, "job")
+	if submitStamp == "" {
+		http.Error(w, "Invalid (empty) submission stamp", http.StatusBadRequest)
 		return
 	}
 
 	// find job state in run catalog
-	jKey = jobKeyFromStamp(jKey)
-	hj, isOk := theRunCatalog.getHistoryJobItem(jKey)
+	hj, isOk := theRunCatalog.getHistoryJobItem(submitStamp)
 
 	if !isOk || hj.isError {
-		jsonResponse(w, r, emptyRunJobState(jKey)) // job not found or job control file error
+		jsonResponse(w, r, emptyRunJobState(submitStamp)) // job not found or job control file error
 		return
 	}
 
 	// get job control state, read log file and run progress, if it is available
 	isOk, st := getJobState(hj.filePath)
 	if !isOk {
-		jsonResponse(w, r, emptyRunJobState(jKey)) // unable to read job control file
+		jsonResponse(w, r, emptyRunJobState(submitStamp)) // unable to read job control file
 		return
 	}
-	st.JobKey = jKey
 	st.JobStatus = hj.JobStatus
 
 	jsonResponse(w, r, st) // return final result
@@ -275,7 +258,7 @@ func getJobState(filePath string) (bool, *runJobState) {
 // PUT /api/service/job/move/:pos/:job
 func jobMoveHandler(w http.ResponseWriter, r *http.Request) {
 
-	// url or query parameters: position and job key
+	// url or query parameters: position and submission stamp
 	sp := getRequestParam(r, "pos")
 	nPos, err := strconv.Atoi(sp)
 	if sp == "" || err != nil {
@@ -283,21 +266,20 @@ func jobMoveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jKey := getRequestParam(r, "job")
-	if jKey == "" {
-		http.Error(w, "Invalid (empty) job key", http.StatusBadRequest)
+	submitStamp := getRequestParam(r, "job")
+	if submitStamp == "" {
+		http.Error(w, "Invalid (empty) submission stamp", http.StatusBadRequest)
 		return
 	}
 
 	// move job in the queue
-	jKey = jobKeyFromStamp(jKey)
-	isOk := theRunCatalog.moveJobInQueue(jKey, nPos)
+	isOk := theRunCatalog.moveJobInQueue(submitStamp, nPos)
 
 	w.Header().Set("Content-Type", "text/plain")
 	if !isOk {
-		w.Header().Set("Content-Location", "service/job/move/false/"+sp+"/"+jKey)
+		w.Header().Set("Content-Location", "service/job/move/false/"+sp+"/"+submitStamp)
 		return
 	}
 	// else: job moved into the spoecified queue position
-	w.Header().Set("Content-Location", "service/job/move/true/"+sp+"/"+jKey)
+	w.Header().Set("Content-Location", "service/job/move/true/"+sp+"/"+submitStamp)
 }

@@ -48,15 +48,6 @@ func jobDirValid(jobDir string) error {
 	return nil
 }
 
-// if source is a submission stamp then return job key as stamp-#-oms else return source string as is
-func jobKeyFromStamp(stamp string) string {
-
-	if !strings.Contains(stamp, "-#-") && helper.IsUnderscoreTimeStamp(stamp) {
-		return stamp + "-#-" + theCfg.omsName
-	}
-	return stamp
-}
-
 // return job control file path if model is running now, e.g.: 2022_07_08_23_03_27_555-#-_4040-#-RiskPaths-#-d90e1e9a-#-8888.json
 func jobActivePath(submitStamp, modelName, modelDigest string, pid int) string {
 	return filepath.Join(theCfg.jobDir, "active", submitStamp+"-#-"+theCfg.omsName+"-#-"+modelName+"-#-"+modelDigest+"-#-"+strconv.Itoa(pid)+".json")
@@ -167,7 +158,7 @@ func parseHistoryPath(srcPath string) (string, string, string, string, string, s
 // write new run request into job queue file
 func addJobToQueue(job *RunJob) (*runJobFile, error) {
 
-	rjf := runJobFile{omsName: theCfg.omsName, RunJob: *job}
+	rjf := runJobFile{RunJob: *job}
 
 	// write into job queue file if job control is enabled
 	if !theCfg.isJobControl {
@@ -421,10 +412,10 @@ func scanJobs(doneC <-chan bool) {
 	jobStatePath := jobStatePath()
 	nJobStateErrCount := 0
 
-	// map job file key (submission stamp and oms instance name) to file content (run job)
+	// map job file submission stamp to file content (run job)
 	toJobMap := func(fLst []string, jobMap map[string]runJobFile) []string {
 
-		jKeys := make([]string, 0, len(fLst)) // list of jobs key
+		subStamps := make([]string, 0, len(fLst)) // list of submission stamps
 
 		for _, f := range fLst {
 
@@ -433,10 +424,9 @@ func scanJobs(doneC <-chan bool) {
 			if stamp == "" || oms == "" || mn == "" || dgst == "" {
 				continue // file name is not a job file name
 			}
-			jobKey := stamp + "-#-" + oms
-			jKeys = append(jKeys, jobKey)
+			subStamps = append(subStamps, stamp)
 
-			if _, ok := jobMap[jobKey]; ok {
+			if _, ok := jobMap[stamp]; ok {
 				continue // this file already in the jobs list
 			}
 
@@ -445,15 +435,15 @@ func scanJobs(doneC <-chan bool) {
 			isOk, err := helper.FromJsonFile(f, &jc)
 			if err != nil {
 				omppLog.Log(err)
-				jobMap[jobKey] = runJobFile{omsName: oms, filePath: f, isError: true}
+				jobMap[stamp] = runJobFile{filePath: f, isError: true}
 			}
 			if !isOk || err != nil {
 				continue // file not exist or invalid
 			}
 
-			jobMap[jobKey] = runJobFile{RunJob: jc, omsName: oms, filePath: f} // add job into jobs list
+			jobMap[stamp] = runJobFile{RunJob: jc, filePath: f} // add job into jobs list
 		}
-		return jKeys
+		return subStamps
 	}
 
 	queueJobs := map[string]runJobFile{}
@@ -478,16 +468,14 @@ func scanJobs(doneC <-chan bool) {
 			if subStamp == "" || oms == "" {
 				continue // file name is not a job file name
 			}
-			jobKey := subStamp + "-#-" + oms
-			hKeys = append(hKeys, jobKey)
+			hKeys = append(hKeys, subStamp)
 
-			if _, ok := historyJobs[jobKey]; ok {
+			if _, ok := historyJobs[subStamp]; ok {
 				continue // this file already in the history jobs list
 			}
 
 			// add job into history jobs list
-			historyJobs[jobKey] = historyJobFile{
-				omsName:     oms,
+			historyJobs[subStamp] = historyJobFile{
 				filePath:    f,
 				isError:     (mn == "" || dgst == "" || rStamp == "" || status == ""),
 				SubmitStamp: subStamp,
@@ -500,34 +488,34 @@ func scanJobs(doneC <-chan bool) {
 
 		// remove from queue files or active files which are in history
 		// remove from queue files which are in active
-		for jobKey := range historyJobs {
-			delete(queueJobs, jobKey)
-			delete(activeJobs, jobKey)
+		for stamp := range historyJobs {
+			delete(queueJobs, stamp)
+			delete(activeJobs, stamp)
 		}
-		for jobKey := range activeJobs {
-			delete(queueJobs, jobKey)
+		for stamp := range activeJobs {
+			delete(queueJobs, stamp)
 		}
 
 		// remove existing job entries where files are no longer exist
 		sort.Strings(qKeys)
-		for jobKey := range queueJobs {
-			k := sort.SearchStrings(qKeys, jobKey)
-			if k < 0 || k >= len(qKeys) || qKeys[k] != jobKey {
-				delete(queueJobs, jobKey)
+		for stamp := range queueJobs {
+			k := sort.SearchStrings(qKeys, stamp)
+			if k < 0 || k >= len(qKeys) || qKeys[k] != stamp {
+				delete(queueJobs, stamp)
 			}
 		}
 		sort.Strings(aKeys)
-		for jobKey := range activeJobs {
-			k := sort.SearchStrings(aKeys, jobKey)
-			if k < 0 || k >= len(aKeys) || aKeys[k] != jobKey {
-				delete(activeJobs, jobKey)
+		for stamp := range activeJobs {
+			k := sort.SearchStrings(aKeys, stamp)
+			if k < 0 || k >= len(aKeys) || aKeys[k] != stamp {
+				delete(activeJobs, stamp)
 			}
 		}
 		sort.Strings(hKeys)
-		for jobKey := range historyJobs {
-			k := sort.SearchStrings(hKeys, jobKey)
-			if k < 0 || k >= len(hKeys) || hKeys[k] != jobKey {
-				delete(historyJobs, jobKey)
+		for stamp := range historyJobs {
+			k := sort.SearchStrings(hKeys, stamp)
+			if k < 0 || k >= len(hKeys) || hKeys[k] != stamp {
+				delete(historyJobs, stamp)
 			}
 		}
 
