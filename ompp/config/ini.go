@@ -44,7 +44,7 @@ func NewIni(iniPath string, encodingName string) (map[string]string, error) {
 	// read ini-file and convert to utf-8
 	s, err := helper.FileToUtf8(iniPath, encodingName)
 	if err != nil {
-		return nil, errors.New("reading ini-file file to utf-8 failed: " + err.Error())
+		return nil, errors.New("reading ini-file to utf-8 failed: " + err.Error())
 	}
 
 	// parse ini-file into strings map of (section.key)=>value

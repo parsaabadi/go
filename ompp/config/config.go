@@ -51,12 +51,12 @@ type RunOptions struct {
 
 // LogOptions for console and log file output
 type LogOptions struct {
-	LogPath     string // path to log file
-	IsConsole   bool   // if true then log to standard output, default: true
-	IsFile      bool   // if true then log to file
-	IsLogSql    bool   // if true then log sql statements
-	TimeStamp   string // log timestamp string, ie: 2012_08_17_16_04_59_148
-	IsDaily     bool   // if true then use daily log file names, ie: exeName.20120817.log
+	LogPath   string // path to log file
+	IsConsole bool   // if true then log to standard output, default: true
+	IsFile    bool   // if true then log to file
+	IsLogSql  bool   // if true then log sql statements
+	TimeStamp string // log timestamp string, ie: 2012_08_17_16_04_59_148
+	IsDaily   bool   // if true then use daily log file names, ie: exeName.20120817.log
 }
 
 // FullShort is pair of full option name and short option name
@@ -112,7 +112,7 @@ func New(encodingKey string, optFs []FullShort) (*RunOptions, *LogOptions, []str
 		runOpts.KeyValue = kvIni
 	}
 
-	// override ini-file file values with command-line arguments
+	// override ini-file values with command-line arguments
 	flag.Visit(func(f *flag.Flag) {
 		if f.Name == IniFile || f.Name == IniFileShort {
 			runOpts.KeyValue[IniFile] = runOpts.iniPath

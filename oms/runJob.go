@@ -70,7 +70,7 @@ func (rsc *RunCatalog) getJobFromQueue() (string, *RunRequest, bool) {
 }
 
 // return copy of submission stamps and job control items for queue, active and history model run jobs
-func (rsc *RunCatalog) getRunJobs() (string, bool, []string, []RunJob, []string, []RunJob, []string, []historyJobFile) {
+func (rsc *RunCatalog) getRunJobs() (string, bool, []string, []RunJob, RunRes, RunRes, []string, []RunJob, RunRes, RunRes, []string, []historyJobFile) {
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
@@ -111,7 +111,7 @@ func (rsc *RunCatalog) getRunJobs() (string, bool, []string, []RunJob, []string,
 		hJobs[k] = rsc.historyJobs[stamp]
 	}
 
-	return rsc.jobsUpdateDt, rsc.isPaused, qKeys, qJobs, aKeys, aJobs, hKeys, hJobs
+	return rsc.jobsUpdateDt, rsc.isPaused, qKeys, qJobs, rsc.queueTotalRes, rsc.queueOwnRes, aKeys, aJobs, rsc.activeTotalRes, rsc.activeOwnRes, hKeys, hJobs
 }
 
 // return active job control item and is found boolean flag
@@ -219,13 +219,17 @@ func (rsc *RunCatalog) moveJobInQueue(submitStamp string, position int) bool {
 
 // update run catalog with current job control files
 func (rsc *RunCatalog) updateRunJobs(
-	queueJobs map[string]runJobFile, isPaused bool, activeJobs map[string]runJobFile, historyJobs map[string]historyJobFile,
+	queueJobs map[string]runJobFile, isPaused bool, reqTotalRes, reqOwnRes RunRes, activeJobs map[string]runJobFile, runTotalRes, runOwnRes RunRes, historyJobs map[string]historyJobFile,
 ) *jobControlState {
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
 	rsc.isPaused = isPaused
+	rsc.activeTotalRes = runTotalRes
+	rsc.activeOwnRes = runOwnRes
+	rsc.queueTotalRes = reqTotalRes
+	rsc.queueOwnRes = reqOwnRes
 	rsc.jobsUpdateDt = helper.MakeDateTime(time.Now())
 
 	// update queue jobs and collect all new submission stamps

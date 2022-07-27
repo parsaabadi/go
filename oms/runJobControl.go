@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/openmpp/go/ompp/db"
 	"github.com/openmpp/go/ompp/helper"
@@ -19,10 +20,11 @@ import (
 const jobScanInterval = 1123      // timeout in msec, sleep interval between scanning all job directories
 const jobQueueScanInterval = 107  // timeout in msec, sleep interval between getting next job from the queue
 const jobOuterScanInterval = 5021 // timeout in msec, sleep interval between scanning active job directory
+const jobRunTickTimeout = 8191    // timeout in msec, interval to update active run job state file
 
 // jobDirValid checking job control configuration.
 // if job control directory is empty then job control disabled.
-// if job control directory not empty then it must have active, queue and history subdirectories.
+// if job control directory not empty then it must have active, queue, history and state subdirectories.
 // if state.json exists then it must be a valid configuration file.
 func jobDirValid(jobDir string) error {
 
@@ -77,7 +79,14 @@ func jobPausedPath() string {
 	return filepath.Join(theCfg.jobDir, "state", "jobs.queue.paused")
 }
 
-// parse job file file path or job file name:
+// return file name and file path prefix for active run state, name prefix example: run-#-_4040-#-2022_07_08_23_03_27_555-#-8888-#-cpu-#-8-#-mem-#-4
+func jobRunStatePrefix(submitStamp string, pid int, cpu int, mem int) (string, string) {
+
+	name := "run-#-" + theCfg.omsName + "-#-" + submitStamp + "-#-" + strconv.Itoa(pid) + "-#-cpu-#-" + strconv.Itoa(cpu) + "-#-mem-#-" + strconv.Itoa(mem)
+	return name, filepath.Join(theCfg.jobDir, "state", name)
+}
+
+// parse job file path or job file name:
 // remove .json extension and directory prefix
 // return submission stamp, oms instance name, model name, model digest and the rest of the file name
 func parseJobPath(srcPath string) (string, string, string, string, string) {
@@ -155,6 +164,45 @@ func parseHistoryPath(srcPath string) (string, string, string, string, string, s
 	return subStamp, oms, mn, dgst, sp[0], sp[1]
 }
 
+// parse active job run file path: job/state/run-#-_4040-#-2022_07_08_23_03_27_555-#-8888-#-cpu-#-8-#-mem-#-4-#-2022_07_08_23_45_12_123-#-1257894000000
+// return oms instance name, submission stamp, pid, cpu count, memory size, time stamp and clock ticks.
+func parseJobRunStatePath(srcPath string) (string, string, int, int, int, string, int64) {
+
+	p := filepath.Base(srcPath) // remove job directory
+
+	// check result: it must be 10 non-empty parts, with two time stamps
+	sp := strings.Split(p, "-#-")
+	if len(sp) < 10 ||
+		sp[0] != "run" || sp[1] == "" || sp[3] == "" || sp[4] != "cpu" || sp[5] == "" || sp[6] != "mem" || sp[7] == "" || sp[9] == "" ||
+		!helper.IsUnderscoreTimeStamp(sp[2]) || !helper.IsUnderscoreTimeStamp(sp[8]) {
+		return "", "", 0, 0, 0, "", 0 // source file path is not job file
+	}
+
+	// convert process id, cpu count, memory size and clock ticks
+	pid, err := strconv.Atoi(sp[3])
+	if err != nil || pid <= 0 {
+		return "", "", 0, 0, 0, "", 0 // pid must be positive integer
+	}
+	cpu, err := strconv.Atoi(sp[5])
+	if err != nil || cpu <= 0 {
+		return "", "", 0, 0, 0, "", 0 // cpu count must be positive integer
+	}
+	mem, err := strconv.Atoi(sp[7])
+	if err != nil || mem < 0 {
+		return "", "", 0, 0, 0, "", 0 // memory size must be no negative integer
+	}
+
+	// convert clock ticks
+	const minTickMs int64 = 1597707959000 // unix milliseconds of 2020-08-17 23:45:59
+
+	tickMs, err := strconv.ParseInt(sp[9], 10, 64)
+	if err != nil || tickMs <= minTickMs {
+		return "", "", 0, 0, 0, "", 0 // clock ticks must after 2020-08-17 23:45:59
+	}
+
+	return sp[1], sp[2], pid, cpu, mem, sp[8], tickMs
+}
+
 // write new run request into job queue file
 func addJobToQueue(job *RunJob) (*runJobFile, error) {
 
@@ -178,9 +226,9 @@ func addJobToQueue(job *RunJob) (*runJobFile, error) {
 }
 
 // move run job to active state from queue
-func moveJobToActive(rState *RunState, runStamp string) bool {
+func moveJobToActive(rState *RunState, runStamp string) (string, string, bool) {
 	if !theCfg.isJobControl || rState == nil {
-		return true // job control disabled
+		return "", "", true // job control disabled
 	}
 
 	// read run request from job queue
@@ -193,7 +241,7 @@ func moveJobToActive(rState *RunState, runStamp string) bool {
 	}
 	if !isOk || err != nil {
 		fileDeleteAndLog(true, src) // invalid file content: remove job control file from queue
-		return false
+		return "", "", false
 	}
 
 	// add run stamp, process info and move job control file into active
@@ -211,9 +259,36 @@ func moveJobToActive(rState *RunState, runStamp string) bool {
 	if err != nil {
 		omppLog.Log(err)
 		fileDeleteAndLog(true, dst) // on error remove file, if any file created
-		return false
+		return "", "", false
 	}
-	return true
+
+	// create job run state file
+	_, p := jobRunStatePrefix(rState.SubmitStamp, rState.pid, jc.Res.Cpu, jc.Res.Mem)
+	ts := time.Now()
+	fp := p + "-#-" + helper.MakeTimeStamp(ts) + "-#-" + strconv.FormatInt(ts.UnixMilli(), 10)
+
+	if !fileCreateEmpty(false, fp) {
+		fp = ""
+		p = ""
+	}
+	return fp, p, true
+}
+
+// update active run job state file name with current timestamp: model run job heart beat
+func updateJobRunState(srcPath, stem string) (string, bool) {
+	if !theCfg.isJobControl || srcPath == "" {
+		return "", true // job control disabled or job run state file error
+	}
+
+	// create job run state file
+	ts := time.Now()
+	dst := stem + "-#-" + helper.MakeTimeStamp(ts) + "-#-" + strconv.FormatInt(ts.UnixMilli(), 10)
+
+	if !fileMoveAndLog(false, srcPath, dst) {
+		fileDeleteAndLog(true, srcPath) // if move failed then delete active run job state file
+		return "", false
+	}
+	return dst, true
 }
 
 // move active model run job control file to history
@@ -405,10 +480,6 @@ func scanJobs(doneC <-chan bool) {
 		return // job control disabled
 	}
 
-	queuePtrn := filepath.Join(theCfg.jobDir, "queue") + string(filepath.Separator) + "*-#-" + theCfg.omsName + "-#-*.json"
-	activePtrn := filepath.Join(theCfg.jobDir, "active") + string(filepath.Separator) + "*-#-" + theCfg.omsName + "-#-*.json"
-	historyPtrn := filepath.Join(theCfg.jobDir, "history") + string(filepath.Separator) + "*-#-" + theCfg.omsName + "-#-*.json"
-
 	jobStatePath := jobStatePath()
 	nJobStateErrCount := 0
 
@@ -446,6 +517,11 @@ func scanJobs(doneC <-chan bool) {
 		return subStamps
 	}
 
+	queuePtrn := filepath.Join(theCfg.jobDir, "queue") + string(filepath.Separator) + "*-#-" + theCfg.omsName + "-#-*.json"
+	activePtrn := filepath.Join(theCfg.jobDir, "active") + string(filepath.Separator) + "*-#-" + theCfg.omsName + "-#-*.json"
+	historyPtrn := filepath.Join(theCfg.jobDir, "history") + string(filepath.Separator) + "*-#-" + theCfg.omsName + "-#-*.json"
+	runStatePtrn := filepath.Join(theCfg.jobDir, "state") + string(filepath.Separator) + "run-#-*-#-*-#-*-#-cpu-#-*-#-mem-#-*-#-*-#-*"
+
 	queueJobs := map[string]runJobFile{}
 	activeJobs := map[string]runJobFile{}
 	historyJobs := map[string]historyJobFile{}
@@ -454,6 +530,8 @@ func scanJobs(doneC <-chan bool) {
 		queueFiles := filesByPattern(queuePtrn, "Error at queue job files search")
 		activeFiles := filesByPattern(activePtrn, "Error at active job files search")
 		historyFiles := filesByPattern(historyPtrn, "Error at history job files search")
+		runStateFiles := filesByPattern(runStatePtrn, "Error at active run state files search")
+		minStateTs := time.Now().Add(-1 * time.Minute).UnixMilli()
 
 		qKeys := toJobMap(queueFiles, queueJobs)
 		aKeys := toJobMap(activeFiles, activeJobs)
@@ -519,8 +597,29 @@ func scanJobs(doneC <-chan bool) {
 			}
 		}
 
+		// calculate total resources for active runs and queue
+		runTotalRes := RunRes{}
+		runOwnRes := RunRes{}
+		reqTotalRes := RunRes{}
+		reqOwnRes := RunRes{}
+
+		for _, fp := range runStateFiles {
+
+			oms, _, _, cpu, mem, _, ts := parseJobRunStatePath(fp)
+			if oms == "" || ts < minStateTs {
+				continue // skip: invalid active run job state file path or file too old (job failed)
+			}
+
+			runTotalRes.Cpu = runTotalRes.Cpu + cpu
+			runTotalRes.Mem = runTotalRes.Mem + mem
+			if oms == theCfg.omsName {
+				runOwnRes.Cpu = runOwnRes.Cpu + cpu
+				runOwnRes.Mem = runOwnRes.Mem + mem
+			}
+		}
+
 		// update run catalog with current job control files
-		jsc := theRunCatalog.updateRunJobs(queueJobs, isPausedJobState(), activeJobs, historyJobs)
+		jsc := theRunCatalog.updateRunJobs(queueJobs, isPausedJobState(), reqTotalRes, reqOwnRes, activeJobs, runTotalRes, runOwnRes, historyJobs)
 
 		// save persistent part of jobs state
 		if nJobStateErrCount < 16 {

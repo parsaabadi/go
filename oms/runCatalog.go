@@ -15,21 +15,25 @@ import (
 
 // RunCatalog is a most recent state of model run for each model.
 type RunCatalog struct {
-	rscLock      sync.Mutex                     // mutex to lock for model list operations
-	models       map[string]modelRunBasic       // map model digest to basic info to run the model and manage log files
-	etcDir       string                         // model run templates directory, if relative then must be relative to oms root directory
-	runTemplates []string                       // list of model run templates
-	mpiTemplates []string                       // list of model MPI run templates
-	presets      []RunOptionsPreset             // list of preset run options
-	runLst       *list.List                     // list of model runs state (runStateLog)
-	modelLogs    map[string]map[string]RunState // map each model digest to run stamps to run state and run log path
-	jobsUpdateDt string                         // last date-time jobs list updated
-	isPaused     bool                           // if true then jobs queue is paused, jobs are not selected from queue
-	queueKeys    []string                       // run submission stamps of model runs waiting in the queue
-	queueJobs    map[string]runJobFile          // model run jobs waiting in the queue
-	activeJobs   map[string]runJobFile          // active (currently running) model run jobs
-	historyJobs  map[string]historyJobFile      // models run jobs history
-	selectedKeys []string                       // jobs selected from queue to run now
+	rscLock        sync.Mutex                     // mutex to lock for model list operations
+	models         map[string]modelRunBasic       // map model digest to basic info to run the model and manage log files
+	etcDir         string                         // model run templates directory, if relative then must be relative to oms root directory
+	runTemplates   []string                       // list of model run templates
+	mpiTemplates   []string                       // list of model MPI run templates
+	presets        []RunOptionsPreset             // list of preset run options
+	runLst         *list.List                     // list of model runs state (runStateLog)
+	modelLogs      map[string]map[string]RunState // map each model digest to run stamps to run state and run log path
+	jobsUpdateDt   string                         // last date-time jobs list updated
+	isPaused       bool                           // if true then jobs queue is paused, jobs are not selected from queue
+	queueKeys      []string                       // run submission stamps of model runs waiting in the queue
+	queueJobs      map[string]runJobFile          // model run jobs waiting in the queue
+	activeJobs     map[string]runJobFile          // active (currently running) model run jobs
+	historyJobs    map[string]historyJobFile      // models run jobs history
+	selectedKeys   []string                       // jobs selected from queue to run now
+	activeTotalRes RunRes                         // active model run resources (CPUs and memory) used by all oms instances
+	activeOwnRes   RunRes                         // active model run resources (CPUs and memory) used by this oms instance
+	queueTotalRes  RunRes                         // queue model run resources (CPUs and memory) requested by all oms instances
+	queueOwnRes    RunRes                         // queue model run resources (CPUs and memory) requested by this oms instance
 }
 
 var theRunCatalog RunCatalog // list of most recent state of model run for each model.
@@ -84,12 +88,15 @@ type RunJob struct {
 	Pid         int    // process id
 	CmdPath     string // executable path
 	RunRequest         // model run request: model name, digest and run options
-	Res         struct {
-		Cpu int // model run cpu count
-		Mem int // if not zero then memory size in gigbytes
-	}
+	Res         RunRes // model run resources: CPU cores and memory
 	LogFileName string // log file name
 	LogPath     string // log file path: log/dir/modelName.RunStamp.console.log
+}
+
+// RunRes is model run resources
+type RunRes struct {
+	Cpu int // cpu cores count
+	Mem int // if not zero then memory size in gigbytes
 }
 
 // run job control file info
@@ -133,6 +140,8 @@ type RunState struct {
 	pid            int       // process id
 	cmdPath        string    // executable path
 	killC          chan bool // channel to kill model process
+	runStatePath   string    // if not empty then path to active job state file
+	runStateStem   string    // if not empty then constant part of path to active job state file
 }
 
 // runStateLog is model run state and log file lines.

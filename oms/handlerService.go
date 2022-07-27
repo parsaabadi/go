@@ -55,6 +55,10 @@ func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
 		IsJobControl   bool             // if true then job control enabled
 		UpdateDateTime string           // last date-time jobs list updated
 		IsPaused       bool             // if true then jobs queue is paused, jobs are not selected from queue
+		ActiveTotalRes RunRes           // active model run resources (CPUs and memory) used by all oms instances
+		ActiveOwnRes   RunRes           // active model run resources (CPUs and memory) used by this oms instance
+		QueueTotalRes  RunRes           // queue model run resources (CPUs and memory) requested by all oms instances
+		QueueOwnRes    RunRes           // queue model run resources (CPUs and memory) requested by this oms instance
 		Queue          []RunJob         // list of model run jobs in the queue
 		Active         []RunJob         // list of active (currently running) model run jobs
 		History        []historyJobFile // history of model runs
@@ -66,10 +70,14 @@ func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if theCfg.isJobControl {
-		updateDt, isPause, qKeys, qJobs, aKeys, aJobs, hKeys, hJobs := theRunCatalog.getRunJobs()
+		updateDt, isPause, qKeys, qJobs, qTotal, qOwn, aKeys, aJobs, aTotal, aOwn, hKeys, hJobs := theRunCatalog.getRunJobs()
 
 		st.UpdateDateTime = updateDt
 		st.IsPaused = isPause
+		st.ActiveTotalRes = aTotal
+		st.ActiveOwnRes = aOwn
+		st.QueueTotalRes = qTotal
+		st.QueueOwnRes = qOwn
 
 		st.Queue = make([]RunJob, len(qKeys))
 		for k := range qKeys {

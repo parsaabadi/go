@@ -213,6 +213,7 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 	errDoneC := make(chan bool, 1)
 	killC := make(chan bool, 1)
 	logTck := time.NewTicker(logTickTimeout * time.Millisecond)
+	jobRunTck := time.NewTicker(jobRunTickTimeout * time.Millisecond)
 
 	// append console output to log lines array
 	doLog := func(rState *RunState, r io.Reader, done chan<- bool) {
@@ -249,7 +250,7 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 	// else model started
 	rs.pid = cmd.Process.Pid
 	rsc.updateRunStateProcess(rs, false, killC)
-	moveJobToActive(rs, rStamp)
+	rs.runStatePath, rs.runStateStem, _ = moveJobToActive(rs, rStamp)
 
 	//  wait until run completed or terminated
 	go func(rState *RunState, cmd *exec.Cmd) {
@@ -275,6 +276,10 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 						omppLog.Log(e)
 					}
 				}
+			case <-jobRunTck.C:
+				if rs.runStatePath != "" {
+					rs.runStatePath, _ = updateJobRunState(rs.runStatePath, rs.runStateStem)
+				}
 			case <-logTck.C:
 			}
 		}
@@ -289,11 +294,17 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 			if e != nil {
 				omppLog.Log(e)
 			}
+			if rs.runStatePath != "" {
+				fileDeleteAndLog(false, rs.runStatePath)
+			}
 			return
 		}
 		// else: completed OK
 		rsc.updateRunStateLog(rState, true, "")
 		moveJobToHistory(db.DoneRunStatus, rState.SubmitStamp, rState.ModelName, rState.ModelDigest, rState.RunStamp, cmd.Process.Pid)
+		if rs.runStatePath != "" {
+			fileDeleteAndLog(false, rs.runStatePath)
+		}
 
 	}(rs, cmd)
 

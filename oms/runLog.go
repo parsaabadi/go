@@ -400,14 +400,3 @@ func doExitSleep(ms time.Duration, doneC <-chan bool) bool {
 	}
 	return false
 }
-
-// return list of files by pattern, on error log error message
-func filesByPattern(ptrn string, msg string) []string {
-
-	fLst, err := filepath.Glob(ptrn)
-	if err != nil {
-		omppLog.Log(msg, ": ", ptrn)
-		return []string{}
-	}
-	return fLst
-}

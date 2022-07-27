@@ -359,6 +359,17 @@ func fileStat(filePath string) (fs.FileInfo, error) {
 	return fi, nil
 }
 
+// return list of files by pattern, on error log error message
+func filesByPattern(ptrn string, msg string) []string {
+
+	fLst, err := filepath.Glob(ptrn)
+	if err != nil {
+		omppLog.Log(msg, ": ", ptrn)
+		return []string{}
+	}
+	return fLst
+}
+
 // Delete file and log path if isLog is true, return false on delete error.
 func fileDeleteAndLog(isLog bool, path string) bool {
 	if isLog {
