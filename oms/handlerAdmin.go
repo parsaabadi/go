@@ -73,9 +73,9 @@ func jobsPauseHandler(w http.ResponseWriter, r *http.Request) {
 	// create jobs paused state file or remove it to resume queue processing
 	isOk := false
 	if isPause {
-		isOk = fileCreateEmpty(false, jobPausedPath())
+		isOk = fileCreateEmpty(false, jobQueuePausedPath())
 	} else {
-		isOk = fileDeleteAndLog(false, jobPausedPath())
+		isOk = fileDeleteAndLog(false, jobQueuePausedPath())
 	}
 	if !isOk {
 		isPause = !isPause // operation failed

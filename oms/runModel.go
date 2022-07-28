@@ -50,7 +50,7 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 	if !ok {
 		err := errors.New("Model not found: " + rs.ModelName + ": " + rs.ModelDigest)
 		omppLog.Log("Model run error: ", err)
-		moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
+		moveJobQueueToFailed(req.Res, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
 		rs.IsFinal = true
 		return rs, err // exit with error: model failed to start
 	}
@@ -149,7 +149,7 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 		}
 		if e != nil {
 			omppLog.Log("Model run error: ", e)
-			moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
+			moveJobQueueToFailed(req.Res, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
 			rs.IsFinal = true
 			return rs, e
 		}
@@ -164,7 +164,7 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 		if !rs.IsLog {
 			e := errors.New("Unable to save run notes: " + rs.ModelName + ": " + rs.ModelDigest)
 			omppLog.Log("Model run error: ", e)
-			moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
+			moveJobQueueToFailed(req.Res, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
 			rs.IsFinal = true
 			return rs, e
 		}
@@ -175,7 +175,7 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 		}
 		if e != nil {
 			omppLog.Log("Model run error: ", e)
-			moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
+			moveJobQueueToFailed(req.Res, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
 			rs.IsFinal = true
 			return rs, e
 		}
@@ -189,7 +189,7 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 	cmd, err := rsc.makeCommand(mExe, binDir, wDir, mb.dbPath, mArgs, req)
 	if err != nil {
 		omppLog.Log("Error at starting model: ", err)
-		moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
+		moveJobQueueToFailed(req.Res, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
 		rs.IsFinal = true
 		return rs, errors.New("Error at starting model " + rs.ModelName + ": " + err.Error())
 	}
@@ -198,22 +198,21 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 	outPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		omppLog.Log("Error at starting model: ", err)
-		moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
+		moveJobQueueToFailed(req.Res, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
 		rs.IsFinal = true
 		return rs, errors.New("Error at starting model " + rs.ModelName + ": " + err.Error())
 	}
 	errPipe, err := cmd.StderrPipe()
 	if err != nil {
 		omppLog.Log("Error at starting model: ", err)
-		moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
+		moveJobQueueToFailed(req.Res, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
 		rs.IsFinal = true
 		return rs, errors.New("Error at starting model " + rs.ModelName + ": " + err.Error())
 	}
 	outDoneC := make(chan bool, 1)
 	errDoneC := make(chan bool, 1)
-	killC := make(chan bool, 1)
+	rs.killC = make(chan bool, 1)
 	logTck := time.NewTicker(logTickTimeout * time.Millisecond)
-	jobRunTck := time.NewTicker(jobRunTickTimeout * time.Millisecond)
 
 	// append console output to log lines array
 	doLog := func(rState *RunState, r io.Reader, done chan<- bool) {
@@ -237,23 +236,23 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 	omppLog.Log("Run model: ", mExe, " in directory: ", wDir)
 	omppLog.Log(strings.Join(cmd.Args, " "))
 	rs.cmdPath = cmd.Path
-	rsc.updateRunStateProcess(rs, false, killC)
+	rsc.updateRunStateProcess(rs, false)
 
 	err = cmd.Start()
 	if err != nil {
 		omppLog.Log("Model run error: ", err)
-		moveJobQueueToFailed(rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
+		moveJobQueueToFailed(req.Res, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
 		rsc.updateRunStateLog(rs, true, err.Error())
 		rs.IsFinal = true
 		return rs, err // exit with error: model failed to start
 	}
 	// else model started
 	rs.pid = cmd.Process.Pid
-	rsc.updateRunStateProcess(rs, false, killC)
-	rs.runStatePath, rs.runStateStem, _ = moveJobToActive(rs, rStamp)
+	rsc.updateRunStateProcess(rs, false)
+	activeJobPath, _ := moveJobToActive(*rs, req.Res, rStamp)
 
 	//  wait until run completed or terminated
-	go func(rState *RunState, cmd *exec.Cmd) {
+	go func(rState *RunState, cmd *exec.Cmd, jobPath string) {
 
 		// wait until stdout and stderr closed
 		for outDoneC != nil || errDoneC != nil {
@@ -266,19 +265,15 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 				if !ok {
 					errDoneC = nil
 				}
-			case isKill, ok := <-killC:
+			case isKill, ok := <-rs.killC:
 				if !ok {
-					killC = nil
+					rs.killC = nil
 				}
 				if isKill && ok {
 					omppLog.Log("Kill run: ", rState.ModelName, " ", rState.ModelDigest, " ", rState.RunName, " ", rState.RunStamp)
 					if e := cmd.Process.Kill(); e != nil {
 						omppLog.Log(e)
 					}
-				}
-			case <-jobRunTck.C:
-				if rs.runStatePath != "" {
-					rs.runStatePath, _ = updateJobRunState(rs.runStatePath, rs.runStateStem)
 				}
 			case <-logTck.C:
 			}
@@ -289,24 +284,18 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 		if e != nil {
 			omppLog.Log("Model run error: ", e)
 			rsc.updateRunStateLog(rState, true, e.Error())
-			moveJobToHistory(db.ErrorRunStatus, rState.SubmitStamp, rState.ModelName, rState.ModelDigest, rState.RunStamp, cmd.Process.Pid)
+			moveJobToHistory(jobPath, db.ErrorRunStatus, rState.SubmitStamp, rState.ModelName, rState.ModelDigest, rState.RunStamp)
 			_, e = theCatalog.UpdateRunStatus(rState.ModelDigest, rState.RunStamp, db.ErrorRunStatus)
 			if e != nil {
 				omppLog.Log(e)
-			}
-			if rs.runStatePath != "" {
-				fileDeleteAndLog(false, rs.runStatePath)
 			}
 			return
 		}
 		// else: completed OK
 		rsc.updateRunStateLog(rState, true, "")
-		moveJobToHistory(db.DoneRunStatus, rState.SubmitStamp, rState.ModelName, rState.ModelDigest, rState.RunStamp, cmd.Process.Pid)
-		if rs.runStatePath != "" {
-			fileDeleteAndLog(false, rs.runStatePath)
-		}
+		moveJobToHistory(jobPath, db.DoneRunStatus, rState.SubmitStamp, rState.ModelName, rState.ModelDigest, rState.RunStamp)
 
-	}(rs, cmd)
+	}(rs, cmd, activeJobPath)
 
 	return rs, nil
 }
@@ -441,8 +430,8 @@ func (rsc *RunCatalog) makeCommand(mExe, binDir, workDir, dbPath string, mArgs [
 
 // stopModelRun kill model run by run stamp
 //  or remove run request from the queue by submit stamp or by run stamp
-// return submission stamp and two flags: if model run found and if model is runniing now
-func (rsc *RunCatalog) stopModelRun(modelDigest string, stamp string) (bool, string, bool) {
+// return submission stamp, job file path and two flags: if model run found and if model is runniing now
+func (rsc *RunCatalog) stopModelRun(modelDigest string, stamp string) (bool, string, string, bool) {
 
 	dtNow := time.Now()
 
@@ -472,19 +461,31 @@ func (rsc *RunCatalog) stopModelRun(modelDigest string, stamp string) (bool, str
 	// if model run stamp not found then check if submit stamp found
 	if !ok || rs == nil {
 		if rsSubmit == nil {
-			return false, "", false // no model run stamp and no submit stamp found
+			return false, "", "", false // no model run stamp and no submit stamp found
 		}
 		rs = rsSubmit // submit stamp found
 	}
+
+	// find model in the active job list
+	jobPath := ""
+	if aj, ok := rsc.activeJobs[rs.SubmitStamp]; ok {
+		jobPath = aj.filePath
+	} else {
+		// active job not found: check job queue
+		if qj, ok := rsc.activeJobs[rs.SubmitStamp]; ok {
+			jobPath = qj.filePath
+		}
+	}
+
 	rs.UpdateDateTime = helper.MakeDateTime(dtNow)
 
 	// kill model run if model is running
 	if rs.killC != nil {
 		rs.killC <- true
-		return true, rs.SubmitStamp, true
+		return true, rs.SubmitStamp, jobPath, true
 	}
 	// else remove request from the queue
 	rs.IsFinal = true
 
-	return true, rs.SubmitStamp, false
+	return true, rs.SubmitStamp, jobPath, false
 }

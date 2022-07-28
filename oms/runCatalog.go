@@ -80,6 +80,7 @@ type RunRequest struct {
 		LangCode string // model language code
 		Note     string // run notes
 	}
+	Res RunRes // model run resources: CPU cores and memory
 }
 
 // RunJob is model run request and run job control: submission stamp and model process id
@@ -88,7 +89,6 @@ type RunJob struct {
 	Pid         int    // process id
 	CmdPath     string // executable path
 	RunRequest         // model run request: model name, digest and run options
-	Res         RunRes // model run resources: CPU cores and memory
 	LogFileName string // log file name
 	LogPath     string // log file path: log/dir/modelName.RunStamp.console.log
 }
@@ -140,8 +140,6 @@ type RunState struct {
 	pid            int       // process id
 	cmdPath        string    // executable path
 	killC          chan bool // channel to kill model process
-	runStatePath   string    // if not empty then path to active job state file
-	runStateStem   string    // if not empty then constant part of path to active job state file
 }
 
 // runStateLog is model run state and log file lines.
@@ -229,7 +227,7 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error
 		}
 	}
 
-	isPaused := isPausedJobState() // check if job queue is paused
+	isPaused := isPausedJobQueue() // check if job queue is paused
 
 	// lock and update run state catalog
 	rsc.rscLock.Lock()

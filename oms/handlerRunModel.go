@@ -49,14 +49,13 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 	req.ModelDigest = m.Digest
 	req.ModelName = m.Name
 
-	// get number of modelling cpu and for backward compatibility: check if number of threads specified using run options
-	nCpu, _, _, nTh, err := cpuRequest(req)
-	if err != nil {
-		omppLog.Log(err)
+	// get number of modelling cpu
+	// for backward compatibility: check if number of threads specified using run options
+	req.Res, _, _, req.Threads, ok = resFromRequest(req)
+	if !ok {
 		http.Error(w, "Model start failed: "+dn, http.StatusBadRequest)
 		return
 	}
-	req.Threads = nTh
 
 	// if job control disabled the start model run
 	submitStamp, dtNow := theCatalog.getNewTimeStamp() // create submit stamp
@@ -74,13 +73,12 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// else append run request to the queue and return submit stamp
-	jc := RunJob{
+	job := RunJob{
 		SubmitStamp: submitStamp,
 		RunRequest:  req,
 	}
-	jc.Res.Cpu = nCpu
 
-	_, err = addJobToQueue(&jc)
+	_, err := addJobToQueue(&job)
 	if err != nil {
 		http.Error(w, "Model run submission failed: "+dn, http.StatusBadRequest)
 		return
@@ -98,8 +96,8 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 		})
 }
 
-// return cpu modelling count, MPI not-on-root flag, number of processes and modelling threads per process
-func cpuRequest(req RunRequest) (int, bool, int, int, error) {
+// return cpu modelling count, MPI not-on-root flag, number of processes, modelling threads per process and error flag
+func resFromRequest(req RunRequest) (RunRes, bool, int, int, bool) {
 
 	// get number of threads and MPI NotOnRoot flag
 	nTh := req.Threads
@@ -116,7 +114,7 @@ func cpuRequest(req RunRequest) (int, bool, int, int, error) {
 			nTh, err = strconv.Atoi(val) // must be >= 1
 			if err != nil || nTh < 1 {
 				omppLog.Log(err)
-				return 0, false, 0, 0, err
+				return RunRes{}, false, 0, 0, false
 			}
 		}
 
@@ -129,7 +127,7 @@ func cpuRequest(req RunRequest) (int, bool, int, int, error) {
 			isNotOnRoot, err = strconv.ParseBool(val)
 			if err != nil {
 				omppLog.Log(err)
-				return 0, false, 0, 0, err
+				return RunRes{}, false, 0, 0, false
 			}
 		}
 	}
@@ -143,9 +141,13 @@ func cpuRequest(req RunRequest) (int, bool, int, int, error) {
 	if np > 1 && isNotOnRoot {
 		np--
 	}
-	nCpu := np * nTh
 
-	return nCpu, isNotOnRoot, np, nTh, nil
+	res := RunRes{
+		Cpu: np * nTh,
+		Mem: 0,
+	}
+
+	return res, isNotOnRoot, np, nTh, true
 }
 
 // stopModelHandler kill model run by model digest-or-name and run stamp or remove model run request from queue by submit stamp.
@@ -167,10 +169,10 @@ func stopModelHandler(w http.ResponseWriter, r *http.Request) {
 
 	// kill model run by run stamp or
 	// remove run request from the queue by submit stamp or by run stamp
-	isFound, _, isRunning := theRunCatalog.stopModelRun(modelDigest, stamp)
+	isFound, submitStamp, jobPath, isRunning := theRunCatalog.stopModelRun(modelDigest, stamp)
 
 	if !isRunning {
-		moveJobQueueToFailed(stamp, m.Name, modelDigest) // model was not running, move job control file to history
+		moveJobQueueFileToFailed(jobPath, submitStamp, m.Name, m.Digest) // model was not running, move job control file to history
 	}
 
 	// write model run key as response

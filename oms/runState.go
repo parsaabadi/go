@@ -65,7 +65,7 @@ func (rsc *RunCatalog) createRunStateLog(rState *RunState) {
 }
 
 // updateRunStateProcess set process info if isFinal is false or clear it if isFinal is true
-func (rsc *RunCatalog) updateRunStateProcess(rState *RunState, isFinal bool, killC chan bool) {
+func (rsc *RunCatalog) updateRunStateProcess(rState *RunState, isFinal bool) {
 	if rState == nil {
 		return
 	}
@@ -105,7 +105,6 @@ func (rsc *RunCatalog) updateRunStateProcess(rState *RunState, isFinal bool, kil
 	if isFinal {
 		rs.killC = nil
 	} else {
-		rs.killC = killC
 		rs.pid = rState.pid
 	}
 	if rState.cmdPath != "" {
