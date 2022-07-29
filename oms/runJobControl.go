@@ -195,13 +195,15 @@ func scanJobs(doneC <-chan bool) {
 		return subStamps, totalRes, ownRes
 	}
 
-	omsTickPath, omsTickPrefix := createJobOmsTick() // job processing started at this oms instance
+	omsTickPath, omsTickPrefix := createOmsTick() // job processing started at this oms instance
 	nTick := 0
 
 	queuePtrn := filepath.Join(theCfg.jobDir, "queue") + string(filepath.Separator) + "*-#-*-#-*-#-*-#-cpu-#-*-#-mem-#-*.json"
 	activePtrn := filepath.Join(theCfg.jobDir, "active") + string(filepath.Separator) + "*-#-*-#-*-#-*-#-cpu-#-*-#-mem-#-*.json"
 	historyPtrn := filepath.Join(theCfg.jobDir, "history") + string(filepath.Separator) + "*-#-" + theCfg.omsName + "-#-*.json"
 	omsTickPtrn := filepath.Join(theCfg.jobDir, "state") + string(filepath.Separator) + "oms-#-*-#-*-#-*"
+	limitCpuPtrn := filepath.Join(theCfg.jobDir, "state") + string(filepath.Separator) + "total-limit-cpu-#-*"
+	limitMemPtrn := filepath.Join(theCfg.jobDir, "state") + string(filepath.Separator) + "total-limit-mem-#-*"
 
 	queueJobs := map[string]runJobFile{}
 	activeJobs := map[string]runJobFile{}
@@ -213,12 +215,28 @@ func scanJobs(doneC <-chan bool) {
 		activeFiles := filesByPattern(activePtrn, "Error at active job files search")
 		historyFiles := filesByPattern(historyPtrn, "Error at history job files search")
 		omsTickFiles := filesByPattern(omsTickPtrn, "Error at oms heart beat files search")
-		minStateTs := time.Now().Add(-1 * time.Minute).UnixMilli()
+		limitCpuFiles := filesByPattern(limitCpuPtrn, "Error at limit CPU cores file search")
+		limitMemFiles := filesByPattern(limitMemPtrn, "Error at limit memory file search")
+
+		// update available resources limits
+		updateTs := time.Now()
+		minStateTs := updateTs.Add(-1 * time.Minute).UnixMilli()
+
+		jsState := JobServiceState{
+			IsQueuePaused:     isPausedJobQueue(),
+			JobUpdateDateTime: helper.MakeDateTime(updateTs),
+		}
+		if len(limitCpuFiles) > 0 {
+			jsState.LimitTotalRes.Cpu = parseTotalLimitPath(limitCpuFiles[0], "cpu")
+		}
+		if len(limitMemFiles) > 0 {
+			jsState.LimitTotalRes.Mem = parseTotalLimitPath(limitMemFiles[0], "mem")
+		}
 
 		// update oms instances heart beat status
 		for _, fp := range omsTickFiles {
 
-			oms, _, ts := parseJobOmsTickPath(fp)
+			oms, _, ts := parseOmsTickPath(fp)
 			if oms == "" {
 				continue // skip: invalid active run job state file path
 			}
@@ -294,13 +312,19 @@ func scanJobs(doneC <-chan bool) {
 			}
 		}
 
-		// update run catalog with current job control files, save persistent part of jobs state, update oms heart beat file
-		jsc := theRunCatalog.updateRunJobs(queueJobs, isPausedJobQueue(), qTotal, qOwn, activeJobs, aTotal, aOwn, historyJobs)
+		// update run catalog with current job control files and save persistent part of jobs state
+		jsState.ActiveTotalRes = aTotal
+		jsState.ActiveOwnRes = aOwn
+		jsState.QueueTotalRes = qTotal
+		jsState.QueueOwnRes = qOwn
+
+		jsc := theRunCatalog.updateRunJobs(jsState, queueJobs, activeJobs, historyJobs)
 		jobStateWrite(*jsc)
 
+		//  update oms heart beat file
 		nTick++
-		if nTick%8 == 0 {
-			omsTickPath, _ = moveToNextJobOmsTick(omsTickPath, omsTickPrefix)
+		if nTick%7 == 0 {
+			omsTickPath, _ = moveToNextOmsTick(omsTickPath, omsTickPrefix)
 		}
 
 		// wait for doneC or sleep

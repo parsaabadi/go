@@ -15,25 +15,20 @@ import (
 
 // RunCatalog is a most recent state of model run for each model.
 type RunCatalog struct {
-	rscLock        sync.Mutex                     // mutex to lock for model list operations
-	models         map[string]modelRunBasic       // map model digest to basic info to run the model and manage log files
-	etcDir         string                         // model run templates directory, if relative then must be relative to oms root directory
-	runTemplates   []string                       // list of model run templates
-	mpiTemplates   []string                       // list of model MPI run templates
-	presets        []RunOptionsPreset             // list of preset run options
-	runLst         *list.List                     // list of model runs state (runStateLog)
-	modelLogs      map[string]map[string]RunState // map each model digest to run stamps to run state and run log path
-	jobsUpdateDt   string                         // last date-time jobs list updated
-	isPaused       bool                           // if true then jobs queue is paused, jobs are not selected from queue
-	queueKeys      []string                       // run submission stamps of model runs waiting in the queue
-	queueJobs      map[string]runJobFile          // model run jobs waiting in the queue
-	activeJobs     map[string]runJobFile          // active (currently running) model run jobs
-	historyJobs    map[string]historyJobFile      // models run jobs history
-	selectedKeys   []string                       // jobs selected from queue to run now
-	activeTotalRes RunRes                         // active model run resources (CPUs and memory) used by all oms instances
-	activeOwnRes   RunRes                         // active model run resources (CPUs and memory) used by this oms instance
-	queueTotalRes  RunRes                         // queue model run resources (CPUs and memory) requested by all oms instances
-	queueOwnRes    RunRes                         // queue model run resources (CPUs and memory) requested by this oms instance
+	rscLock         sync.Mutex                     // mutex to lock for model list operations
+	models          map[string]modelRunBasic       // map model digest to basic info to run the model and manage log files
+	etcDir          string                         // model run templates directory, if relative then must be relative to oms root directory
+	runTemplates    []string                       // list of model run templates
+	mpiTemplates    []string                       // list of model MPI run templates
+	presets         []RunOptionsPreset             // list of preset run options
+	runLst          *list.List                     // list of model runs state (runStateLog)
+	modelLogs       map[string]map[string]RunState // map each model digest to run stamps to run state and run log path
+	JobServiceState                                // jobs service state: paused, resources usage and limits
+	queueKeys       []string                       // run submission stamps of model runs waiting in the queue
+	queueJobs       map[string]runJobFile          // model run jobs waiting in the queue
+	activeJobs      map[string]runJobFile          // active (currently running) model run jobs
+	historyJobs     map[string]historyJobFile      // models run jobs history
+	selectedKeys    []string                       // jobs selected from queue to run now
 }
 
 var theRunCatalog RunCatalog // list of most recent state of model run for each model.
@@ -120,6 +115,17 @@ type historyJobFile struct {
 // job control state
 type jobControlState struct {
 	Queue []string // jobs queue
+}
+
+// service state and job control state
+type JobServiceState struct {
+	IsQueuePaused     bool   // if true then jobs queue is paused, jobs are not selected from queue
+	JobUpdateDateTime string // last date-time jobs list updated
+	ActiveTotalRes    RunRes // active model run resources (CPU cores and memory) used by all oms instances
+	ActiveOwnRes      RunRes // active model run resources (CPU cores and memory) used by this oms instance
+	QueueTotalRes     RunRes // queue model run resources (CPU cores and memory) requested by all oms instances
+	QueueOwnRes       RunRes // queue model run resources (CPU cores and memory) requested by this oms instance
+	LimitTotalRes     RunRes // total available resources limits (CPU cores and memory)
 }
 
 // RunState is model run state.
@@ -227,15 +233,12 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error
 		}
 	}
 
-	isPaused := isPausedJobQueue() // check if job queue is paused
-
 	// lock and update run state catalog
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
 	// update etc directory and list of templates
 	rsc.etcDir = etcDir
-	rsc.isPaused = isPaused
 
 	// copy existing models run history
 	rLst := list.New()
@@ -272,8 +275,10 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error
 	}
 	rsc.models = rbs
 
-	// cleanup jobs control files info
-	rsc.jobsUpdateDt = helper.MakeDateTime(time.Now())
+	// cleanup jobs control state
+	rsc.IsQueuePaused = true // pause jobs queue until jobs state updated current files
+
+	rsc.JobUpdateDateTime = helper.MakeDateTime(time.Now())
 	rsc.queueKeys = []string{}
 	rsc.activeJobs = map[string]runJobFile{}
 	rsc.queueJobs = map[string]runJobFile{}

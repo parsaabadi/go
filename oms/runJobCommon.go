@@ -79,6 +79,16 @@ func jobQueuePausedPath() string {
 	return filepath.Join(theCfg.jobDir, "state", "jobs.queue.paused")
 }
 
+// return total cpu cores limit file paths, zero or negative value means unlimited e.g.: job/state/total-limit-cpu-#-64
+func jobCpuTotalLimitPath(cpu int) string {
+	return filepath.Join(theCfg.jobDir, "state", "total-limit-cpu-#-"+strconv.Itoa(cpu))
+}
+
+// return job memory limit in gigabytes file paths, zero or negative value means unlimited e.g.: job/state/total-limit-mem-#-0
+func jobMemTotalLimitPath(mem int) string {
+	return filepath.Join(theCfg.jobDir, "state", "total-limit-mem-#-"+strconv.Itoa(mem))
+}
+
 // parse job file path or job file name:
 // remove .json extension and directory prefix
 // return submission stamp, oms instance name, model name, model digest and the rest of the file name
@@ -190,7 +200,7 @@ func parseHistoryPath(srcPath string) (string, string, string, string, string, s
 
 // parse oms heart beat tick file path: job/state/oms-#-_4040-#-2022_07_08_23_45_12_123-#-1257894000000
 // return oms instance name time stamp and clock ticks.
-func parseJobOmsTickPath(srcPath string) (string, string, int64) {
+func parseOmsTickPath(srcPath string) (string, string, int64) {
 
 	p := filepath.Base(srcPath) // remove job directory
 
@@ -209,6 +219,31 @@ func parseJobOmsTickPath(srcPath string) (string, string, int64) {
 	}
 
 	return sp[1], sp[2], tickMs
+}
+
+// parse total limit file path or file name and return a limit, zero or negative value means unlimited.
+// For example this is 64 cores total limit: job/state/total-limit-cpu-#-64
+func parseTotalLimitPath(srcPath string, kind string) int {
+
+	if srcPath == "" || kind == "" {
+		return 0 // source file path is not a total limit file or invalid (empty) limit kind specified
+	}
+
+	// remove job directory
+	p := filepath.Base(srcPath)
+
+	// check result: it must be at least 4 non-empty parts and first must be a time stamp
+	sp := strings.Split(p, "-#-")
+	if len(sp) != 2 || kind == "" || sp[0] != "total-limit-"+kind || sp[1] == "" {
+		return 0 // source file path is not a total limit file
+	}
+
+	// convert limit value
+	n, err := strconv.Atoi(sp[1])
+	if err != nil || n <= 0 {
+		return 0 // limit value invalid (not an integer) or unlimited (zero or negative)
+	}
+	return n
 }
 
 // write new run request into job queue file, return queue job file path
@@ -327,7 +362,7 @@ func moveJobQueueFileToFailed(queuePath string, submitStamp, modelName, modelDig
 
 // remove all existing oms heart beat tick files and create new oms heart beat tick file with current timestamp.
 // For example: job/state/oms-#-_4040-#-2022_07_08_23_45_12_123-#-1257894000000
-func createJobOmsTick() (string, string) {
+func createOmsTick() (string, string) {
 
 	p := filepath.Join(theCfg.jobDir, "state", "oms-#-"+theCfg.omsName)
 
@@ -349,7 +384,7 @@ func createJobOmsTick() (string, string) {
 }
 
 // update oms heart beat tick file path with current timestamp: oms instance is alive
-func moveToNextJobOmsTick(srcPath, stem string) (string, bool) {
+func moveToNextOmsTick(srcPath, stem string) (string, bool) {
 	if !theCfg.isJobControl || srcPath == "" {
 		return "", false // job control disabled or job run state file error
 	}

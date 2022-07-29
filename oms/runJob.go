@@ -5,9 +5,6 @@ package main
 
 import (
 	"sort"
-	"time"
-
-	"github.com/openmpp/go/ompp/helper"
 )
 
 // get model run request from the queue
@@ -17,7 +14,7 @@ func (rsc *RunCatalog) getJobFromQueue() (string, *RunRequest, bool) {
 	defer rsc.rscLock.Unlock()
 
 	// find first job request in the queue
-	if rsc.isPaused || len(rsc.queueKeys) <= 0 {
+	if rsc.IsQueuePaused || len(rsc.queueKeys) <= 0 {
 		return "", nil, false // queue is paused or empty
 	}
 
@@ -70,7 +67,7 @@ func (rsc *RunCatalog) getJobFromQueue() (string, *RunRequest, bool) {
 }
 
 // return copy of submission stamps and job control items for queue, active and history model run jobs
-func (rsc *RunCatalog) getRunJobs() (string, bool, []string, []RunJob, RunRes, RunRes, []string, []RunJob, RunRes, RunRes, []string, []historyJobFile) {
+func (rsc *RunCatalog) getRunJobs() (JobServiceState, []string, []RunJob, []string, []RunJob, []string, []historyJobFile) {
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
@@ -111,7 +108,7 @@ func (rsc *RunCatalog) getRunJobs() (string, bool, []string, []RunJob, RunRes, R
 		hJobs[k] = rsc.historyJobs[stamp]
 	}
 
-	return rsc.jobsUpdateDt, rsc.isPaused, qKeys, qJobs, rsc.queueTotalRes, rsc.queueOwnRes, aKeys, aJobs, rsc.activeTotalRes, rsc.activeOwnRes, hKeys, hJobs
+	return rsc.JobServiceState, qKeys, qJobs, aKeys, aJobs, hKeys, hJobs
 }
 
 // return active job control item and is found boolean flag
@@ -219,18 +216,13 @@ func (rsc *RunCatalog) moveJobInQueue(submitStamp string, position int) bool {
 
 // update run catalog with current job control files
 func (rsc *RunCatalog) updateRunJobs(
-	queueJobs map[string]runJobFile, isPaused bool, reqTotalRes, reqOwnRes RunRes, activeJobs map[string]runJobFile, runTotalRes, runOwnRes RunRes, historyJobs map[string]historyJobFile,
+	jsState JobServiceState, queueJobs map[string]runJobFile, activeJobs map[string]runJobFile, historyJobs map[string]historyJobFile,
 ) *jobControlState {
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
-	rsc.isPaused = isPaused
-	rsc.activeTotalRes = runTotalRes
-	rsc.activeOwnRes = runOwnRes
-	rsc.queueTotalRes = reqTotalRes
-	rsc.queueOwnRes = reqOwnRes
-	rsc.jobsUpdateDt = helper.MakeDateTime(time.Now())
+	rsc.JobServiceState = jsState
 
 	// update queue jobs and collect all new submission stamps
 	for stamp := range rsc.queueJobs {
