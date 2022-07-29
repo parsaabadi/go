@@ -23,21 +23,21 @@ import (
 // runModel starts new model run and return run stamp.
 // if run stamp not specified as input parameter then use unique timestamp.
 // Model run console output redirected to log file: models/log/modelName.runStamp.console.log
-func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState, error) {
+func (rsc *RunCatalog) runModel(job *RunJob) (*RunState, error) {
 
 	// make model process run stamp, if not specified then use timestamp by default
 	ts, dtNow := theCatalog.getNewTimeStamp()
-	rStamp := helper.CleanPath(req.RunStamp)
+	rStamp := helper.CleanPath(job.RunStamp)
 	if rStamp == "" {
 		rStamp = ts
 	}
 
 	// new run state
 	rs := &RunState{
-		ModelName:      req.ModelName,
-		ModelDigest:    req.ModelDigest,
+		ModelName:      job.ModelName,
+		ModelDigest:    job.ModelDigest,
 		RunStamp:       rStamp,
-		SubmitStamp:    submitStamp,
+		SubmitStamp:    job.SubmitStamp,
 		UpdateDateTime: helper.MakeDateTime(dtNow),
 	}
 
@@ -50,15 +50,15 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 	if !ok {
 		err := errors.New("Model not found: " + rs.ModelName + ": " + rs.ModelDigest)
 		omppLog.Log("Model run error: ", err)
-		moveJobQueueToFailed(req.Res, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
+		moveJobQueueToFailed(job.Res, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
 		rs.IsFinal = true
 		return rs, err // exit with error: model failed to start
 	}
 	binDir := mb.binDir
 
 	wDir := binDir
-	if req.Dir != "" {
-		wDir = filepath.Join(binRoot, req.Dir)
+	if job.Dir != "" {
+		wDir = filepath.Join(binRoot, job.Dir)
 	}
 
 	binDir, err := filepath.Rel(wDir, binDir)
@@ -90,7 +90,7 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 	importDbLc := strings.ToLower("-ImportDb.")
 
 	// append model run options from run request
-	for krq, val := range req.Opts {
+	for krq, val := range job.Opts {
 
 		if len(krq) < 1 { // skip empty run options
 			continue
@@ -133,8 +133,8 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 	}
 
 	// append threads number if required
-	if req.Threads > 1 {
-		mArgs = append(mArgs, "-OpenM.Threads", strconv.Itoa(req.Threads))
+	if job.Threads > 1 {
+		mArgs = append(mArgs, "-OpenM.Threads", strconv.Itoa(job.Threads))
 	}
 
 	// if list of tables to retain is not empty then put the list into ini-file:
@@ -142,14 +142,14 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 	//   [Tables]
 	//   Retain   = ageSexIncome,AdditionalTables
 	//
-	if len(req.Tables) > 0 {
+	if len(job.Tables) > 0 {
 		p, e := filepath.Abs(filepath.Join(mb.logDir, rs.RunStamp+"."+mb.name+".ini"))
 		if e == nil {
-			e = os.WriteFile(p, []byte("[Tables]"+"\n"+"Retain = "+strings.Join(req.Tables, ", ")+"\n"), 0644)
+			e = os.WriteFile(p, []byte("[Tables]"+"\n"+"Retain = "+strings.Join(job.Tables, ", ")+"\n"), 0644)
 		}
 		if e != nil {
 			omppLog.Log("Model run error: ", e)
-			moveJobQueueToFailed(req.Res, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
+			moveJobQueueToFailed(job.Res, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
 			rs.IsFinal = true
 			return rs, e
 		}
@@ -157,14 +157,14 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 	}
 
 	// save run notes into the file(s) and append file path(s) to the model run options
-	for _, rn := range req.RunNotes {
+	for _, rn := range job.RunNotes {
 		if rn.Note == "" {
 			continue
 		}
 		if !rs.IsLog {
 			e := errors.New("Unable to save run notes: " + rs.ModelName + ": " + rs.ModelDigest)
 			omppLog.Log("Model run error: ", e)
-			moveJobQueueToFailed(req.Res, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
+			moveJobQueueToFailed(job.Res, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
 			rs.IsFinal = true
 			return rs, e
 		}
@@ -175,7 +175,7 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 		}
 		if e != nil {
 			omppLog.Log("Model run error: ", e)
-			moveJobQueueToFailed(req.Res, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
+			moveJobQueueToFailed(job.Res, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
 			rs.IsFinal = true
 			return rs, e
 		}
@@ -186,10 +186,10 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 	// assume model exe name is the same as model name
 	mExe := helper.CleanPath(rs.ModelName)
 
-	cmd, err := rsc.makeCommand(mExe, binDir, wDir, mb.dbPath, mArgs, req)
+	cmd, err := rsc.makeCommand(mExe, binDir, wDir, mb.dbPath, mArgs, job.RunRequest)
 	if err != nil {
 		omppLog.Log("Error at starting model: ", err)
-		moveJobQueueToFailed(req.Res, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
+		moveJobQueueToFailed(job.Res, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
 		rs.IsFinal = true
 		return rs, errors.New("Error at starting model " + rs.ModelName + ": " + err.Error())
 	}
@@ -198,14 +198,14 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 	outPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		omppLog.Log("Error at starting model: ", err)
-		moveJobQueueToFailed(req.Res, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
+		moveJobQueueToFailed(job.Res, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
 		rs.IsFinal = true
 		return rs, errors.New("Error at starting model " + rs.ModelName + ": " + err.Error())
 	}
 	errPipe, err := cmd.StderrPipe()
 	if err != nil {
 		omppLog.Log("Error at starting model: ", err)
-		moveJobQueueToFailed(req.Res, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
+		moveJobQueueToFailed(job.Res, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
 		rs.IsFinal = true
 		return rs, errors.New("Error at starting model " + rs.ModelName + ": " + err.Error())
 	}
@@ -241,7 +241,7 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 	err = cmd.Start()
 	if err != nil {
 		omppLog.Log("Model run error: ", err)
-		moveJobQueueToFailed(req.Res, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
+		moveJobQueueToFailed(job.Res, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
 		rsc.updateRunStateLog(rs, true, err.Error())
 		rs.IsFinal = true
 		return rs, err // exit with error: model failed to start
@@ -249,7 +249,7 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 	// else model started
 	rs.pid = cmd.Process.Pid
 	rsc.updateRunStateProcess(rs, false)
-	activeJobPath, _ := moveJobToActive(*rs, req.Res, rStamp)
+	activeJobPath, _ := moveJobToActive(*rs, job.Res, rStamp)
 
 	//  wait until run completed or terminated
 	go func(rState *RunState, cmd *exec.Cmd, jobPath string) {
@@ -304,7 +304,7 @@ func (rsc *RunCatalog) runModel(submitStamp string, req *RunRequest) (*RunState,
 // If template file name specified then template processing results used to create command line.
 // If this is MPI model run then tempalate is requred
 // MPI run template can be model specific: "mpi.ModelName.template.txt" or default: "mpi.ModelRun.template.txt".
-func (rsc *RunCatalog) makeCommand(mExe, binDir, workDir, dbPath string, mArgs []string, req *RunRequest) (*exec.Cmd, error) {
+func (rsc *RunCatalog) makeCommand(mExe, binDir, workDir, dbPath string, mArgs []string, req RunRequest) (*exec.Cmd, error) {
 
 	// check is it MPI model run, to run MPI model template is required
 	isMpi := req.Mpi.Np != 0

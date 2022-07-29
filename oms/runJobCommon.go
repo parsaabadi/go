@@ -116,7 +116,7 @@ func parseJobPath(srcPath string) (string, string, string, string, string) {
 // parse common part of active job file path or queue file path (or file name)
 // and return submission stamp, oms instance name, model name, digest, cpu count, memory size and the rest of file name.
 // For example: 2022_07_05_19_55_38_111-#-_4040-#-RiskPaths-#-d90e1e9a-#-cpu-#-8-#-mem-#-4.json
-func parseJobInPath(srcPath string) (string, string, string, string, int, int, string) {
+func parseJobActPath(srcPath string) (string, string, string, string, int, int, string) {
 
 	// parse common job file part
 	subStamp, oms, mn, dgst, p := parseJobPath(srcPath)
@@ -153,7 +153,7 @@ func parseJobInPath(srcPath string) (string, string, string, string, int, int, s
 func parseActivePath(srcPath string) (string, string, string, string, int, int, int) {
 
 	// parse common job file part
-	subStamp, oms, mn, dgst, cpu, mem, p := parseJobInPath(srcPath)
+	subStamp, oms, mn, dgst, cpu, mem, p := parseJobActPath(srcPath)
 
 	if subStamp == "" || oms == "" || mn == "" || dgst == "" || p == "" {
 		return subStamp, oms, "", "", 0, 0, 0 // source file path is not active job file
@@ -173,7 +173,7 @@ func parseActivePath(srcPath string) (string, string, string, string, int, int, 
 // For example: 2022_07_05_19_55_38_111-#-_4040-#-RiskPaths-#-d90e1e9a-#-cpu-#-8-#-mem-#-4.json
 func parseQueuePath(srcPath string) (string, string, string, string, int, int) {
 
-	subStamp, oms, mn, dgst, cpu, mem, _ := parseJobInPath(srcPath)
+	subStamp, oms, mn, dgst, cpu, mem, _ := parseJobActPath(srcPath)
 	return subStamp, oms, mn, dgst, cpu, mem
 }
 

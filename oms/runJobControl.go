@@ -153,7 +153,7 @@ func scanJobs(doneC <-chan bool) {
 		for _, f := range fLst {
 
 			// get submission stamp and oms instance
-			stamp, oms, mn, dgst, cpu, mem, _ := parseJobInPath(f)
+			stamp, oms, mn, dgst, cpu, mem, _ := parseJobActPath(f)
 			if stamp == "" || oms == "" || mn == "" || dgst == "" {
 				continue // file name is not a job file name
 			}
@@ -162,6 +162,7 @@ func scanJobs(doneC <-chan bool) {
 			}
 
 			// collect total resource usage
+			preRes := totalRes
 			totalRes.Cpu = totalRes.Cpu + cpu
 			totalRes.Mem = totalRes.Mem + mem
 
@@ -175,7 +176,9 @@ func scanJobs(doneC <-chan bool) {
 
 			subStamps = append(subStamps, stamp)
 
-			if _, ok := jobMap[stamp]; ok {
+			if jc, ok := jobMap[stamp]; ok {
+				jc.preRes = preRes
+				jobMap[stamp] = jc
 				continue // this file already in the jobs list
 			}
 
@@ -190,7 +193,7 @@ func scanJobs(doneC <-chan bool) {
 				continue // file not exist or invalid
 			}
 
-			jobMap[stamp] = runJobFile{RunJob: jc, filePath: f} // add job into jobs list
+			jobMap[stamp] = runJobFile{RunJob: jc, filePath: f, preRes: preRes} // add job into jobs list
 		}
 		return subStamps, totalRes, ownRes
 	}
@@ -247,9 +250,12 @@ func scanJobs(doneC <-chan bool) {
 			}
 		}
 
-		// parse queue and active files
-		qKeys, qTotal, qOwn := toJobMap(queueFiles, queueJobs, omsActive)
+		// parse active files and queue files
+		// sort queue files by submit stamp to allocate resources in FIFO order
 		aKeys, aTotal, aOwn := toJobMap(activeFiles, activeJobs, omsActive)
+
+		sort.Strings(queueFiles)
+		qKeys, qTotal, qOwn := toJobMap(queueFiles, queueJobs, omsActive)
 
 		// parse history files list
 		hKeys := make([]string, 0, len(historyFiles))
@@ -344,9 +350,9 @@ func scanRunJobs(doneC <-chan bool) {
 
 	for {
 		// get job from the queue and run
-		if stamp, req, isFound := theRunCatalog.getJobFromQueue(); isFound {
+		if job, isFound := theRunCatalog.getJobFromQueue(); isFound {
 
-			_, e := theRunCatalog.runModel(stamp, req)
+			_, e := theRunCatalog.runModel(job)
 			if e != nil {
 				omppLog.Log(e)
 			}

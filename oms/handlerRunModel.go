@@ -49,47 +49,48 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 	req.ModelDigest = m.Digest
 	req.ModelName = m.Name
 
+	// get submit stamp
+	submitStamp, dtNow := theCatalog.getNewTimeStamp()
+	job := RunJob{
+		SubmitStamp: submitStamp,
+		RunRequest:  req,
+	}
+
 	// get number of modelling cpu
 	// for backward compatibility: check if number of threads specified using run options
-	req.Res, _, _, req.Threads, ok = resFromRequest(req)
+	job.Res, _, _, job.Threads, ok = resFromRequest(req)
 	if !ok {
 		http.Error(w, "Model start failed: "+dn, http.StatusBadRequest)
 		return
 	}
 
 	// if job control disabled the start model run
-	submitStamp, dtNow := theCatalog.getNewTimeStamp() // create submit stamp
-
 	if !theCfg.isJobControl {
 
-		rs, err := theRunCatalog.runModel(submitStamp, &req)
+		rs, err := theRunCatalog.runModel(&job)
 		if err != nil {
 			omppLog.Log(err)
 			http.Error(w, "Model start failed: "+dn, http.StatusBadRequest)
 			return
 		}
-		w.Header().Set("Content-Location", "/api/model/"+req.ModelDigest+"/run/"+rs.RunStamp)
+		w.Header().Set("Content-Location", "/api/model/"+job.ModelDigest+"/run/"+rs.RunStamp)
 		jsonResponse(w, r, rs)
 		return
 	}
 	// else append run request to the queue and return submit stamp
-	job := RunJob{
-		SubmitStamp: submitStamp,
-		RunRequest:  req,
-	}
 
 	_, err := addJobToQueue(&job)
 	if err != nil {
 		http.Error(w, "Model run submission failed: "+dn, http.StatusBadRequest)
 		return
 	}
-	rStamp := helper.CleanPath(req.RunStamp)
+	rStamp := helper.CleanPath(job.RunStamp)
 
-	w.Header().Set("Content-Location", "/api/model/"+req.ModelDigest+"/run/"+rStamp)
+	w.Header().Set("Content-Location", "/api/model/"+job.ModelDigest+"/run/"+rStamp)
 	jsonResponse(w, r,
 		&RunState{
-			ModelName:      req.ModelName,
-			ModelDigest:    req.ModelDigest,
+			ModelName:      job.ModelName,
+			ModelDigest:    job.ModelDigest,
 			RunStamp:       rStamp,
 			SubmitStamp:    submitStamp,
 			UpdateDateTime: helper.MakeDateTime(dtNow),

@@ -7,15 +7,15 @@ import (
 	"sort"
 )
 
-// get model run request from the queue
-func (rsc *RunCatalog) getJobFromQueue() (string, *RunRequest, bool) {
+// get model run job from the queue
+func (rsc *RunCatalog) getJobFromQueue() (*RunJob, bool) {
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
 	// find first job request in the queue
 	if rsc.IsQueuePaused || len(rsc.queueKeys) <= 0 {
-		return "", nil, false // queue is paused or empty
+		return nil, false // queue is paused or empty
 	}
 
 	stamp := ""
@@ -34,36 +34,51 @@ func (rsc *RunCatalog) getJobFromQueue() (string, *RunRequest, bool) {
 		}
 	}
 	if stamp == "" {
-		return "", nil, false // queue is empty or all jobs already selected to run
+		return nil, false // queue is empty or all jobs already selected to run
+	}
+
+	// check avaliable resource: cpu cores and memory
+	qRes := RunRes{
+		Cpu: rsc.LimitTotalRes.Cpu - rsc.ActiveTotalRes.Cpu,
+		Mem: rsc.LimitTotalRes.Mem - rsc.ActiveTotalRes.Mem,
+	}
+	qj := rsc.queueJobs[stamp]
+
+	isRes := (rsc.LimitTotalRes.Cpu <= 0 || qj.Res.Cpu <= 0) || qRes.Cpu >= qj.Res.Cpu+qj.preRes.Cpu
+	if isRes {
+		isRes = (rsc.LimitTotalRes.Mem <= 0 || qj.Res.Mem <= 0) || qRes.Mem >= qj.Res.Mem+qj.preRes.Mem
+	}
+	if !isRes {
+		return nil, false // not enough resources to satisfy job request
 	}
 
 	// job found: copy run request from the queue
 	rsc.selectedKeys = append(rsc.selectedKeys, stamp)
-	qj := rsc.queueJobs[stamp]
-	req := qj.RunRequest
 
-	req.Opts = make(map[string]string, len(qj.Opts))
+	job := qj.RunJob
+
+	job.Opts = make(map[string]string, len(qj.Opts))
 	for key, val := range qj.Opts {
-		req.Opts[key] = val
+		job.Opts[key] = val
 	}
 
-	req.Env = make(map[string]string, len(qj.Env))
+	job.Env = make(map[string]string, len(qj.Env))
 	for key, val := range qj.Env {
-		req.Env[key] = val
+		job.Env[key] = val
 	}
 
-	req.Tables = make([]string, len(qj.Tables))
-	copy(req.Tables, qj.Tables)
+	job.Tables = make([]string, len(qj.Tables))
+	copy(job.Tables, qj.Tables)
 
-	req.RunNotes = make(
+	job.RunNotes = make(
 		[]struct {
 			LangCode string // model language code
 			Note     string // run notes
 		},
 		len(qj.RunNotes))
-	copy(req.RunNotes, qj.RunNotes)
+	copy(job.RunNotes, qj.RunNotes)
 
-	return qj.SubmitStamp, &req, true
+	return &job, true
 }
 
 // return copy of submission stamps and job control items for queue, active and history model run jobs

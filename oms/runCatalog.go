@@ -75,7 +75,6 @@ type RunRequest struct {
 		LangCode string // model language code
 		Note     string // run notes
 	}
-	Res RunRes // model run resources: CPU cores and memory
 }
 
 // RunJob is model run request and run job control: submission stamp and model process id
@@ -84,6 +83,7 @@ type RunJob struct {
 	Pid         int    // process id
 	CmdPath     string // executable path
 	RunRequest         // model run request: model name, digest and run options
+	Res         RunRes // model run resources: CPU cores and memory
 	LogFileName string // log file name
 	LogPath     string // log file path: log/dir/modelName.RunStamp.console.log
 }
@@ -99,6 +99,7 @@ type runJobFile struct {
 	filePath string // job control file path
 	isError  bool   // if true then ignore that file due to error
 	RunJob          // job control file content
+	preRes   RunRes // model run resources required for queue jobs before this job
 }
 
 // job control file info for history job: parts of file name
