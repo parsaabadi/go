@@ -84,3 +84,39 @@ func jobsPauseHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Location", "/api/admin/jobs-pause/"+strconv.FormatBool(isPause))
 	w.Header().Set("Content-Type", "text/plain")
 }
+
+/*
+development only, DO NOT USE in production.
+
+// runTestHandler run command: exe arg
+// POST /api/admin/run-test/:exe/:arg
+func runTestHandler(w http.ResponseWriter, r *http.Request) {
+
+	// url or query parameters: executable name and argument
+	// executable must be a name only, cannot be a path: / or \ not allowed
+	exe := getRequestParam(r, "exe")
+	arg := getRequestParam(r, "arg")
+	if exe == "" || strings.ContainsAny(exe, "/\\") {
+		http.Error(w, "Invalid (or empty) executable name", http.StatusBadRequest)
+		return
+	}
+
+	// make a command, run it and return combined output
+	cmd := exec.Command(exe, arg)
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		omppLog.Log("Run error: ", err)
+		if len(out) > 0 {
+			omppLog.Log(string(out))
+		}
+		http.Error(w, "Error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// return combined output
+	w.Header().Set("Content-Location", "/api/admin/run-test/"+exe+"/"+arg)
+	w.Header().Set("Content-Type", "text/plain")
+	w.Write(out)
+}
+*/
