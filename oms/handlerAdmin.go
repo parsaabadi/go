@@ -86,8 +86,8 @@ func jobsPauseHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
-development only, DO NOT USE in production.
-
+// DO NOT USE in production, development only
+//
 // runTestHandler run command: exe arg
 // POST /api/admin/run-test/:exe/:arg
 func runTestHandler(w http.ResponseWriter, r *http.Request) {

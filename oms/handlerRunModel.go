@@ -51,6 +51,10 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 
 	// get submit stamp
 	submitStamp, dtNow := theCatalog.getNewTimeStamp()
+
+	if req.Env == nil {
+		req.Env = map[string]string{}
+	}
 	job := RunJob{
 		SubmitStamp: submitStamp,
 		RunRequest:  req,
@@ -79,7 +83,7 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// else append run request to the queue and return submit stamp
 
-	_, err := addJobToQueue(&job)
+	_, err := theRunCatalog.addJobToQueue(&job)
 	if err != nil {
 		http.Error(w, "Model run submission failed: "+dn, http.StatusBadRequest)
 		return
@@ -173,7 +177,7 @@ func stopModelHandler(w http.ResponseWriter, r *http.Request) {
 	isFound, submitStamp, jobPath, isRunning := theRunCatalog.stopModelRun(modelDigest, stamp)
 
 	if !isRunning {
-		moveJobQueueFileToFailed(jobPath, submitStamp, m.Name, m.Digest) // model was not running, move job control file to history
+		moveJobQueueToFailed(jobPath, submitStamp, m.Name, m.Digest) // model was not running, move job control file to history
 	}
 
 	// write model run key as response

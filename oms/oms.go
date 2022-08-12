@@ -1143,7 +1143,7 @@ func apiAdminRoutes(router *vestigo.Router) {
 	// POST /api/admin/jobs-pause/:pause
 	router.Post("/api/admin/jobs-pause/:pause", jobsPauseHandler, logRequest)
 
-	// development only, DO NOT USE in production
+	// DO NOT USE in production, development only
 	//
 	// POST /api/admin/run-test/:exe/:arg
 	// router.Post("/api/admin/run-test/:exe/:arg", runTestHandler, logRequest)

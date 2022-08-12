@@ -53,11 +53,11 @@ func jobActivePath(submitStamp, modelName, modelDigest string, pid int, cpu int,
 
 // return path job control file path if model run standing is queue
 // For example: 2022_07_05_19_55_38_111-#-_4040-#-RiskPaths-#-d90e1e9a-cpu-#-8-#-mem-#-4.json
-func jobQueuePath(submitStamp, modelName, modelDigest string, cpu int, mem int) string {
+func jobQueuePath(submitStamp, modelName, modelDigest string, position int, cpu int, mem int) string {
 	return filepath.Join(
 		theCfg.jobDir,
 		"queue",
-		submitStamp+"-#-"+theCfg.omsName+"-#-"+modelName+"-#-"+modelDigest+"-#-cpu-#-"+strconv.Itoa(cpu)+"-#-mem-#-"+strconv.Itoa(mem)+".json")
+		submitStamp+"-#-"+theCfg.omsName+"-#-"+modelName+"-#-"+modelDigest+"-#-cpu-#-"+strconv.Itoa(cpu)+"-#-mem-#-"+strconv.Itoa(mem)+"-#-"+strconv.Itoa(position)+".json")
 }
 
 // return job control file path to completed model with run status suffix.
@@ -79,14 +79,28 @@ func jobQueuePausedPath() string {
 	return filepath.Join(theCfg.jobDir, "state", "jobs.queue.paused")
 }
 
-// return total cpu cores limit file paths, zero or negative value means unlimited e.g.: job/state/total-limit-cpu-#-64
-func jobCpuTotalLimitPath(cpu int) string {
-	return filepath.Join(theCfg.jobDir, "state", "total-limit-cpu-#-"+strconv.Itoa(cpu))
+// return limit file paths, zero or negative value means unlimited e.g.: job/state/total-limit-cpu-#-64
+func jobLimitPath(kind string, value int) string {
+	return filepath.Join(theCfg.jobDir, "state", kind+"-#-"+strconv.Itoa(value))
 }
 
-// return job memory limit in gigabytes file paths, zero or negative value means unlimited e.g.: job/state/total-limit-mem-#-0
-func jobMemTotalLimitPath(mem int) string {
-	return filepath.Join(theCfg.jobDir, "state", "total-limit-mem-#-"+strconv.Itoa(mem))
+// return compute server or cluster resources file path: job/state/comp-#-name-#-cpu-#-8-#-mem-#-16
+func compPath(name string, cpu, mem int) string {
+	return filepath.Join(theCfg.jobDir, "state", "comp#-"+name+"-#-cpu-#-"+strconv.Itoa(cpu)+"-#-mem-#-"+strconv.Itoa(mem))
+}
+
+// return compute server or cluster ready file path: job/state/comp-ready-#-name
+func compReadyPath(name string) string {
+	return filepath.Join(theCfg.jobDir, "state", "comp-ready-#-"+name)
+}
+
+// return server used by model run path prefix and file path.
+// For example: job/state/comp-used-#-name-#-2022_07_08_23_03_27_555-#-_4040-#-cpu-#-4-#-mem-#-8
+func compUsedPath(name, submitStamp string, cpu, mem int) string {
+	return filepath.Join(
+		theCfg.jobDir,
+		"state",
+		"comp-used-#-"+name+"-#-"+submitStamp+"-#-"+theCfg.omsName+"-#-"+"-#-cpu-#-"+strconv.Itoa(cpu)+"-#-mem-#-"+strconv.Itoa(mem))
 }
 
 // parse job file path or job file name:
@@ -113,68 +127,53 @@ func parseJobPath(srcPath string) (string, string, string, string, string) {
 	return sp[0], sp[1], sp[2], sp[3], sp[4]
 }
 
-// parse common part of active job file path or queue file path (or file name)
-// and return submission stamp, oms instance name, model name, digest, cpu count, memory size and the rest of file name.
-// For example: 2022_07_05_19_55_38_111-#-_4040-#-RiskPaths-#-d90e1e9a-#-cpu-#-8-#-mem-#-4.json
-func parseJobActPath(srcPath string) (string, string, string, string, int, int, string) {
+// parse active job file path or queue file path (or file name)
+// and return submission stamp, oms instance name, model name, digest, cpu count, memory size and active job pid or queue job position.
+// For example: 2022_07_05_19_55_38_111-#-_4040-#-RiskPaths-#-d90e1e9a-#-cpu-#-8-#-mem-#-4-#-8888.json
+func parseJobActPath(srcPath string) (string, string, string, string, int, int, int) {
 
 	// parse common job file part
 	subStamp, oms, mn, dgst, p := parseJobPath(srcPath)
 
 	if subStamp == "" || oms == "" || mn == "" || dgst == "" || p == "" {
-		return subStamp, oms, "", "", 0, 0, "" // source file path is not queue job file
+		return subStamp, oms, "", "", 0, 0, 0 // source file path is not active or queue job file
 	}
 
-	// parse cpu count and memory size, at least 4 parts expected
-	sp := strings.SplitN(p, "-#-", 5)
-	if len(sp) < 4 || sp[0] != "cpu" || sp[1] == "" || sp[2] != "mem" || sp[3] == "" {
-		return subStamp, oms, "", "", 0, 0, "" // source file path is not job file
+	// parse cpu count and memory size, 5 parts expected
+	sp := strings.Split(p, "-#-")
+	if len(sp) != 5 || sp[0] != "cpu" || sp[1] == "" || sp[2] != "mem" || sp[3] == "" || sp[4] == "" {
+		return subStamp, oms, "", "", 0, 0, 0 // source file path is not active or queue job file
 	}
 
 	// parse and convert cpu count and memory size
 	cpu, err := strconv.Atoi(sp[1])
 	if err != nil || cpu <= 0 {
-		return subStamp, oms, "", "", 0, 0, "" // cpu count must be positive integer
+		return subStamp, oms, "", "", 0, 0, 0 // cpu count must be positive integer
 	}
 	mem, err := strconv.Atoi(sp[3])
 	if err != nil || mem < 0 {
-		return subStamp, oms, "", "", 0, 0, "" // memory size must be non-negative integer
+		return subStamp, oms, "", "", 0, 0, 0 // memory size must be non-negative integer
+	}
+	pos, err := strconv.Atoi(sp[4])
+	if err != nil || pos < 0 {
+		return subStamp, oms, "", "", 0, 0, 0 // position must be non-negative integer
 	}
 
-	if len(sp) == 4 {
-		return subStamp, oms, mn, dgst, cpu, mem, "" // only cpu count and memory size, the rest of source file name is empty
-	}
-	return subStamp, oms, mn, dgst, cpu, mem, sp[4]
+	return subStamp, oms, mn, dgst, cpu, mem, pos
 }
 
 // parse active file path or active file name
 // and return submission stamp, oms instance name, model name, digest, cpu count, memory size and process id.
 // For example: 2022_07_08_23_03_27_555-#-_4040-#-RiskPaths-#-d90e1e9a-#-cpu-#-8-#-mem-#-4-#-8888.json
 func parseActivePath(srcPath string) (string, string, string, string, int, int, int) {
-
-	// parse common job file part
-	subStamp, oms, mn, dgst, cpu, mem, p := parseJobActPath(srcPath)
-
-	if subStamp == "" || oms == "" || mn == "" || dgst == "" || p == "" {
-		return subStamp, oms, "", "", 0, 0, 0 // source file path is not active job file
-	}
-
-	// file name ends with pid, convert process id
-	pid, err := strconv.Atoi(p)
-	if err != nil || pid <= 0 {
-		return subStamp, oms, "", "", 0, 0, 0 // pid must be positive integer
-	}
-
-	return subStamp, oms, mn, dgst, cpu, mem, pid
+	return parseJobActPath(srcPath)
 }
 
 // parse queue file path or queue file name
-// and return submission stamp, oms instance name, model name, digest, cpu count, memory size.
-// For example: 2022_07_05_19_55_38_111-#-_4040-#-RiskPaths-#-d90e1e9a-#-cpu-#-8-#-mem-#-4.json
-func parseQueuePath(srcPath string) (string, string, string, string, int, int) {
-
-	subStamp, oms, mn, dgst, cpu, mem, _ := parseJobActPath(srcPath)
-	return subStamp, oms, mn, dgst, cpu, mem
+// and return submission stamp, oms instance name, model name, digest, cpu count, memory size and job position in queue.
+// For example: 2022_07_05_19_55_38_111-#-_4040-#-RiskPaths-#-d90e1e9a-#-cpu-#-8-#-mem-#-4-#-20220817.json
+func parseQueuePath(srcPath string) (string, string, string, string, int, int, int) {
+	return parseJobActPath(srcPath)
 }
 
 // parse history file path or history file name and
@@ -204,37 +203,34 @@ func parseOmsTickPath(srcPath string) (string, string, int64) {
 
 	p := filepath.Base(srcPath) // remove job directory
 
-	// check result: it must be 4 non-empty parts with time stamp
+	// split file name and check result: it must be 4 non-empty parts with time stamp
 	sp := strings.Split(p, "-#-")
 	if len(sp) != 4 || sp[0] != "oms" || sp[1] == "" || sp[3] == "" || !helper.IsUnderscoreTimeStamp(sp[2]) {
 		return "", "", 0 // source file path is not job file
 	}
 
 	// convert clock ticks
-	const minTickMs int64 = 1597707959000 // unix milliseconds of 2020-08-17 23:45:59
-
 	tickMs, err := strconv.ParseInt(sp[3], 10, 64)
-	if err != nil || tickMs <= minTickMs {
+	if err != nil || tickMs <= minJobTickMs {
 		return "", "", 0 // clock ticks must after 2020-08-17 23:45:59
 	}
 
 	return sp[1], sp[2], tickMs
 }
 
-// parse total limit file path or file name and return a limit, zero or negative value means unlimited.
+// parse limit file path or file name and return a limit, zero or negative value means unlimited.
 // For example this is 64 cores total limit: job/state/total-limit-cpu-#-64
-func parseTotalLimitPath(srcPath string, kind string) int {
+func parseLimitPath(srcPath string, kind string) int {
 
 	if srcPath == "" || kind == "" {
 		return 0 // source file path is not a total limit file or invalid (empty) limit kind specified
 	}
 
-	// remove job directory
-	p := filepath.Base(srcPath)
+	p := filepath.Base(srcPath) // remove job directory
 
-	// check result: it must be at least 4 non-empty parts and first must be a time stamp
+	// split file name and check result: it must be 2 non-empty parts and first must be a limit kind
 	sp := strings.Split(p, "-#-")
-	if len(sp) != 2 || kind == "" || sp[0] != "total-limit-"+kind || sp[1] == "" {
+	if len(sp) != 2 || kind == "" || sp[0] != kind || sp[1] == "" {
 		return 0 // source file path is not a total limit file
 	}
 
@@ -246,55 +242,124 @@ func parseTotalLimitPath(srcPath string, kind string) int {
 	return n
 }
 
-// write new run request into job queue file, return queue job file path
-func addJobToQueue(job *RunJob) (string, error) {
+// parse compute server or cluster resources file path and return server name, cpu count, memory size.
+// For example: job/state/comp-#-name-#-cpu-#-8-#-mem-#-16
+func parseCompPath(srcPath string) (string, int, int) {
 
-	// write into job queue file if job control is enabled
-	if !theCfg.isJobControl {
-		return "", nil // job control disabled
+	p := filepath.Base(srcPath) // remove job directory
+
+	// split file name and check result: it must be 6 non-empty parts with cpu count and memory size
+	sp := strings.Split(p, "-#-")
+	if len(sp) != 6 || sp[0] != "comp" || sp[1] == "" || sp[2] != "cpu" || sp[3] == "" || sp[4] != "mem" || sp[5] == "" {
+		return "", 0, 0 // source file path is not compute resources path
 	}
 
-	fp := jobQueuePath(job.SubmitStamp, job.ModelName, job.ModelDigest, job.Res.Cpu, job.Res.Mem)
-
-	err := helper.ToJsonIndentFile(fp, job)
-	if err != nil {
-		omppLog.Log(err)
-		fileDeleteAndLog(true, fp) // on error remove file, if any file created
-		return "", err
+	// parse and convert cpu count and memory size
+	cpu, err := strconv.Atoi(sp[3])
+	if err != nil || cpu <= 0 {
+		return "", 0, 0 // cpu count must be positive integer
+	}
+	mem, err := strconv.Atoi(sp[5])
+	if err != nil || mem < 0 {
+		return "", 0, 0 // memory size must be non-negative integer
 	}
 
-	return "", nil
+	return sp[1], cpu, mem
+}
+
+// parse compute server or cluster ready file path and return server name, e.g.: job/state/comp-ready-#-name
+func parseCompReadyPath(srcPath string) string {
+
+	p := filepath.Base(srcPath) // remove job directory
+
+	// split file name and check result: it must be 2 non-empty parts
+	sp := strings.Split(p, "-#-")
+	if len(sp) != 2 || sp[0] != "comp-ready" || sp[1] == "" {
+		return "" // source file path is not compute server ready path
+	}
+
+	return sp[1]
+}
+
+// parse compute server or cluster state file path and return server name, time stamp and clock ticks.
+// State must be one of: start, stop, error.
+// For example: job/state/comp-start-#-name-#-2022_07_08_23_45_12_123-#-1257894000000
+func parseCompStatePath(srcPath, state string) (string, string, int64) {
+
+	p := filepath.Base(srcPath) // remove job directory
+
+	// split file name and check result: it must be 4 non-empty parts and with time stamp
+	sp := strings.Split(p, "-#-")
+	if len(sp) != 3 || sp[0] != "comp-"+state || sp[1] == "" || sp[3] == "" || !helper.IsUnderscoreTimeStamp(sp[2]) {
+		return "", "", 0 // source file path is not compute server state path
+	}
+
+	// convert clock ticks
+	tickMs, err := strconv.ParseInt(sp[3], 10, 64)
+	if err != nil || tickMs <= minJobTickMs {
+		return "", "", 0 // clock ticks must after 2020-08-17 23:45:59
+	}
+
+	return sp[1], sp[2], tickMs
+}
+
+// parse compute server used by model run file path
+// and return server name, submission stamp, oms instance name, cpu count and memory size.
+// For example: job/state/comp-used-#-name-#-2022_07_08_23_03_27_555-#-_4040-#-cpu-#-4-#-mem-#-8
+func parseCompUsedPath(srcPath string) (string, string, string, int, int) {
+
+	p := filepath.Base(srcPath) // remove job directory
+
+	// split file name and check result: it must be 8 non-empty parts
+	// and include submission stamp, cpu count and memory size
+	sp := strings.Split(p, "-#-")
+	if len(sp) != 9 || sp[0] != "comp-used" ||
+		sp[1] == "" || !helper.IsUnderscoreTimeStamp(sp[2]) || sp[3] == "" ||
+		sp[4] != "cpu" || sp[5] == "" || sp[6] != "mem" || sp[7] == "" {
+		return "", "", "", 0, 0 // source file path is not compute server used by model run path
+	}
+
+	// parse and convert cpu count and memory size
+	cpu, err := strconv.Atoi(sp[5])
+	if err != nil || cpu <= 0 {
+		return "", "", "", 0, 0 // cpu count must be positive integer
+	}
+	mem, err := strconv.Atoi(sp[7])
+	if err != nil || mem < 0 {
+		return "", "", "", 0, 0 // memory size must be non-negative integer
+	}
+
+	return sp[1], sp[2], sp[3], cpu, mem
 }
 
 // move run job to active state from queue
-func moveJobToActive(rState RunState, res RunRes, runStamp string) (string, bool) {
+func moveJobToActive(queueJobPath string, rState RunState, res RunRes, runStamp string) (string, bool) {
 	if !theCfg.isJobControl {
 		return "", true // job control disabled
 	}
 
 	// read run request from job queue
-	src := jobQueuePath(rState.SubmitStamp, rState.ModelName, rState.ModelDigest, res.Cpu, res.Mem)
-
 	var jc RunJob
-	isOk, err := helper.FromJsonFile(src, &jc)
+	isOk, err := helper.FromJsonFile(queueJobPath, &jc)
 	if err != nil {
 		omppLog.Log(err)
 	}
 	if !isOk || err != nil {
-		fileDeleteAndLog(true, src) // invalid file content: remove job control file from queue
+		fileDeleteAndLog(true, queueJobPath) // invalid file content: remove job control file from queue
 		return "", false
 	}
 
-	// add run stamp, process info and move job control file into active
+	// add run stamp, process info, actual run resources, log file and move job control file into active
 	jc.RunStamp = runStamp
 	jc.Pid = rState.pid
 	jc.CmdPath = rState.cmdPath
+	jc.Res = res
 	jc.LogFileName = rState.LogFileName
 	jc.LogPath = rState.logPath
 
 	dst := jobActivePath(rState.SubmitStamp, rState.ModelName, rState.ModelDigest, rState.pid, jc.Res.Cpu, jc.Res.Mem)
 
-	fileDeleteAndLog(false, src) // remove job control file from queue
+	fileDeleteAndLog(false, queueJobPath) // remove job control file from queue
 
 	err = helper.ToJsonIndentFile(dst, &jc)
 	if err != nil {
@@ -337,17 +402,8 @@ func moveOuterJobToHistory(srcPath, status string, submitStamp, modelName, model
 }
 
 // move model run request from queue to error if model run fail to start
-func moveJobQueueToFailed(res RunRes, submitStamp, modelName, modelDigest string) bool {
-	return moveJobQueueFileToFailed(
-		jobQueuePath(submitStamp, modelName, modelDigest, res.Cpu, res.Mem),
-		submitStamp,
-		modelName,
-		modelDigest)
-}
-
-// move model run request from queue to error if model run fail to start
-func moveJobQueueFileToFailed(queuePath string, submitStamp, modelName, modelDigest string) bool {
-	if !theCfg.isJobControl {
+func moveJobQueueToFailed(queuePath string, submitStamp, modelName, modelDigest string) bool {
+	if !theCfg.isJobControl || queuePath == "" {
 		return true // job control disabled
 	}
 
@@ -398,6 +454,28 @@ func moveToNextOmsTick(srcPath, stem string) (string, bool) {
 		return "", false
 	}
 	return dst, true
+}
+
+// remove all existing compute server state files and create new compute server file with current timestamp.
+// For example: job/state/comp-start-#-name-#-2022_07_08_23_45_12_123-#-1257894000000
+func createCompState(name, state string) string {
+
+	p := filepath.Join(theCfg.jobDir, "state", "comp-"+state+"-#-"+name)
+
+	// delete existing state files for this server state
+	fl := filesByPattern(p+"-#-*-#-*", "Error at server state files search")
+	for _, f := range fl {
+		fileDeleteAndLog(false, f)
+	}
+
+	// create new server state file
+	ts := time.Now()
+	fp := p + "-#-" + helper.MakeTimeStamp(ts) + "-#-" + strconv.FormatInt(ts.UnixMilli(), 10)
+
+	if !fileCreateEmpty(false, fp) {
+		fp = ""
+	}
+	return fp
 }
 
 // read job control state from the file, return empty state on error or if state file not exist

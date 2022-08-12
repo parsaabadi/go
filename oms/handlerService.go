@@ -250,7 +250,7 @@ func getJobState(filePath string) (bool, *runJobState) {
 	return true, &st // return final result
 }
 
-// jobMoveHandler move job into the specified queue position.
+// jobMoveHandler move job into the specified queue index position.
 // Top of the queue position is zero, negative position treated as zero.
 // If position number exceeds queue length then job moved to the bottom of the queue.
 // PUT /api/service/job/move/:pos/:job
@@ -270,8 +270,12 @@ func jobMoveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// move job in the queue
-	isOk := theRunCatalog.moveJobInQueue(submitStamp, nPos)
+	// move job in the queue and rename files in tge queue
+	isOk, fileMoveLst := theRunCatalog.moveJobInQueue(submitStamp, nPos)
+
+	for _, fm := range fileMoveLst {
+		fileMoveAndLog(false, fm[0], fm[1])
+	}
 
 	w.Header().Set("Content-Type", "text/plain")
 	if !isOk {

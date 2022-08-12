@@ -30,7 +30,7 @@ func cleanSourceExpr(src string) string {
 	return sb.String()
 }
 
-// find name postion in source expression or return -1 if not found
+// find name position in source expression or return -1 if not found
 // name must be delimited by space or left and right delimeters
 func findNamePos(expr string, name string) int {
 

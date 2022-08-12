@@ -149,7 +149,7 @@ func (rsc *RunCatalog) getRunStateLogPage(digest, stamp string, start, count int
 	// if not found then try to search log history
 	isNewLog := false
 	if !isFound {
-		if ml, ok := rsc.modelLogs[digest]; ok {
+		if ml, ok := rsc.modelRuns[digest]; ok {
 			if r, isLog := ml[runStamp]; isLog {
 				rsl = &runStateLog{RunState: r, logLineLst: []string{}}
 				isFound = true
@@ -341,7 +341,7 @@ func scanModelLogDirs(doneC <-chan bool) {
 			}
 
 			// add new log file names to model log list and update most recent run id for that model
-			theRunCatalog.addModelLogs(dgst, rsLst)
+			theRunCatalog.addModelRuns(dgst, rsLst)
 		}
 
 		// clear old entries entries in run state list
@@ -356,14 +356,14 @@ func scanModelLogDirs(doneC <-chan bool) {
 
 // add new log file names to model log list
 // if run stamp already exist in model run history then replace run state with more recent data
-func (rsc *RunCatalog) addModelLogs(digest string, runStateLst []RunState) {
+func (rsc *RunCatalog) addModelRuns(digest string, runStateLst []RunState) {
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
 	// add new runs to model run history
 	for _, r := range runStateLst {
 
-		if ml, ok := rsc.modelLogs[digest]; ok { // skip model if not exist
+		if ml, ok := rsc.modelRuns[digest]; ok { // skip model if not exist
 			ml[r.RunStamp] = r
 		}
 	}

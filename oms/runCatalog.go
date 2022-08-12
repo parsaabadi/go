@@ -22,13 +22,14 @@ type RunCatalog struct {
 	mpiTemplates    []string                       // list of model MPI run templates
 	presets         []RunOptionsPreset             // list of preset run options
 	runLst          *list.List                     // list of model runs state (runStateLog)
-	modelLogs       map[string]map[string]RunState // map each model digest to run stamps to run state and run log path
+	modelRuns       map[string]map[string]RunState // map each model digest to run stamps to run state and run log path
 	JobServiceState                                // jobs service state: paused, resources usage and limits
 	queueKeys       []string                       // run submission stamps of model runs waiting in the queue
-	queueJobs       map[string]runJobFile          // model run jobs waiting in the queue
+	queueJobs       map[string]queueJobFile        // model run jobs waiting in the queue
 	activeJobs      map[string]runJobFile          // active (currently running) model run jobs
 	historyJobs     map[string]historyJobFile      // models run jobs history
 	selectedKeys    []string                       // jobs selected from queue to run now
+	computeState    map[string]computeItem         // map names of server or cluster the state of computational resources
 }
 
 var theRunCatalog RunCatalog // list of most recent state of model run for each model.
@@ -84,6 +85,7 @@ type RunJob struct {
 	CmdPath     string // executable path
 	RunRequest         // model run request: model name, digest and run options
 	Res         RunRes // model run resources: CPU cores and memory
+	IsOverLimit bool   // if true then model run resource(s) exceed limit(s)
 	LogFileName string // log file name
 	LogPath     string // log file path: log/dir/modelName.RunStamp.console.log
 }
@@ -99,7 +101,13 @@ type runJobFile struct {
 	filePath string // job control file path
 	isError  bool   // if true then ignore that file due to error
 	RunJob          // job control file content
+}
+
+// run job control file info
+type queueJobFile struct {
+	runJobFile
 	preRes   RunRes // model run resources required for queue jobs before this job
+	position int    // part of file name: active job pid or queue position
 }
 
 // job control file info for history job: parts of file name
@@ -111,22 +119,6 @@ type historyJobFile struct {
 	ModelDigest string // model digest
 	RunStamp    string // run stamp, if empty then auto-generated as timestamp
 	JobStatus   string // run status
-}
-
-// job control state
-type jobControlState struct {
-	Queue []string // jobs queue
-}
-
-// service state and job control state
-type JobServiceState struct {
-	IsQueuePaused     bool   // if true then jobs queue is paused, jobs are not selected from queue
-	JobUpdateDateTime string // last date-time jobs list updated
-	ActiveTotalRes    RunRes // active model run resources (CPU cores and memory) used by all oms instances
-	ActiveOwnRes      RunRes // active model run resources (CPU cores and memory) used by this oms instance
-	QueueTotalRes     RunRes // queue model run resources (CPU cores and memory) requested by all oms instances
-	QueueOwnRes       RunRes // queue model run resources (CPU cores and memory) requested by this oms instance
-	LimitTotalRes     RunRes // total available resources limits (CPU cores and memory)
 }
 
 // RunState is model run state.
@@ -162,6 +154,37 @@ type RunStateLogPage struct {
 	Size      int      // log page size
 	TotalSize int      // log total run line count
 	Lines     []string // page of log lines
+}
+
+// service state and job control state
+type JobServiceState struct {
+	IsQueuePaused     bool   // if true then jobs queue is paused, jobs are not selected from queue
+	JobUpdateDateTime string // last date-time jobs list updated
+	ActiveTotalRes    RunRes // active model run resources (CPU cores and memory) used by all oms instances
+	ActiveOwnRes      RunRes // active model run resources (CPU cores and memory) used by this oms instance
+	QueueTotalRes     RunRes // queue model run resources (CPU cores and memory) requested by all oms instances
+	QueueOwnRes       RunRes // queue model run resources (CPU cores and memory) requested by this oms instance
+	LimitTotalRes     RunRes // total available resources limits (CPU cores and memory)
+	maxStartTime      int    // max time in seconds to start compute server or cluster
+	maxStopTime       int    // max time in seconds to stop compute server or cluster
+	maxIdleTime       int    // max idle in seconds time before stopping server or cluster
+	jobNextPosition   int    // next job position in the queue
+	jobMinPosition    int    // minimal job position in the queue
+}
+
+// computational server or cluster state
+type computeItem struct {
+	state       string // state: start, stop, ready, error, empty "" means power off
+	totalRes    RunRes // total computational resources (CPU cores and memory)
+	usedRes     RunRes // resources (CPU cores and memory) used by all oms instances
+	ownRes      RunRes // resources (CPU cores and memory) used by this instance
+	errorCount  int    // number of incomplete starts, stops and errors
+	lastErrorTs int64  // last error time (unix milliseconds)
+}
+
+// job control state
+type jobControlState struct {
+	Queue []string // jobs queue
 }
 
 // timeout in msec, wait on stdout and stderr polling.
@@ -259,19 +282,19 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error
 	rsc.runLst = rLst
 
 	// model log history: add new models and delete existing models
-	if rsc.modelLogs == nil {
-		rsc.modelLogs = map[string]map[string]RunState{}
+	if rsc.modelRuns == nil {
+		rsc.modelRuns = map[string]map[string]RunState{}
 	}
 	// if model deleted then delete model logs history
-	for d := range rsc.modelLogs {
+	for d := range rsc.modelRuns {
 		if _, ok := rbs[d]; !ok {
-			delete(rsc.modelLogs, d)
+			delete(rsc.modelRuns, d)
 		}
 	}
 	// if new model added then add new empty logs history
 	for d := range rbs {
-		if _, ok := rsc.modelLogs[d]; !ok {
-			rsc.modelLogs[d] = map[string]RunState{}
+		if _, ok := rsc.modelRuns[d]; !ok {
+			rsc.modelRuns[d] = map[string]RunState{}
 		}
 	}
 	rsc.models = rbs
@@ -282,8 +305,9 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error
 	rsc.JobUpdateDateTime = helper.MakeDateTime(time.Now())
 	rsc.queueKeys = []string{}
 	rsc.activeJobs = map[string]runJobFile{}
-	rsc.queueJobs = map[string]runJobFile{}
+	rsc.queueJobs = map[string]queueJobFile{}
 	rsc.historyJobs = make(map[string]historyJobFile, theCfg.runHistoryMaxSize)
+	rsc.computeState = map[string]computeItem{}
 
 	if rsc.selectedKeys == nil {
 		rsc.selectedKeys = []string{}
@@ -293,6 +317,12 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error
 		if len(jsc.Queue) > 0 {
 			rsc.queueKeys = append(rsc.queueKeys, jsc.Queue...)
 		}
+	}
+	if rsc.jobNextPosition <= jobPositionDefault {
+		rsc.jobNextPosition = jobPositionDefault + 1
+	}
+	if rsc.jobMinPosition < jobMinPositionDefault || rsc.jobMinPosition >= jobPositionDefault || rsc.jobMinPosition >= rsc.jobNextPosition {
+		rsc.jobMinPosition = jobMinPositionDefault
 	}
 
 	return nil

@@ -5,10 +5,13 @@ package main
 
 import (
 	"sort"
+
+	"github.com/openmpp/go/ompp/helper"
+	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // get model run job from the queue
-func (rsc *RunCatalog) getJobFromQueue() (*RunJob, bool) {
+func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool) {
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
@@ -18,18 +21,19 @@ func (rsc *RunCatalog) getJobFromQueue() (*RunJob, bool) {
 		return nil, false // queue is paused or empty
 	}
 
+	// find first job where required resources do not exceed existing avaliable resources
 	stamp := ""
-	for k := range rsc.queueKeys {
-		jc, ok := rsc.queueJobs[rsc.queueKeys[k]]
-		if !ok || jc.isError {
-			continue
+	for _, qKey := range rsc.queueKeys {
+		jc, ok := rsc.queueJobs[qKey]
+		if !ok || jc.isError || jc.IsOverLimit {
+			continue // skip invalid job or if required resources exceeding limits
 		}
 		isSel := false
 		for j := 0; !isSel && j < len(rsc.selectedKeys); j++ {
-			isSel = rsc.selectedKeys[j] == rsc.queueKeys[k]
+			isSel = rsc.selectedKeys[j] == qKey
 		}
 		if !isSel {
-			stamp = rsc.queueKeys[k] // first job in queue which not yet selected to run
+			stamp = qKey // first job in queue which not yet selected to run
 			break
 		}
 	}
@@ -143,10 +147,10 @@ func (rsc *RunCatalog) getActiveJobItem(submitStamp string) (runJobFile, bool) {
 }
 
 // return queue job control item and is found boolean flag
-func (rsc *RunCatalog) getQueueJobItem(submitStamp string) (runJobFile, bool) {
+func (rsc *RunCatalog) getQueueJobItem(submitStamp string) (queueJobFile, bool) {
 
 	if submitStamp == "" {
-		return runJobFile{}, false // empty job submission stamp: return empty result
+		return queueJobFile{}, false // empty job submission stamp: return empty result
 	}
 
 	rsc.rscLock.Lock()
@@ -155,7 +159,7 @@ func (rsc *RunCatalog) getQueueJobItem(submitStamp string) (runJobFile, bool) {
 	if qj, ok := rsc.queueJobs[submitStamp]; ok {
 		return qj, true
 	}
-	return runJobFile{}, false // not found
+	return queueJobFile{}, false // not found
 }
 
 // return history job control item and is found boolean flag
@@ -174,20 +178,55 @@ func (rsc *RunCatalog) getHistoryJobItem(submitStamp string) (historyJobFile, bo
 	return historyJobFile{}, false // not found
 }
 
-// move job into the specified queue position.
-// Top of the queue position is zero, negative position treated as zero.
-// If position number exceeds queue length then job moved to the bottom of the queue.
-// Return false if job not found in the queue
-func (rsc *RunCatalog) moveJobInQueue(submitStamp string, position int) bool {
+// write new run request into job queue file, return queue job file path
+func (rsc *RunCatalog) addJobToQueue(job *RunJob) (string, error) {
+	if !theCfg.isJobControl {
+		return "", nil // job control disabled
+	}
 
-	if submitStamp == "" {
-		return false // empty job submission stamp: return empty result
+	fp := jobQueuePath(job.SubmitStamp, job.ModelName, job.ModelDigest, rsc.nextJobPosition(), job.Res.Cpu, job.Res.Mem)
+
+	err := helper.ToJsonIndentFile(fp, job)
+	if err != nil {
+		omppLog.Log(err)
+		fileDeleteAndLog(true, fp) // on error remove file, if any file created
+		return "", err
+	}
+
+	return "", nil
+}
+
+// return next job position in the queue, it is not a queue index but "ticket number" to establish queue jobs order
+func (rsc *RunCatalog) nextJobPosition() int {
+	if !theCfg.isJobControl {
+		return 0 // job control disabled
 	}
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
-	// find current job position in the queue
+	rsc.jobNextPosition++
+
+	if rsc.jobNextPosition <= jobPositionDefault {
+		rsc.jobNextPosition = jobPositionDefault + 1
+	}
+	return rsc.jobNextPosition
+}
+
+// move job into the specified queue index position.
+// Top of the queue position is zero, negative position treated as zero.
+// If position number exceeds queue length then job moved to the bottom of the queue.
+// Return false if job not found in the queue
+func (rsc *RunCatalog) moveJobInQueue(submitStamp string, index int) (bool, [][2]string) {
+
+	if submitStamp == "" {
+		return false, [][2]string{} // empty job submission stamp: return empty result
+	}
+
+	rsc.rscLock.Lock()
+	defer rsc.rscLock.Unlock()
+
+	// find current job position in the queue, excluding jobs selected to run
 	isFound := false
 	n := 0
 	for n = range rsc.queueKeys {
@@ -196,48 +235,156 @@ func (rsc *RunCatalog) moveJobInQueue(submitStamp string, position int) bool {
 			break
 		}
 	}
+	if isFound {
+		isSel := false
+		for j := 0; !isSel && j < len(rsc.selectedKeys); j++ {
+			isSel = rsc.selectedKeys[j] == submitStamp
+		}
+		isFound = !isSel
+	}
 	if !isFound {
-		return false // job not found in the queue
+		return false, [][2]string{} // job not found in the queue
 	}
 
-	// position must be between zero at the last postion in the queue
-	nPos := position
-	if nPos <= 0 {
+	// position must be between zero at the last position in the queue
+	nPos := index
+	fPos := jobPositionDefault
+
+	isFirst := nPos <= 0
+	if isFirst {
 		nPos = 0
+		rsc.jobMinPosition--
+		fPos = rsc.jobMinPosition
 	}
-	if nPos >= len(rsc.queueKeys)-1 {
+
+	isLast := !isFirst && nPos >= len(rsc.queueKeys)-1
+	if isLast {
 		nPos = len(rsc.queueKeys) - 1
+		fPos = rsc.jobNextPosition + 1
+		rsc.jobNextPosition = fPos + 1
 	}
 	if nPos == n {
-		return true // job is already at this position
+		return true, [][2]string{} // job is already at this position
+	}
+
+	// list of files to rename
+	moveLst := [][2]string{}
+
+	fJ, isFrom := rsc.queueJobs[submitStamp]
+	toJ, isTo := rsc.queueJobs[rsc.queueKeys[nPos]]
+
+	if !isFirst && !isLast {
+
+		if isFrom && isTo {
+			moveLst = append(moveLst, [2]string{
+				fJ.filePath,
+				jobQueuePath(fJ.SubmitStamp, fJ.ModelName, fJ.ModelDigest, toJ.position, fJ.Res.Cpu, fJ.Res.Mem),
+			})
+		}
+	} else { // move source file to the top (before the first position) or to the bottom (after last postion)
+
+		moveLst = append(moveLst, [2]string{
+			fJ.filePath,
+			jobQueuePath(fJ.SubmitStamp, fJ.ModelName, fJ.ModelDigest, fPos, fJ.Res.Cpu, fJ.Res.Mem),
+		})
 	}
 
 	// move down to the queue: shift items up
 	if nPos > n {
 
 		for k := n; k < nPos && k < len(rsc.queueKeys)-1; k++ {
-			rsc.queueKeys[k] = rsc.queueKeys[k+1]
+
+			// skip files selected to run
+			fromKey := rsc.queueKeys[k+1]
+
+			isSel := false
+			for j := 0; !isSel && j < len(rsc.selectedKeys); j++ {
+				isSel = rsc.selectedKeys[j] == fromKey
+			}
+			if isSel {
+				continue
+			}
+
+			if !isFirst && !isLast {
+
+				fJ, isFrom = rsc.queueJobs[fromKey]
+				toJ, isTo = rsc.queueJobs[rsc.queueKeys[k]]
+				if isFrom && isTo {
+					moveLst = append(moveLst, [2]string{
+						fJ.filePath,
+						jobQueuePath(fJ.SubmitStamp, fJ.ModelName, fJ.ModelDigest, toJ.position, fJ.Res.Cpu, fJ.Res.Mem),
+					})
+				}
+			}
+
+			rsc.queueKeys[k] = fromKey
 		}
+
 	} else { // move up in the queue: shift items down
 
 		for k := n - 1; k >= nPos && k >= 0; k-- {
-			rsc.queueKeys[k+1] = rsc.queueKeys[k]
+
+			// skip files selected to run
+			fromKey := rsc.queueKeys[k]
+
+			isSel := false
+			for j := 0; !isSel && j < len(rsc.selectedKeys); j++ {
+				isSel = rsc.selectedKeys[j] == fromKey
+			}
+			if isSel {
+				continue
+			}
+
+			if !isFirst && !isLast {
+
+				fJ, isFrom = rsc.queueJobs[fromKey]
+				toJ, isTo = rsc.queueJobs[rsc.queueKeys[k+1]]
+				if isFrom && isTo {
+					moveLst = append(moveLst, [2]string{
+						fJ.filePath,
+						jobQueuePath(fJ.SubmitStamp, fJ.ModelName, fJ.ModelDigest, toJ.position, fJ.Res.Cpu, fJ.Res.Mem),
+					})
+				}
+			}
+
+			rsc.queueKeys[k+1] = fromKey
 		}
 	}
 	rsc.queueKeys[nPos] = submitStamp
 
-	return true
+	return true, moveLst
 }
 
 // update run catalog with current job control files
 func (rsc *RunCatalog) updateRunJobs(
-	jsState JobServiceState, queueJobs map[string]runJobFile, activeJobs map[string]runJobFile, historyJobs map[string]historyJobFile,
+	jsState JobServiceState,
+	computeState map[string]computeItem,
+	queueJobs map[string]queueJobFile,
+	activeJobs map[string]runJobFile,
+	historyJobs map[string]historyJobFile,
 ) *jobControlState {
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
+	jNextPos := rsc.jobNextPosition
+
 	rsc.JobServiceState = jsState
+
+	if rsc.jobNextPosition < jNextPos {
+		rsc.jobNextPosition = jNextPos
+	}
+
+	// copy state of computational resources
+	for name := range rsc.computeState {
+		_, ok := computeState[name]
+		if !ok {
+			delete(rsc.computeState, name) // remove: server or cluster not does exist anymore
+		}
+	}
+	for name, ci := range computeState {
+		rsc.computeState[name] = ci
+	}
 
 	// update queue jobs and collect all new submission stamps
 	for stamp := range rsc.queueJobs {
