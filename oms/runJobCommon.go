@@ -290,7 +290,7 @@ func parseCompStatePath(srcPath, state string) (string, string, int64) {
 
 	// split file name and check result: it must be 4 non-empty parts and with time stamp
 	sp := strings.Split(p, "-#-")
-	if len(sp) != 3 || sp[0] != "comp-"+state || sp[1] == "" || sp[3] == "" || !helper.IsUnderscoreTimeStamp(sp[2]) {
+	if len(sp) != 4 || sp[0] != "comp-"+state || sp[1] == "" || !helper.IsUnderscoreTimeStamp(sp[2]) || sp[3] == "" {
 		return "", "", 0 // source file path is not compute server state path
 	}
 
@@ -377,13 +377,24 @@ func moveJobToHistory(activePath, status string, submitStamp, modelName, modelDi
 		return true // job control disabled
 	}
 
+	// move active job file to history
 	dst := jobHistoryPath(status, submitStamp, modelName, modelDigest, runStamp)
 
-	if !fileMoveAndLog(false, activePath, dst) {
+	isOk := fileMoveAndLog(false, activePath, dst)
+	if !isOk {
 		fileDeleteAndLog(true, activePath) // if move failed then delete job control file from active list
-		return false
 	}
-	return true
+
+	// remove all compute server usage files
+	// for example: job/state/comp-used-#-name-#-2022_07_08_23_03_27_555-#-_4040-#-cpu-#-4-#-mem-#-8
+	ptrn := filepath.Join(theCfg.jobDir, "state") + string(filepath.Separator) + "comp-used-#-*-#-" + submitStamp + "-#-" + theCfg.omsName + "-#-cpu-#-*-#-mem-#-*"
+
+	if fLst, err := filepath.Glob(ptrn); err == nil {
+		for _, f := range fLst {
+			fileDeleteAndLog(false, f)
+		}
+	}
+	return isOk
 }
 
 // move outer model run job control file to history
@@ -394,11 +405,21 @@ func moveOuterJobToHistory(srcPath, status string, submitStamp, modelName, model
 
 	dst := jobHistoryPath(status, submitStamp, modelName, modelDigest, runStamp)
 
-	if !fileMoveAndLog(true, srcPath, dst) {
+	isOk := fileMoveAndLog(false, srcPath, dst)
+	if !isOk {
 		fileDeleteAndLog(true, srcPath) // if move failed then delete job control file from active list
-		return false
 	}
-	return true
+
+	// remove all compute server usage files
+	// for example: job/state/comp-used-#-name-#-2022_07_08_23_03_27_555-#-_4040-#-cpu-#-4-#-mem-#-8
+	ptrn := filepath.Join(theCfg.jobDir, "state") + string(filepath.Separator) + "comp-used-#-*-#-" + submitStamp + "-#-" + theCfg.omsName + "-#-cpu-#-*-#-mem-#-*"
+
+	if fLst, err := filepath.Glob(ptrn); err == nil {
+		for _, f := range fLst {
+			fileDeleteAndLog(false, f)
+		}
+	}
+	return isOk
 }
 
 // move model run request from queue to error if model run fail to start

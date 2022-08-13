@@ -22,7 +22,7 @@ const jobOuterScanInterval = 5021        // timeout in msec, sleep interval betw
 const serverTimeoutDefault = 60          // time in seconds to start or stop compute server
 const minJobTickMs int64 = 1597707959000 // unix milliseconds of 2020-08-17 23:45:59
 const jobPositionDefault = 20220817      // queue job position by default, e.g. if queue is empty
-const jobMinPositionDefault = 10240817   // queue minimal job position by default, e.g. on instance startup
+const maxComputeErrors = 8               // errors threshold for compute server or cluster
 
 /*
 scan active job directory to find active model run files without run state.
@@ -214,8 +214,8 @@ func scanJobs(doneC <-chan bool) {
 		jsState := JobServiceState{
 			IsQueuePaused:     isPausedJobQueue(),
 			JobUpdateDateTime: helper.MakeDateTime(updateTs),
-			jobNextPosition:   jobPositionDefault,
-			jobMinPosition:    jobMinPositionDefault,
+			jobLastPosition:   jobPositionDefault + (1 + len(queueFiles)),
+			jobFirstPosition:  jobPositionDefault - (1 + len(queueFiles)),
 		}
 		if len(limitCpuFiles) > 0 {
 			jsState.LimitTotalRes.Cpu = parseLimitPath(limitCpuFiles[0], "total-limit-cpu")
@@ -272,16 +272,27 @@ func scanJobs(doneC <-chan bool) {
 		// queue resources limits:
 		// do sum of all computational servers cpu cores and memory and apply total resource limits
 		cRes := RunRes{}
+		jsState.ComputeErrorRes = RunRes{}
 
-		for _, cu := range computeState {
-			cRes.Cpu += cu.totalRes.Cpu
-			cRes.Mem += cu.totalRes.Mem
+		for _, cs := range computeState {
+
+			cRes.Cpu += cs.totalRes.Cpu
+			cRes.Mem += cs.totalRes.Mem
+
+			if cs.state == "error" {
+				jsState.ComputeErrorRes.Cpu += cs.totalRes.Cpu
+				jsState.ComputeErrorRes.Mem += cs.totalRes.Mem
+			}
 		}
-		if cRes.Cpu > 0 && jsState.LimitTotalRes.Cpu > cRes.Cpu {
+		if cRes.Cpu > 0 && jsState.LimitTotalRes.Cpu != cRes.Cpu {
 			jsState.LimitTotalRes.Cpu = cRes.Cpu
 		}
-		if cRes.Mem > 0 && jsState.LimitTotalRes.Mem > cRes.Mem {
+		if cRes.Mem > 0 && jsState.LimitTotalRes.Mem != cRes.Mem {
 			jsState.LimitTotalRes.Mem = cRes.Mem
+		}
+		aRes := RunRes{
+			Cpu: jsState.LimitTotalRes.Cpu - jsState.ComputeErrorRes.Cpu,
+			Mem: jsState.LimitTotalRes.Mem - jsState.ComputeErrorRes.Mem,
 		}
 
 		// model runs
@@ -291,7 +302,7 @@ func scanJobs(doneC <-chan bool) {
 
 		// parse queue files
 		sort.Strings(queueFiles)
-		qKeys, maxPos, minPos, qTotal, qOwn := updateQueueJobs(queueFiles, queueJobs, jsState.LimitTotalRes, omsActive)
+		qKeys, maxPos, minPos, qTotal, qOwn := updateQueueJobs(queueFiles, queueJobs, aRes, omsActive)
 
 		// parse history files list
 		hKeys := make([]string, 0, len(historyFiles))
@@ -359,8 +370,8 @@ func scanJobs(doneC <-chan bool) {
 		jsState.ActiveOwnRes = aOwn
 		jsState.QueueTotalRes = qTotal
 		jsState.QueueOwnRes = qOwn
-		jsState.jobNextPosition = maxPos
-		jsState.jobMinPosition = minPos
+		jsState.jobLastPosition = maxPos
+		jsState.jobFirstPosition = minPos
 
 		jsc := theRunCatalog.updateRunJobs(jsState, computeState, queueJobs, activeJobs, historyJobs)
 		jobStateWrite(*jsc)
@@ -464,11 +475,11 @@ func updateQueueJobs(fLst []string, jobMap map[string]queueJobFile, aRes RunRes,
 		if stamp == "" || oms == "" || mn == "" || dgst == "" {
 			continue // file name is not a job file name
 		}
-		if maxPos <= pos {
-			maxPos = pos + 1
+		if maxPos < pos {
+			maxPos = pos
 		}
-		if minPos >= pos {
-			minPos = pos - 1
+		if minPos > pos {
+			minPos = pos
 		}
 		if _, ok := omsActive[oms]; !ok {
 			continue // skip: oms instance inactive
@@ -623,6 +634,7 @@ func updateComputeState(
 
 	cKeys := make([]string, 0, len(computeState))
 
+	// total compute resources: all existing servers or clusters
 	for _, f := range compFiles {
 
 		// get server name, cpu count and memory size
@@ -637,6 +649,8 @@ func updateComputeState(
 			totalRes: RunRes{Cpu: cpu, Mem: mem},
 		}
 	}
+
+	// remove compute servers or cluster which are no longer exist
 	sort.Strings(cKeys)
 	for name := range computeState {
 		k := sort.SearchStrings(cKeys, name)
@@ -645,6 +659,7 @@ func updateComputeState(
 		}
 	}
 
+	// ready compute resources: powered on servers or clusters
 	for _, f := range compReadyFiles {
 
 		// get server name
@@ -660,6 +675,7 @@ func updateComputeState(
 		}
 	}
 
+	// start up servers or clusters: check startup timeout
 	for _, f := range compStartFiles {
 
 		// get server name and time stamp
@@ -677,12 +693,13 @@ func updateComputeState(
 				if cs.lastErrorTs < ts {
 					cs.lastErrorTs = ts
 				}
-				cs.errorCount++
+				cs.errorCount++ // start timeout error
 			}
 			computeState[name] = cs
 		}
 	}
 
+	// stop servers or clusters: check shutdown timeout
 	for _, f := range compStopFiles {
 
 		// get server name and time stamp
@@ -700,16 +717,17 @@ func updateComputeState(
 				if cs.lastErrorTs < ts {
 					cs.lastErrorTs = ts
 				}
-				cs.errorCount++
+				cs.errorCount++ // stop timeout error
 			}
 			computeState[name] = cs
 		}
 	}
 
+	// server or cluster in "error" state
 	for _, f := range compErrorFiles {
 
 		// get server name and time stamp
-		name, _, ts := parseCompStatePath(f, "stop")
+		name, _, ts := parseCompStatePath(f, "error")
 		if name == "" {
 			continue // skip: this is not a compute server state file
 		}
@@ -720,12 +738,22 @@ func updateComputeState(
 			if cs.lastErrorTs < ts {
 				cs.lastErrorTs = ts
 			}
-			cs.errorCount++
+			cs.errorCount++ // error logged for that server or cluster
 
 			computeState[name] = cs
 		}
 	}
 
+	// set error state for server or cluster
+	for name, cs := range computeState {
+
+		if cs.errorCount > maxComputeErrors {
+			cs.state = "error"
+			computeState[name] = cs
+		}
+	}
+
+	// servers or clusters used for model runs: sum up resoureces used by current oms instance and all oms inatances
 	for _, f := range compUsedFiles {
 
 		// get server name and time stamp
@@ -751,7 +779,6 @@ func updateComputeState(
 			computeState[name] = cs
 		}
 	}
-
 }
 
 // scan model run queue and start model runs

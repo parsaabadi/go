@@ -43,8 +43,8 @@ func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool) {
 
 	// check avaliable resource: cpu cores and memory
 	qRes := RunRes{
-		Cpu: rsc.LimitTotalRes.Cpu - rsc.ActiveTotalRes.Cpu,
-		Mem: rsc.LimitTotalRes.Mem - rsc.ActiveTotalRes.Mem,
+		Cpu: (rsc.LimitTotalRes.Cpu - rsc.ComputeErrorRes.Cpu) - rsc.ActiveTotalRes.Cpu,
+		Mem: (rsc.LimitTotalRes.Mem - rsc.ComputeErrorRes.Mem) - rsc.ActiveTotalRes.Mem,
 	}
 	qj := rsc.queueJobs[stamp]
 
@@ -205,12 +205,12 @@ func (rsc *RunCatalog) nextJobPosition() int {
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
-	rsc.jobNextPosition++
+	rsc.jobLastPosition++
 
-	if rsc.jobNextPosition <= jobPositionDefault {
-		rsc.jobNextPosition = jobPositionDefault + 1
+	if rsc.jobLastPosition <= jobPositionDefault {
+		rsc.jobLastPosition = jobPositionDefault + 1
 	}
-	return rsc.jobNextPosition
+	return rsc.jobLastPosition
 }
 
 // move job into the specified queue index position.
@@ -253,15 +253,15 @@ func (rsc *RunCatalog) moveJobInQueue(submitStamp string, index int) (bool, [][2
 	isFirst := nPos <= 0
 	if isFirst {
 		nPos = 0
-		rsc.jobMinPosition--
-		fPos = rsc.jobMinPosition
+		rsc.jobFirstPosition--
+		fPos = rsc.jobFirstPosition
 	}
 
 	isLast := !isFirst && nPos >= len(rsc.queueKeys)-1
 	if isLast {
 		nPos = len(rsc.queueKeys) - 1
-		fPos = rsc.jobNextPosition + 1
-		rsc.jobNextPosition = fPos + 1
+		fPos = rsc.jobLastPosition + 1
+		rsc.jobLastPosition = fPos + 1
 	}
 	if nPos == n {
 		return true, [][2]string{} // job is already at this position
@@ -367,12 +367,12 @@ func (rsc *RunCatalog) updateRunJobs(
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
-	jNextPos := rsc.jobNextPosition
+	jNextPos := rsc.jobLastPosition
 
 	rsc.JobServiceState = jsState
 
-	if rsc.jobNextPosition < jNextPos {
-		rsc.jobNextPosition = jNextPos
+	if rsc.jobLastPosition < jNextPos {
+		rsc.jobLastPosition = jNextPos
 	}
 
 	// copy state of computational resources
@@ -382,8 +382,8 @@ func (rsc *RunCatalog) updateRunJobs(
 			delete(rsc.computeState, name) // remove: server or cluster not does exist anymore
 		}
 	}
-	for name, ci := range computeState {
-		rsc.computeState[name] = ci
+	for name, cs := range computeState {
+		rsc.computeState[name] = cs
 	}
 
 	// update queue jobs and collect all new submission stamps

@@ -165,11 +165,12 @@ type JobServiceState struct {
 	QueueTotalRes     RunRes // queue model run resources (CPU cores and memory) requested by all oms instances
 	QueueOwnRes       RunRes // queue model run resources (CPU cores and memory) requested by this oms instance
 	LimitTotalRes     RunRes // total available resources limits (CPU cores and memory)
+	ComputeErrorRes   RunRes // computational resources on "error" servers
 	maxStartTime      int    // max time in seconds to start compute server or cluster
 	maxStopTime       int    // max time in seconds to stop compute server or cluster
 	maxIdleTime       int    // max idle in seconds time before stopping server or cluster
-	jobNextPosition   int    // next job position in the queue
-	jobMinPosition    int    // minimal job position in the queue
+	jobLastPosition   int    // last job position in the queue
+	jobFirstPosition  int    // minimal job position in the queue
 }
 
 // computational server or cluster state
@@ -308,6 +309,8 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error
 	rsc.queueJobs = map[string]queueJobFile{}
 	rsc.historyJobs = make(map[string]historyJobFile, theCfg.runHistoryMaxSize)
 	rsc.computeState = map[string]computeItem{}
+	rsc.jobLastPosition = jobPositionDefault + 1
+	rsc.jobFirstPosition = jobPositionDefault - 1
 
 	if rsc.selectedKeys == nil {
 		rsc.selectedKeys = []string{}
@@ -317,12 +320,6 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error
 		if len(jsc.Queue) > 0 {
 			rsc.queueKeys = append(rsc.queueKeys, jsc.Queue...)
 		}
-	}
-	if rsc.jobNextPosition <= jobPositionDefault {
-		rsc.jobNextPosition = jobPositionDefault + 1
-	}
-	if rsc.jobMinPosition < jobMinPositionDefault || rsc.jobMinPosition >= jobPositionDefault || rsc.jobMinPosition >= rsc.jobNextPosition {
-		rsc.jobMinPosition = jobMinPositionDefault
 	}
 
 	return nil
