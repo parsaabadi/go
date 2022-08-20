@@ -158,6 +158,33 @@ func New(encodingKey string, optFs []FullShort) (*RunOptions, *LogOptions, []str
 	return runOpts, logOpts, extrArgs, nil
 }
 
+// FromIni read ini-file options.
+//
+// encodingName, if not empty, is a "code page" to convert source file into utf-8, for example: windows-1252
+//
+// Return
+// 1. *RunOptions: is (key, value) pairs from ini-file: section.key=value
+// 2. error or nil on success
+func FromIni(iniPath string, encodingName string) (*RunOptions, error) {
+
+	runOpts := &RunOptions{
+		KeyValue:        make(map[string]string),
+		DefaultKeyValue: make(map[string]string),
+	}
+
+	// parse ini-file using encoding, if it is not empty
+	kvIni, err := NewIni(iniPath, encodingName)
+	if err != nil {
+		return nil, nil
+	}
+	if kvIni != nil {
+		runOpts.KeyValue = kvIni
+	}
+
+	// adjust log settings
+	return runOpts, nil
+}
+
 // IsExist return true if key is defined as command line argument or ini-file option.
 func (opts *RunOptions) IsExist(key string) bool {
 	if opts == nil || opts.KeyValue == nil {

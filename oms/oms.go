@@ -125,6 +125,10 @@ import (
 
 // config keys to get values from ini-file or command line arguments.
 const (
+	listenArgKey         = "oms.Listen"        // address to listen, default: localhost:4040
+	listenShortKey       = "l"                 // address to listen (short form)
+	omsNameArgKey        = "oms.Name"          // oms instance name, if empty then derived from address to listen
+	urlFileArgKey        = "oms.UrlSaveTo"     // file path to save oms URL in form of: http://localhost:4040, if relative then must be relative to oms root directory
 	rootDirArgKey        = "oms.RootDir"       // oms root directory, expected to contain log subfolder
 	modelDirArgKey       = "oms.ModelDir"      // models executable and model.sqlite directory, if relative then must be relative to oms root directory
 	modelLogDirArgKey    = "oms.ModelLogDir"   // models log directory, if relative then must be relative to oms root directory
@@ -134,10 +138,6 @@ const (
 	homeDirArgKey        = "oms.HomeDir"       // user personal home directory, if relative then must be relative to oms root directory
 	isDownloadArgKey     = "oms.AllowDownload" // if true then allow download from user home sub-directory: home/io/download
 	isUploadArgKey       = "oms.AllowUpload"   // if true then allow upload to user home sub-directory: home/io/upload
-	listenArgKey         = "oms.Listen"        // address to listen, default: localhost:4040
-	listenShortKey       = "l"                 // address to listen (short form)
-	omsNameArgKey        = "oms.Name"          // oms instance name, if empty then derived from address to listen
-	urlFileArgKey        = "oms.UrlSaveTo"     // file path to save oms URL in form of: http://localhost:4040, if relative then must be relative to oms root directory
 	logRequestArgKey     = "oms.LogRequest"    // if true then log http request
 	apiOnlyArgKey        = "oms.ApiOnly"       // if true then API only web-service, no web UI
 	uiLangsArgKey        = "oms.Languages"     // list of supported languages
@@ -167,6 +167,7 @@ var theCfg = struct {
 	pageMaxSize       int64             // default "page" size: row count to read parameters or output tables
 	runHistoryMaxSize int               // max number of completed model run states to keep in run list history
 	doubleFmt         string            // format to convert float or double value to string
+	codePage          string            // "code page" to convert source file into utf-8, for example: windows-1252
 	env               map[string]string // server config environmemt variables
 }{
 	pageMaxSize:       100,
@@ -250,6 +251,7 @@ func mainBody(args []string) error {
 	if theCfg.runHistoryMaxSize <= 0 {
 		theCfg.runHistoryMaxSize = runHistoryDefaultSize
 	}
+	theCfg.codePage = runOpts.String(encodingArgKey)
 
 	// get server config environmemt variables
 	env := os.Environ()

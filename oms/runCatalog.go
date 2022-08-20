@@ -67,6 +67,7 @@ type RunRequest struct {
 	Opts        map[string]string // model run options
 	Env         map[string]string // environment variables to set
 	Threads     int               // number of modelling threads
+	IsMpi       bool              // if true then it use MPI to run the model
 	Mpi         struct {
 		Np int // if non-zero then number of MPI processes
 	}
@@ -86,6 +87,7 @@ type RunJob struct {
 	RunRequest         // model run request: model name, digest and run options
 	Res         RunRes // model run resources: CPU cores and memory
 	IsOverLimit bool   // if true then model run resource(s) exceed limit(s)
+	QueuePos    int    // one-based position in global queue
 	LogFileName string // log file name
 	LogPath     string // log file path: log/dir/modelName.RunStamp.console.log
 }
@@ -107,7 +109,7 @@ type runJobFile struct {
 type queueJobFile struct {
 	runJobFile
 	preRes   RunRes // model run resources required for queue jobs before this job
-	position int    // part of file name: active job pid or queue position
+	position int    // part of file name: queue position
 }
 
 // job control file info for history job: parts of file name
@@ -160,12 +162,16 @@ type RunStateLogPage struct {
 type JobServiceState struct {
 	IsQueuePaused     bool   // if true then jobs queue is paused, jobs are not selected from queue
 	JobUpdateDateTime string // last date-time jobs list updated
-	ActiveTotalRes    RunRes // active model run resources (CPU cores and memory) used by all oms instances
-	ActiveOwnRes      RunRes // active model run resources (CPU cores and memory) used by this oms instance
-	QueueTotalRes     RunRes // queue model run resources (CPU cores and memory) requested by all oms instances
-	QueueOwnRes       RunRes // queue model run resources (CPU cores and memory) requested by this oms instance
-	LimitTotalRes     RunRes // total available resources limits (CPU cores and memory)
+	ActiveTotalRes    RunRes // MPI active model run resources (CPU cores and memory) used by all oms instances
+	ActiveOwnRes      RunRes // MPI active model run resources (CPU cores and memory) used by this oms instance
+	QueueTotalRes     RunRes // MPI queue model run resources (CPU cores and memory) requested by all oms instances
+	QueueOwnRes       RunRes // MPI queue model run resources (CPU cores and memory) requested by this oms instance
+	MpiRes            RunRes // MPI total available resources limits (CPU cores and memory)
+	LocalRes          RunRes // localhost non-MPI jobs total resources limits
+	LocalUsedRes      RunRes // localhost non-MPI jobs resources used by this instance to run models
+	LocalQueueRes     RunRes // localhost non-MPI jobs queue resources for this oms instance
 	ComputeErrorRes   RunRes // computational resources on "error" servers
+	isLeader          bool   // if true then this oms instance is a leader
 	maxStartTime      int    // max time in seconds to start compute server or cluster
 	maxStopTime       int    // max time in seconds to stop compute server or cluster
 	maxIdleTime       int    // max idle in seconds time before stopping server or cluster
@@ -175,12 +181,20 @@ type JobServiceState struct {
 
 // computational server or cluster state
 type computeItem struct {
-	state       string // state: start, stop, ready, error, empty "" means power off
-	totalRes    RunRes // total computational resources (CPU cores and memory)
-	usedRes     RunRes // resources (CPU cores and memory) used by all oms instances
-	ownRes      RunRes // resources (CPU cores and memory) used by this instance
-	errorCount  int    // number of incomplete starts, stops and errors
-	lastErrorTs int64  // last error time (unix milliseconds)
+	name        string   // name of server or cluster
+	state       string   // state: start, stop, ready, error, empty "" means power off
+	totalRes    RunRes   // total computational resources (CPU cores and memory)
+	usedRes     RunRes   // resources (CPU cores and memory) used by all oms instances
+	ownRes      RunRes   // resources (CPU cores and memory) used by this instance
+	errorCount  int      // number of incomplete starts, stops and errors
+	lastUsedTs  int64    // last time of model run (unix milliseconds)
+	lastStartTs int64    // last start time (unix milliseconds)
+	lastStopTs  int64    // last stop time (unix milliseconds)
+	lastErrorTs int64    // last error time (unix milliseconds)
+	startExe    string   // name of executable to start server, e.g.: /bin/sh
+	startArgs   []string // arguments to start server, e.g.: -c start.sh my-server-name
+	stopExe     string   // name of executable to stop server,, e.g.: /bin/sh
+	stopArgs    []string // arguments to stop server, e.g.: -c stop.sh my-server-name
 }
 
 // job control state

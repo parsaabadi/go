@@ -48,6 +48,7 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	req.ModelDigest = m.Digest
 	req.ModelName = m.Name
+	req.IsMpi = req.Mpi.Np != 0
 
 	// get submit stamp
 	submitStamp, dtNow := theCatalog.getNewTimeStamp()
@@ -68,7 +69,7 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// if job control disabled the start model run
+	// if job control disabled then start model run
 	if !theCfg.isJobControl {
 
 		rs, err := theRunCatalog.runModel(&job)

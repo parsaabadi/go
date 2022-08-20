@@ -5,55 +5,137 @@ package main
 
 import (
 	"sort"
+	"time"
 
 	"github.com/openmpp/go/ompp/helper"
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // get model run job from the queue
-func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool) {
+func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, []string, []RunRes) {
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
-	// find first job request in the queue
 	if rsc.IsQueuePaused || len(rsc.queueKeys) <= 0 {
-		return nil, false // queue is paused or empty
+		return nil, false, []string{}, []RunRes{} // queue is paused or empty
 	}
 
-	// find first job where required resources do not exceed existing avaliable resources
+	// resource available to rum MPI jobs from global MPI queue and form localhost queue of this oms instance jobs
+	qMpi := RunRes{
+		Cpu: (rsc.MpiRes.Cpu - rsc.ComputeErrorRes.Cpu) - rsc.ActiveTotalRes.Cpu,
+		Mem: (rsc.MpiRes.Mem - rsc.ComputeErrorRes.Mem) - rsc.ActiveTotalRes.Mem,
+	}
+	qLocal := RunRes{
+		Cpu: rsc.LocalRes.Cpu - rsc.LocalUsedRes.Cpu,
+		Mem: rsc.LocalRes.Mem - rsc.LocalUsedRes.Mem,
+	}
+
+	// first job in localhost non-MPI queue or global queue where zero resources required for previous jobs
+	// check if there are enough available resources to run the job
 	stamp := ""
 	for _, qKey := range rsc.queueKeys {
+
 		jc, ok := rsc.queueJobs[qKey]
-		if !ok || jc.isError || jc.IsOverLimit {
-			continue // skip invalid job or if required resources exceeding limits
+
+		if !ok || jc.isError || jc.IsOverLimit || jc.preRes.Cpu > 0 || jc.preRes.Mem > 0 {
+			continue // skip invalid job or if required resources exceeding limits or if it is not a first job in global queue
 		}
 		isSel := false
 		for j := 0; !isSel && j < len(rsc.selectedKeys); j++ {
 			isSel = rsc.selectedKeys[j] == qKey
 		}
-		if !isSel {
-			stamp = qKey // first job in queue which not yet selected to run
-			break
+		if isSel {
+			continue // this job is already selected to run
 		}
+
+		// check avaliable resource: cpu cores and memory
+		if !jc.IsMpi {
+
+			if rsc.LocalRes.Cpu > 0 && jc.Res.Cpu > 0 && qLocal.Cpu < jc.Res.Cpu+jc.preRes.Cpu {
+				continue // localhost cpu cores limited and job cpu limit set to non zero and localhost available cpu less than required cpu
+			}
+			if rsc.LocalRes.Mem > 0 && jc.Res.Mem > 0 && qLocal.Mem < jc.Res.Mem+jc.preRes.Mem {
+				continue // localhost memory limited and job memory limit set to non zero and localhost available memory less than required memory
+			}
+		} else { // check resources available for MPI jobs
+
+			if rsc.MpiRes.Cpu > 0 && jc.Res.Cpu > 0 && qMpi.Cpu < jc.Res.Cpu+jc.preRes.Cpu {
+				continue // MPI cluster cpu cores limited and job cpu limit set to non zero and MPI cluster available cpu less than required cpu
+			}
+			if rsc.MpiRes.Mem > 0 && jc.Res.Mem > 0 && qMpi.Mem < jc.Res.Mem+jc.preRes.Mem {
+				continue // MPI cluster memory limited and job memory limit set to non zero and MPI cluster available memory less than required memory
+			}
+		}
+
+		stamp = qKey // first job in queue which not yet selected to run and enough resources available to run
 	}
 	if stamp == "" {
-		return nil, false // queue is empty or all jobs already selected to run
+		return nil, false, []string{}, []RunRes{} // queue is empty or all jobs already selected to run
 	}
+	qj := rsc.queueJobs[stamp] // job found
 
-	// check avaliable resource: cpu cores and memory
-	qRes := RunRes{
-		Cpu: (rsc.LimitTotalRes.Cpu - rsc.ComputeErrorRes.Cpu) - rsc.ActiveTotalRes.Cpu,
-		Mem: (rsc.LimitTotalRes.Mem - rsc.ComputeErrorRes.Mem) - rsc.ActiveTotalRes.Mem,
-	}
-	qj := rsc.queueJobs[stamp]
+	// select servers where max cpu cores available until all required cores assigned to the servers
+	nameLst := []string{}
+	resLst := []RunRes{}
 
-	isRes := (rsc.LimitTotalRes.Cpu <= 0 || qj.Res.Cpu <= 0) || qRes.Cpu >= qj.Res.Cpu+qj.preRes.Cpu
-	if isRes {
-		isRes = (rsc.LimitTotalRes.Mem <= 0 || qj.Res.Mem <= 0) || qRes.Mem >= qj.Res.Mem+qj.preRes.Mem
-	}
-	if !isRes {
-		return nil, false // not enough resources to satisfy job request
+	if qj.IsMpi {
+
+		nCpu := qj.Res.Cpu
+		nMem := qj.Res.Mem
+
+		for nCpu > 0 {
+
+			// find serever with max cpu cores available
+			m := ""
+			res := RunRes{}
+
+			for name, cs := range rsc.computeState {
+
+				isUse := false
+				for k := 0; !isUse && k < len(nameLst); k++ {
+					isUse = name == nameLst[k]
+				}
+				if isUse {
+					continue // this server already selected for tha model run
+				}
+				if res.Cpu < cs.totalRes.Cpu-cs.usedRes.Cpu {
+					m = name
+					res.Cpu = cs.totalRes.Cpu - cs.usedRes.Cpu
+					res.Mem = cs.totalRes.Mem - cs.usedRes.Mem
+				}
+			}
+			if m == "" {
+
+				if len(resLst) <= 0 {
+					omppLog.Log("ERROR: resources not found to run the model, CPU: ", qj.Res.Cpu, ": ", stamp)
+					return nil, false, []string{}, []RunRes{}
+				}
+				// else assign the rest of the job to the last server
+				resLst[len(resLst)-1].Cpu = resLst[len(resLst)-1].Cpu + nCpu
+
+				omppLog.Log("WARNING: oversubscribe resources run the model, CPU: ", qj.Res.Cpu, ": ", stamp)
+				break // oversubscribe last server
+			}
+
+			if res.Cpu > nCpu {
+				res.Cpu = nCpu
+			}
+			if res.Mem > nMem {
+				res.Mem = nMem
+			}
+			if res.Mem < 0 {
+				res.Mem = 0
+			}
+
+			nameLst = append(nameLst, m)
+			resLst = append(resLst, res)
+
+			nCpu = nCpu - res.Cpu
+			if nMem > 0 {
+				nMem = nMem - (rsc.computeState[m].totalRes.Mem - rsc.computeState[m].usedRes.Mem)
+			}
+		}
 	}
 
 	// job found: copy run request from the queue
@@ -82,7 +164,7 @@ func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool) {
 		len(qj.RunNotes))
 	copy(job.RunNotes, qj.RunNotes)
 
-	return &job, true
+	return &job, true, nameLst, resLst
 }
 
 // return copy of submission stamps and job control items for queue, active and history model run jobs
@@ -184,7 +266,7 @@ func (rsc *RunCatalog) addJobToQueue(job *RunJob) (string, error) {
 		return "", nil // job control disabled
 	}
 
-	fp := jobQueuePath(job.SubmitStamp, job.ModelName, job.ModelDigest, rsc.nextJobPosition(), job.Res.Cpu, job.Res.Mem)
+	fp := jobQueuePath(job.SubmitStamp, job.ModelName, job.ModelDigest, job.IsMpi, rsc.nextJobPosition(), job.Res.Cpu, job.Res.Mem)
 
 	err := helper.ToJsonIndentFile(fp, job)
 	if err != nil {
@@ -278,14 +360,14 @@ func (rsc *RunCatalog) moveJobInQueue(submitStamp string, index int) (bool, [][2
 		if isFrom && isTo {
 			moveLst = append(moveLst, [2]string{
 				fJ.filePath,
-				jobQueuePath(fJ.SubmitStamp, fJ.ModelName, fJ.ModelDigest, toJ.position, fJ.Res.Cpu, fJ.Res.Mem),
+				jobQueuePath(fJ.SubmitStamp, fJ.ModelName, fJ.ModelDigest, fJ.IsMpi, toJ.position, fJ.Res.Cpu, fJ.Res.Mem),
 			})
 		}
 	} else { // move source file to the top (before the first position) or to the bottom (after last postion)
 
 		moveLst = append(moveLst, [2]string{
 			fJ.filePath,
-			jobQueuePath(fJ.SubmitStamp, fJ.ModelName, fJ.ModelDigest, fPos, fJ.Res.Cpu, fJ.Res.Mem),
+			jobQueuePath(fJ.SubmitStamp, fJ.ModelName, fJ.ModelDigest, fJ.IsMpi, fPos, fJ.Res.Cpu, fJ.Res.Mem),
 		})
 	}
 
@@ -312,7 +394,7 @@ func (rsc *RunCatalog) moveJobInQueue(submitStamp string, index int) (bool, [][2
 				if isFrom && isTo {
 					moveLst = append(moveLst, [2]string{
 						fJ.filePath,
-						jobQueuePath(fJ.SubmitStamp, fJ.ModelName, fJ.ModelDigest, toJ.position, fJ.Res.Cpu, fJ.Res.Mem),
+						jobQueuePath(fJ.SubmitStamp, fJ.ModelName, fJ.ModelDigest, fJ.IsMpi, toJ.position, fJ.Res.Cpu, fJ.Res.Mem),
 					})
 				}
 			}
@@ -342,7 +424,7 @@ func (rsc *RunCatalog) moveJobInQueue(submitStamp string, index int) (bool, [][2
 				if isFrom && isTo {
 					moveLst = append(moveLst, [2]string{
 						fJ.filePath,
-						jobQueuePath(fJ.SubmitStamp, fJ.ModelName, fJ.ModelDigest, toJ.position, fJ.Res.Cpu, fJ.Res.Mem),
+						jobQueuePath(fJ.SubmitStamp, fJ.ModelName, fJ.ModelDigest, fJ.IsMpi, toJ.position, fJ.Res.Cpu, fJ.Res.Mem),
 					})
 				}
 			}
@@ -353,6 +435,92 @@ func (rsc *RunCatalog) moveJobInQueue(submitStamp string, index int) (bool, [][2
 	rsc.queueKeys[nPos] = submitStamp
 
 	return true, moveLst
+}
+
+// return list of computational servers or clusters to start
+func (rsc *RunCatalog) selectToStartCompute() ([]computeItem, int) {
+
+	rsc.rscLock.Lock()
+	defer rsc.rscLock.Unlock()
+
+	// do not start anything if:
+	// this instance is not a leader oms instance or queue is paused or queue is empty
+	if !rsc.isLeader || rsc.IsQueuePaused || rsc.QueueTotalRes.Cpu <= 0 && rsc.QueueTotalRes.Mem <= 0 {
+		return []computeItem{}, 1
+	}
+
+	// check if any item in the queue is MPI job
+	isAnyMpi := false
+	for _, qj := range rsc.queueJobs {
+		isAnyMpi = qj.IsMpi
+		if isAnyMpi {
+			break
+		}
+	}
+	if !isAnyMpi {
+		return []computeItem{}, 1 // do not start anything: there are no MPI jobs
+	}
+
+	// select servers where state is power off until it is enough cpu and memory to satisfy queue demand
+	lst := []computeItem{}
+	res := rsc.QueueTotalRes
+
+	for _, cs := range rsc.computeState {
+
+		if res.Cpu <= 0 && res.Mem <= 0 { // done: enough servers to satisfy queue demand
+			break
+		}
+
+		// if server server state is "" power off
+		if cs.state == "" {
+
+			cp := cs
+			cp.startArgs = make([]string, len(cs.startArgs))
+			cp.stopArgs = make([]string, len(cs.stopArgs))
+			copy(cp.startArgs, cs.startArgs)
+			copy(cp.stopArgs, cs.stopArgs)
+
+			lst = append(lst, cp)
+
+			res.Cpu -= cs.totalRes.Cpu
+			res.Mem -= cs.totalRes.Mem
+		}
+	}
+
+	return lst, rsc.maxStartTime
+}
+
+// return list of computational servers or clusters to stop
+func (rsc *RunCatalog) selectToStopCompute() ([]computeItem, int) {
+
+	rsc.rscLock.Lock()
+	defer rsc.rscLock.Unlock()
+
+	// do not stop anything: if idle time is unlimited or this instance is not a leader oms instance
+	if rsc.maxIdleTime <= 0 || !rsc.isLeader {
+		return []computeItem{}, 1
+	}
+	nowTs := time.Now().UnixMilli() // current time in unix milliseconds
+
+	// find servers where there no model runs for more than idle time interval
+	lst := []computeItem{}
+
+	for _, cs := range rsc.computeState {
+
+		// if no model runs for more than idle time in milliseconds
+		if cs.state == "ready" && cs.lastUsedTs+int64(1000*rsc.maxIdleTime) < nowTs {
+
+			cp := cs
+			cp.startArgs = make([]string, len(cs.startArgs))
+			cp.stopArgs = make([]string, len(cs.stopArgs))
+			copy(cp.startArgs, cs.startArgs)
+			copy(cp.stopArgs, cs.stopArgs)
+
+			lst = append(lst, cp)
+		}
+	}
+
+	return lst, rsc.maxStopTime
 }
 
 // update run catalog with current job control files
@@ -432,7 +600,7 @@ func (rsc *RunCatalog) updateRunJobs(
 			}
 		}
 
-		// // sort new jobs by time stamps: first come forst served and append at the end of existing queue
+		// sort new jobs by time stamps: first come first served and append at the end of existing queue
 		sort.Strings(qKeys)
 		rsc.queueKeys = append(rsc.queueKeys, qKeys...)
 	}

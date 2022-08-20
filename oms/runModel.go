@@ -288,7 +288,7 @@ func (rsc *RunCatalog) runModel(job *RunJob) (*RunState, error) {
 		if e != nil {
 			omppLog.Log("Model run error: ", e)
 			rsc.updateRunStateLog(rState, true, e.Error())
-			moveJobToHistory(jobPath, db.ErrorRunStatus, rState.SubmitStamp, rState.ModelName, rState.ModelDigest, rState.RunStamp)
+			moveActiveJobToHistory(jobPath, db.ErrorRunStatus, rState.SubmitStamp, rState.ModelName, rState.ModelDigest, rState.RunStamp)
 			_, e = theCatalog.UpdateRunStatus(rState.ModelDigest, rState.RunStamp, db.ErrorRunStatus)
 			if e != nil {
 				omppLog.Log(e)
@@ -297,7 +297,7 @@ func (rsc *RunCatalog) runModel(job *RunJob) (*RunState, error) {
 		}
 		// else: completed OK
 		rsc.updateRunStateLog(rState, true, "")
-		moveJobToHistory(jobPath, db.DoneRunStatus, rState.SubmitStamp, rState.ModelName, rState.ModelDigest, rState.RunStamp)
+		moveActiveJobToHistory(jobPath, db.DoneRunStatus, rState.SubmitStamp, rState.ModelName, rState.ModelDigest, rState.RunStamp)
 
 	}(rs, cmd, activeJobPath)
 
@@ -311,8 +311,7 @@ func (rsc *RunCatalog) runModel(job *RunJob) (*RunState, error) {
 func (rsc *RunCatalog) makeCommand(mExe, binDir, workDir, dbPath string, mArgs []string, req RunRequest) (*exec.Cmd, error) {
 
 	// check is it MPI model run, to run MPI model template is required
-	isMpi := req.Mpi.Np != 0
-	if isMpi && req.Template == "" {
+	if req.IsMpi && req.Template == "" {
 
 		// search for model-specific MPI template
 		mtn := "mpi." + req.ModelName + ".template.txt"
@@ -333,7 +332,7 @@ func (rsc *RunCatalog) makeCommand(mExe, binDir, workDir, dbPath string, mArgs [
 	//	 ./modelExe -OpenM.LogToFile true ...etc...
 	var cmd *exec.Cmd
 
-	if !isTmpl && !isMpi {
+	if !isTmpl && !req.IsMpi {
 		if binDir == "" || binDir == "." || binDir == "./" {
 			mExe = "./" + mExe
 		} else {
@@ -414,7 +413,7 @@ func (rsc *RunCatalog) makeCommand(mExe, binDir, workDir, dbPath string, mArgs [
 	// if this is not MPI run then:
 	// 	set work directory
 	// 	append request environment variables to model environment
-	if !isMpi {
+	if !req.IsMpi {
 
 		cmd.Dir = workDir
 
