@@ -1,0 +1,17 @@
+#!/bin/bash
+#
+# start computational server
+
+set -e 
+
+srv_name="$1"
+
+if [ -z "$srv_name" ] ;
+then
+  echo "ERROR: invalid (empty) server name"
+  exit 1
+fi
+
+sleep 2
+
+echo "Server started: $srv_name"
