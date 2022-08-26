@@ -8,19 +8,18 @@ import (
 )
 
 // get "public" configuration of model catalog
-func (mc *ModelCatalog) toPublicConfig() *ModelCatalogConfig {
+func (mc *ModelCatalog) toPublicConfig() ModelCatalogConfig {
 
 	// lock run catalog and return results
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	mp := ModelCatalogConfig{
+	return ModelCatalogConfig{
 		ModelDir:        mc.modelDir,
 		ModelLogDir:     mc.modelLogDir,
 		IsLogDirEnabled: mc.isLogDirEnabled,
 		LastTimeStamp:   mc.lastTimeStamp,
 	}
-	return &mp
 }
 
 // getModelDir return model directory
@@ -129,6 +128,7 @@ func (mc *ModelCatalog) findModelBasic(isByDigestOnly bool, dn string) (modelBas
 			isLogDir: mc.modelLst[idx].isLogDir,
 			dbPath:   mc.modelLst[idx].dbPath,
 			relDir:   mc.modelLst[idx].relDir,
+			extra:    mc.modelLst[idx].extra,
 		},
 		true
 }
@@ -148,6 +148,7 @@ func (mc *ModelCatalog) allModels() []modelBasic {
 			isLogDir: mc.modelLst[idx].isLogDir,
 			dbPath:   mc.modelLst[idx].dbPath,
 			relDir:   mc.modelLst[idx].relDir,
+			extra:    mc.modelLst[idx].extra,
 		}
 	}
 	return mbs

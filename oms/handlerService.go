@@ -40,7 +40,7 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 		AllowUpload:       theCfg.uploadDir != "",
 		IsJobControl:      theCfg.isJobControl,
 		Env:               theCfg.env,
-		ModelCatalog:      *theCatalog.toPublicConfig(),
+		ModelCatalog:      theCatalog.toPublicConfig(),
 		RunCatalog:        *theRunCatalog.toPublicConfig(),
 	}
 	jsonResponse(w, r, st)

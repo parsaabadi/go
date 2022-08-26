@@ -1,0 +1,13 @@
+@echo off
+REM stop computational server
+
+set srv_name=%1
+
+if "%srv_name%" == "" (
+  @echo "ERROR: invalid (empty) server name"
+  EXIT 1
+)
+
+REM ping 127.0.0.1 -n 8 >nul
+
+@echo "Server stopped: %srv_name%"

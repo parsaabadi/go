@@ -220,6 +220,35 @@ func ToIntValue(src interface{}) (int, bool) {
 	return iv, true
 }
 
+// greatest common divisor of two integers
+func Gcd2(a, b int) int {
+	for b != 0 {
+		t := b
+		b = a % b
+		a = t
+	}
+	return a
+}
+
+// retrun greatest common divisor of all src[]
+func Gcd(src []int) int {
+
+	if len(src) <= 0 {
+		return 1
+	}
+
+	d := src[0]
+	for k := 1; k < len(src); k++ {
+		d = Gcd2(src[k], d)
+	}
+	return d
+	/*
+	   src d:  [12 5 7] 1
+	   src d:  [12 2 2 4 8] 2
+	   src d:  [44 16 20 12 16 4 8] 4
+	*/
+}
+
 // SaveTo copy all from source reader into new outPath file. File truncated if already exists.
 func SaveTo(outPath string, rd io.Reader) error {
 

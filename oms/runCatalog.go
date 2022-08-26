@@ -30,6 +30,8 @@ type RunCatalog struct {
 	historyJobs     map[string]historyJobFile      // models run jobs history
 	selectedKeys    []string                       // jobs selected from queue to run now
 	computeState    map[string]computeItem         // map names of server or cluster the state of computational resources
+	startupNames    []string                       // names of the servers which are starting now
+	shutdownNames   []string                       // names of the servers which are stopping now
 }
 
 var theRunCatalog RunCatalog // list of most recent state of model run for each model.
@@ -69,7 +71,9 @@ type RunRequest struct {
 	Threads     int               // number of modelling threads
 	IsMpi       bool              // if true then it use MPI to run the model
 	Mpi         struct {
-		Np int // if non-zero then number of MPI processes
+		Np          int  // if non-zero then number of MPI processes
+		IsNotOnRoot bool // if true then do no run modelling threads on MPI root process
+		IsNotByJob  bool // if true then do not allocate resources by job, use CPU, threads and memory as is
 	}
 	Template string   // template file name to make run model command line
 	Tables   []string // if not empty then output tables or table groups to retain, by default retain all tables
@@ -92,10 +96,10 @@ type RunJob struct {
 	LogPath     string // log file path: log/dir/modelName.RunStamp.console.log
 }
 
-// RunRes is model run resources
+// RunRes is model run computational resources
 type RunRes struct {
 	Cpu int // cpu cores count
-	Mem int // if not zero then memory size in gigbytes
+	Mem int // if not zero then memory size in gigabytes
 }
 
 // run job control file info
@@ -160,23 +164,24 @@ type RunStateLogPage struct {
 
 // service state and job control state
 type JobServiceState struct {
-	IsQueuePaused     bool   // if true then jobs queue is paused, jobs are not selected from queue
-	JobUpdateDateTime string // last date-time jobs list updated
-	ActiveTotalRes    RunRes // MPI active model run resources (CPU cores and memory) used by all oms instances
-	ActiveOwnRes      RunRes // MPI active model run resources (CPU cores and memory) used by this oms instance
-	QueueTotalRes     RunRes // MPI queue model run resources (CPU cores and memory) requested by all oms instances
-	QueueOwnRes       RunRes // MPI queue model run resources (CPU cores and memory) requested by this oms instance
-	MpiRes            RunRes // MPI total available resources limits (CPU cores and memory)
-	LocalRes          RunRes // localhost non-MPI jobs total resources limits
-	LocalUsedRes      RunRes // localhost non-MPI jobs resources used by this instance to run models
-	LocalQueueRes     RunRes // localhost non-MPI jobs queue resources for this oms instance
-	ComputeErrorRes   RunRes // computational resources on "error" servers
-	isLeader          bool   // if true then this oms instance is a leader
-	maxStartTime      int    // max time in seconds to start compute server or cluster
-	maxStopTime       int    // max time in seconds to stop compute server or cluster
-	maxIdleTime       int    // max idle in seconds time before stopping server or cluster
-	jobLastPosition   int    // last job position in the queue
-	jobFirstPosition  int    // minimal job position in the queue
+	IsQueuePaused     bool    // if true then jobs queue is paused, jobs are not selected from queue
+	JobUpdateDateTime string  // last date-time jobs list updated
+	MpiRes            RunRes  // MPI total available resources available as sum of all servers (CPU cores and memory)
+	ActiveTotalRes    RunRes  // MPI active model run resources (CPU cores and memory) used by all oms instances
+	ActiveOwnRes      RunRes  // MPI active model run resources (CPU cores and memory) used by this oms instance
+	QueueTotalRes     RunRes  // MPI queue model run resources (CPU cores and memory) requested by all oms instances
+	QueueOwnRes       RunRes  // MPI queue model run resources (CPU cores and memory) requested by this oms instance
+	LocalRes          RunRes  // localhost non-MPI jobs total resources limits
+	LocalActiveRes    RunRes  // localhost non-MPI jobs resources used by this instance to run models
+	LocalQueueRes     RunRes  // localhost non-MPI jobs queue resources for this oms instance
+	ComputeErrorRes   RunRes  // computational resources on "error" servers
+	isLeader          bool    // if true then this oms instance is a leader
+	maxStartTime      int     // max time in seconds to start compute server or cluster
+	maxStopTime       int     // max time in seconds to stop compute server or cluster
+	maxIdleTime       int     // max idle in seconds time before stopping server or cluster
+	jobLastPosition   int     // last job position in the queue
+	jobFirstPosition  int     // minimal job position in the queue
+	hostFile          hostIni // MPI jobs hostfile settings
 }
 
 // computational server or cluster state
@@ -195,6 +200,24 @@ type computeItem struct {
 	startArgs   []string // arguments to start server, e.g.: -c start.sh my-server-name
 	stopExe     string   // name of executable to stop server,, e.g.: /bin/sh
 	stopArgs    []string // arguments to stop server, e.g.: -c stop.sh my-server-name
+}
+
+// computational server or cluster usage
+type computeUse struct {
+	name     string // name of server or cluster
+	RunRes          // used computational resources (CPU cores and memory)
+	filePath string // if not empty then compute use file path
+}
+
+// MPI jobs process, threads and hostfile config from job.ini file
+type hostIni struct {
+	maxThreads int    // max number of modelling threads per MPI process, zero means unlimited
+	isUse      bool   // if true then create and use hostfile to run MPI jobs
+	dir        string // HostFileDir = models/log
+	hostName   string // HostName = @-HOST-@
+	cpuCores   string // CpuCores = @-CORES-@
+	rootLine   string // RootLine = cpm slots=1 max_slots=1
+	hostLine   string // HostLine = @-HOST-@ slots=@-CORES-@
 }
 
 // job control state
@@ -234,7 +257,7 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error
 	}
 
 	// read all run options preset files
-	// keep steam of preset file name: run-options.RiskPaths.1-small.json => RiskPaths.1-small
+	// keep stem of preset file name: run-options.RiskPaths.1-small.json => RiskPaths.1-small
 	// and file content as string
 	rsc.presets = []RunOptionsPreset{}
 	if dirExist(etcDir) == nil {
@@ -328,6 +351,12 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error
 
 	if rsc.selectedKeys == nil {
 		rsc.selectedKeys = []string{}
+	}
+	if rsc.startupNames == nil {
+		rsc.startupNames = []string{}
+	}
+	if rsc.shutdownNames == nil {
+		rsc.shutdownNames = []string{}
 	}
 
 	if jsc != nil {

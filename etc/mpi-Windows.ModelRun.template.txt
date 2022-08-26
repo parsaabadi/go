@@ -16,8 +16,9 @@ Arguments of template:
   ExeStem   string            // base part of model exe name, usually modelName
   Dir       string            // work directory to run the model
   BinDir    string            // bin directory where model exe is located
-  DbPath    string            // if not empty then absolute path to sqlite database file
+  DbPath    string            // absolute path to sqlite database file: models/bin/model.sqlite
   MpiNp     int               // number of MPI processes
+  HostFile  string            // if not empty then path to hostfile
   Args      []string          // model command line arguments
   Env       map[string]string // environment variables to run the model
 

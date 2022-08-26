@@ -4,6 +4,7 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -105,7 +106,7 @@ func compUsedPath(name, submitStamp string, cpu, mem int) string {
 	return filepath.Join(
 		theCfg.jobDir,
 		"state",
-		"comp-used-#-"+name+"-#-"+submitStamp+"-#-"+theCfg.omsName+"-#-"+"-#-cpu-#-"+strconv.Itoa(cpu)+"-#-mem-#-"+strconv.Itoa(mem))
+		"comp-used-#-"+name+"-#-"+submitStamp+"-#-"+theCfg.omsName+"-#-cpu-#-"+strconv.Itoa(cpu)+"-#-mem-#-"+strconv.Itoa(mem))
 }
 
 // parse job file path or job file name:
@@ -298,7 +299,7 @@ func parseCompUsedPath(srcPath string) (string, string, string, int, int) {
 	// split file name and check result: it must be 8 non-empty parts
 	// and include submission stamp, cpu count and memory size
 	sp := strings.Split(p, "-#-")
-	if len(sp) != 9 || sp[0] != "comp-used" ||
+	if len(sp) != 8 || sp[0] != "comp-used" ||
 		sp[1] == "" || !helper.IsUnderscoreTimeStamp(sp[2]) || sp[3] == "" ||
 		sp[4] != "cpu" || sp[5] == "" || sp[6] != "mem" || sp[7] == "" {
 		return "", "", "", 0, 0 // source file path is not compute server used by model run path
@@ -437,28 +438,42 @@ func moveToNextOmsTick(srcPath, stem string) (string, bool) {
 	return dst, true
 }
 
-// remove all existing compute server state files and create new compute server file with current timestamp.
+// create new compute server file with current timestamp.
 // For example: job/state/comp-start-#-name-#-2022_07_08_23_45_12_123-#-1257894000000
-func createCompState(name, state string, isDelete bool) string {
+func createCompStateFile(name, state string) string {
 
-	p := filepath.Join(theCfg.jobDir, "state", "comp-"+state+"-#-"+name)
-
-	// delete existing state files for this server state
-	if isDelete {
-		fl := filesByPattern(p+"-#-*-#-*", "Error at server state files search")
-		for _, f := range fl {
-			fileDeleteAndLog(false, f)
-		}
-	}
-
-	// create new server state file
 	ts := time.Now()
-	fp := p + "-#-" + helper.MakeTimeStamp(ts) + "-#-" + strconv.FormatInt(ts.UnixMilli(), 10)
+	fp := filepath.Join(
+		theCfg.jobDir,
+		"state",
+		"comp-"+state+"-#-"+name+"-#-"+helper.MakeTimeStamp(ts)+"-#-"+strconv.FormatInt(ts.UnixMilli(), 10))
 
 	if !fileCreateEmpty(false, fp) {
 		fp = ""
 	}
 	return fp
+}
+
+// remove all existing compute server state files, log delete errors, return true on success or false or errors.
+// Create error state file if any delete failed.
+// For example: job/state/comp-error-#-name-#-2022_07_08_23_45_12_123-#-1257894000000
+func deleteCompStateFiles(name, state string) bool {
+
+	p := filepath.Join(theCfg.jobDir, "state", "comp-"+state+"-#-"+name)
+
+	isNoError := true
+
+	fl := filesByPattern(p+"-#-*-#-*", "Error at server state files search")
+	for _, f := range fl {
+		isOk := fileDeleteAndLog(false, f)
+		isNoError = isNoError && isOk
+		if !isOk {
+			createCompStateFile(name, "error")
+			omppLog.Log("FAILED to delete state file: ", state, " ", name, " ", p)
+		}
+	}
+
+	return isNoError
 }
 
 // read job control state from the file, return empty state on error or if state file not exist
@@ -489,4 +504,107 @@ func jobStateWrite(jsc jobControlState) bool {
 // return true if jobs queue processing is paused
 func isPausedJobQueue() bool {
 	return fileExist(jobQueuePausedPath()) == nil
+}
+
+// create MPI job hostfile, e.g.: models/log/host-2022_07_08_23_03_27_555-_4040.ini
+// retun path to host file, number of modelling threads per process and error
+func createHostFile(job *RunJob, hfCfg hostIni, compUse []computeUse) (string, int, error) {
+
+	if !job.IsMpi || !hfCfg.isUse || len(compUse) <= 0 { // hostfile is not required
+		return "", job.Threads, nil
+	}
+
+	// number of modelling threads:
+	// it must be <= max threads from run request, e.g. if user request max threads == 1 then model is single threaded
+	// number of threads can be limited by job.ini to avoid excessive threads in single model process
+	// number of threads is greatest common divisor to between all avaliable CPU cores on each server
+	nTh := job.Threads
+	if nTh <= 0 {
+		nTh = 1
+	}
+	if !job.Mpi.IsNotByJob {
+
+		if hfCfg.maxThreads > 0 && nTh > hfCfg.maxThreads { // number of threads is limited in job.ini
+			nTh = hfCfg.maxThreads
+		}
+		for k := range compUse {
+			nTh = helper.Gcd2(nTh, compUse[k].Cpu)
+		}
+	}
+
+	/*
+	   ; MS-MPI hostfile
+	   ;
+	   ; cpm:1
+	   ; cpc-1:2
+	   ; cpc-3:4
+	   ;
+	   [hostfile]
+	   HostFileDir = models\log
+	   HostName = @-HOST-@
+	   CpuCores = @-CORES-@
+	   RootLine = cpm:1
+	   HostLine = @-HOST-@:@-CORES-@
+
+	   ; OpenMPI hostfile
+	   ;
+	   ; cpm   slots=1 max_slots=1
+	   ; cpc-1 slots=2
+	   ; cpc-3 slots=4
+	   ;
+	   [hostfile]
+	   HostFileDir = models/log
+	   HostName = @-HOST-@
+	   CpuCores = @-CORES-@
+	   RootLine = cpm slots=1 max_slots=1
+	   HostLine = @-HOST-@ slots=@-CORES-@
+	*/
+	// first line is root process host
+	ls := []string{}
+
+	if hfCfg.rootLine != "" {
+		ls = append(ls, hfCfg.rootLine)
+	}
+
+	// for each server substitute host name and cores count
+	if hfCfg.hostLine != "" {
+		for _, cu := range compUse {
+
+			ln := hfCfg.hostLine
+
+			if hfCfg.hostName != "" {
+				ln = strings.ReplaceAll(ln, hfCfg.hostName, cu.name)
+			}
+			if hfCfg.cpuCores != "" {
+				if !job.Mpi.IsNotByJob {
+					ln = strings.ReplaceAll(ln, hfCfg.cpuCores, strconv.Itoa(cu.Cpu/nTh))
+				} else {
+					ln = strings.ReplaceAll(ln, hfCfg.cpuCores, strconv.Itoa(cu.Cpu))
+				}
+			}
+			ls = append(ls, ln)
+		}
+	}
+
+	// write all lines into hostfile: /ompp/models/log/host-2022_07_08_23_03_27_555-_4040.ini
+	hfPath := ""
+	if len(ls) > 0 {
+
+		fn := "host-" + job.SubmitStamp + "-" + theCfg.omsName + ".ini"
+		hfPath, e := filepath.Abs(filepath.Join(hfCfg.dir, fn))
+		if e == nil {
+			e = os.WriteFile(hfPath, []byte(strings.Join(ls, "\n")+"\n"), 0644)
+		}
+		if e != nil {
+			omppLog.Log("Error at write into ", fn, ": ", e)
+			return "", job.Threads, e
+		}
+
+		omppLog.Log("Run job: ", job.SubmitStamp, " ", job.ModelName, " hostfile: ", hfPath)
+		for _, ln := range ls {
+			omppLog.Log(ln)
+		}
+	}
+
+	return hfPath, nTh, nil
 }

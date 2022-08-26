@@ -23,7 +23,7 @@ import (
 // runModel starts new model run and return run stamp.
 // if run stamp not specified as input parameter then use unique timestamp.
 // Model run console output redirected to log file: models/log/modelName.runStamp.console.log
-func (rsc *RunCatalog) runModel(job *RunJob) (*RunState, error) {
+func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni, compUse []computeUse) (*RunState, error) {
 
 	// make model process run stamp, if not specified then use timestamp by default
 	ts, dtNow := theCatalog.getNewTimeStamp()
@@ -39,10 +39,6 @@ func (rsc *RunCatalog) runModel(job *RunJob) (*RunState, error) {
 		RunStamp:       rStamp,
 		SubmitStamp:    job.SubmitStamp,
 		UpdateDateTime: helper.MakeDateTime(dtNow),
-	}
-	queueJobPath := ""
-	if qj, isFound := rsc.getQueueJobItem(rs.SubmitStamp); isFound {
-		queueJobPath = qj.filePath
 	}
 
 	// set directories: work directory and bin model.exe directory
@@ -113,9 +109,13 @@ func (rsc *RunCatalog) runModel(job *RunJob) (*RunState, error) {
 		if strings.EqualFold(key, "-OpenM.TaskRunName") {
 			rs.TaskRunName = val
 		}
-		// thread count MUST be specified using options
+		// thread count MUST be specified using request Threads
 		if strings.EqualFold(key, "-OpenM.Threads") {
 			continue // skip number of threads option: use request Threads value instead
+		}
+		// MPI "not on root" flag
+		if strings.EqualFold(key, "-OpenM.NotOnRoot") {
+			continue // skip  MPI "not on root" flag: use request Mpi.IsNotOnRoot boolean instead
 		}
 		if strings.EqualFold(key, "-OpenM.LogToConsole") {
 			continue // skip log to console input run option: it is already on
@@ -136,9 +136,27 @@ func (rsc *RunCatalog) runModel(job *RunJob) (*RunState, error) {
 		mArgs = append(mArgs, key, val) // append command line argument key and value
 	}
 
+	// use job control resources if not explicitly disabled
+	// recalculate number of MPI processes, modelling threads and create hostfile
+	hfPath := ""
+	if !job.Mpi.IsNotByJob {
+
+		hfPath, job.Threads, err = createHostFile(job, hfCfg, compUse)
+
+		if err != nil {
+			omppLog.Log("Model run error: ", err)
+			moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
+			rs.IsFinal = true
+			return rs, err
+		}
+	}
+
 	// append threads number if required
 	if job.Threads > 1 {
 		mArgs = append(mArgs, "-OpenM.Threads", strconv.Itoa(job.Threads))
+	}
+	if job.IsMpi && job.Mpi.IsNotOnRoot {
+		mArgs = append(mArgs, "-OpenM.NotOnRoot")
 	}
 
 	// if list of tables to retain is not empty then put the list into ini-file:
@@ -190,7 +208,7 @@ func (rsc *RunCatalog) runModel(job *RunJob) (*RunState, error) {
 	// assume model exe name is the same as model name
 	mExe := helper.CleanPath(rs.ModelName)
 
-	cmd, err := rsc.makeCommand(mExe, binDir, wDir, mb.dbPath, mArgs, job.RunRequest)
+	cmd, err := rsc.makeCommand(mExe, binDir, wDir, mb.dbPath, mArgs, hfPath, job.RunRequest)
 	if err != nil {
 		omppLog.Log("Error at starting model: ", err)
 		moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
@@ -198,20 +216,49 @@ func (rsc *RunCatalog) runModel(job *RunJob) (*RunState, error) {
 		return rs, errors.New("Error at starting model " + rs.ModelName + ": " + err.Error())
 	}
 
+	// create job usage file for each computational server
+	isErr := false
+	for k := 0; !isErr && k < len(compUse); k++ {
+
+		compUse[k].filePath = compUsedPath(compUse[k].name, rs.SubmitStamp, compUse[k].Cpu, compUse[k].Mem)
+		isErr = !fileCreateEmpty(false, compUse[k].filePath)
+	}
+	if isErr {
+		omppLog.Log("Error at starting model: ", rs.ModelName, " ", rs.ModelDigest, " ", rs.SubmitStamp)
+		for _, cu := range compUse {
+			if cu.filePath != "" {
+				fileDeleteAndLog(false, cu.filePath)
+			}
+		}
+		moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
+		rs.IsFinal = true
+		return rs, errors.New("Error at starting model " + rs.ModelName + " " + rs.ModelDigest)
+	}
+
+	// cleanup helpers
+	delComputeUse := func(cuLst []computeUse) {
+		for _, cu := range cuLst {
+			if cu.filePath != "" {
+				fileDeleteAndLog(false, cu.filePath)
+			}
+		}
+	}
+	cleanAndReturn := func(e error, rSt *RunState, qPath string, cuLst []computeUse) (*RunState, error) {
+		omppLog.Log("Error at starting model: ", e)
+		delComputeUse(cuLst)
+		moveJobQueueToFailed(qPath, rSt.SubmitStamp, rSt.ModelName, rSt.ModelDigest)
+		rSt.IsFinal = true
+		return rSt, errors.New("Error at starting model " + rSt.ModelName + ": " + e.Error())
+	}
+
 	// connect console output to log line array
 	outPipe, err := cmd.StdoutPipe()
 	if err != nil {
-		omppLog.Log("Error at starting model: ", err)
-		moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
-		rs.IsFinal = true
-		return rs, errors.New("Error at starting model " + rs.ModelName + ": " + err.Error())
+		return cleanAndReturn(err, rs, queueJobPath, compUse)
 	}
 	errPipe, err := cmd.StderrPipe()
 	if err != nil {
-		omppLog.Log("Error at starting model: ", err)
-		moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
-		rs.IsFinal = true
-		return rs, errors.New("Error at starting model " + rs.ModelName + ": " + err.Error())
+		return cleanAndReturn(err, rs, queueJobPath, compUse)
 	}
 	outDoneC := make(chan bool, 1)
 	errDoneC := make(chan bool, 1)
@@ -228,7 +275,7 @@ func (rsc *RunCatalog) runModel(job *RunJob) (*RunState, error) {
 		close(done)
 	}
 
-	// run state initialized: save in run state list
+	// run state initialized: append it to the run state list
 	// create model run log file
 	rsc.createRunStateLog(rs)
 
@@ -238,6 +285,9 @@ func (rsc *RunCatalog) runModel(job *RunJob) (*RunState, error) {
 
 	// start the model
 	omppLog.Log("Run model: ", mExe, " in directory: ", wDir)
+	if rs.logPath != "" {
+		omppLog.Log("Run model: ", mExe, " log: ", rs.logPath)
+	}
 	omppLog.Log(strings.Join(cmd.Args, " "))
 	rs.cmdPath = cmd.Path
 	rsc.updateRunStateProcess(rs, false)
@@ -245,6 +295,7 @@ func (rsc *RunCatalog) runModel(job *RunJob) (*RunState, error) {
 	err = cmd.Start()
 	if err != nil {
 		omppLog.Log("Model run error: ", err)
+		delComputeUse(compUse)
 		moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
 		rsc.updateRunStateLog(rs, true, err.Error())
 		rs.IsFinal = true
@@ -256,7 +307,7 @@ func (rsc *RunCatalog) runModel(job *RunJob) (*RunState, error) {
 	activeJobPath, _ := moveJobToActive(queueJobPath, *rs, job.Res, rStamp)
 
 	//  wait until run completed or terminated
-	go func(rState *RunState, cmd *exec.Cmd, jobPath string) {
+	go func(rState *RunState, cmd *exec.Cmd, jobPath string, cuLst []computeUse) {
 
 		// wait until stdout and stderr closed
 		for outDoneC != nil || errDoneC != nil {
@@ -287,6 +338,7 @@ func (rsc *RunCatalog) runModel(job *RunJob) (*RunState, error) {
 		e := cmd.Wait()
 		if e != nil {
 			omppLog.Log("Model run error: ", e)
+			delComputeUse(cuLst)
 			rsc.updateRunStateLog(rState, true, e.Error())
 			moveActiveJobToHistory(jobPath, db.ErrorRunStatus, rState.SubmitStamp, rState.ModelName, rState.ModelDigest, rState.RunStamp)
 			_, e = theCatalog.UpdateRunStatus(rState.ModelDigest, rState.RunStamp, db.ErrorRunStatus)
@@ -297,9 +349,10 @@ func (rsc *RunCatalog) runModel(job *RunJob) (*RunState, error) {
 		}
 		// else: completed OK
 		rsc.updateRunStateLog(rState, true, "")
+		delComputeUse(cuLst)
 		moveActiveJobToHistory(jobPath, db.DoneRunStatus, rState.SubmitStamp, rState.ModelName, rState.ModelDigest, rState.RunStamp)
 
-	}(rs, cmd, activeJobPath)
+	}(rs, cmd, activeJobPath, compUse)
 
 	return rs, nil
 }
@@ -308,7 +361,7 @@ func (rsc *RunCatalog) runModel(job *RunJob) (*RunState, error) {
 // If template file name specified then template processing results used to create command line.
 // If this is MPI model run then tempalate is requred
 // MPI run template can be model specific: "mpi.ModelName.template.txt" or default: "mpi.ModelRun.template.txt".
-func (rsc *RunCatalog) makeCommand(mExe, binDir, workDir, dbPath string, mArgs []string, req RunRequest) (*exec.Cmd, error) {
+func (rsc *RunCatalog) makeCommand(mExe, binDir, workDir, dbPath string, mArgs []string, hfPath string, req RunRequest) (*exec.Cmd, error) {
 
 	// check is it MPI model run, to run MPI model template is required
 	if req.IsMpi && req.Template == "" {
@@ -362,6 +415,7 @@ func (rsc *RunCatalog) makeCommand(mExe, binDir, workDir, dbPath string, mArgs [
 			BinDir    string            // bin directory where model.exe is located
 			DbPath    string            // absolute path to sqlite database file: models/bin/model.sqlite
 			MpiNp     int               // number of MPI processes
+			HostFile  string            // if not empty then absolute path to hostfile
 			Args      []string          // model command line arguments
 			Env       map[string]string // environment variables to run the model
 		}{
@@ -371,6 +425,7 @@ func (rsc *RunCatalog) makeCommand(mExe, binDir, workDir, dbPath string, mArgs [
 			BinDir:    binDir,
 			DbPath:    dbPath,
 			MpiNp:     req.Mpi.Np,
+			HostFile:  hfPath,
 			Args:      mArgs,
 			Env:       req.Env,
 		}
@@ -382,7 +437,7 @@ func (rsc *RunCatalog) makeCommand(mExe, binDir, workDir, dbPath string, mArgs [
 		if err != nil {
 			return nil, err
 		}
-		tLines := strings.Split(strings.Replace(b.String(), "\r", "\n", -1), "\n")
+		tLines := strings.Split(strings.ReplaceAll(b.String(), "\r", "\n"), "\n")
 
 		// from template processing results get:
 		//   exe name as first non-empty line

@@ -4,11 +4,14 @@
 package main
 
 import (
+	"context"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/openmpp/go/ompp/config"
 	"github.com/openmpp/go/ompp/db"
 	"github.com/openmpp/go/ompp/helper"
 	"github.com/openmpp/go/ompp/omppLog"
@@ -17,6 +20,7 @@ import (
 )
 
 const jobScanInterval = 1123             // timeout in msec, sleep interval between scanning all job directories
+const computeStartStopInterval = 3373    // timeout in msec, interval between start or stop computational servers, must be at least 2 * jobScanInterval
 const jobQueueScanInterval = 107         // timeout in msec, sleep interval between getting next job from the queue
 const jobOuterScanInterval = 5021        // timeout in msec, sleep interval between scanning active job directory
 const serverTimeoutDefault = 60          // time in seconds to start or stop compute server
@@ -72,7 +76,7 @@ func scanOuterJobs(doneC <-chan bool) {
 			}
 
 			// get submission stamp, model name, digest and process id from active job file name
-			stamp, _, mn, dgst, _, _, pid := parseActivePath(fLst[k][nActive+1:])
+			stamp, _, mn, dgst, _, _, _, pid := parseActivePath(fLst[k][nActive+1:])
 			if stamp == "" || mn == "" || dgst == "" || pid <= 0 {
 				continue // file name is not an active job file name
 			}
@@ -90,7 +94,7 @@ func scanOuterJobs(doneC <-chan bool) {
 				omppLog.Log(err)
 			}
 			if !isOk || err != nil {
-				moveOuterJobToHistory(fLst[k], "", stamp, mn, dgst, "no-model-run-time-stamp") // invalid file content: move to history with unknown status
+				moveActiveJobToHistory(fLst[k], "", stamp, mn, dgst, "no-model-run-time-stamp") // invalid file content: move to history with unknown status
 				continue
 			}
 
@@ -130,7 +134,7 @@ func scanOuterJobs(doneC <-chan bool) {
 					}
 				}
 			}
-			moveOuterJobToHistory(fp, rStat, jc.SubmitStamp, jc.ModelName, jc.ModelDigest, jc.RunStamp)
+			moveActiveJobToHistory(fp, rStat, jc.SubmitStamp, jc.ModelName, jc.ModelDigest, jc.RunStamp)
 			delete(outerJobs, fp)
 		}
 
@@ -150,35 +154,24 @@ func scanJobs(doneC <-chan bool) {
 	omsTickPath, omsTickPrefix := createOmsTick() // job processing started at this oms instance
 	nTick := 0
 
+	// path to job.ini: available resources limits and computational servers configuration
+	jobIniPath := filepath.Join(theCfg.jobDir, "job.ini")
+
 	// model run files in queue, active runs, run history
-	queuePtrn := filepath.Join(theCfg.jobDir, "queue") + string(filepath.Separator) + "*-#-*-#-*-#-*-#-cpu-#-*-#-mem-#-*.json"
-	activePtrn := filepath.Join(theCfg.jobDir, "active") + string(filepath.Separator) + "*-#-*-#-*-#-*-#-cpu-#-*-#-mem-#-*.json"
+	queuePtrn := filepath.Join(theCfg.jobDir, "queue") + string(filepath.Separator) + "*-#-*-#-*-#-*-#-*-#-cpu-#-*-#-mem-#-*.json"
+	activePtrn := filepath.Join(theCfg.jobDir, "active") + string(filepath.Separator) + "*-#-*-#-*-#-*-#-*-#-cpu-#-*-#-mem-#-*.json"
 	historyPtrn := filepath.Join(theCfg.jobDir, "history") + string(filepath.Separator) + "*-#-" + theCfg.omsName + "-#-*.json"
 
 	// oms instances heart beat files:
 	// if oms instance file does not updated more than 1 minute then oms instance is dead
 	omsTickPtrn := filepath.Join(theCfg.jobDir, "state") + string(filepath.Separator) + "oms-#-*-#-*-#-*"
 
-	// total resources limits:
-	// if limit files not exist or value <= 0 then resource is unlimited
-	limitCpuPtrn := filepath.Join(theCfg.jobDir, "state") + string(filepath.Separator) + "total-limit-cpu-#-*"
-	limitMemPtrn := filepath.Join(theCfg.jobDir, "state") + string(filepath.Separator) + "total-limit-mem-#-*"
-
-	// max time in seconds to start compute server or cluster: max-time-start-#-123
-	// max time in seconds to stop compute server or cluster:  max-time-stop-#-456
-	// max idle time before stopping server or cluster:        max-time-idle-#-900
-	maxTimeStartPtrn := filepath.Join(theCfg.jobDir, "state") + string(filepath.Separator) + "max-time-start-#-*"
-	maxTimeStopPtrn := filepath.Join(theCfg.jobDir, "state") + string(filepath.Separator) + "max-time-stop-#-*"
-	maxTimeIdlePtrn := filepath.Join(theCfg.jobDir, "state") + string(filepath.Separator) + "max-time-idle-#-*"
-
 	// compute servers or clusters:
-	// server resources: comp-#-name-#-cpu-#-8-#-mem-#-16
-	// server ready:     comp-ready-#-name
-	// server starting:  comp-start-#-name-#-2022_08_17_22_33_44_567
-	// server stopping:  comp-stop-#-name-#-2022_08_17_22_33_44_567
-	// server error:     comp-error-#-name-#-2022_08_17_22_33_44_567
+	// server ready: comp-ready-#-name
+	// server start: comp-start-#-name-#-2022_08_17_22_33_44_567
+	// server stop:  comp-stop-#-name-#-2022_08_17_22_33_44_567
+	// server error: comp-error-#-name-#-2022_08_17_22_33_44_567
 	// server used by model run: comp-used-#-name-#-2022_07_08_23_03_27_555-#-_4040-#-cpu-#-4-#-mem-#-8
-	compPtrn := filepath.Join(theCfg.jobDir, "state") + string(filepath.Separator) + "comp-#-*-#-cpu-#-*-#-mem-#-*"
 	compReadyPtrn := filepath.Join(theCfg.jobDir, "state") + string(filepath.Separator) + "comp-ready-#-*"
 	compStartPtrn := filepath.Join(theCfg.jobDir, "state") + string(filepath.Separator) + "comp-start-#-*-#-*"
 	compStopPtrn := filepath.Join(theCfg.jobDir, "state") + string(filepath.Separator) + "comp-stop-#-*-#-*"
@@ -192,73 +185,48 @@ func scanJobs(doneC <-chan bool) {
 	computeState := map[string]computeItem{}
 
 	for {
+		// get jobs service state and computational resources state: servers or clustres definition
+		updateTs := time.Now()
+		nowTs := updateTs.UnixMilli()
+
+		jsState := initJobComputeState(jobIniPath, updateTs, computeState)
+
 		queueFiles := filesByPattern(queuePtrn, "Error at queue job files search")
 		activeFiles := filesByPattern(activePtrn, "Error at active job files search")
 		historyFiles := filesByPattern(historyPtrn, "Error at history job files search")
 		omsTickFiles := filesByPattern(omsTickPtrn, "Error at oms heart beat files search")
-		limitCpuFiles := filesByPattern(limitCpuPtrn, "Error at limit CPU cores file search")
-		limitMemFiles := filesByPattern(limitMemPtrn, "Error at limit memory file search")
-		maxTimeStartFiles := filesByPattern(maxTimeStartPtrn, "Error at max time files search")
-		maxTimeStopFiles := filesByPattern(maxTimeStopPtrn, "Error at max time files search")
-		maxTimeIdleFiles := filesByPattern(maxTimeIdlePtrn, "Error at max time files search")
-		compFiles := filesByPattern(compPtrn, "Error at server files search")
 		compReadyFiles := filesByPattern(compReadyPtrn, "Error at server ready files search")
 		compStartFiles := filesByPattern(compStartPtrn, "Error at server start files search")
 		compStopFiles := filesByPattern(compStopPtrn, "Error at server stop files search")
 		compErrorFiles := filesByPattern(compErrorPtrn, "Error at server errors files search")
 		compUsedFiles := filesByPattern(compUsedPtrn, "Error at server usage files search")
 
-		// update available resources limits
-		updateTs := time.Now()
-
-		jsState := JobServiceState{
-			IsQueuePaused:     isPausedJobQueue(),
-			JobUpdateDateTime: helper.MakeDateTime(updateTs),
-			jobLastPosition:   jobPositionDefault + (1 + len(queueFiles)),
-			jobFirstPosition:  jobPositionDefault - (1 + len(queueFiles)),
-		}
-		if len(limitCpuFiles) > 0 {
-			jsState.LimitTotalRes.Cpu = parseLimitPath(limitCpuFiles[0], "total-limit-cpu")
-		}
-		if len(limitMemFiles) > 0 {
-			jsState.LimitTotalRes.Mem = parseLimitPath(limitMemFiles[0], "total-limit-mem")
-		}
-		if len(maxTimeStartFiles) > 0 {
-			jsState.maxStartTime = parseLimitPath(maxTimeStartFiles[0], "max-time-start")
-		}
-		if len(maxTimeStopFiles) > 0 {
-			jsState.maxStopTime = parseLimitPath(maxTimeStopFiles[0], "max-time-stop")
-		}
-		if len(maxTimeIdleFiles) > 0 {
-			jsState.maxIdleTime = parseLimitPath(maxTimeIdleFiles[0], "max-time-idle")
-		}
-		if jsState.maxStartTime <= 0 {
-			jsState.maxStartTime = serverTimeoutDefault // time to start server or cluster by default
-		}
-		if jsState.maxStopTime <= 0 {
-			jsState.maxStopTime = serverTimeoutDefault // time to stop server or cluster by default
-		}
-
-		// set minimal times to detect timeouts
-		// one minute of missing heart beats is an interval to consider oms instance dead
-		// set max time for compute server start or stop timeouts
-		minOmsStateTs := updateTs.Add(-1 * time.Minute).UnixMilli()
-		maxStartTs := updateTs.Add(time.Duration(jsState.maxStartTime) * time.Second).UnixMilli()
-		maxStopTs := updateTs.Add(time.Duration(jsState.maxStartTime) * time.Second).UnixMilli()
+		jsState.jobLastPosition = jobPositionDefault + (1 + len(queueFiles))
+		jsState.jobFirstPosition = jobPositionDefault - (1 + len(queueFiles))
 
 		// update oms instances heart beat status
+		// one minute of missing heart beats is an interval to consider oms instance dead
+		minOmsStateTs := updateTs.Add(-1 * time.Minute).UnixMilli()
+		leaderName := ""
+
 		for _, fp := range omsTickFiles {
 
 			oms, _, ts := parseOmsTickPath(fp)
 			if oms == "" {
 				continue // skip: invalid active run job state file path
 			}
+
 			if ts > minOmsStateTs {
 				omsActive[oms] = ts // oms instance is alive
+
+				if leaderName == "" || leaderName > oms {
+					leaderName = oms
+				}
 			} else {
 				delete(omsActive, oms) // oms instance not active
 			}
 		}
+		jsState.isLeader = theCfg.omsName == leaderName // this oms instance is a leader instance
 
 		// computational resources state
 		// for each server or cluster detect current state: ready, start, stop or power off
@@ -266,43 +234,43 @@ func scanJobs(doneC <-chan bool) {
 		updateComputeState(
 			computeState,
 			omsActive,
-			maxStartTs, maxStopTs,
-			compFiles, compReadyFiles, compStartFiles, compStopFiles, compErrorFiles, compUsedFiles)
+			nowTs,
+			jsState.maxStartTime,
+			jsState.maxStopTime,
+			compReadyFiles, compStartFiles, compStopFiles, compErrorFiles, compUsedFiles)
 
-		// queue resources limits:
-		// do sum of all computational servers cpu cores and memory and apply total resource limits
-		cRes := RunRes{}
 		jsState.ComputeErrorRes = RunRes{}
 
 		for _, cs := range computeState {
-
-			cRes.Cpu += cs.totalRes.Cpu
-			cRes.Mem += cs.totalRes.Mem
-
 			if cs.state == "error" {
 				jsState.ComputeErrorRes.Cpu += cs.totalRes.Cpu
 				jsState.ComputeErrorRes.Mem += cs.totalRes.Mem
 			}
 		}
-		if cRes.Cpu > 0 && jsState.LimitTotalRes.Cpu != cRes.Cpu {
-			jsState.LimitTotalRes.Cpu = cRes.Cpu
-		}
-		if cRes.Mem > 0 && jsState.LimitTotalRes.Mem != cRes.Mem {
-			jsState.LimitTotalRes.Mem = cRes.Mem
-		}
-		aRes := RunRes{
-			Cpu: jsState.LimitTotalRes.Cpu - jsState.ComputeErrorRes.Cpu,
-			Mem: jsState.LimitTotalRes.Mem - jsState.ComputeErrorRes.Mem,
+
+		aRes := RunRes{}
+		isMpiLimit := true
+
+		if len(computeState) > 0 {
+
+			aRes.Cpu = jsState.MpiRes.Cpu - jsState.ComputeErrorRes.Cpu
+			aRes.Mem = jsState.MpiRes.Mem - jsState.ComputeErrorRes.Mem
+		} else {
+
+			isMpiLimit = jsState.LocalRes.Cpu > 0
+			if isMpiLimit {
+				aRes = jsState.LocalRes
+			}
 		}
 
 		// model runs
 		//
 		// parse active files, use unlimited resources for already active jobs
-		aKeys, aTotal, aOwn := updateActiveJobs(activeFiles, activeJobs, omsActive)
+		aKeys, aTotal, aOwn, aLocal := updateActiveJobs(activeFiles, activeJobs, omsActive)
 
 		// parse queue files
 		sort.Strings(queueFiles)
-		qKeys, maxPos, minPos, qTotal, qOwn := updateQueueJobs(queueFiles, queueJobs, aRes, omsActive)
+		qKeys, maxPos, minPos, qTotal, qOwn, qLocal := updateQueueJobs(queueFiles, queueJobs, aRes, isMpiLimit, jsState.LocalRes, omsActive)
 
 		// parse history files list
 		hKeys := make([]string, 0, len(historyFiles))
@@ -368,8 +336,10 @@ func scanJobs(doneC <-chan bool) {
 		// update run catalog with current job control files and save persistent part of jobs state
 		jsState.ActiveTotalRes = aTotal
 		jsState.ActiveOwnRes = aOwn
+		jsState.LocalActiveRes = aLocal
 		jsState.QueueTotalRes = qTotal
 		jsState.QueueOwnRes = qOwn
+		jsState.LocalQueueRes = qLocal
 		jsState.jobLastPosition = maxPos
 		jsState.jobFirstPosition = minPos
 
@@ -392,16 +362,17 @@ func scanJobs(doneC <-chan bool) {
 }
 
 // insert run job into job map: map job file submission stamp to file content (run job)
-func updateActiveJobs(fLst []string, jobMap map[string]runJobFile, omsActive map[string]int64) ([]string, RunRes, RunRes) {
+func updateActiveJobs(fLst []string, jobMap map[string]runJobFile, omsActive map[string]int64) ([]string, RunRes, RunRes, RunRes) {
 
 	subStamps := make([]string, 0, len(fLst)) // list of submission stamps
 	totalRes := RunRes{}
 	ownRes := RunRes{}
+	localOwnRes := RunRes{}
 
 	for _, f := range fLst {
 
 		// get submission stamp, oms instance and resources
-		stamp, oms, mn, dgst, cpu, mem, _ := parseJobActPath(f)
+		stamp, oms, mn, dgst, isMpi, cpu, mem, _ := parseActivePath(f)
 		if stamp == "" || oms == "" || mn == "" || dgst == "" {
 			continue // file name is not a job file name
 		}
@@ -410,16 +381,23 @@ func updateActiveJobs(fLst []string, jobMap map[string]runJobFile, omsActive map
 		}
 
 		// collect total resource usage
-		totalRes.Cpu = totalRes.Cpu + cpu
-		totalRes.Mem = totalRes.Mem + mem
+		if isMpi {
+			totalRes.Cpu = totalRes.Cpu + cpu
+			totalRes.Mem = totalRes.Mem + mem
+		}
 
 		if oms != theCfg.omsName {
 			continue // done with this job: it is other oms instance
 		}
 
-		// this is own job: job to run in current oms instance
-		ownRes.Cpu = ownRes.Cpu + cpu
-		ownRes.Mem = ownRes.Mem + mem
+		// this is own job: job to run in current oms instance on MPI cluster or localhost server
+		if isMpi {
+			ownRes.Cpu = ownRes.Cpu + cpu
+			ownRes.Mem = ownRes.Mem + mem
+		} else {
+			localOwnRes.Cpu = localOwnRes.Cpu + cpu
+			localOwnRes.Mem = localOwnRes.Mem + mem
+		}
 
 		subStamps = append(subStamps, stamp)
 
@@ -441,11 +419,14 @@ func updateActiveJobs(fLst []string, jobMap map[string]runJobFile, omsActive map
 
 		jobMap[stamp] = runJobFile{RunJob: jc, filePath: f} // add job into jobs list
 	}
-	return subStamps, totalRes, ownRes
+	return subStamps, totalRes, ownRes, localOwnRes
 }
 
 // insert run job into queue job map: map job file submission stamp to file content (run job)
-func updateQueueJobs(fLst []string, jobMap map[string]queueJobFile, aRes RunRes, omsActive map[string]int64) ([]string, int, int, RunRes, RunRes) {
+func updateQueueJobs(
+	fLst []string, jobMap map[string]queueJobFile, aRes RunRes, isMpiLimit bool, localRes RunRes, omsActive map[string]int64,
+) (
+	[]string, int, int, RunRes, RunRes, RunRes) {
 
 	nFiles := len(fLst)
 	maxPos := jobPositionDefault + 1
@@ -456,7 +437,8 @@ func updateQueueJobs(fLst []string, jobMap map[string]queueJobFile, aRes RunRes,
 		fileIdx  int    // source file index
 		oms      string // instance name
 		stamp    string // submission stamp
-		position int    // queue position file name part
+		position int    // queue position: file name part
+		allQi    int    // queue position: index in combined queue (queues from all oms instances)
 		res      RunRes // resources required to run the model
 		preRes   RunRes // resources required for queue jobs before this job
 		isOver   bool   // if true then resources required are exceeding total resource(s) limit(s)
@@ -467,11 +449,11 @@ func updateQueueJobs(fLst []string, jobMap map[string]queueJobFile, aRes RunRes,
 	}
 	allQ := make(map[string]omsQ, nFiles) // queue for each oms instance
 
-	// for each oms instance append files to job queue
+	// for each oms instance append MPI job files to job queue
 	for k, f := range fLst {
 
 		// get submission stamp, oms instance and queue position
-		stamp, oms, mn, dgst, cpu, mem, pos := parseJobActPath(f)
+		stamp, oms, mn, dgst, isMpi, cpu, mem, pos := parseQueuePath(f)
 		if stamp == "" || oms == "" || mn == "" || dgst == "" {
 			continue // file name is not a job file name
 		}
@@ -480,6 +462,9 @@ func updateQueueJobs(fLst []string, jobMap map[string]queueJobFile, aRes RunRes,
 		}
 		if minPos > pos {
 			minPos = pos
+		}
+		if !isMpi {
+			continue // this is not MPI cluster job
 		}
 		if _, ok := omsActive[oms]; !ok {
 			continue // skip: oms instance inactive
@@ -496,7 +481,7 @@ func updateQueueJobs(fLst []string, jobMap map[string]queueJobFile, aRes RunRes,
 			stamp:    stamp,
 			position: pos,
 			res:      RunRes{Cpu: cpu, Mem: mem},
-			isOver:   (aRes.Cpu > 0 && cpu > aRes.Cpu) || (aRes.Mem > 0 && mem > aRes.Mem),
+			isOver:   isMpiLimit && (cpu > aRes.Cpu || (aRes.Mem > 0 && mem > aRes.Mem)),
 		})
 		allQ[oms] = aq
 	}
@@ -527,6 +512,7 @@ func updateQueueJobs(fLst []string, jobMap map[string]queueJobFile, aRes RunRes,
 	//   [ {_4040, 1234, 2022_08_17}, {_8080, 1212, 2022_08_17}, {_4040, 4567, 2022_08_12}, {_8080, 3434, 2022_08_16} ]
 
 	totalRes := RunRes{} // total resources required to serve all queues
+	nextQueueIdx := 0    // global queue index position
 
 	for isAll := false; !isAll; {
 
@@ -560,11 +546,13 @@ func updateQueueJobs(fLst []string, jobMap map[string]queueJobFile, aRes RunRes,
 
 		aq := allQ[topOms] // this queue contains minimal submission stamp at current queue top position
 
-		// collect total resource usage
+		// collect total resource usage and if top job is not exceeding available resources then assign globdl queue index position
 		preRes := totalRes
 		if !aq.q[aq.top].isOver {
 			totalRes.Cpu = totalRes.Cpu + aq.q[aq.top].res.Cpu
 			totalRes.Mem = totalRes.Mem + aq.q[aq.top].res.Mem
+			nextQueueIdx++
+			aq.q[aq.top].allQi = nextQueueIdx
 		}
 		aq.q[aq.top].preRes = preRes // resource used by jobs before current
 
@@ -574,12 +562,70 @@ func updateQueueJobs(fLst []string, jobMap map[string]queueJobFile, aRes RunRes,
 	}
 
 	// update current instance job map, queue files and resources
+	// append localhost job queue for current oms instance
 	qKeys := make([]string, 0, nFiles)
+	usedLocal := RunRes{}
+
+	for _, f := range fLst {
+
+		// get submission stamp, oms instance and queue position
+		stamp, oms, mn, dgst, isMpi, cpu, mem, pos := parseQueuePath(f)
+		if stamp == "" || oms == "" || mn == "" || dgst == "" {
+			continue // file name is not a job file name
+		}
+		if isMpi || oms != theCfg.omsName {
+			continue // skip: this is MPI model run or it is local run from other oms instance
+		}
+
+		preRes := usedLocal
+		isOver := (localRes.Cpu > 0 && cpu > localRes.Cpu) || (localRes.Mem > 0 && mem > localRes.Mem)
+
+		if !isOver {
+			usedLocal.Cpu = usedLocal.Cpu + cpu
+			usedLocal.Mem = usedLocal.Mem + mem
+		}
+		qKeys = append(qKeys, stamp)
+
+		// if this file already in the queue jobs map then update resources
+		if jc, ok := jobMap[stamp]; ok {
+
+			jc.filePath = f
+			jc.position = pos
+			jc.preRes = preRes
+			jc.IsOverLimit = isOver
+			jc.QueuePos = len(qKeys)
+			jobMap[stamp] = jc // update exsiting job in the queue with current resources info
+			continue
+		}
+		// else create run state from job file and insert into the queue map
+		var jc RunJob
+
+		isOk, err := helper.FromJsonFile(f, &jc)
+		if err != nil {
+			omppLog.Log(err)
+			jobMap[stamp] = queueJobFile{runJobFile: runJobFile{filePath: f, isError: true}}
+		}
+		if !isOk || err != nil {
+			continue // file does not exist or invalid
+		}
+		jc.IsOverLimit = isOver
+		jc.QueuePos = len(qKeys)
+
+		// add new job into queue jobs map
+		jobMap[stamp] = queueJobFile{
+			runJobFile: runJobFile{RunJob: jc, filePath: f},
+			position:   pos,
+			preRes:     preRes,
+		}
+	}
+
+	// update current instance job map, queue files and resources
+	// append MPI jobs queue for current oms instance
 	ownRes := RunRes{}
 
 	ownQ, isOwn := allQ[theCfg.omsName]
 	if !isOwn {
-		return qKeys, maxPos, minPos, totalRes, ownRes // there are no jobs for current oms instance
+		return qKeys, maxPos, minPos, totalRes, ownRes, usedLocal // there are no MPI jobs for current oms instance
 	}
 
 	for _, f := range ownQ.q {
@@ -596,6 +642,7 @@ func updateQueueJobs(fLst []string, jobMap map[string]queueJobFile, aRes RunRes,
 			jc.position = f.position
 			jc.preRes = f.preRes
 			jc.IsOverLimit = f.isOver
+			jc.QueuePos = f.allQi
 			jobMap[f.stamp] = jc // update exsiting job in the queue with current resources info
 			continue
 		}
@@ -611,6 +658,7 @@ func updateQueueJobs(fLst []string, jobMap map[string]queueJobFile, aRes RunRes,
 			continue // file does not exist or invalid
 		}
 		jc.IsOverLimit = f.isOver
+		jc.QueuePos = f.allQi
 
 		// add new job into queue jobs map
 		jobMap[f.stamp] = queueJobFile{
@@ -619,7 +667,140 @@ func updateQueueJobs(fLst []string, jobMap map[string]queueJobFile, aRes RunRes,
 			preRes:     f.preRes,
 		}
 	}
-	return qKeys, maxPos, minPos, totalRes, ownRes
+
+	return qKeys, maxPos, minPos, totalRes, ownRes, usedLocal
+}
+
+// read job service state and computational servers definition from job.ini
+func initJobComputeState(jobIniPath string, updateTs time.Time, computeState map[string]computeItem) JobServiceState {
+
+	jsState := JobServiceState{
+		IsQueuePaused:     isPausedJobQueue(),
+		JobUpdateDateTime: helper.MakeDateTime(updateTs),
+		maxStartTime:      serverTimeoutDefault,
+		maxStopTime:       serverTimeoutDefault,
+	}
+
+	// read available resources limits and computational servers configuration from job.ini
+	if jobIniPath == "" || fileExist(jobIniPath) != nil {
+		return jsState
+	}
+
+	opts, err := config.FromIni(jobIniPath, theCfg.codePage)
+	if err != nil {
+		omppLog.Log(err)
+		return jsState
+	}
+	nowTs := updateTs.UnixMilli()
+
+	// total available resources limits and timeouts
+	jsState.LocalRes.Cpu = opts.Int("Common.LocalCpu", 0)    // localhost unlimited cpu cores by default
+	jsState.LocalRes.Mem = opts.Int("Common.LocalMemory", 0) // localhost unlimited memory by default
+
+	jsState.maxIdleTime = opts.Int("Common.IdleTimeout", 0) // never stop servers by default
+	jsState.maxStartTime = opts.Int("Common.StartTimeout", serverTimeoutDefault)
+	jsState.maxStopTime = opts.Int("Common.StopTimeout", serverTimeoutDefault)
+
+	// MPI jobs process, threads and hostfile config
+	jsState.hostFile.maxThreads = opts.Int("Common.MpiMaxThreads", 0) // max number of modelling threads per MPI process, zero means unlimited
+	jsState.hostFile.hostName = opts.String("hostfile.HostName")
+	jsState.hostFile.cpuCores = opts.String("hostfile.CpuCores")
+	jsState.hostFile.rootLine = opts.String("hostfile.RootLine")
+	jsState.hostFile.hostLine = opts.String("hostfile.HostLine")
+	jsState.hostFile.dir = opts.String("hostfile.HostFileDir")
+
+	jsState.hostFile.isUse = jsState.hostFile.dir != "" &&
+		jsState.hostFile.dir != "." && jsState.hostFile.dir != ".." &&
+		jsState.hostFile.dir != "./" && jsState.hostFile.dir != "../" && jsState.hostFile.dir != "/" &&
+		(jsState.hostFile.rootLine != "" || jsState.hostFile.hostLine != "")
+
+	if jsState.hostFile.isUse {
+		jsState.hostFile.isUse = dirExist(jsState.hostFile.dir) == nil
+	}
+
+	// default settings for compute servers or clusters
+
+	splitOpts := func(key, sep string) []string {
+		v := strings.Split(opts.String(key), sep)
+		if len(v) <= 0 || len(v) == 1 && v[0] == "" {
+			return []string{}
+		}
+		return v
+	}
+
+	exeStart := opts.String("Common.StartExe")
+	exeStop := opts.String("Common.StopExe")
+	argsBreak := opts.String("Common.ArgsBreak")
+	argsStart := splitOpts("Common.StartArgs", argsBreak)
+	argsStop := splitOpts("Common.StopArgs", argsBreak)
+
+	// compute servers or clusters defaults
+	srvNames := splitOpts("Common.Servers", ",")
+
+	for k, s := range srvNames {
+
+		srvNames[k] = strings.TrimSpace(s)
+		if srvNames[k] == "" {
+			continue // skip empty name
+		}
+
+		// add or clean existing computational server state
+		cs, ok := computeState[srvNames[k]]
+		if !ok {
+			cs = computeItem{
+				name:       srvNames[k],
+				lastUsedTs: nowTs,
+				startArgs:  []string{},
+				stopArgs:   []string{},
+			}
+		}
+		cs.usedRes.Cpu = 0 // updated as sum of comp-used files
+		cs.usedRes.Mem = 0 // updated as sum of comp-used files
+		cs.ownRes.Cpu = 0  // updated as sum of comp-used files
+		cs.ownRes.Mem = 0  // updated as sum of comp-used files
+		cs.errorCount = 0  // updated as count of comp-start, comp-stop, comp-error files
+
+		cs.totalRes.Cpu = opts.Int(cs.name+".Cpu", 0)    // unlimited cpu cores by default
+		cs.totalRes.Mem = opts.Int(cs.name+".Memory", 0) // unlimited memory cores by default
+
+		cs.startExe = opts.String(cs.name + ".StartExe")
+		if cs.startExe == "" {
+			cs.startExe = exeStart // default executable to start server
+		}
+
+		cs.startArgs = splitOpts(cs.name+".StartArgs", argsBreak)
+		if len(cs.startArgs) <= 0 {
+			cs.startArgs = append(argsStart, cs.name) // default start arguments and server name as last argument
+		}
+
+		cs.stopExe = opts.String(cs.name + ".StopExe")
+		if cs.stopExe == "" {
+			cs.stopExe = exeStop // default executable to stop server
+		}
+
+		cs.stopArgs = splitOpts(cs.name+".StopArgs", argsBreak)
+		if len(cs.stopArgs) <= 0 {
+			cs.stopArgs = append(argsStop, cs.name) // default stop arguments and server name as last argument
+		}
+		computeState[cs.name] = cs
+	}
+
+	// remove compute servers or clusters which are no longer exist
+	sort.Strings(srvNames)
+	for name := range computeState {
+		k := sort.SearchStrings(srvNames, name)
+		if k < 0 || k >= len(srvNames) || srvNames[k] != name {
+			delete(computeState, name)
+		}
+	}
+
+	// update total available MPI resources
+	for _, cs := range computeState {
+		jsState.MpiRes.Cpu += cs.totalRes.Cpu
+		jsState.MpiRes.Mem += cs.totalRes.Mem
+	}
+
+	return jsState
 }
 
 // Update computational serveres or clusters map.
@@ -628,38 +809,15 @@ func updateQueueJobs(fLst []string, jobMap map[string]queueJobFile, aRes RunRes,
 func updateComputeState(
 	computeState map[string]computeItem,
 	omsActive map[string]int64,
-	maxStartTs, maxStopTs int64,
-	compFiles, compReadyFiles, compStartFiles, compStopFiles, compErrorFiles, compUsedFiles []string,
+	nowTs int64,
+	maxStartTime int,
+	maxStopTime int,
+	compReadyFiles, compStartFiles, compStopFiles, compErrorFiles, compUsedFiles []string,
 ) {
 
-	cKeys := make([]string, 0, len(computeState))
-
-	// total compute resources: all existing servers or clusters
-	for _, f := range compFiles {
-
-		// get server name, cpu count and memory size
-		name, cpu, mem := parseCompPath(f)
-		if name == "" {
-			continue // skip: this is not a compute server file
-		}
-		cKeys = append(cKeys, name)
-
-		// add to the servers list
-		computeState[name] = computeItem{
-			totalRes: RunRes{Cpu: cpu, Mem: mem},
-		}
-	}
-
-	// remove compute servers or cluster which are no longer exist
-	sort.Strings(cKeys)
-	for name := range computeState {
-		k := sort.SearchStrings(cKeys, name)
-		if k < 0 || k >= len(cKeys) || cKeys[k] != name {
-			delete(computeState, name)
-		}
-	}
-
 	// ready compute resources: powered on servers or clusters
+	readyNames := []string{}
+
 	for _, f := range compReadyFiles {
 
 		// get server name
@@ -667,11 +825,37 @@ func updateComputeState(
 		if name == "" {
 			continue // skip: this is not a compute server ready file
 		}
+		cs, ok := computeState[name]
+		if !ok {
+			continue // this server does not exist anymore
+		}
+		readyNames = append(readyNames, name)
 
 		// update server state to ready
-		if cs, ok := computeState[name]; ok {
-			cs.state = "ready"
-			computeState[name] = cs
+		cs.state = "ready"
+		cs.errorCount = 0
+
+		if cs.lastUsedTs <= 0 {
+			cs.lastUsedTs = nowTs
+		}
+		if cs.lastStartTs <= 0 {
+			cs.lastStartTs = nowTs
+		}
+		computeState[name] = cs
+	}
+
+	// clear ready state for server or cluster if ready state file does not exist
+	for name, cs := range computeState {
+
+		if cs.state == "ready" {
+			isReady := false
+			for k := 0; !isReady && k < len(readyNames); k++ {
+				isReady = readyNames[k] == name
+			}
+			if !isReady {
+				cs.state = "" // power off state
+				computeState[name] = cs
+			}
 		}
 	}
 
@@ -683,20 +867,25 @@ func updateComputeState(
 		if name == "" {
 			continue // skip: this is not a compute server state file
 		}
-
-		if cs, ok := computeState[name]; ok { // if this server still exist
-
-			// update server state to start or detect error
-			if (cs.state == "" || cs.state == "start") && ts <= maxStartTs {
-				cs.state = "start"
-			} else {
-				if cs.lastErrorTs < ts {
-					cs.lastErrorTs = ts
-				}
-				cs.errorCount++ // start timeout error
-			}
-			computeState[name] = cs
+		cs, ok := computeState[name]
+		if !ok {
+			continue // this server does not exist anymore
 		}
+
+		// update server state to start or detect error
+		if (cs.state == "" || cs.state == "start" || cs.state == "ready") && (ts+int64(maxStartTime)) >= nowTs {
+
+			cs.state = "start"
+			if cs.lastStartTs < ts {
+				cs.lastStartTs = ts
+			}
+		} else {
+			if cs.lastErrorTs < ts {
+				cs.lastErrorTs = ts
+			}
+			cs.errorCount++ // start timeout error
+		}
+		computeState[name] = cs
 	}
 
 	// stop servers or clusters: check shutdown timeout
@@ -707,20 +896,25 @@ func updateComputeState(
 		if name == "" {
 			continue // skip: this is not a compute server state file
 		}
-
-		if cs, ok := computeState[name]; ok { // if this server still exist
-
-			// update server state to stop or detect error
-			if (cs.state == "ready" || cs.state == "stop") && ts <= maxStopTs {
-				cs.state = "stop"
-			} else {
-				if cs.lastErrorTs < ts {
-					cs.lastErrorTs = ts
-				}
-				cs.errorCount++ // stop timeout error
-			}
-			computeState[name] = cs
+		cs, ok := computeState[name]
+		if !ok {
+			continue // this server does not exist anymore
 		}
+
+		// update server state to stop or detect error
+		if (cs.state == "ready" || cs.state == "stop" || cs.state == "") && (ts+int64(maxStopTime)) >= nowTs {
+
+			cs.state = "stop"
+			if cs.lastStopTs < ts {
+				cs.lastStopTs = ts
+			}
+		} else {
+			if cs.lastErrorTs < ts {
+				cs.lastErrorTs = ts
+			}
+			cs.errorCount++ // stop timeout error
+		}
+		computeState[name] = cs
 	}
 
 	// server or cluster in "error" state
@@ -731,20 +925,21 @@ func updateComputeState(
 		if name == "" {
 			continue // skip: this is not a compute server state file
 		}
-
-		if cs, ok := computeState[name]; ok { // if this server still exist
-
-			// count server errors
-			if cs.lastErrorTs < ts {
-				cs.lastErrorTs = ts
-			}
-			cs.errorCount++ // error logged for that server or cluster
-
-			computeState[name] = cs
+		cs, ok := computeState[name]
+		if !ok {
+			continue // this server does not exist anymore
 		}
+
+		// count server errors
+		if cs.lastErrorTs < ts {
+			cs.lastErrorTs = ts
+		}
+		cs.errorCount++ // error logged for that server or cluster
+
+		computeState[name] = cs
 	}
 
-	// set error state for server or cluster
+	// set error state for server or cluster if error count exceed max error limit
 	for name, cs := range computeState {
 
 		if cs.errorCount > maxComputeErrors {
@@ -761,40 +956,79 @@ func updateComputeState(
 		if name == "" || oms == "" {
 			continue // skip: this is not a compute server state file
 		}
-
-		// if this server stil exist
-		if cs, ok := computeState[name]; ok {
-
-			if _, ok = omsActive[oms]; !ok {
-				continue // oms instance not active
-			}
-
-			// update resources used by model runs
-			cs.usedRes.Cpu += cpu
-			cs.usedRes.Mem += mem
-			if oms == theCfg.omsName {
-				cs.ownRes.Cpu += cpu
-				cs.ownRes.Mem += mem
-			}
-			computeState[name] = cs
+		if _, ok := omsActive[oms]; !ok {
+			continue // oms instance not active
 		}
+		cs, ok := computeState[name]
+		if !ok {
+			continue // this server does not exist anymore
+		}
+
+		// update resources used by model runs
+		cs.usedRes.Cpu += cpu
+		cs.usedRes.Mem += mem
+		if oms == theCfg.omsName {
+			cs.ownRes.Cpu += cpu
+			cs.ownRes.Mem += mem
+		}
+		cs.lastUsedTs = nowTs
+
+		computeState[name] = cs
 	}
 }
 
-// scan model run queue and start model runs
+// scan model run queue, start model runs, start or stop MPI servers
 func scanRunJobs(doneC <-chan bool) {
 	if !theCfg.isJobControl {
 		return // job control disabled: no queue
 	}
 
+	lastStartStopTs := time.Now().UnixMilli() // last time when start and stop of computational servers done
+
 	for {
 		// get job from the queue and run
-		if job, isFound := theRunCatalog.selectJobFromQueue(); isFound {
+		if job, isFound, qPath, compUse, hf, e := theRunCatalog.selectJobFromQueue(); isFound && e == nil {
 
-			_, e := theRunCatalog.runModel(job)
+			_, e = theRunCatalog.runModel(job, qPath, hf, compUse)
 			if e != nil {
 				omppLog.Log(e)
 			}
+		} else {
+			if e != nil {
+				omppLog.Log(e)
+				if qPath != "" {
+					moveJobQueueToFailed(qPath, job.SubmitStamp, job.ModelName, job.ModelDigest) // can not run this job: remove from the queue
+				}
+			}
+		}
+
+		// check if this is a time to do start or stop computational servers:
+		// interval must be at least double of job files scan to make sure server state files updated
+		if lastStartStopTs+computeStartStopInterval < time.Now().UnixMilli() {
+
+			// start computational servers or clusters
+			startNames, startMax, startExes, startArgs := theRunCatalog.selectToStartCompute()
+
+			for k := range startNames {
+				if startExes[k] != "" {
+					go doStartStopCompute(startNames[k], "start", startExes[k], startArgs[k], startMax)
+				} else {
+					doStartOnceCompute(startNames[k]) // special case: server always ready
+				}
+			}
+
+			// stop computational servers or clusters
+			stopNames, stopMax, stopExes, stopArgs := theRunCatalog.selectToStopCompute()
+
+			for k := range stopNames {
+				if stopExes[k] != "" {
+					go doStartStopCompute(stopNames[k], "stop", stopExes[k], stopArgs[k], stopMax)
+				} else {
+					doStopCleanupCompute(stopNames[k]) // special case: server never stop
+				}
+			}
+
+			lastStartStopTs = time.Now().UnixMilli()
 		}
 
 		// wait for doneC or sleep
@@ -802,4 +1036,98 @@ func scanRunJobs(doneC <-chan bool) {
 			return
 		}
 	}
+}
+
+// start (or stop) computational server or cluster and create (or delete) ready state file
+func doStartStopCompute(name, state, exe string, args []string, maxTime int) {
+
+	omppLog.Log(state, ": ", name)
+
+	// create server start or stop file to signal server state
+	sf := createCompStateFile(name, state)
+	if sf == "" {
+		omppLog.Log("FAILED to create state file: ", state, " ", name)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(maxTime)*time.Second)
+	defer cancel()
+
+	// make a command, run it and return combined output
+	out, err := exec.CommandContext(ctx, exe, args...).CombinedOutput()
+	if len(out) > 0 {
+		omppLog.Log(string(out))
+	}
+
+	// create or delete server ready file and delete state file
+	isOk := false
+	if err == nil {
+
+		readyPath := compReadyPath(name)
+		if state == "start" {
+			isOk = fileCreateEmpty(false, readyPath)
+			if !isOk {
+				omppLog.Log("FAILED to create server ready file: ", readyPath)
+			}
+		} else {
+			isOk = fileDeleteAndLog(false, readyPath)
+			if !isOk {
+				omppLog.Log("FAILED to delete server ready file: ", readyPath)
+			}
+		}
+
+		if isOk {
+			okStart := deleteCompStateFiles(name, "start")
+			okStop := deleteCompStateFiles(name, "stop")
+			okErr := deleteCompStateFiles(name, "error")
+			isOk = okStart && okStop && okErr
+		}
+		if isOk {
+			omppLog.Log("Done: ", state, " ", name)
+		}
+
+	} else {
+		if ctx.Err() == context.DeadlineExceeded {
+			omppLog.Log("ERROR server timeout: ", state, " ", name)
+		}
+		omppLog.Log("Error: ", err)
+		omppLog.Log("FAILED: ", state, " ", name)
+	}
+
+	// remove this server from startup or shutdown list
+	if state == "start" {
+		theRunCatalog.startupCompleted(isOk, name)
+	} else {
+		theRunCatalog.shutdownCompleted(isOk, name)
+	}
+}
+
+// start computational server, special case: if server always ready then only create ready state file
+func doStartOnceCompute(name string) {
+
+	omppLog.Log("Start: ", name)
+
+	readyPath := compReadyPath(name)
+	isOk := fileCreateEmpty(false, readyPath)
+	if !isOk {
+		omppLog.Log("FAILED to create server ready file: ", readyPath)
+	}
+
+	if isOk {
+		okStart := deleteCompStateFiles(name, "start")
+		okStop := deleteCompStateFiles(name, "stop")
+		okErr := deleteCompStateFiles(name, "error")
+		isOk = okStart && okStop && okErr
+	}
+	if isOk {
+		omppLog.Log("Done start of: ", name)
+	}
+}
+
+// stop computational server, special case: if server never stop then only cleanup state files
+func doStopCleanupCompute(name string) {
+
+	deleteCompStateFiles(name, "start")
+	deleteCompStateFiles(name, "stop")
+	deleteCompStateFiles(name, "error")
 }

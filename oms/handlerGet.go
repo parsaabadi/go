@@ -20,6 +20,7 @@ func modelListHandler(w http.ResponseWriter, r *http.Request) {
 	type modelListItem struct {
 		Model db.ModelDicRow // model_dic db row
 		Dir   string         // model directory, relative to model root and slashed: dir/sub
+		Extra string         // if not empty then model extra content
 	}
 	ml := make([]modelListItem, 0, len(mbs))
 
@@ -30,6 +31,7 @@ func modelListHandler(w http.ResponseWriter, r *http.Request) {
 				modelListItem{
 					Model: m,
 					Dir:   b.relDir,
+					Extra: b.extra,
 				})
 		}
 	}
@@ -52,6 +54,7 @@ func modelTextListHandler(w http.ResponseWriter, r *http.Request) {
 	type modelTxtListItem struct {
 		ModelDicDescrNote        // model_dic db row and model_dic_txt row
 		Dir               string // model directory, relative to model root and slashed: dir/sub
+		Extra             string // if not empty then model extra content
 	}
 	mtl := make([]modelTxtListItem, 0, len(mbs))
 
@@ -62,6 +65,7 @@ func modelTextListHandler(w http.ResponseWriter, r *http.Request) {
 				modelTxtListItem{
 					ModelDicDescrNote: *mt,
 					Dir:               b.relDir,
+					Extra:             b.extra,
 				})
 		}
 	}

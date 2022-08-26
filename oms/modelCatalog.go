@@ -50,6 +50,7 @@ type modelDef struct {
 	matcher       language.Matcher  // matcher to search text by language
 	langMeta      *db.LangMeta      // list of languages: one list per db connection, order of languages NOT the same as language codes
 	modelWord     *db.ModelWordMeta // if not nil then list of model words, order of languages NOT the same as language codes
+	extra         string            // if not empty then model extra content from models/bin/dir/model.extra.json
 }
 
 // modelBasic is basic model info: name, digest, files location
@@ -61,6 +62,7 @@ type modelBasic struct {
 	isLogDir bool   // if true then use model log directory for model run logs
 	dbPath   string // absolute path to sqlite database file: models/bin/model.sqlite
 	relDir   string // relative database directory, relative to model root and slashed: dir/sub
+	extra    string // if not empty then model extra content from models/bin/dir/model.extra.json
 }
 
 // ModelMetaFull is full model metadata: language-neutral db rows

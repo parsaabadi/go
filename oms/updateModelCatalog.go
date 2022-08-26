@@ -128,6 +128,12 @@ func (mc *ModelCatalog) refreshSqlite(modelDir, modelLogDir string) error {
 				}
 			}
 
+			// read model extra content from models/bin/dir/model.extra.json
+			me := ""
+			if bt, err := os.ReadFile(filepath.Join(dbDir, dicLst[idx].Name+".extra.json")); err == nil {
+				me = string(bt)
+			}
+
 			// append to model list
 			mLst = append(mLst, modelDef{
 				dbConn:     dbc,
@@ -140,7 +146,8 @@ func (mc *ModelCatalog) refreshSqlite(modelDir, modelLogDir string) error {
 				meta:       &db.ModelMeta{Model: dicLst[idx]},
 				langCodes:  ml,
 				langMeta:   ls,
-				matcher:    language.NewMatcher(lt)})
+				matcher:    language.NewMatcher(lt),
+				extra:      me})
 		}
 	}
 

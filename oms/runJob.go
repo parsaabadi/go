@@ -4,7 +4,9 @@
 package main
 
 import (
+	"errors"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/openmpp/go/ompp/helper"
@@ -12,26 +14,45 @@ import (
 )
 
 // get model run job from the queue
-func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, []string, []RunRes) {
+// return job to run, bool job found flag, queue job file path, list of server names to run the job, list of resources to use on each server
+func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, string, []computeUse, hostIni, error) {
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
 	if rsc.IsQueuePaused || len(rsc.queueKeys) <= 0 {
-		return nil, false, []string{}, []RunRes{} // queue is paused or empty
+		return nil, false, "", []computeUse{}, hostIni{}, nil // queue is paused or empty
 	}
 
 	// resource available to rum MPI jobs from global MPI queue and form localhost queue of this oms instance jobs
-	qMpi := RunRes{
-		Cpu: (rsc.MpiRes.Cpu - rsc.ComputeErrorRes.Cpu) - rsc.ActiveTotalRes.Cpu,
-		Mem: (rsc.MpiRes.Mem - rsc.ComputeErrorRes.Mem) - rsc.ActiveTotalRes.Mem,
-	}
 	qLocal := RunRes{
-		Cpu: rsc.LocalRes.Cpu - rsc.LocalUsedRes.Cpu,
-		Mem: rsc.LocalRes.Mem - rsc.LocalUsedRes.Mem,
+		Cpu: rsc.LocalRes.Cpu - rsc.LocalActiveRes.Cpu,
+		Mem: rsc.LocalRes.Mem - rsc.LocalActiveRes.Mem,
 	}
 
-	// first job in localhost non-MPI queue or global queue where zero resources required for previous jobs
+	qMpi := RunRes{}
+	isMpiLimit := true
+
+	if len(rsc.computeState) > 0 {
+
+		for _, cs := range rsc.computeState {
+			if cs.state == "ready" {
+				qMpi.Cpu += cs.totalRes.Cpu
+				qMpi.Mem += cs.totalRes.Mem
+			}
+		}
+		qMpi.Cpu = qMpi.Cpu - (rsc.ComputeErrorRes.Cpu + rsc.ActiveTotalRes.Cpu)
+		qMpi.Mem = qMpi.Mem - (rsc.ComputeErrorRes.Mem + rsc.ActiveTotalRes.Mem)
+
+	} else {
+
+		isMpiLimit = rsc.LocalRes.Cpu > 0
+		if isMpiLimit {
+			qMpi = qLocal
+		}
+	}
+
+	// first job in localhost non-MPI queue or global MPI queue where zero resources required for previous jobs
 	// check if there are enough available resources to run the job
 	stamp := ""
 	for _, qKey := range rsc.queueKeys {
@@ -60,10 +81,10 @@ func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, []string, []RunRes) 
 			}
 		} else { // check resources available for MPI jobs
 
-			if rsc.MpiRes.Cpu > 0 && jc.Res.Cpu > 0 && qMpi.Cpu < jc.Res.Cpu+jc.preRes.Cpu {
-				continue // MPI cluster cpu cores limited and job cpu limit set to non zero and MPI cluster available cpu less than required cpu
+			if isMpiLimit && qMpi.Cpu < jc.Res.Cpu+jc.preRes.Cpu {
+				continue // job cpu limit set to non zero and MPI cluster available cpu less than required cpu
 			}
-			if rsc.MpiRes.Mem > 0 && jc.Res.Mem > 0 && qMpi.Mem < jc.Res.Mem+jc.preRes.Mem {
+			if isMpiLimit && rsc.MpiRes.Mem > 0 && jc.Res.Mem > 0 && qMpi.Mem < jc.Res.Mem+jc.preRes.Mem {
 				continue // MPI cluster memory limited and job memory limit set to non zero and MPI cluster available memory less than required memory
 			}
 		}
@@ -71,13 +92,14 @@ func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, []string, []RunRes) 
 		stamp = qKey // first job in queue which not yet selected to run and enough resources available to run
 	}
 	if stamp == "" {
-		return nil, false, []string{}, []RunRes{} // queue is empty or all jobs already selected to run
+		return nil, false, "", []computeUse{}, hostIni{}, nil // queue is empty or all jobs already selected to run
 	}
 	qj := rsc.queueJobs[stamp] // job found
 
-	// select servers where max cpu cores available until all required cores assigned to the servers
-	nameLst := []string{}
-	resLst := []RunRes{}
+	// if this is MPI job then
+	// select servers where state is ready and max cpu cores available
+	// until all required cores assigned to the servers
+	compUse := []computeUse{}
 
 	if qj.IsMpi {
 
@@ -87,53 +109,56 @@ func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, []string, []RunRes) 
 		for nCpu > 0 {
 
 			// find serever with max cpu cores available
-			m := ""
-			res := RunRes{}
+			cUse := computeUse{}
 
 			for name, cs := range rsc.computeState {
 
+				if cs.state != "ready" {
+					continue // this server is not ready
+				}
+
 				isUse := false
-				for k := 0; !isUse && k < len(nameLst); k++ {
-					isUse = name == nameLst[k]
+				for k := 0; !isUse && k < len(compUse); k++ {
+					isUse = name == compUse[k].name
 				}
 				if isUse {
 					continue // this server already selected for tha model run
 				}
-				if res.Cpu < cs.totalRes.Cpu-cs.usedRes.Cpu {
-					m = name
-					res.Cpu = cs.totalRes.Cpu - cs.usedRes.Cpu
-					res.Mem = cs.totalRes.Mem - cs.usedRes.Mem
+
+				if cUse.Cpu < cs.totalRes.Cpu-cs.usedRes.Cpu {
+					cUse.name = name
+					cUse.Cpu = cs.totalRes.Cpu - cs.usedRes.Cpu
+					cUse.Mem = cs.totalRes.Mem - cs.usedRes.Mem
 				}
 			}
-			if m == "" {
+			if cUse.name == "" {
 
-				if len(resLst) <= 0 {
-					omppLog.Log("ERROR: resources not found to run the model, CPU: ", qj.Res.Cpu, ": ", stamp)
-					return nil, false, []string{}, []RunRes{}
+				if len(compUse) <= 0 {
+					e := errors.New("ERROR: resources not found to run the model, CPU: " + strconv.Itoa(qj.Res.Cpu) + ": " + stamp)
+					return nil, false, qj.filePath, []computeUse{}, hostIni{}, e
 				}
 				// else assign the rest of the job to the last server
-				resLst[len(resLst)-1].Cpu = resLst[len(resLst)-1].Cpu + nCpu
+				compUse[len(compUse)-1].Cpu = compUse[len(compUse)-1].Cpu + nCpu
 
 				omppLog.Log("WARNING: oversubscribe resources run the model, CPU: ", qj.Res.Cpu, ": ", stamp)
 				break // oversubscribe last server
 			}
 
-			if res.Cpu > nCpu {
-				res.Cpu = nCpu
+			if cUse.Cpu > nCpu {
+				cUse.Cpu = nCpu
 			}
-			if res.Mem > nMem {
-				res.Mem = nMem
+			if cUse.Mem > nMem {
+				cUse.Mem = nMem
 			}
-			if res.Mem < 0 {
-				res.Mem = 0
+			if cUse.Mem < 0 {
+				cUse.Mem = 0
 			}
 
-			nameLst = append(nameLst, m)
-			resLst = append(resLst, res)
+			compUse = append(compUse, cUse)
 
-			nCpu = nCpu - res.Cpu
+			nCpu = nCpu - cUse.Cpu
 			if nMem > 0 {
-				nMem = nMem - (rsc.computeState[m].totalRes.Mem - rsc.computeState[m].usedRes.Mem)
+				nMem = nMem - (rsc.computeState[cUse.name].totalRes.Mem - rsc.computeState[cUse.name].usedRes.Mem)
 			}
 		}
 	}
@@ -164,7 +189,7 @@ func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, []string, []RunRes) 
 		len(qj.RunNotes))
 	copy(job.RunNotes, qj.RunNotes)
 
-	return &job, true, nameLst, resLst
+	return &job, true, qj.filePath, compUse, rsc.hostFile, nil
 }
 
 // return copy of submission stamps and job control items for queue, active and history model run jobs
@@ -437,8 +462,9 @@ func (rsc *RunCatalog) moveJobInQueue(submitStamp string, index int) (bool, [][2
 	return true, moveLst
 }
 
-// return list of computational servers or clusters to start
-func (rsc *RunCatalog) selectToStartCompute() ([]computeItem, int) {
+// select additional computational servers or clusters to start,
+// return server names, startup timeout and for each server startup exe names and startup arguments
+func (rsc *RunCatalog) selectToStartCompute() ([]string, int, []string, [][]string) {
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
@@ -446,81 +472,214 @@ func (rsc *RunCatalog) selectToStartCompute() ([]computeItem, int) {
 	// do not start anything if:
 	// this instance is not a leader oms instance or queue is paused or queue is empty
 	if !rsc.isLeader || rsc.IsQueuePaused || rsc.QueueTotalRes.Cpu <= 0 && rsc.QueueTotalRes.Mem <= 0 {
-		return []computeItem{}, 1
+		return []string{}, 1, []string{}, [][]string{}
 	}
 
 	// check if any item in the queue is MPI job
+	// find resources required to run first MPI job in the queue
+	res := RunRes{}
 	isAnyMpi := false
+
 	for _, qj := range rsc.queueJobs {
-		isAnyMpi = qj.IsMpi
-		if isAnyMpi {
+		if qj.IsMpi {
+			res = qj.Res
+			isAnyMpi = true
 			break
 		}
 	}
 	if !isAnyMpi {
-		return []computeItem{}, 1 // do not start anything: there are no MPI jobs
+		return []string{}, 1, []string{}, [][]string{} // do not start anything: there are no MPI jobs
 	}
 
-	// select servers where state is power off until it is enough cpu and memory to satisfy queue demand
-	lst := []computeItem{}
-	res := rsc.QueueTotalRes
+	// remove from startup list servers which are no longer exist
+	// substract from required resources servers which are starting now
 
-	for _, cs := range rsc.computeState {
+	n := 0
+	for _, name := range rsc.startupNames {
+		if cs, ok := rsc.computeState[name]; ok {
+			rsc.startupNames[n] = name // server stil exist
+			n++
 
-		if res.Cpu <= 0 && res.Mem <= 0 { // done: enough servers to satisfy queue demand
-			break
-		}
-
-		// if server server state is "" power off
-		if cs.state == "" {
-
-			cp := cs
-			cp.startArgs = make([]string, len(cs.startArgs))
-			cp.stopArgs = make([]string, len(cs.stopArgs))
-			copy(cp.startArgs, cs.startArgs)
-			copy(cp.stopArgs, cs.stopArgs)
-
-			lst = append(lst, cp)
-
-			res.Cpu -= cs.totalRes.Cpu
+			res.Cpu -= cs.totalRes.Cpu // server is starting, reduce cpu and memory required to run the queue
 			res.Mem -= cs.totalRes.Mem
 		}
 	}
+	rsc.startupNames = rsc.startupNames[:n]
 
-	return lst, rsc.maxStartTime
+	if res.Cpu <= 0 && res.Mem <= 0 {
+		return []string{}, 1, []string{}, [][]string{} // do not start any additional servers
+	}
+
+	// select servers to start
+	// where state is power off and with min error count and longest unused time
+	// until it is enough cpu and memory to run first MPI job in the queue
+	srvLst := []string{}
+	exeLst := []string{}
+	argLst := [][]string{}
+
+	for res.Cpu > 0 || res.Mem > 0 { // until not enough servers to run first MPI job in the queue
+
+		name := ""
+		minE := 2 * maxComputeErrors
+		minTs := time.Now().UnixMilli() + 100
+
+		for _, cs := range rsc.computeState {
+			if cs.state != "" {
+				continue // server not in power off state
+			}
+
+			isAct := false
+			for k := 0; !isAct && k < len(rsc.startupNames); k++ {
+				isAct = rsc.startupNames[k] == cs.name
+			}
+			for k := 0; !isAct && k < len(rsc.shutdownNames); k++ {
+				isAct = rsc.shutdownNames[k] == cs.name
+			}
+			if isAct {
+				continue // this server already in startup or shutdown list
+			}
+
+			if name == "" || cs.errorCount < minE || cs.errorCount == minE && cs.lastUsedTs < minTs {
+				name = cs.name
+				minE = cs.errorCount
+				minTs = cs.lastUsedTs
+			}
+		}
+		if name == "" {
+			break // no servers available
+		}
+
+		// add server to startup list
+		srvLst = append(srvLst, name)
+		exeLst = append(exeLst, rsc.computeState[name].startExe)
+
+		args := make([]string, len(rsc.computeState[name].startArgs))
+		copy(args, rsc.computeState[name].startArgs)
+		argLst = append(argLst, args)
+
+		rsc.startupNames = append(rsc.startupNames, name)
+
+		res.Cpu -= rsc.computeState[name].totalRes.Cpu
+		res.Mem -= rsc.computeState[name].totalRes.Mem
+	}
+
+	return srvLst, rsc.maxStartTime, exeLst, argLst
 }
 
-// return list of computational servers or clusters to stop
-func (rsc *RunCatalog) selectToStopCompute() ([]computeItem, int) {
+// select computational servers or clusters to shutdown,
+// return server names, shutdown timeout and for each server shutdown exe names and shutdown arguments
+func (rsc *RunCatalog) selectToStopCompute() ([]string, int, []string, [][]string) {
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
 	// do not stop anything: if idle time is unlimited or this instance is not a leader oms instance
 	if rsc.maxIdleTime <= 0 || !rsc.isLeader {
-		return []computeItem{}, 1
+		return []string{}, 1, []string{}, [][]string{}
 	}
 	nowTs := time.Now().UnixMilli() // current time in unix milliseconds
 
+	// remove from shutdown list servers which are no longer exist
+	n := 0
+	for _, name := range rsc.shutdownNames {
+		if _, ok := rsc.computeState[name]; ok {
+			rsc.shutdownNames[n] = name // server stil exist
+			n++
+		}
+	}
+	rsc.shutdownNames = rsc.shutdownNames[:n]
+
 	// find servers where there no model runs for more than idle time interval
-	lst := []computeItem{}
+	srvLst := []string{}
+	exeLst := []string{}
+	argLst := [][]string{}
 
 	for _, cs := range rsc.computeState {
 
-		// if no model runs for more than idle time in milliseconds
-		if cs.state == "ready" && cs.lastUsedTs+int64(1000*rsc.maxIdleTime) < nowTs {
+		isAct := false
+		for k := 0; !isAct && k < len(rsc.shutdownNames); k++ {
+			isAct = rsc.shutdownNames[k] == cs.name
+		}
+		for k := 0; !isAct && k < len(rsc.startupNames); k++ {
+			isAct = rsc.startupNames[k] == cs.name
+		}
+		if isAct {
+			continue // this server already in shutdown or startup list
+		}
 
-			cp := cs
-			cp.startArgs = make([]string, len(cs.startArgs))
-			cp.stopArgs = make([]string, len(cs.stopArgs))
-			copy(cp.startArgs, cs.startArgs)
-			copy(cp.stopArgs, cs.stopArgs)
+		// if no model runs for more than idle time in milliseconds and server started more than idle time in milliseconds
+		if cs.state == "ready" && cs.lastUsedTs+int64(1000*rsc.maxIdleTime) < nowTs && cs.lastStartTs+int64(1000*rsc.maxIdleTime) < nowTs {
 
-			lst = append(lst, cp)
+			srvLst = append(srvLst, cs.name)
+			exeLst = append(exeLst, cs.stopExe)
+
+			args := make([]string, len(cs.stopArgs))
+			copy(args, cs.stopArgs)
+			argLst = append(argLst, args)
+
+			rsc.shutdownNames = append(rsc.shutdownNames, cs.name)
 		}
 	}
 
-	return lst, rsc.maxStopTime
+	return srvLst, rsc.maxStopTime, exeLst, argLst
+}
+
+// on sucess reset server error count or increase it on error and remove server name from startup list
+func (rsc *RunCatalog) startupCompleted(isOkStart bool, name string) {
+
+	rsc.rscLock.Lock()
+	defer rsc.rscLock.Unlock()
+
+	// update server state
+	if cs, ok := rsc.computeState[name]; ok {
+		if isOkStart {
+			cs.errorCount = 0
+			cs.lastStartTs = time.Now().UnixMilli()
+		} else {
+			cs.errorCount++
+			cs.lastErrorTs = time.Now().UnixMilli()
+		}
+		rsc.computeState[name] = cs
+	}
+
+	// remove from startup list
+	n := 0
+	for k := range rsc.startupNames {
+		if rsc.startupNames[k] != name {
+			rsc.startupNames[n] = rsc.startupNames[k]
+			n++
+		}
+	}
+	rsc.startupNames = rsc.startupNames[:n]
+}
+
+// on sucess reset server error count or increase it on error remove server name from shutdown list
+func (rsc *RunCatalog) shutdownCompleted(isOkStop bool, name string) {
+
+	rsc.rscLock.Lock()
+	defer rsc.rscLock.Unlock()
+
+	// update server state
+	if cs, ok := rsc.computeState[name]; ok {
+		if isOkStop {
+			cs.errorCount = 0
+			cs.lastStopTs = time.Now().UnixMilli()
+		} else {
+			cs.errorCount++
+			cs.lastErrorTs = time.Now().UnixMilli()
+		}
+		rsc.computeState[name] = cs
+	}
+
+	// remove from shutdown list
+	n := 0
+	for k := range rsc.shutdownNames {
+		if rsc.shutdownNames[k] != name {
+			rsc.shutdownNames[n] = rsc.shutdownNames[k]
+			n++
+		}
+	}
+	rsc.shutdownNames = rsc.shutdownNames[:n]
 }
 
 // update run catalog with current job control files

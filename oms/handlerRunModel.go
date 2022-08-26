@@ -16,7 +16,7 @@ import (
 
 // runModelHandler run the model identified by model digest-or-name with specified run options.
 // POST /api/run
-// Json RunRequest structre is posted to specify model digest-or-name, run stamp and othe run options.
+// Json RunRequest structure is posted to specify model digest-or-name, run stamp and othe run options.
 // If multiple models with same name exist then result is undefined.
 // Model run console output redirected to log file: models/log/modelName.runStamp.console.log
 func runModelHandler(w http.ResponseWriter, r *http.Request) {
@@ -63,7 +63,7 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 
 	// get number of modelling cpu
 	// for backward compatibility: check if number of threads specified using run options
-	job.Res, _, _, job.Threads, ok = resFromRequest(req)
+	job.Res, job.Mpi.IsNotOnRoot, _, job.Threads, ok = resFromRequest(req)
 	if !ok {
 		http.Error(w, "Model start failed: "+dn, http.StatusBadRequest)
 		return
@@ -72,7 +72,7 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 	// if job control disabled then start model run
 	if !theCfg.isJobControl {
 
-		rs, err := theRunCatalog.runModel(&job)
+		rs, err := theRunCatalog.runModel(&job, "", hostIni{}, []computeUse{}) // no job control: use empty arguments
 		if err != nil {
 			omppLog.Log(err)
 			http.Error(w, "Model start failed: "+dn, http.StatusBadRequest)
@@ -102,12 +102,12 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 		})
 }
 
-// return cpu modelling count, MPI not-on-root flag, number of processes, modelling threads per process and error flag
+// return cpu modelling count, MPI not-on-root flag, number of processes, number of modelling threads per process and error flag
 func resFromRequest(req RunRequest) (RunRes, bool, int, int, bool) {
 
 	// get number of threads and MPI NotOnRoot flag
 	nTh := req.Threads
-	isNotOnRoot := false
+	isNotOnRoot := req.Mpi.IsNotOnRoot
 
 	for krq, val := range req.Opts {
 
@@ -124,16 +124,20 @@ func resFromRequest(req RunRequest) (RunRes, bool, int, int, bool) {
 			}
 		}
 
-		// get MPI "not on root" flag: do not run modelling on root MPI process
-		if strings.EqualFold(krq, "-OpenM.NotOnRoot") || strings.EqualFold(krq, "OpenM.NotOnRoot") {
+		// backward compatibility: check MPI "not on root" specified using run options
+		if !isNotOnRoot {
 
-			if val == "" {
-				isNotOnRoot = true // empty boolean option value treated as true
-			}
-			isNotOnRoot, err = strconv.ParseBool(val)
-			if err != nil {
-				omppLog.Log(err)
-				return RunRes{}, false, 0, 0, false
+			// get MPI "not on root" flag: do not run modelling on root MPI process
+			if strings.EqualFold(krq, "-OpenM.NotOnRoot") || strings.EqualFold(krq, "OpenM.NotOnRoot") {
+
+				if val == "" {
+					isNotOnRoot = true // empty boolean option value treated as true
+				}
+				isNotOnRoot, err = strconv.ParseBool(val)
+				if err != nil {
+					omppLog.Log(err)
+					return RunRes{}, false, 0, 0, false
+				}
 			}
 		}
 	}
@@ -146,6 +150,9 @@ func resFromRequest(req RunRequest) (RunRes, bool, int, int, bool) {
 	np := nProc
 	if np > 1 && isNotOnRoot {
 		np--
+	}
+	if nTh <= 0 {
+		nTh = 1
 	}
 
 	res := RunRes{
