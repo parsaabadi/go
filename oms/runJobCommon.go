@@ -588,16 +588,17 @@ func createHostFile(job *RunJob, hfCfg hostIni, compUse []computeUse) (string, i
 
 	// write all lines into hostfile: /ompp/models/log/host-2022_07_08_23_03_27_555-_4040.ini
 	hfPath := ""
+	var err error
 	if len(ls) > 0 {
 
 		fn := "host-" + job.SubmitStamp + "-" + theCfg.omsName + ".ini"
-		hfPath, e := filepath.Abs(filepath.Join(hfCfg.dir, fn))
-		if e == nil {
-			e = os.WriteFile(hfPath, []byte(strings.Join(ls, "\n")+"\n"), 0644)
+		hfPath, err = filepath.Abs(filepath.Join(hfCfg.dir, fn))
+		if err == nil {
+			err = os.WriteFile(hfPath, []byte(strings.Join(ls, "\n")+"\n"), 0644)
 		}
-		if e != nil {
-			omppLog.Log("Error at write into ", fn, ": ", e)
-			return "", job.Threads, e
+		if err != nil {
+			omppLog.Log("Error at write into ", fn, ": ", err)
+			return "", job.Threads, err
 		}
 
 		omppLog.Log("Run job: ", job.SubmitStamp, " ", job.ModelName, " hostfile: ", hfPath)
