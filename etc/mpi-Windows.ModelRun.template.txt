@@ -27,7 +27,6 @@ Example of result:
 
 */}}
 
-
 mpiexec
 -n
 {{ .MpiNp}}
