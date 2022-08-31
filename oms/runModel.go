@@ -205,6 +205,22 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 		mArgs = append(mArgs, "-"+rn.LangCode+".RunNotesPath", p) // append run notes file path to command line arguments
 	}
 
+	// cleanup helpers
+	delComputeUse := func(cuLst []computeUse) {
+		for _, cu := range cuLst {
+			if cu.filePath != "" {
+				fileDeleteAndLog(false, cu.filePath)
+			}
+		}
+	}
+	cleanAndReturn := func(e error, rSt *RunState, qPath string, cuLst []computeUse) (*RunState, error) {
+		omppLog.Log("Error at starting model: ", e)
+		delComputeUse(cuLst)
+		moveJobQueueToFailed(qPath, rSt.SubmitStamp, rSt.ModelName, rSt.ModelDigest)
+		rSt.IsFinal = true
+		return rSt, errors.New("Error at starting model " + rSt.ModelName + ": " + e.Error())
+	}
+
 	// assume model exe name is the same as model name
 	mExe := helper.CleanPath(rs.ModelName)
 
@@ -225,30 +241,10 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 	}
 	if isErr {
 		omppLog.Log("Error at starting model: ", rs.ModelName, " ", rs.ModelDigest, " ", rs.SubmitStamp)
-		for _, cu := range compUse {
-			if cu.filePath != "" {
-				fileDeleteAndLog(false, cu.filePath)
-			}
-		}
+		delComputeUse(compUse)
 		moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest)
 		rs.IsFinal = true
 		return rs, errors.New("Error at starting model " + rs.ModelName + " " + rs.ModelDigest)
-	}
-
-	// cleanup helpers
-	delComputeUse := func(cuLst []computeUse) {
-		for _, cu := range cuLst {
-			if cu.filePath != "" {
-				fileDeleteAndLog(false, cu.filePath)
-			}
-		}
-	}
-	cleanAndReturn := func(e error, rSt *RunState, qPath string, cuLst []computeUse) (*RunState, error) {
-		omppLog.Log("Error at starting model: ", e)
-		delComputeUse(cuLst)
-		moveJobQueueToFailed(qPath, rSt.SubmitStamp, rSt.ModelName, rSt.ModelDigest)
-		rSt.IsFinal = true
-		return rSt, errors.New("Error at starting model " + rSt.ModelName + ": " + e.Error())
 	}
 
 	// connect console output to log line array

@@ -31,9 +31,14 @@ func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, string, []computeUse
 	}
 
 	qMpi := RunRes{}
-	isMpiLimit := true
+	isMpiLimit := false
 
-	if len(rsc.computeState) > 0 {
+	if len(rsc.computeState) <= 0 {
+
+		qMpi = qLocal               // no computational servers, use localhost to run MPI jobs
+		isMpiLimit = qLocal.Cpu > 0 // MPI cores limited if locahost CPU is limited
+	} else {
+		isMpiLimit = true // MPI cores are limited by sum of ready to use servers CPU cores
 
 		for _, cs := range rsc.computeState {
 			if cs.state == "ready" {
@@ -43,13 +48,6 @@ func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, string, []computeUse
 		}
 		qMpi.Cpu = qMpi.Cpu - (rsc.ComputeErrorRes.Cpu + rsc.ActiveTotalRes.Cpu)
 		qMpi.Mem = qMpi.Mem - (rsc.ComputeErrorRes.Mem + rsc.ActiveTotalRes.Mem)
-
-	} else {
-
-		isMpiLimit = rsc.LocalRes.Cpu > 0
-		if isMpiLimit {
-			qMpi = qLocal
-		}
 	}
 
 	// first job in localhost non-MPI queue or global MPI queue where zero resources required for previous jobs
@@ -84,7 +82,7 @@ func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, string, []computeUse
 			if isMpiLimit && qMpi.Cpu < jc.Res.Cpu+jc.preRes.Cpu {
 				continue // job cpu limit set to non zero and MPI cluster available cpu less than required cpu
 			}
-			if isMpiLimit && rsc.MpiRes.Mem > 0 && jc.Res.Mem > 0 && qMpi.Mem < jc.Res.Mem+jc.preRes.Mem {
+			if qMpi.Mem > 0 && jc.Res.Mem > 0 && qMpi.Mem < jc.Res.Mem+jc.preRes.Mem {
 				continue // MPI cluster memory limited and job memory limit set to non zero and MPI cluster available memory less than required memory
 			}
 		}
@@ -101,7 +99,7 @@ func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, string, []computeUse
 	// until all required cores assigned to the servers
 	compUse := []computeUse{}
 
-	if qj.IsMpi {
+	if qj.IsMpi && len(rsc.computeState) > 0 {
 
 		nCpu := qj.Res.Cpu
 		nMem := qj.Res.Mem
@@ -134,8 +132,10 @@ func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, string, []computeUse
 			if cUse.name == "" {
 
 				if len(compUse) <= 0 {
+					qj.isError = true
+					rsc.queueJobs[stamp] = qj
 					e := errors.New("ERROR: resources not found to run the model, CPU: " + strconv.Itoa(qj.Res.Cpu) + ": " + stamp)
-					return nil, false, qj.filePath, []computeUse{}, hostIni{}, e
+					return &qj.RunJob, false, qj.filePath, []computeUse{}, hostIni{}, e
 				}
 				// else assign the rest of the job to the last server
 				compUse[len(compUse)-1].Cpu = compUse[len(compUse)-1].Cpu + nCpu
@@ -470,30 +470,14 @@ func (rsc *RunCatalog) selectToStartCompute() ([]string, int, []string, [][]stri
 	defer rsc.rscLock.Unlock()
 
 	// do not start anything if:
-	// this instance is not a leader oms instance or queue is paused or queue is empty
-	if !rsc.isLeader || rsc.IsQueuePaused || rsc.QueueTotalRes.Cpu <= 0 && rsc.QueueTotalRes.Mem <= 0 {
+	// this instance is not a leader oms instance or queue is paused or MPI queue is empty
+	if !rsc.isLeader || rsc.IsQueuePaused || rsc.topQueueRes.Cpu <= 0 && rsc.topQueueRes.Mem <= 0 {
 		return []string{}, 1, []string{}, [][]string{}
 	}
-
-	// check if any item in the queue is MPI job
-	// find resources required to run first MPI job in the queue
-	res := RunRes{}
-	isAnyMpi := false
-
-	for _, qj := range rsc.queueJobs {
-		if qj.IsMpi {
-			res = qj.Res
-			isAnyMpi = true
-			break
-		}
-	}
-	if !isAnyMpi {
-		return []string{}, 1, []string{}, [][]string{} // do not start anything: there are no MPI jobs
-	}
+	res := rsc.topQueueRes
 
 	// remove from startup list servers which are no longer exist
 	// substract from required resources servers which are starting now
-
 	n := 0
 	for _, name := range rsc.startupNames {
 		if cs, ok := rsc.computeState[name]; ok {
@@ -532,6 +516,9 @@ func (rsc *RunCatalog) selectToStartCompute() ([]string, int, []string, [][]stri
 			for k := 0; !isAct && k < len(rsc.startupNames); k++ {
 				isAct = rsc.startupNames[k] == cs.name
 			}
+			for k := 0; !isAct && k < len(srvLst); k++ {
+				isAct = srvLst[k] == cs.name
+			}
 			for k := 0; !isAct && k < len(rsc.shutdownNames); k++ {
 				isAct = rsc.shutdownNames[k] == cs.name
 			}
@@ -557,11 +544,17 @@ func (rsc *RunCatalog) selectToStartCompute() ([]string, int, []string, [][]stri
 		copy(args, rsc.computeState[name].startArgs)
 		argLst = append(argLst, args)
 
-		rsc.startupNames = append(rsc.startupNames, name)
-
 		res.Cpu -= rsc.computeState[name].totalRes.Cpu
 		res.Mem -= rsc.computeState[name].totalRes.Mem
 	}
+
+	// check results: if not enough servers to run first MPI job in the queue then return empty result
+	if res.Cpu > 0 || res.Mem > 0 {
+		return []string{}, 1, []string{}, [][]string{}
+	}
+
+	// append to servers starup list and return list of servers to start
+	rsc.startupNames = append(rsc.startupNames, srvLst...)
 
 	return srvLst, rsc.maxStartTime, exeLst, argLst
 }

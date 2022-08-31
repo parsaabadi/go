@@ -125,6 +125,7 @@ type historyJobFile struct {
 	ModelDigest string // model digest
 	RunStamp    string // run stamp, if empty then auto-generated as timestamp
 	JobStatus   string // run status
+	RunTitle    string // model run title: run name, task run name or workset name
 }
 
 // RunState is model run state.
@@ -166,11 +167,12 @@ type RunStateLogPage struct {
 type JobServiceState struct {
 	IsQueuePaused     bool    // if true then jobs queue is paused, jobs are not selected from queue
 	JobUpdateDateTime string  // last date-time jobs list updated
-	MpiRes            RunRes  // MPI total available resources available as sum of all servers (CPU cores and memory)
+	MpiRes            RunRes  // MPI total available resources available (CPU cores and memory) as sum of all servers or localhost resources
 	ActiveTotalRes    RunRes  // MPI active model run resources (CPU cores and memory) used by all oms instances
 	ActiveOwnRes      RunRes  // MPI active model run resources (CPU cores and memory) used by this oms instance
 	QueueTotalRes     RunRes  // MPI queue model run resources (CPU cores and memory) requested by all oms instances
 	QueueOwnRes       RunRes  // MPI queue model run resources (CPU cores and memory) requested by this oms instance
+	topQueueRes       RunRes  // resources required for MPI queue first job
 	LocalRes          RunRes  // localhost non-MPI jobs total resources limits
 	LocalActiveRes    RunRes  // localhost non-MPI jobs resources used by this instance to run models
 	LocalQueueRes     RunRes  // localhost non-MPI jobs queue resources for this oms instance

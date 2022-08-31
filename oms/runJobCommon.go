@@ -398,6 +398,54 @@ func moveJobQueueToFailed(queuePath string, submitStamp, modelName, modelDigest 
 	return true
 }
 
+// read run title from job json file: return run name or task run name or workset name
+func getJobRunTitle(filePath string) string {
+	if !theCfg.isJobControl {
+		return "" // job control disabled
+	}
+
+	// read run request from job queue
+	var jc RunJob
+	isOk, err := helper.FromJsonFile(filePath, &jc)
+	if err != nil {
+		omppLog.Log(err)
+	}
+	if !isOk || err != nil {
+		return ""
+	}
+
+	// find run name or task run or workset name in model run options
+	runName := ""
+	taskRunName := ""
+	wsName := ""
+	for krq, val := range jc.Opts {
+
+		// remove "-" from command line argument key ex: "-OpenM.Threads"
+		key := krq
+		if krq[0] == '-' {
+			key = krq[1:]
+		}
+
+		if strings.EqualFold(key, "OpenM.RunName") {
+			runName = val
+		}
+		if strings.EqualFold(key, "OpenM.TaskRunName") {
+			taskRunName = val
+		}
+		if strings.EqualFold(key, "OpenM.SetName") {
+			wsName = val
+		}
+	}
+
+	if runName != "" {
+		return runName
+	}
+	if taskRunName != "" {
+		return taskRunName
+	}
+	return wsName
+}
+
 // remove all existing oms heart beat tick files and create new oms heart beat tick file with current timestamp.
 // For example: job/state/oms-#-_4040-#-2022_07_08_23_45_12_123-#-1257894000000
 func createOmsTick() (string, string) {

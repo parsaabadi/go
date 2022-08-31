@@ -251,9 +251,9 @@ func getJobState(filePath string) (bool, *runJobState) {
 }
 
 // jobMoveHandler move job into the specified queue index position.
+// PUT /api/service/job/move/:pos/:job
 // Top of the queue position is zero, negative position treated as zero.
 // If position number exceeds queue length then job moved to the bottom of the queue.
-// PUT /api/service/job/move/:pos/:job
 func jobMoveHandler(w http.ResponseWriter, r *http.Request) {
 
 	// url or query parameters: position and submission stamp
@@ -282,6 +282,31 @@ func jobMoveHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Location", "service/job/move/false/"+sp+"/"+submitStamp)
 		return
 	}
-	// else: job moved into the spoecified queue position
+	// else: job moved into the specified queue position
 	w.Header().Set("Content-Location", "service/job/move/true/"+sp+"/"+submitStamp)
+}
+
+// jobHistoryDeleteHandler delete only job history json file, it does not delete model run.
+// DELETE /api/service/job/delete/history/:job
+func jobHistoryDeleteHandler(w http.ResponseWriter, r *http.Request) {
+
+	// url or query parameters: submission stamp
+	submitStamp := getRequestParam(r, "job")
+	if submitStamp == "" {
+		http.Error(w, "Invalid (empty) submission stamp", http.StatusBadRequest)
+		return
+	}
+
+	// find job history in run catalog
+	hj, isOk := theRunCatalog.getHistoryJobItem(submitStamp)
+	if isOk {
+
+		isOk = fileDeleteAndLog(true, hj.filePath)
+		if !isOk {
+			http.Error(w, "Unable to delete job file", http.StatusInternalServerError)
+			return
+		}
+	}
+	// job history file deleted or job history not found
+	w.Header().Set("Content-Location", "/api/service/job/delete/history/"+submitStamp)
 }

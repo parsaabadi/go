@@ -148,7 +148,7 @@ const (
 )
 
 // max number of completed model run states to keep in run list history
-const runHistoryDefaultSize int = 100
+const runHistoryDefaultSize int = 1000
 
 // server run configuration
 var theCfg = struct {
@@ -412,8 +412,8 @@ func mainBody(args []string) error {
 	doneOuterJobScanC := make(chan bool)
 	go scanOuterJobs(doneOuterJobScanC)
 
-	doneJobScanC := make(chan bool)
-	go scanJobs(doneJobScanC)
+	doneStateJobScanC := make(chan bool)
+	go scanStateJobs(doneStateJobScanC)
 
 	doneRunScanC := make(chan bool)
 	go scanRunJobs(doneRunScanC)
@@ -545,7 +545,7 @@ func mainBody(args []string) error {
 	}
 
 	doneRunScanC <- true
-	doneJobScanC <- true
+	doneStateJobScanC <- true
 	doneOuterJobScanC <- true
 	doneLogScanC <- true
 	return err
@@ -1131,6 +1131,9 @@ func apiServiceRoutes(router *vestigo.Router) {
 
 	// PUT /api/service/job/move/:pos/:job
 	router.Put("/api/service/job/move/:pos/:job", jobMoveHandler, logRequest)
+
+	// DELETE /api/service/job/delete/history/:job
+	router.Delete("/api/service/job/delete/history/:job", jobHistoryDeleteHandler, logRequest)
 }
 
 // add web-service /api routes for administrative tasks

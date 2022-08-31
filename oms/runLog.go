@@ -59,7 +59,8 @@ func (rsc *RunCatalog) readModelRunLog(digest, stamp string, start, count int) (
 		lines := []string{}
 		if lrp.RunState.IsLog {
 
-			if lines, isOk := readLogFile(lrp.logPath); isOk && len(lines) > 0 {
+			ok := false
+			if lines, ok = readLogFile(lrp.logPath); ok && len(lines) > 0 {
 				lrp.Offset, lrp.Size, lrp.Lines = getLinesPage(start, count, lines) // make log page to return
 				lrp.TotalSize = len(lines)
 			}
@@ -68,47 +69,6 @@ func (rsc *RunCatalog) readModelRunLog(digest, stamp string, start, count int) (
 		rsc.postRunStateLog(digest, lrp.RunState, lines)
 	}
 	return lrp, nil
-}
-
-// update model run catalog with new run state and log file lines.
-func (rsc *RunCatalog) postRunStateLog(digest string, runState RunState, logLines []string) {
-
-	if digest == "" || runState.RunStamp == "" {
-		return // model run undefined
-	}
-
-	rsc.rscLock.Lock()
-	defer rsc.rscLock.Unlock()
-
-	// find model run state by digest and run stamp
-	// update model run state and append log message
-	var rs *runStateLog
-	var ok bool
-	for re := rsc.runLst.Front(); re != nil; re = re.Next() {
-
-		rs, ok = re.Value.(*runStateLog)
-		if !ok || rs == nil {
-			continue
-		}
-		ok = rs.ModelDigest == digest && rs.RunStamp == runState.RunStamp
-		if ok {
-			break
-		}
-	}
-
-	// update existing run status or append new element to run list
-	if ok && rs != nil {
-		rs.RunState = runState
-		if len(logLines) > len(rs.logLineLst) {
-			rs.logLineLst = logLines
-		}
-	} else {
-		rsc.runLst.PushFront(
-			&runStateLog{
-				RunState:   runState,
-				logLineLst: logLines,
-			})
-	}
 }
 
 // get current run status and page of log lines and return true if run status found in catalog.
@@ -173,6 +133,47 @@ func (rsc *RunCatalog) getRunStateLogPage(digest, stamp string, start, count int
 	lrp.Offset, lrp.Size, lrp.Lines = getLinesPage(start, count, rsl.logLineLst)
 
 	return lrp, true, runStamp, isNewLog
+}
+
+// update model run catalog with new run state and log file lines.
+func (rsc *RunCatalog) postRunStateLog(digest string, runState RunState, logLines []string) {
+
+	if digest == "" || runState.RunStamp == "" {
+		return // model run undefined
+	}
+
+	rsc.rscLock.Lock()
+	defer rsc.rscLock.Unlock()
+
+	// find model run state by digest and run stamp
+	// update model run state and append log message
+	var rs *runStateLog
+	var ok bool
+	for re := rsc.runLst.Front(); re != nil; re = re.Next() {
+
+		rs, ok = re.Value.(*runStateLog)
+		if !ok || rs == nil {
+			continue
+		}
+		ok = rs.ModelDigest == digest && rs.RunStamp == runState.RunStamp
+		if ok {
+			break
+		}
+	}
+
+	// update existing run status or append new element to run list
+	if ok && rs != nil {
+		rs.RunState = runState
+		if len(logLines) > len(rs.logLineLst) {
+			rs.logLineLst = logLines
+		}
+	} else {
+		rsc.runLst.PushFront(
+			&runStateLog{
+				RunState:   runState,
+				logLineLst: logLines,
+			})
+	}
 }
 
 // read all non-empty text lines from log file.
