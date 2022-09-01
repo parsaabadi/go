@@ -471,7 +471,9 @@ func (rsc *RunCatalog) selectToStartCompute() ([]string, int, []string, [][]stri
 
 	// do not start anything if:
 	// this instance is not a leader oms instance or queue is paused or MPI queue is empty
-	if !rsc.isLeader || rsc.IsQueuePaused || rsc.topQueueRes.Cpu <= 0 && rsc.topQueueRes.Mem <= 0 {
+	nowTs := time.Now().UnixMilli()
+
+	if !rsc.isLeader || rsc.IsQueuePaused || rsc.topQueueRes.Cpu <= 0 && rsc.topQueueRes.Mem <= 0 || rsc.lastStartStopTs+computeStartStopInterval < nowTs {
 		return []string{}, 1, []string{}, [][]string{}
 	}
 	res := rsc.topQueueRes
@@ -480,6 +482,7 @@ func (rsc *RunCatalog) selectToStartCompute() ([]string, int, []string, [][]stri
 	// substract from required resources servers which are starting now
 	n := 0
 	for _, name := range rsc.startupNames {
+
 		if cs, ok := rsc.computeState[name]; ok {
 			rsc.startupNames[n] = name // server stil exist
 			n++
@@ -505,7 +508,7 @@ func (rsc *RunCatalog) selectToStartCompute() ([]string, int, []string, [][]stri
 
 		name := ""
 		minE := 2 * maxComputeErrors
-		minTs := time.Now().UnixMilli() + 100
+		minTs := nowTs + 100
 
 		for _, cs := range rsc.computeState {
 			if cs.state != "" {
@@ -567,10 +570,11 @@ func (rsc *RunCatalog) selectToStopCompute() ([]string, int, []string, [][]strin
 	defer rsc.rscLock.Unlock()
 
 	// do not stop anything: if idle time is unlimited or this instance is not a leader oms instance
-	if rsc.maxIdleTime <= 0 || !rsc.isLeader {
+	nowTs := time.Now().UnixMilli()
+
+	if rsc.maxIdleTime <= 0 || !rsc.isLeader || rsc.lastStartStopTs+computeStartStopInterval < nowTs {
 		return []string{}, 1, []string{}, [][]string{}
 	}
-	nowTs := time.Now().UnixMilli() // current time in unix milliseconds
 
 	// remove from shutdown list servers which are no longer exist
 	n := 0
@@ -601,7 +605,7 @@ func (rsc *RunCatalog) selectToStopCompute() ([]string, int, []string, [][]strin
 		}
 
 		// if no model runs for more than idle time in milliseconds and server started more than idle time in milliseconds
-		if cs.state == "ready" && cs.lastUsedTs+int64(1000*rsc.maxIdleTime) < nowTs && cs.lastStartTs+int64(1000*rsc.maxIdleTime) < nowTs {
+		if cs.state == "ready" && cs.lastUsedTs+int64(1000*rsc.maxIdleTime) < nowTs {
 
 			srvLst = append(srvLst, cs.name)
 			exeLst = append(exeLst, cs.stopExe)
@@ -624,13 +628,16 @@ func (rsc *RunCatalog) startupCompleted(isOkStart bool, name string) {
 	defer rsc.rscLock.Unlock()
 
 	// update server state
+	rsc.lastStartStopTs = time.Now().UnixMilli()
+
 	if cs, ok := rsc.computeState[name]; ok {
 		if isOkStart {
 			cs.errorCount = 0
-			cs.lastStartTs = time.Now().UnixMilli()
+			cs.lastStartTs = rsc.lastStartStopTs
+			cs.lastUsedTs = rsc.lastStartStopTs
 		} else {
 			cs.errorCount++
-			cs.lastErrorTs = time.Now().UnixMilli()
+			cs.lastErrorTs = rsc.lastStartStopTs
 		}
 		rsc.computeState[name] = cs
 	}
@@ -653,13 +660,15 @@ func (rsc *RunCatalog) shutdownCompleted(isOkStop bool, name string) {
 	defer rsc.rscLock.Unlock()
 
 	// update server state
+	rsc.lastStartStopTs = time.Now().UnixMilli()
+
 	if cs, ok := rsc.computeState[name]; ok {
 		if isOkStop {
 			cs.errorCount = 0
-			cs.lastStopTs = time.Now().UnixMilli()
+			cs.lastStopTs = rsc.lastStartStopTs
 		} else {
 			cs.errorCount++
-			cs.lastErrorTs = time.Now().UnixMilli()
+			cs.lastErrorTs = rsc.lastStartStopTs
 		}
 		rsc.computeState[name] = cs
 	}

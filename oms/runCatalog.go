@@ -181,6 +181,7 @@ type JobServiceState struct {
 	maxStartTime      int     // max time in seconds to start compute server or cluster
 	maxStopTime       int     // max time in seconds to stop compute server or cluster
 	maxIdleTime       int     // max idle in seconds time before stopping server or cluster
+	lastStartStopTs   int64   // last time when start or stop of computational servers done
 	jobLastPosition   int     // last job position in the queue
 	jobFirstPosition  int     // minimal job position in the queue
 	hostFile          hostIni // MPI jobs hostfile settings
