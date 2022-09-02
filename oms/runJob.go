@@ -46,8 +46,8 @@ func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, string, []computeUse
 				qMpi.Mem += cs.totalRes.Mem
 			}
 		}
-		qMpi.Cpu = qMpi.Cpu - (rsc.ComputeErrorRes.Cpu + rsc.ActiveTotalRes.Cpu)
-		qMpi.Mem = qMpi.Mem - (rsc.ComputeErrorRes.Mem + rsc.ActiveTotalRes.Mem)
+		qMpi.Cpu = qMpi.Cpu - rsc.ActiveTotalRes.Cpu
+		qMpi.Mem = qMpi.Mem - rsc.ActiveTotalRes.Mem
 	}
 
 	// first job in localhost non-MPI queue or global MPI queue where zero resources required for previous jobs
@@ -464,16 +464,18 @@ func (rsc *RunCatalog) moveJobInQueue(submitStamp string, index int) (bool, [][2
 
 // select additional computational servers or clusters to start,
 // return server names, startup timeout and for each server startup exe names and startup arguments
-func (rsc *RunCatalog) selectToStartCompute() ([]string, int, []string, [][]string) {
+func (rsc *RunCatalog) selectToStartCompute() ([]string, int64, []string, [][]string) {
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
 	// do not start anything if:
-	// this instance is not a leader oms instance or queue is paused or MPI queue is empty
+	// this instance is not a leader oms instance or queue is paused or no computational servers or MPI queue is empty
 	nowTs := time.Now().UnixMilli()
 
-	if !rsc.isLeader || rsc.IsQueuePaused || rsc.topQueueRes.Cpu <= 0 && rsc.topQueueRes.Mem <= 0 || rsc.lastStartStopTs+computeStartStopInterval < nowTs {
+	if !rsc.isLeader || rsc.IsQueuePaused || len(rsc.computeState) <= 0 ||
+		rsc.topQueueRes.Cpu <= 0 && rsc.topQueueRes.Mem <= 0 ||
+		rsc.lastStartStopTs+computeStartStopInterval > nowTs {
 		return []string{}, 1, []string{}, [][]string{}
 	}
 	res := rsc.topQueueRes
@@ -492,6 +494,17 @@ func (rsc *RunCatalog) selectToStartCompute() ([]string, int, []string, [][]stri
 		}
 	}
 	rsc.startupNames = rsc.startupNames[:n]
+
+	// substract from required resources servers which are ready and not used now
+	readyRes := RunRes{}
+	for _, cs := range rsc.computeState {
+		if cs.state == "ready" {
+			readyRes.Cpu += cs.totalRes.Cpu
+			readyRes.Mem += cs.totalRes.Mem
+		}
+	}
+	res.Cpu = res.Cpu - (readyRes.Cpu - rsc.ActiveTotalRes.Cpu)
+	res.Mem = res.Mem - (readyRes.Mem - rsc.ActiveTotalRes.Mem)
 
 	if res.Cpu <= 0 && res.Mem <= 0 {
 		return []string{}, 1, []string{}, [][]string{} // do not start any additional servers
@@ -564,7 +577,7 @@ func (rsc *RunCatalog) selectToStartCompute() ([]string, int, []string, [][]stri
 
 // select computational servers or clusters to shutdown,
 // return server names, shutdown timeout and for each server shutdown exe names and shutdown arguments
-func (rsc *RunCatalog) selectToStopCompute() ([]string, int, []string, [][]string) {
+func (rsc *RunCatalog) selectToStopCompute() ([]string, int64, []string, [][]string) {
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
@@ -572,7 +585,7 @@ func (rsc *RunCatalog) selectToStopCompute() ([]string, int, []string, [][]strin
 	// do not stop anything: if idle time is unlimited or this instance is not a leader oms instance
 	nowTs := time.Now().UnixMilli()
 
-	if rsc.maxIdleTime <= 0 || !rsc.isLeader || rsc.lastStartStopTs+computeStartStopInterval < nowTs {
+	if rsc.maxIdleTime <= 0 || !rsc.isLeader || rsc.lastStartStopTs+computeStartStopInterval > nowTs {
 		return []string{}, 1, []string{}, [][]string{}
 	}
 
@@ -605,7 +618,7 @@ func (rsc *RunCatalog) selectToStopCompute() ([]string, int, []string, [][]strin
 		}
 
 		// if no model runs for more than idle time in milliseconds and server started more than idle time in milliseconds
-		if cs.state == "ready" && cs.lastUsedTs+int64(1000*rsc.maxIdleTime) < nowTs {
+		if cs.state == "ready" && cs.lastUsedTs+rsc.maxIdleTime < nowTs {
 
 			srvLst = append(srvLst, cs.name)
 			exeLst = append(exeLst, cs.stopExe)
@@ -632,17 +645,12 @@ func (rsc *RunCatalog) startupCompleted(isOkStart bool, name string) {
 
 	if cs, ok := rsc.computeState[name]; ok {
 		if isOkStart {
-			cs.errorCount = 0
-			cs.lastStartTs = rsc.lastStartStopTs
 			cs.lastUsedTs = rsc.lastStartStopTs
-		} else {
-			cs.errorCount++
-			cs.lastErrorTs = rsc.lastStartStopTs
 		}
 		rsc.computeState[name] = cs
 	}
 
-	// remove from startup list
+	// remove server from startup list
 	n := 0
 	for k := range rsc.startupNames {
 		if rsc.startupNames[k] != name {
@@ -662,18 +670,7 @@ func (rsc *RunCatalog) shutdownCompleted(isOkStop bool, name string) {
 	// update server state
 	rsc.lastStartStopTs = time.Now().UnixMilli()
 
-	if cs, ok := rsc.computeState[name]; ok {
-		if isOkStop {
-			cs.errorCount = 0
-			cs.lastStopTs = rsc.lastStartStopTs
-		} else {
-			cs.errorCount++
-			cs.lastErrorTs = rsc.lastStartStopTs
-		}
-		rsc.computeState[name] = cs
-	}
-
-	// remove from shutdown list
+	// remove server from shutdown list
 	n := 0
 	for k := range rsc.shutdownNames {
 		if rsc.shutdownNames[k] != name {
@@ -712,6 +709,9 @@ func (rsc *RunCatalog) updateRunJobs(
 		}
 	}
 	for name, cs := range computeState {
+		if cs.lastUsedTs < rsc.computeState[name].lastUsedTs {
+			cs.lastUsedTs = rsc.computeState[name].lastUsedTs
+		}
 		rsc.computeState[name] = cs
 	}
 

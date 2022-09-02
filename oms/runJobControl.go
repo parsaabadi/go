@@ -173,22 +173,22 @@ func scanRunJobs(doneC <-chan bool) {
 		if lastStartStopTs+computeStartStopInterval < time.Now().UnixMilli() {
 
 			// start computational servers or clusters
-			startNames, startMax, startExes, startArgs := theRunCatalog.selectToStartCompute()
+			startNames, maxStatTime, startExes, startArgs := theRunCatalog.selectToStartCompute()
 
 			for k := range startNames {
 				if startExes[k] != "" {
-					go doStartStopCompute(startNames[k], "start", startExes[k], startArgs[k], startMax)
+					go doStartStopCompute(startNames[k], "start", startExes[k], startArgs[k], maxStatTime)
 				} else {
 					doStartOnceCompute(startNames[k]) // special case: server always ready
 				}
 			}
 
 			// stop computational servers or clusters
-			stopNames, stopMax, stopExes, stopArgs := theRunCatalog.selectToStopCompute()
+			stopNames, maxStopTime, stopExes, stopArgs := theRunCatalog.selectToStopCompute()
 
 			for k := range stopNames {
 				if stopExes[k] != "" {
-					go doStartStopCompute(stopNames[k], "stop", stopExes[k], stopArgs[k], stopMax)
+					go doStartStopCompute(stopNames[k], "stop", stopExes[k], stopArgs[k], maxStopTime)
 				} else {
 					doStopCleanupCompute(stopNames[k]) // special case: server never stop
 				}
@@ -205,7 +205,7 @@ func scanRunJobs(doneC <-chan bool) {
 }
 
 // start (or stop) computational server or cluster and create (or delete) ready state file
-func doStartStopCompute(name, state, exe string, args []string, maxTime int) {
+func doStartStopCompute(name, state, exe string, args []string, maxTime int64) {
 
 	omppLog.Log(state, ": ", name)
 
@@ -216,7 +216,7 @@ func doStartStopCompute(name, state, exe string, args []string, maxTime int) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(maxTime)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(maxTime)*time.Millisecond)
 	defer cancel()
 
 	// make a command, run it and return combined output
@@ -253,6 +253,9 @@ func doStartStopCompute(name, state, exe string, args []string, maxTime int) {
 		}
 
 	} else {
+		if createCompStateFile(name, "error") == "" {
+			omppLog.Log("FAILED to create error state file: ", name)
+		}
 		if ctx.Err() == context.DeadlineExceeded {
 			omppLog.Log("ERROR server timeout: ", state, " ", name)
 		}

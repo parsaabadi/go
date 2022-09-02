@@ -20,7 +20,7 @@ func scanStateJobs(doneC <-chan bool) {
 		return // job control disabled
 	}
 
-	omsTickPath, omsTickPrefix := createOmsTick() // job processing started at this oms instance
+	omsTickPath, _ := makeOmsTick() // job processing started at this oms instance
 	nTick := 0
 
 	// path to job.ini: available resources limits and computational servers configuration
@@ -108,12 +108,12 @@ func scanStateJobs(doneC <-chan bool) {
 			jsState.maxStopTime,
 			compReadyFiles, compStartFiles, compStopFiles, compErrorFiles, compUsedFiles)
 
-		jsState.ComputeErrorRes = RunRes{}
+		jsState.MpiErrorRes = RunRes{}
 
 		for _, cs := range computeState {
 			if cs.state == "error" {
-				jsState.ComputeErrorRes.Cpu += cs.totalRes.Cpu
-				jsState.ComputeErrorRes.Mem += cs.totalRes.Mem
+				jsState.MpiErrorRes.Cpu += cs.totalRes.Cpu
+				jsState.MpiErrorRes.Mem += cs.totalRes.Mem
 			}
 		}
 
@@ -127,8 +127,8 @@ func scanStateJobs(doneC <-chan bool) {
 		} else {
 
 			isMpiLimit = true
-			mpiRes.Cpu = jsState.MpiRes.Cpu - jsState.ComputeErrorRes.Cpu
-			mpiRes.Mem = jsState.MpiRes.Mem - jsState.ComputeErrorRes.Mem
+			mpiRes.Cpu = jsState.MpiRes.Cpu - jsState.MpiErrorRes.Cpu
+			mpiRes.Mem = jsState.MpiRes.Mem - jsState.MpiErrorRes.Mem
 		}
 
 		// model runs
@@ -219,7 +219,7 @@ func scanStateJobs(doneC <-chan bool) {
 		// update oms heart beat file
 		nTick++
 		if nTick%7 == 0 {
-			omsTickPath, _ = moveToNextOmsTick(omsTickPath, omsTickPrefix)
+			omsTickPath, _ = makeOmsTick()
 		}
 
 		// wait for doneC or sleep
@@ -575,9 +575,9 @@ func initJobComputeState(jobIniPath string, updateTs time.Time, computeState map
 	jsState.LocalRes.Cpu = opts.Int("Common.LocalCpu", 0)    // localhost unlimited cpu cores by default
 	jsState.LocalRes.Mem = opts.Int("Common.LocalMemory", 0) // localhost unlimited memory by default
 
-	jsState.maxIdleTime = opts.Int("Common.IdleTimeout", 0) // never stop servers by default
-	jsState.maxStartTime = opts.Int("Common.StartTimeout", serverTimeoutDefault)
-	jsState.maxStopTime = opts.Int("Common.StopTimeout", serverTimeoutDefault)
+	jsState.maxIdleTime = 1000 * opts.Int64("Common.IdleTimeout", 0) // never stop servers by default
+	jsState.maxStartTime = 1000 * opts.Int64("Common.StartTimeout", serverTimeoutDefault)
+	jsState.maxStopTime = 1000 * opts.Int64("Common.StopTimeout", serverTimeoutDefault)
 
 	// MPI jobs process, threads and hostfile config
 	jsState.hostFile.maxThreads = opts.Int("Common.MpiMaxThreads", 0) // max number of modelling threads per MPI process, zero means unlimited
@@ -688,14 +688,19 @@ func updateComputeState(
 	computeState map[string]computeItem,
 	omsActive map[string]int64,
 	nowTs int64,
-	maxStartTime int,
-	maxStopTime int,
+	maxStartTime int64,
+	maxStopTime int64,
 	compReadyFiles, compStartFiles, compStopFiles, compErrorFiles, compUsedFiles []string,
 ) {
 
-	// ready compute resources: powered on servers or clusters
-	readyNames := []string{}
+	// clear state for server or cluster: initial state is "" power off
+	for name, cs := range computeState {
 
+		cs.state = "" // power off state
+		computeState[name] = cs
+	}
+
+	// ready compute resources: powered on servers or clusters
 	for _, f := range compReadyFiles {
 
 		// get server name
@@ -707,7 +712,6 @@ func updateComputeState(
 		if !ok {
 			continue // this server does not exist anymore
 		}
-		readyNames = append(readyNames, name)
 
 		// update server state to ready
 		cs.state = "ready"
@@ -716,25 +720,7 @@ func updateComputeState(
 		if cs.lastUsedTs <= 0 {
 			cs.lastUsedTs = nowTs
 		}
-		if cs.lastStartTs <= 0 {
-			cs.lastStartTs = nowTs
-		}
 		computeState[name] = cs
-	}
-
-	// clear ready state for server or cluster if ready state file does not exist
-	for name, cs := range computeState {
-
-		if cs.state == "ready" {
-			isReady := false
-			for k := 0; !isReady && k < len(readyNames); k++ {
-				isReady = readyNames[k] == name
-			}
-			if !isReady {
-				cs.state = "" // power off state
-				computeState[name] = cs
-			}
-		}
 	}
 
 	// start up servers or clusters: check startup timeout
@@ -751,16 +737,9 @@ func updateComputeState(
 		}
 
 		// update server state to start or detect error
-		if (cs.state == "" || cs.state == "start" || cs.state == "ready") && (ts+int64(maxStartTime)) >= nowTs {
-
+		if (cs.state == "" || cs.state == "start" || cs.state == "ready") && (ts+maxStartTime) >= nowTs {
 			cs.state = "start"
-			if cs.lastStartTs < ts {
-				cs.lastStartTs = ts
-			}
 		} else {
-			if cs.lastErrorTs < ts {
-				cs.lastErrorTs = ts
-			}
 			cs.errorCount++ // start timeout error
 		}
 		computeState[name] = cs
@@ -780,16 +759,9 @@ func updateComputeState(
 		}
 
 		// update server state to stop or detect error
-		if (cs.state == "ready" || cs.state == "stop" || cs.state == "") && (ts+int64(maxStopTime)) >= nowTs {
-
+		if (cs.state == "ready" || cs.state == "stop" || cs.state == "") && (ts+maxStopTime) >= nowTs {
 			cs.state = "stop"
-			if cs.lastStopTs < ts {
-				cs.lastStopTs = ts
-			}
 		} else {
-			if cs.lastErrorTs < ts {
-				cs.lastErrorTs = ts
-			}
 			cs.errorCount++ // stop timeout error
 		}
 		computeState[name] = cs
@@ -799,7 +771,7 @@ func updateComputeState(
 	for _, f := range compErrorFiles {
 
 		// get server name and time stamp
-		name, _, ts := parseCompStatePath(f, "error")
+		name, _, _ := parseCompStatePath(f, "error")
 		if name == "" {
 			continue // skip: this is not a compute server state file
 		}
@@ -808,10 +780,6 @@ func updateComputeState(
 			continue // this server does not exist anymore
 		}
 
-		// count server errors
-		if cs.lastErrorTs < ts {
-			cs.lastErrorTs = ts
-		}
 		cs.errorCount++ // error logged for that server or cluster
 
 		computeState[name] = cs
@@ -849,7 +817,9 @@ func updateComputeState(
 			cs.ownRes.Cpu += cpu
 			cs.ownRes.Mem += mem
 		}
-		cs.lastUsedTs = nowTs
+		if cs.lastUsedTs < nowTs {
+			cs.lastUsedTs = nowTs
+		}
 
 		computeState[name] = cs
 	}

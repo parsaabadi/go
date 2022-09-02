@@ -447,43 +447,25 @@ func getJobRunTitle(filePath string) string {
 }
 
 // remove all existing oms heart beat tick files and create new oms heart beat tick file with current timestamp.
+// return oms heart beat file path and true is file created successfully.
 // For example: job/state/oms-#-_4040-#-2022_07_08_23_45_12_123-#-1257894000000
-func createOmsTick() (string, string) {
+func makeOmsTick() (string, bool) {
 
+	// create new oms heart beat tick file
 	p := filepath.Join(theCfg.jobDir, "state", "oms-#-"+theCfg.omsName)
+	ts := time.Now()
+	fnow := p + "-#-" + helper.MakeTimeStamp(ts) + "-#-" + strconv.FormatInt(ts.UnixMilli(), 10)
+
+	isOk := fileCreateEmpty(false, fnow)
 
 	// delete existing heart beat files for our oms instance
 	omsFiles := filesByPattern(p+"-#-*-#-*", "Error at oms heart beat files search")
 	for _, f := range omsFiles {
-		fileDeleteAndLog(false, f)
+		if f != fnow {
+			fileDeleteAndLog(false, f)
+		}
 	}
-
-	// create new oms heart beat tick file
-	ts := time.Now()
-	fp := p + "-#-" + helper.MakeTimeStamp(ts) + "-#-" + strconv.FormatInt(ts.UnixMilli(), 10)
-
-	if !fileCreateEmpty(false, fp) {
-		fp = ""
-		p = ""
-	}
-	return fp, p
-}
-
-// update oms heart beat tick file path with current timestamp: oms instance is alive
-func moveToNextOmsTick(srcPath, stem string) (string, bool) {
-	if !theCfg.isJobControl || srcPath == "" {
-		return "", false // job control disabled or job run state file error
-	}
-
-	// rename oms heart beat tick file
-	ts := time.Now()
-	dst := stem + "-#-" + helper.MakeTimeStamp(ts) + "-#-" + strconv.FormatInt(ts.UnixMilli(), 10)
-
-	if !fileMoveAndLog(false, srcPath, dst) {
-		fileDeleteAndLog(true, srcPath) // if move failed then delete active run job state file
-		return "", false
-	}
-	return dst, true
+	return fnow, isOk
 }
 
 // create new compute server file with current timestamp.

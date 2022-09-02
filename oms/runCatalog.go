@@ -173,14 +173,14 @@ type JobServiceState struct {
 	QueueTotalRes     RunRes  // MPI queue model run resources (CPU cores and memory) requested by all oms instances
 	QueueOwnRes       RunRes  // MPI queue model run resources (CPU cores and memory) requested by this oms instance
 	topQueueRes       RunRes  // resources required for MPI queue first job
+	MpiErrorRes       RunRes  // MPI computational resources on "error" servers
 	LocalRes          RunRes  // localhost non-MPI jobs total resources limits
 	LocalActiveRes    RunRes  // localhost non-MPI jobs resources used by this instance to run models
 	LocalQueueRes     RunRes  // localhost non-MPI jobs queue resources for this oms instance
-	ComputeErrorRes   RunRes  // computational resources on "error" servers
 	isLeader          bool    // if true then this oms instance is a leader
-	maxStartTime      int     // max time in seconds to start compute server or cluster
-	maxStopTime       int     // max time in seconds to stop compute server or cluster
-	maxIdleTime       int     // max idle in seconds time before stopping server or cluster
+	maxStartTime      int64   // max time in milliseconds to start compute server or cluster
+	maxStopTime       int64   // max time in milliseconds to stop compute server or cluster
+	maxIdleTime       int64   // max idle in milliseconds time before stopping server or cluster
 	lastStartStopTs   int64   // last time when start or stop of computational servers done
 	jobLastPosition   int     // last job position in the queue
 	jobFirstPosition  int     // minimal job position in the queue
@@ -189,20 +189,17 @@ type JobServiceState struct {
 
 // computational server or cluster state
 type computeItem struct {
-	name        string   // name of server or cluster
-	state       string   // state: start, stop, ready, error, empty "" means power off
-	totalRes    RunRes   // total computational resources (CPU cores and memory)
-	usedRes     RunRes   // resources (CPU cores and memory) used by all oms instances
-	ownRes      RunRes   // resources (CPU cores and memory) used by this instance
-	errorCount  int      // number of incomplete starts, stops and errors
-	lastUsedTs  int64    // last time of model run (unix milliseconds)
-	lastStartTs int64    // last start time (unix milliseconds)
-	lastStopTs  int64    // last stop time (unix milliseconds)
-	lastErrorTs int64    // last error time (unix milliseconds)
-	startExe    string   // name of executable to start server, e.g.: /bin/sh
-	startArgs   []string // arguments to start server, e.g.: -c start.sh my-server-name
-	stopExe     string   // name of executable to stop server,, e.g.: /bin/sh
-	stopArgs    []string // arguments to stop server, e.g.: -c stop.sh my-server-name
+	name       string   // name of server or cluster
+	state      string   // state: start, stop, ready, error, empty "" means power off
+	totalRes   RunRes   // total computational resources (CPU cores and memory)
+	usedRes    RunRes   // resources (CPU cores and memory) used by all oms instances
+	ownRes     RunRes   // resources (CPU cores and memory) used by this instance
+	errorCount int      // number of incomplete starts, stops and errors
+	lastUsedTs int64    // last time of model run (unix milliseconds)
+	startExe   string   // name of executable to start server, e.g.: /bin/sh
+	startArgs  []string // arguments to start server, e.g.: -c start.sh my-server-name
+	stopExe    string   // name of executable to stop server,, e.g.: /bin/sh
+	stopArgs   []string // arguments to stop server, e.g.: -c stop.sh my-server-name
 }
 
 // computational server or cluster usage
