@@ -349,7 +349,7 @@ func scanModelLogDirs(doneC <-chan bool) {
 		theRunCatalog.clearRunStateList()
 
 		// wait for doneC or sleep
-		if doExitSleep(logScanInterval, doneC) {
+		if isExitSleep(logScanInterval, doneC) {
 			return
 		}
 	}
@@ -392,8 +392,8 @@ func (rsc *RunCatalog) clearRunStateList() {
 	}
 }
 
-// wait for doneC or sleep, return true on doneC read or false at the end of sleep
-func doExitSleep(ms time.Duration, doneC <-chan bool) bool {
+// wait for doneC exit signal or sleep, return true on exit signal or return false at the end of sleep interval
+func isExitSleep(ms time.Duration, doneC <-chan bool) bool {
 	select {
 	case <-doneC:
 		return true

@@ -60,7 +60,7 @@ func scanOuterJobs(doneC <-chan bool) {
 		// find active job files
 		fLst := filesByPattern(ptrn, "Error at active job files search")
 		if len(fLst) <= 0 {
-			if doExitSleep(jobOuterScanInterval, doneC) {
+			if isExitSleep(jobOuterScanInterval, doneC) {
 				return
 			}
 			continue // no active jobs
@@ -137,7 +137,7 @@ func scanOuterJobs(doneC <-chan bool) {
 		}
 
 		// wait for doneC or sleep
-		if doExitSleep(jobOuterScanInterval, doneC) {
+		if isExitSleep(jobOuterScanInterval, doneC) {
 			return
 		}
 	}
@@ -198,7 +198,7 @@ func scanRunJobs(doneC <-chan bool) {
 		}
 
 		// wait for doneC or sleep
-		if doExitSleep(jobQueueScanInterval, doneC) {
+		if isExitSleep(jobQueueScanInterval, doneC) {
 			return
 		}
 	}

@@ -90,11 +90,6 @@ func jobQueuePausedPath() string {
 	return filepath.Join(theCfg.jobDir, "state", "jobs.queue.paused")
 }
 
-// return limit file paths, zero or negative value means unlimited e.g.: job/state/total-limit-cpu-#-64
-func jobLimitPath(kind string, value int) string {
-	return filepath.Join(theCfg.jobDir, "state", kind+"-#-"+strconv.Itoa(value))
-}
-
 // return compute server or cluster ready file path: job/state/comp-ready-#-name
 func compReadyPath(name string) string {
 	return filepath.Join(theCfg.jobDir, "state", "comp-ready-#-"+name)
@@ -227,30 +222,6 @@ func parseOmsTickPath(srcPath string) (string, string, int64) {
 	}
 
 	return sp[1], sp[2], tickMs
-}
-
-// parse limit file path or file name and return a limit, zero or negative value means unlimited.
-// For example this is 64 cores total limit: job/state/total-limit-cpu-#-64
-func parseLimitPath(srcPath string, kind string) int {
-
-	if srcPath == "" || kind == "" {
-		return 0 // source file path is not a total limit file or invalid (empty) limit kind specified
-	}
-
-	p := filepath.Base(srcPath) // remove job directory
-
-	// split file name and check result: it must be 2 non-empty parts and first must be a limit kind
-	sp := strings.Split(p, "-#-")
-	if len(sp) != 2 || kind == "" || sp[0] != kind || sp[1] == "" {
-		return 0 // source file path is not a total limit file
-	}
-
-	// convert limit value
-	n, err := strconv.Atoi(sp[1])
-	if err != nil || n <= 0 {
-		return 0 // limit value invalid (not an integer) or unlimited (zero or negative)
-	}
-	return n
 }
 
 // parse compute server or cluster ready file path and return server name, e.g.: job/state/comp-ready-#-name
@@ -506,6 +477,11 @@ func deleteCompStateFiles(name, state string) bool {
 	return isNoError
 }
 
+// return true if jobs queue processing is paused
+func isPausedJobQueue() bool {
+	return fileExist(jobQueuePausedPath()) == nil
+}
+
 // read job control state from the file, return empty state on error or if state file not exist
 func jobStateRead() (*jobControlState, bool) {
 
@@ -529,11 +505,6 @@ func jobStateWrite(jsc jobControlState) bool {
 		return false
 	}
 	return true
-}
-
-// return true if jobs queue processing is paused
-func isPausedJobQueue() bool {
-	return fileExist(jobQueuePausedPath()) == nil
 }
 
 // create MPI job hostfile, e.g.: models/log/host-2022_07_08_23_03_27_555-_4040.ini

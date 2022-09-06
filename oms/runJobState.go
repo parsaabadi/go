@@ -223,7 +223,7 @@ func scanStateJobs(doneC <-chan bool) {
 		}
 
 		// wait for doneC or sleep
-		if doExitSleep(jobScanInterval, doneC) {
+		if isExitSleep(jobScanInterval, doneC) {
 			break
 		}
 	}
