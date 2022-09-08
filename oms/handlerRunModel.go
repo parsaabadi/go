@@ -48,7 +48,21 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	req.ModelDigest = m.Digest
 	req.ModelName = m.Name
-	req.IsMpi = req.Mpi.Np != 0
+
+	// adjust MPI options:
+	// IsMpi is the same as number of processes > 0
+	if req.Mpi.Np < 0 {
+		req.Mpi.Np = 0
+	}
+	if req.Mpi.Np > 0 {
+		req.IsMpi = true
+	}
+	if req.IsMpi && req.Mpi.Np <= 0 {
+		req.Mpi.Np = 1
+	}
+	if req.IsMpi && !theCfg.isJobControl {
+		req.Mpi.IsNotByJob = true // if job control disabled then model run cannot use job control
+	}
 
 	// get submit stamp
 	submitStamp, dtNow := theCatalog.getNewTimeStamp()

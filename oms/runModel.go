@@ -139,7 +139,7 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 	// use job control resources if not explicitly disabled
 	// recalculate number of MPI processes, modelling threads and create hostfile
 	hfPath := ""
-	if !job.Mpi.IsNotByJob {
+	if job.IsMpi && !job.Mpi.IsNotByJob {
 
 		hfPath, job.Threads, err = createHostFile(job, hfCfg, compUse)
 
