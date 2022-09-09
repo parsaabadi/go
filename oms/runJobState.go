@@ -106,6 +106,7 @@ func scanStateJobs(doneC <-chan bool) {
 			nowTs,
 			jsState.maxStartTime,
 			jsState.maxStopTime,
+			jsState.maxComputeErrors,
 			compReadyFiles, compStartFiles, compStopFiles, compErrorFiles, compUsedFiles)
 
 		jsState.MpiErrorRes = RunRes{}
@@ -575,9 +576,10 @@ func initJobComputeState(jobIniPath string, updateTs time.Time, computeState map
 	jsState.LocalRes.Cpu = opts.Int("Common.LocalCpu", 0)    // localhost unlimited cpu cores by default
 	jsState.LocalRes.Mem = opts.Int("Common.LocalMemory", 0) // localhost unlimited memory by default
 
-	jsState.maxIdleTime = 1000 * opts.Int64("Common.IdleTimeout", 0) // never stop servers by default
+	jsState.maxIdleTime = 1000 * opts.Int64("Common.IdleTimeout", 0) // zero deafult timeout: never stop servers by default
 	jsState.maxStartTime = 1000 * opts.Int64("Common.StartTimeout", serverTimeoutDefault)
 	jsState.maxStopTime = 1000 * opts.Int64("Common.StopTimeout", serverTimeoutDefault)
+	jsState.maxComputeErrors = opts.Int("Common.MaxErrors", maxComputeErrorsDefault)
 
 	// MPI jobs process, threads and hostfile config
 	jsState.hostFile.maxThreads = opts.Int("Common.MpiMaxThreads", 0) // max number of modelling threads per MPI process, zero means unlimited
@@ -690,6 +692,7 @@ func updateComputeState(
 	nowTs int64,
 	maxStartTime int64,
 	maxStopTime int64,
+	maxComputeErrors int,
 	compReadyFiles, compStartFiles, compStopFiles, compErrorFiles, compUsedFiles []string,
 ) {
 

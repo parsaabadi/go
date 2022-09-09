@@ -50,22 +50,33 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 // GET /api/service/state
 func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
 
-	// service state: model run jobs queue, active jobs and history
+	// service state: model run jobs queue, active jobs, history jobs and compute servers state
+	type cItem struct {
+		Name       string // name of server or cluster
+		State      string // state: start, stop, ready, error, off
+		TotalRes   RunRes // total computational resources (CPU cores and memory)
+		UsedRes    RunRes // resources (CPU cores and memory) used by all oms instances
+		OwnRes     RunRes // resources (CPU cores and memory) used by this instance
+		ErrorCount int    // number of incomplete starts, stops and errors
+		LastUsedTs int64  // last time for model run (unix milliseconds)
+	}
 	st := struct {
 		IsJobControl    bool             // if true then job control enabled
 		JobServiceState                  // jobs service state: paused, resources usage and limits
 		Queue           []RunJob         // list of model run jobs in the queue
 		Active          []RunJob         // list of active (currently running) model run jobs
 		History         []historyJobFile // history of model runs
+		ComputeState    []cItem          // state of computational servers or clusters
 	}{
 		IsJobControl: theCfg.isJobControl,
 		Queue:        []RunJob{},
 		Active:       []RunJob{},
 		History:      []historyJobFile{},
+		ComputeState: []cItem{},
 	}
 
 	if theCfg.isJobControl {
-		jsState, qKeys, qJobs, aKeys, aJobs, hKeys, hJobs := theRunCatalog.getRunJobs()
+		jsState, qKeys, qJobs, aKeys, aJobs, hKeys, hJobs, cState := theRunCatalog.getRunJobs()
 
 		st.JobServiceState = jsState
 
@@ -87,6 +98,20 @@ func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
 		st.History = make([]historyJobFile, len(hKeys))
 		for k := range hKeys {
 			st.History[k] = hJobs[k]
+		}
+
+		st.ComputeState = make([]cItem, len(cState))
+		for k := range cState {
+			st.ComputeState[k].Name = cState[k].name
+			st.ComputeState[k].State = cState[k].state
+			if st.ComputeState[k].State == "" {
+				st.ComputeState[k].State = "off"
+			}
+			st.ComputeState[k].TotalRes = cState[k].totalRes
+			st.ComputeState[k].UsedRes = cState[k].usedRes
+			st.ComputeState[k].OwnRes = cState[k].ownRes
+			st.ComputeState[k].ErrorCount = cState[k].errorCount
+			st.ComputeState[k].LastUsedTs = cState[k].lastUsedTs
 		}
 	}
 	jsonResponse(w, r, st)

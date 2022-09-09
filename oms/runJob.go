@@ -193,7 +193,7 @@ func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, string, []computeUse
 }
 
 // return copy of submission stamps and job control items for queue, active and history model run jobs
-func (rsc *RunCatalog) getRunJobs() (JobServiceState, []string, []RunJob, []string, []RunJob, []string, []historyJobFile) {
+func (rsc *RunCatalog) getRunJobs() (JobServiceState, []string, []RunJob, []string, []RunJob, []string, []historyJobFile, []computeItem) {
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
@@ -234,7 +234,26 @@ func (rsc *RunCatalog) getRunJobs() (JobServiceState, []string, []RunJob, []stri
 		hJobs[k] = rsc.historyJobs[stamp]
 	}
 
-	return rsc.JobServiceState, qKeys, qJobs, aKeys, aJobs, hKeys, hJobs
+	// get computational servers state, sorted by name
+	cN := make([]string, len(rsc.computeState))
+
+	np := 0
+	for name := range rsc.computeState {
+		cN[np] = name
+		np++
+	}
+	sort.Strings(cN)
+
+	cState := make([]computeItem, len(rsc.computeState))
+
+	for k := 0; k < len(cN); k++ {
+		cs := rsc.computeState[cN[k]]
+		cState[k] = cs
+		cState[k].startArgs = []string{}
+		cState[k].stopArgs = []string{}
+	}
+
+	return rsc.JobServiceState, qKeys, qJobs, aKeys, aJobs, hKeys, hJobs, cState
 }
 
 // return active job control item and is found boolean flag
@@ -520,7 +539,7 @@ func (rsc *RunCatalog) selectToStartCompute() ([]string, int64, []string, [][]st
 	for res.Cpu > 0 || res.Mem > 0 { // until not enough servers to run first MPI job in the queue
 
 		name := ""
-		minE := 2 * maxComputeErrors
+		minE := 2 * rsc.maxComputeErrors
 		minTs := nowTs + 100
 
 		for _, cs := range rsc.computeState {

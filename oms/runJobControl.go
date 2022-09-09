@@ -24,7 +24,7 @@ const jobOuterScanInterval = 5021        // timeout in msec, sleep interval betw
 const serverTimeoutDefault = 60          // time in seconds to start or stop compute server
 const minJobTickMs int64 = 1597707959000 // unix milliseconds of 2020-08-17 23:45:59
 const jobPositionDefault = 20220817      // queue job position by default, e.g. if queue is empty
-const maxComputeErrors = 8               // errors threshold for compute server or cluster
+const maxComputeErrorsDefault = 8        // default errors threshold for compute server or cluster
 
 /*
 scan active job directory to find active model run files without run state.

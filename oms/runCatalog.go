@@ -182,6 +182,7 @@ type JobServiceState struct {
 	maxStopTime       int64   // max time in milliseconds to stop compute server or cluster
 	maxIdleTime       int64   // max idle in milliseconds time before stopping server or cluster
 	lastStartStopTs   int64   // last time when start or stop of computational servers done
+	maxComputeErrors  int     // errors threshold for compute server or cluster
 	jobLastPosition   int     // last job position in the queue
 	jobFirstPosition  int     // minimal job position in the queue
 	hostFile          hostIni // MPI jobs hostfile settings
@@ -195,7 +196,7 @@ type computeItem struct {
 	usedRes    RunRes   // resources (CPU cores and memory) used by all oms instances
 	ownRes     RunRes   // resources (CPU cores and memory) used by this instance
 	errorCount int      // number of incomplete starts, stops and errors
-	lastUsedTs int64    // last time of model run (unix milliseconds)
+	lastUsedTs int64    // last activity time (unix milliseconds): server start, stop or used
 	startExe   string   // name of executable to start server, e.g.: /bin/sh
 	startArgs  []string // arguments to start server, e.g.: -c start.sh my-server-name
 	stopExe    string   // name of executable to stop server,, e.g.: /bin/sh
@@ -348,6 +349,9 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error
 	rsc.computeState = map[string]computeItem{}
 	rsc.jobLastPosition = jobPositionDefault + 1
 	rsc.jobFirstPosition = jobPositionDefault - 1
+	if rsc.maxComputeErrors <= 1 {
+		rsc.maxComputeErrors = maxComputeErrorsDefault
+	}
 
 	if rsc.selectedKeys == nil {
 		rsc.selectedKeys = []string{}
