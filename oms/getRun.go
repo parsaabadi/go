@@ -389,11 +389,11 @@ func (mc *ModelCatalog) RunFull(dn, rdsn string) (*db.RunPub, bool) {
 	// get run_lst db row by digest, stamp or run name
 	r, err := db.GetRunByDigestOrStampOrName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, rdsn)
 	if err != nil {
-		omppLog.Log("Error at get run status: ", dn, ": ", rdsn, ": ", err.Error())
+		omppLog.Log("Error at get run db row: ", dn, ": ", rdsn, ": ", err.Error())
 		return &db.RunPub{}, false // return empty result: run select error
 	}
 	if r == nil {
-		omppLog.Log("Warning run status not found: ", dn, ": ", rdsn)
+		omppLog.Log("Warning run db row not found: ", dn, ": ", rdsn)
 		return &db.RunPub{}, false // return empty result: run_lst row not found
 	}
 
@@ -446,11 +446,11 @@ func (mc *ModelCatalog) RunTextFull(dn, rdsn string, isAllLang bool, preferredLa
 	// get run_lst db row by digest, stamp or run name
 	r, err := db.GetRunByDigestOrStampOrName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, rdsn)
 	if err != nil {
-		omppLog.Log("Error at get run status: ", dn, ": ", rdsn, ": ", err.Error())
+		omppLog.Log("Error at get run db row: ", dn, ": ", rdsn, ": ", err.Error())
 		return &db.RunPub{}, false // return empty result: run select error
 	}
 	if r == nil {
-		omppLog.Log("Warning run status not found: ", dn, ": ", rdsn)
+		omppLog.Log("Warning run db row not found: ", dn, ": ", rdsn)
 		return &db.RunPub{}, false // return empty result: run_lst row not found
 	}
 
@@ -461,7 +461,7 @@ func (mc *ModelCatalog) RunTextFull(dn, rdsn string, isAllLang bool, preferredLa
 		lc = mc.modelLst[idx].langCodes[np]
 	}
 
-	rm, err := db.GetRunFullText(mc.modelLst[idx].dbConn, r, lc)
+	rm, err := db.GetRunFullText(mc.modelLst[idx].dbConn, r, false, lc)
 	if err != nil {
 		omppLog.Log("Error at get run text: ", dn, ": ", r.Name, ": ", err.Error())
 		return &db.RunPub{}, false // return empty result: run select error

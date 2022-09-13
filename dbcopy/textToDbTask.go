@@ -381,7 +381,7 @@ func fromTaskJsonToDb(
 	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, pubMeta *db.TaskPub) (int, error) {
 
 	// convert from "public" format into destination db rows
-	meta, isSetNotFound, isTaskRunNotFound, err := pubMeta.FromPublic(dbConn, modelDef)
+	meta, isSetNotFound, isTaskRunNotFound, err := pubMeta.FromPublic(dbConn, modelDef, true)
 	if err != nil {
 		return 0, err
 	}

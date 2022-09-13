@@ -66,7 +66,7 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 	}
 
 	// get full model run metadata
-	meta, err := db.GetRunFullText(srcDb, runRow, "")
+	meta, err := db.GetRunFullText(srcDb, runRow, true, "")
 	if err != nil {
 		return err
 	}

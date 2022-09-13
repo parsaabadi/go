@@ -53,11 +53,18 @@ func (mc *ModelCatalog) ReadParameterTo(dn, src string, layout *db.ReadParamLayo
 		}
 	} else {
 
-		if rst, ok := mc.loadCompletedRunByDigestOrStampOrName(idx, src); ok {
-			layout.FromId = rst.RunId // source run id
-		} else {
+		// get run_lst db row by digest, stamp or run name
+		rst, err := db.GetRunByDigestOrStampOrName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, src)
+		if err != nil {
+			omppLog.Log("Error at get run status: ", mc.modelLst[idx].meta.Model.Name, ": ", src, ": ", err.Error())
 			return nil, false // return empty result: run select error
 		}
+		if rst == nil {
+			omppLog.Log("Warning: run not found: ", mc.modelLst[idx].meta.Model.Name, ": ", src)
+			return nil, false // return empty result: run_lst row not found
+		}
+
+		layout.FromId = rst.RunId // source run id
 	}
 
 	// read parameter page

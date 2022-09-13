@@ -86,7 +86,7 @@ func ReadParameterTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayou
 	}
 
 	// if parameter from run (or from workset base run) then:
-	//   check if model run exist and model run completed
+	//   check if model run exist and model run completed is completed or in progress
 	if !isWsParam {
 		runRow, err := GetRun(dbConn, srcRunId)
 		if err != nil {
@@ -95,7 +95,7 @@ func ReadParameterTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayou
 		if runRow == nil {
 			return nil, errors.New("model run not found, id: " + strconv.Itoa(srcRunId))
 		}
-		if !IsRunCompleted(runRow.Status) {
+		if !IsRunCompleted(runRow.Status) && runRow.Status != ProgressRunStatus {
 			return nil, errors.New("model run not completed, id: " + strconv.Itoa(srcRunId))
 		}
 	}

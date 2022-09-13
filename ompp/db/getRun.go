@@ -538,9 +538,10 @@ func GetRunFull(dbConn *sql.DB, runRow *RunRow) (*RunMeta, error) {
 // GetRunFullText return full metadata, including text, for completed model run:
 // run_lst, run_txt, run_option, run_parameter, run_parameter_txt, run_table, run_progress rows.
 //
-// It does not return non-completed runs (run in progress).
+// If isSuccess true then return only successfully completed runs
+// else retrun all runs: success, error, exit, progress.
 // If langCode not empty then only specified language selected else all languages
-func GetRunFullText(dbConn *sql.DB, runRow *RunRow, langCode string) (*RunMeta, error) {
+func GetRunFullText(dbConn *sql.DB, runRow *RunRow, isSuccess bool, langCode string) (*RunMeta, error) {
 
 	// validate parameters
 	if runRow == nil {
@@ -548,8 +549,13 @@ func GetRunFullText(dbConn *sql.DB, runRow *RunRow, langCode string) (*RunMeta, 
 	}
 
 	// where filters
-	runWhere := " WHERE H.run_id = " + strconv.Itoa(runRow.RunId) +
-		" AND H.status IN (" + ToQuoted(DoneRunStatus) + ", " + ToQuoted(ErrorRunStatus) + ", " + ToQuoted(ExitRunStatus) + ")"
+	runWhere := " WHERE H.run_id = " + strconv.Itoa(runRow.RunId)
+	if isSuccess {
+		runWhere += " AND H.status = " + ToQuoted(DoneRunStatus)
+	} else {
+		runWhere += " AND H.status IN (" +
+			ToQuoted(DoneRunStatus) + ", " + ToQuoted(ErrorRunStatus) + ", " + ToQuoted(ExitRunStatus) + ", " + ToQuoted(ProgressRunStatus) + ")"
+	}
 
 	var langFilter string
 	if langCode != "" {
@@ -670,8 +676,8 @@ func GetRunFullText(dbConn *sql.DB, runRow *RunRow, langCode string) (*RunMeta, 
 // GetRunFullTextList return list of full metadata, including text, for completed model runs:
 // run_lst, run_txt, run_option, run_parameter, run_parameter_txt, run_table, run_progress rows.
 //
-// If isSuccess true then return only successfully completed runs else all completed runs.
-// It does not return non-completed runs (run in progress).
+// If isSuccess true then return only successfully completed runs
+// else retrun all runs: success, error, exit, progress.
 // If langCode not empty then only specified language selected else all languages
 func GetRunFullTextList(dbConn *sql.DB, modelId int, isSuccess bool, langCode string) ([]RunMeta, error) {
 
@@ -681,7 +687,7 @@ func GetRunFullTextList(dbConn *sql.DB, modelId int, isSuccess bool, langCode st
 		statusFilter = " AND H.status = " + ToQuoted(DoneRunStatus)
 	} else {
 		statusFilter = " AND H.status IN (" +
-			ToQuoted(DoneRunStatus) + ", " + ToQuoted(ErrorRunStatus) + ", " + ToQuoted(ExitRunStatus) + ")"
+			ToQuoted(DoneRunStatus) + ", " + ToQuoted(ErrorRunStatus) + ", " + ToQuoted(ExitRunStatus) + ", " + ToQuoted(ProgressRunStatus) + ")"
 	}
 
 	var langFilter string

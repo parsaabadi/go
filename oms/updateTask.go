@@ -55,7 +55,7 @@ func (mc *ModelCatalog) UpdateTaskDef(isReplace bool, tpd *db.TaskDefPub) (bool,
 
 	// convert run from "public" into db rows
 	// all input worskset names must exist in workset_lst
-	tm, isSetNotFound, _, err := (&db.TaskPub{TaskDefPub: *tpd}).FromPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
+	tm, isSetNotFound, _, err := (&db.TaskPub{TaskDefPub: *tpd}).FromPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, true)
 	if err != nil {
 		omppLog.Log("Error at modeling task conversion: ", dn, ": ", tn, ": ", err.Error())
 		return false, dn, tn, err

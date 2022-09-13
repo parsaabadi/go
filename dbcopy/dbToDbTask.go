@@ -90,7 +90,7 @@ func dbToDbTask(modelName string, modelDigest string, runOpts *config.RunOptions
 		}
 	}
 
-	meta, err := db.GetTaskFull(srcDb, taskRow, "") // get task full metadata, including task run history
+	meta, err := db.GetTaskFull(srcDb, taskRow, true, "") // get task full metadata, including task run history
 	if err != nil {
 		return err
 	}
@@ -142,7 +142,7 @@ func dbToDbTask(modelName string, modelDigest string, runOpts *config.RunOptions
 				continue // skip: run not completed
 			}
 
-			rm, err := db.GetRunFullText(srcDb, runRow, "") // get full model run metadata
+			rm, err := db.GetRunFullText(srcDb, runRow, true, "") // get full model run metadata
 			if err != nil {
 				return err
 			}
@@ -306,7 +306,7 @@ func copyTaskDbToDb(
 	}
 
 	// destination: convert from "public" format into destination db rows
-	dstTask, isSetNotFound, isTaskRunNotFound, err := pub.FromPublic(dstDb, dstModel)
+	dstTask, isSetNotFound, isTaskRunNotFound, err := pub.FromPublic(dstDb, dstModel, true)
 	if err != nil {
 		return 0, err
 	}

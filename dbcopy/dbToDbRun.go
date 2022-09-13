@@ -79,7 +79,7 @@ func dbToDbRun(modelName string, modelDigest string, runOpts *config.RunOptions)
 	}
 
 	// get full model run metadata
-	meta, err := db.GetRunFullText(srcDb, runRow, "")
+	meta, err := db.GetRunFullText(srcDb, runRow, true, "")
 	if err != nil {
 		return err
 	}

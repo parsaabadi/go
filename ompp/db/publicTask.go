@@ -164,7 +164,9 @@ func (meta *TaskMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskPub, e
 //
 // Worksets are searched by set name, which is unique inside of the model.
 // Model run searched by run digest.
-func (pub *TaskPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskMeta, bool, bool, error) {
+// If isCompleted true then return only completed runs where status is success, error or exit
+// else retrun all runs: success, error, exit, progress.
+func (pub *TaskPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta, isCompleted bool) (*TaskMeta, bool, bool, error) {
 
 	// validate parameters
 	if modelDef == nil {
@@ -243,16 +245,23 @@ func (pub *TaskPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskMeta, 
 	isSetNotFound := len(pub.Set) > len(meta.Set) // some "public" workset names not found in database
 
 	// build task run history body as list of (run id, set id)
-	// select only runs where status is completed (success, exit, error)
+	// exclude runs where status is init (run not started yet)
 	// use run digest as run key
 
 	tri := make(map[int][]TaskRunSetRow, len(pub.TaskRun)) // map [index in pub.TaskRun] => [](run id, set id)
+
+	statusFilter := ""
+	if isCompleted {
+		statusFilter = " AND R.status IN (" + ToQuoted(DoneRunStatus) + ", " + ToQuoted(ErrorRunStatus) + ", " + ToQuoted(ExitRunStatus) + ")"
+	} else {
+		statusFilter = " AND R.status IN (" + ToQuoted(DoneRunStatus) + ", " + ToQuoted(ErrorRunStatus) + ", " + ToQuoted(ExitRunStatus) + ", " + ToQuoted(ProgressRunStatus) + ")"
+	}
 
 	err = SelectRows(dbConn,
 		"SELECT R.run_id, R.run_digest"+
 			" FROM run_lst R"+
 			" WHERE R.model_id = "+strconv.Itoa(modelDef.Model.ModelId)+
-			" AND R.status IN ("+ToQuoted(DoneRunStatus)+", "+ToQuoted(ErrorRunStatus)+", "+ToQuoted(ExitRunStatus)+")"+
+			statusFilter+
 			" ORDER BY 1",
 		func(rows *sql.Rows) error {
 

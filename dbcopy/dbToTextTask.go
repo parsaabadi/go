@@ -84,7 +84,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".task."+taskName)
 	}
 
-	meta, err := db.GetTaskFull(srcDb, taskRow, "") // get task full metadata, including task run history
+	meta, err := db.GetTaskFull(srcDb, taskRow, true, "") // get task full metadata, including task run history
 	if err != nil {
 		return err
 	}
@@ -137,7 +137,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 				continue // skip: run not completed
 			}
 
-			rm, err := db.GetRunFullText(srcDb, runRow, "") // get full model run metadata
+			rm, err := db.GetRunFullText(srcDb, runRow, true, "") // get full model run metadata
 			if err != nil {
 				return err
 			}

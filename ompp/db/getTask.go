@@ -180,10 +180,11 @@ func getTaskSetLst(dbConn *sql.DB, query string) (map[int][]int, error) {
 
 // GetTaskRunSetText return additinal modeling task text description and notes for all task worksets and model runs: workset_txt, run_txt table rows.
 //
-// It includes all input worksets text (description and notes) and comlpleted model runs text (description and notes).
-// Task run completed if run status one of: s=success, x=exit, e=error
+// It includes all input worksets text and model runs text.
+// If isSuccess true then return only successfully completed runs
+// else retrun all runs: success, error, exit, progress.
 // If langCode not empty then only specified language selected else all languages.
-func GetTaskRunSetText(dbConn *sql.DB, taskId int, langCode string) (*TaskRunSetTxt, error) {
+func GetTaskRunSetText(dbConn *sql.DB, taskId int, isSuccess bool, langCode string) (*TaskRunSetTxt, error) {
 
 	tp := TaskRunSetTxt{
 		SetTxt: map[string][]DescrNote{},
@@ -235,7 +236,14 @@ func GetTaskRunSetText(dbConn *sql.DB, taskId int, langCode string) (*TaskRunSet
 	}
 
 	// select description and notes for task run worksets from task_run_set table
-	// use only input worksets from completed model runs
+	var statusFilter string
+	if isSuccess {
+		statusFilter = " AND RL.status = " + ToQuoted(DoneRunStatus)
+	} else {
+		statusFilter = " AND RL.status IN (" +
+			ToQuoted(DoneRunStatus) + ", " + ToQuoted(ErrorRunStatus) + ", " + ToQuoted(ExitRunStatus) + ", " + ToQuoted(ProgressRunStatus) + ")"
+	}
+
 	q = "SELECT M.set_id, M.lang_id, WS.set_name, L.lang_code, M.descr, M.note" +
 		" FROM task_run_lst TRL" +
 		" INNER JOIN task_run_set TRS ON (TRS.task_run_id = TRL.task_run_id)" +
@@ -243,8 +251,10 @@ func GetTaskRunSetText(dbConn *sql.DB, taskId int, langCode string) (*TaskRunSet
 		" INNER JOIN workset_lst WS ON (WS.set_id = TRS.set_id)" +
 		" INNER JOIN workset_txt M ON (M.set_id = WS.set_id)" +
 		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)" +
-		" WHERE TRL.task_id = " + strconv.Itoa(taskId) +
-		" AND RL.status IN (" + ToQuoted(DoneRunStatus) + ", " + ToQuoted(ErrorRunStatus) + ", " + ToQuoted(ExitRunStatus) + ")"
+		" WHERE TRL.task_id = " + strconv.Itoa(taskId)
+
+	q += statusFilter
+
 	if langCode != "" {
 		q += " AND L.lang_code = " + ToQuoted(langCode)
 	}
@@ -284,15 +294,16 @@ func GetTaskRunSetText(dbConn *sql.DB, taskId int, langCode string) (*TaskRunSet
 	}
 
 	// select description and notes for model runs from task_run_set table
-	// use only completed model runs
 	q = "SELECT M.run_id, M.lang_id, RL.run_name, RL.run_digest, L.lang_code, M.descr, M.note" +
 		" FROM task_run_lst TRL" +
 		" INNER JOIN task_run_set TRS ON (TRS.task_run_id = TRL.task_run_id)" +
 		" INNER JOIN run_lst RL ON (RL.run_id = TRS.run_id)" +
 		" INNER JOIN run_txt M ON (M.run_id = RL.run_id)" +
 		" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)" +
-		" WHERE TRL.task_id = " + strconv.Itoa(taskId) +
-		" AND RL.status IN (" + ToQuoted(DoneRunStatus) + ", " + ToQuoted(ErrorRunStatus) + ", " + ToQuoted(ExitRunStatus) + ")"
+		" WHERE TRL.task_id = " + strconv.Itoa(taskId)
+
+	q += statusFilter
+
 	if langCode != "" {
 		q += " AND L.lang_code = " + ToQuoted(langCode)
 	}
@@ -438,16 +449,12 @@ func GetTaskRunListByStampOrName(dbConn *sql.DB, taskId int, trsn string) ([]Tas
 }
 
 // GetTaskRunSetRows return task run body (pairs of run id and set id) by task run id: task_run_set table rows.
-//
-// It does not return non-completed task run (run in progress).
-// Task run completed if run status one of: s=success, x=exit, e=error
 func GetTaskRunSetRows(dbConn *sql.DB, taskRunId int) ([]TaskRunSetRow, error) {
 	return getTaskRunSetLst(dbConn,
 		"SELECT TRS.task_run_id, TRS.run_id, TRS.set_id, TRS.task_id"+
 			" FROM task_run_lst M"+
 			" INNER JOIN task_run_set TRS ON (TRS.task_run_id = M.task_run_id)"+
 			" WHERE M.task_run_id = "+strconv.Itoa(taskRunId)+
-			" AND M.status IN ("+ToQuoted(DoneRunStatus)+", "+ToQuoted(ErrorRunStatus)+", "+ToQuoted(ExitRunStatus)+")"+
 			" ORDER BY 1, 2")
 }
 
@@ -487,10 +494,7 @@ func GetTaskLastCompletedRun(dbConn *sql.DB, taskId int) (*TaskRunRow, error) {
 			" )")
 }
 
-// GetTaskRunList return model run history: master row from task_lst and all rows from task_run_lst, task_run_set where task run is completed.
-//
-// It does not return non-completed task runs (run in progress).
-// Task run completed if run status one of: s=success, x=exit, e=error
+// GetTaskRunList return model run history: master row from task_lst and all rows from task_run_lst, task_run_set.
 func GetTaskRunList(dbConn *sql.DB, taskRow *TaskRow) (*TaskMeta, error) {
 
 	// validate parameters
@@ -510,7 +514,6 @@ func GetTaskRunList(dbConn *sql.DB, taskRow *TaskRow) (*TaskMeta, error) {
 		"SELECT M.task_run_id, M.task_id, M.run_name, M.sub_count, M.create_dt, M.status, M.update_dt, M.run_stamp"+
 			" FROM task_run_lst M"+
 			" WHERE M.task_id = "+strconv.Itoa(taskRow.TaskId)+
-			" AND M.status IN ("+ToQuoted(DoneRunStatus)+", "+ToQuoted(ErrorRunStatus)+", "+ToQuoted(ExitRunStatus)+")"+
 			" ORDER BY 1")
 	if err != nil {
 		return nil, err
@@ -530,7 +533,6 @@ func GetTaskRunList(dbConn *sql.DB, taskRow *TaskRow) (*TaskMeta, error) {
 			" FROM task_run_lst M"+
 			" INNER JOIN task_run_set TRS ON (TRS.task_run_id = M.task_run_id)"+
 			" WHERE M.task_id = "+strconv.Itoa(taskRow.TaskId)+
-			" AND M.status IN ("+ToQuoted(DoneRunStatus)+", "+ToQuoted(ErrorRunStatus)+", "+ToQuoted(ExitRunStatus)+")"+
 			" ORDER BY 1, 2")
 	if err != nil {
 		return nil, err
@@ -613,9 +615,10 @@ func getTaskRunSetLst(dbConn *sql.DB, query string) ([]TaskRunSetRow, error) {
 // GetTaskFull return modeling task metadata, description, notes and run history
 // from db-tables: task_lst, task_txt, task_set, task_run_lst, task_run_set.
 //
-// It does not return non-completed task runs (run in progress).
+// If isSuccess true then return only successfully completed runs
+// else retrun all runs: success, error, exit, progress.
 // If langCode not empty then only specified language selected else all languages
-func GetTaskFull(dbConn *sql.DB, taskRow *TaskRow, langCode string) (*TaskMeta, error) {
+func GetTaskFull(dbConn *sql.DB, taskRow *TaskRow, isSuccess bool, langCode string) (*TaskMeta, error) {
 
 	// validate parameters
 	if taskRow == nil {
@@ -624,9 +627,13 @@ func GetTaskFull(dbConn *sql.DB, taskRow *TaskRow, langCode string) (*TaskMeta, 
 
 	// where filters
 	taskWhere := " WHERE K.task_id = " + strconv.Itoa(taskRow.TaskId)
-
-	statusFilter := " AND H.status IN (" +
-		ToQuoted(DoneRunStatus) + ", " + ToQuoted(ErrorRunStatus) + ", " + ToQuoted(ExitRunStatus) + ")"
+	statusFilter := ""
+	if isSuccess {
+		statusFilter = " AND H.status = " + ToQuoted(DoneRunStatus)
+	} else {
+		statusFilter = " AND H.status IN (" +
+			ToQuoted(DoneRunStatus) + ", " + ToQuoted(ErrorRunStatus) + ", " + ToQuoted(ExitRunStatus) + ", " + ToQuoted(ProgressRunStatus) + ")"
+	}
 
 	var langFilter string
 	if langCode != "" {
@@ -705,8 +712,8 @@ func GetTaskFull(dbConn *sql.DB, taskRow *TaskRow, langCode string) (*TaskMeta, 
 // GetTaskFullList return list of modeling tasks metadata, description, notes and run history
 // from db-tables: task_lst, task_txt, task_set, task_run_lst, task_run_set.
 //
-// If isSuccess true then return only successfully completed task runs else all completed runs.
-// It does not return non-completed task runs (run in progress).
+// If isSuccess true then return only successfully completed runs
+// else retrun all runs: success, error, exit, progress.
 // If langCode not empty then only specified language selected else all languages
 func GetTaskFullList(dbConn *sql.DB, modelId int, isSuccess bool, langCode string) ([]TaskMeta, error) {
 
@@ -716,7 +723,7 @@ func GetTaskFullList(dbConn *sql.DB, modelId int, isSuccess bool, langCode strin
 		statusFilter = " AND H.status = " + ToQuoted(DoneRunStatus)
 	} else {
 		statusFilter = " AND H.status IN (" +
-			ToQuoted(DoneRunStatus) + ", " + ToQuoted(ErrorRunStatus) + ", " + ToQuoted(ExitRunStatus) + ")"
+			ToQuoted(DoneRunStatus) + ", " + ToQuoted(ErrorRunStatus) + ", " + ToQuoted(ExitRunStatus) + ", " + ToQuoted(ProgressRunStatus) + ")"
 	}
 
 	var langFilter string

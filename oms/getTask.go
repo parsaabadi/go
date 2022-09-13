@@ -433,8 +433,6 @@ func (mc *ModelCatalog) FirstOrLastTaskRunStatus(dn, tn string, isFirst, isCompl
 
 // TaskTextFull return full task metadata, description, notes, run history by model digest-or-name and task name
 // from db-tables: task_lst, task_txt, task_set, task_run_lst, task_run_set.
-// It does not return non-completed task runs (run in progress).
-// Run completed if run status one of: s=success, x=exit, e=error.
 // Text (description and notes) can be in preferred language or all languages.
 // If preferred language requested and it is not found in db then return empty text results.
 func (mc *ModelCatalog) TaskTextFull(dn, tn string, isAllLang bool, preferredLang []language.Tag) (*db.TaskPub, *db.TaskRunSetTxt, bool) {
@@ -479,7 +477,7 @@ func (mc *ModelCatalog) TaskTextFull(dn, tn string, isAllLang bool, preferredLan
 		lc = mc.modelLst[idx].langCodes[np]
 	}
 
-	tm, err := db.GetTaskFull(mc.modelLst[idx].dbConn, tr, lc)
+	tm, err := db.GetTaskFull(mc.modelLst[idx].dbConn, tr, false, lc)
 	if err != nil {
 		omppLog.Log("Error at get modeling task text: ", dn, ": ", tr.Name, ": ", err.Error())
 		return &db.TaskPub{}, nil, false // return empty result: run select error
@@ -493,7 +491,7 @@ func (mc *ModelCatalog) TaskTextFull(dn, tn string, isAllLang bool, preferredLan
 	}
 
 	// get additinal task text: description and notes for worksets and model runs
-	at, err := db.GetTaskRunSetText(mc.modelLst[idx].dbConn, tr.TaskId, lc)
+	at, err := db.GetTaskRunSetText(mc.modelLst[idx].dbConn, tr.TaskId, false, lc)
 	if err != nil {
 		omppLog.Log("Error at get additional modeling task text: ", dn, ": ", tr.Name, ": ", err.Error())
 		return &db.TaskPub{}, nil, false // return empty result: conversion error
