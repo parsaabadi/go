@@ -295,7 +295,7 @@ func jobMoveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// move job in the queue and rename files in tge queue
+	// move job in the queue and rename files in the queue
 	isOk, fileMoveLst := theRunCatalog.moveJobInQueue(submitStamp, nPos)
 
 	for _, fm := range fileMoveLst {
