@@ -705,22 +705,26 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 //
 // CREATE TABLE ageSex_p20120817
 // (
-//  run_id      INT   NOT NULL,
-//  sub_id      INT   NOT NULL,
-//  dim0        INT   NOT NULL,
-//  dim1        INT   NOT NULL,
-//  param_value FLOAT NOT NULL, -- can be NULL
-//  PRIMARY KEY (run_id, sub_id, dim0, dim1)
+//
+//	run_id      INT      NOT NULL,
+//	sub_id      SMALLINT NOT NULL,
+//	dim0        INT      NOT NULL,
+//	dim1        INT      NOT NULL,
+//	param_value FLOAT    NOT NULL, -- can be NULL
+//	PRIMARY KEY (run_id, sub_id, dim0, dim1)
+//
 // )
 //
 // CREATE TABLE ageSex_w20120817
 // (
-//  set_id      INT   NOT NULL,
-//  sub_id      INT   NOT NULL,
-//  dim0        INT   NOT NULL,
-//  dim1        INT   NOT NULL,
-//  param_value FLOAT NOT NULL, -- can be NULL
-//  PRIMARY KEY (set_id, sub_id, dim0, dim1)
+//
+//	set_id      INT      NOT NULL,
+//	sub_id      SMALLINT NOT NULL,
+//	dim0        INT      NOT NULL,
+//	dim1        INT      NOT NULL,
+//	param_value FLOAT    NOT NULL, -- can be NULL
+//	PRIMARY KEY (set_id, sub_id, dim0, dim1)
+//
 // )
 func sqlCreateParamTable(dbFacet Facet, param *ParamMeta) (string, string, error) {
 
@@ -746,13 +750,13 @@ func sqlCreateParamTable(dbFacet Facet, param *ParamMeta) (string, string, error
 
 	rSql := dbFacet.createTableIfNotExist(param.DbRunTable, "("+
 		"run_id INT NOT NULL, "+
-		"sub_id INT NOT NULL, "+
+		"sub_id SMALLINT NOT NULL, "+
 		colPart+
 		"PRIMARY KEY (run_id, sub_id"+keyPart+")"+
 		")")
 	wSql := dbFacet.createTableIfNotExist(param.DbSetTable, "("+
 		"set_id INT NOT NULL, "+
-		"sub_id INT NOT NULL, "+
+		"sub_id SMALLINT NOT NULL, "+
 		colPart+
 		"PRIMARY KEY (set_id, sub_id"+keyPart+")"+
 		")")
@@ -763,23 +767,27 @@ func sqlCreateParamTable(dbFacet Facet, param *ParamMeta) (string, string, error
 //
 // CREATE TABLE salarySex_v20120820
 // (
-//  run_id     INT   NOT NULL,
-//  expr_id    INT   NOT NULL,
-//  dim0       INT   NOT NULL,
-//  dim1       INT   NOT NULL,
-//  expr_value FLOAT NULL,
-//  PRIMARY KEY (run_id, expr_id, dim0, dim1)
+//
+//	run_id     INT      NOT NULL,
+//	expr_id    SMALLINT NOT NULL,
+//	dim0       INT      NOT NULL,
+//	dim1       INT      NOT NULL,
+//	expr_value FLOAT    NULL,
+//	PRIMARY KEY (run_id, expr_id, dim0, dim1)
+//
 // )
 //
 // CREATE TABLE salarySex_a20120820
 // (
-//  run_id    INT   NOT NULL,
-//  acc_id    INT   NOT NULL,
-//  sub_id    INT   NOT NULL,
-//  dim0      INT   NOT NULL,
-//  dim1      INT   NOT NULL,
-//  acc_value FLOAT NULL,
-//  PRIMARY KEY (run_id, acc_id, sub_id, dim0, dim1)
+//
+//	run_id    INT      NOT NULL,
+//	acc_id    SMALLINT NOT NULL,
+//	sub_id    SMALLINT NOT NULL,
+//	dim0      INT      NOT NULL,
+//	dim1      INT      NOT NULL,
+//	acc_value FLOAT    NULL,
+//	PRIMARY KEY (run_id, acc_id, sub_id, dim0, dim1)
+//
 // )
 func sqlCreateOutTable(dbFacet Facet, meta *TableMeta) (string, string) {
 
@@ -795,15 +803,15 @@ func sqlCreateOutTable(dbFacet Facet, meta *TableMeta) (string, string) {
 
 	eSql := dbFacet.createTableIfNotExist(meta.DbExprTable, "("+
 		"run_id  INT NOT NULL, "+
-		"expr_id INT NOT NULL, "+
+		"expr_id SMALLINT NOT NULL, "+
 		colPart+
 		"expr_value "+dbFacet.floatType()+" NULL, "+
 		"PRIMARY KEY (run_id, expr_id"+keyPart+")"+
 		")")
 	aSql := dbFacet.createTableIfNotExist(meta.DbAccTable, "("+
 		"run_id INT NOT NULL, "+
-		"acc_id INT NOT NULL, "+
-		"sub_id INT NOT NULL, "+
+		"acc_id SMALLINT NOT NULL, "+
+		"sub_id SMALLINT NOT NULL, "+
 		colPart+
 		"acc_value "+dbFacet.floatType()+" NULL, "+
 		"PRIMARY KEY (run_id, acc_id, sub_id"+keyPart+")"+
@@ -817,25 +825,28 @@ func sqlCreateOutTable(dbFacet Facet, meta *TableMeta) (string, string) {
 // AS
 // WITH va1 AS
 // (
-//   SELECT
-//     run_id, sub_id, dim0, dim1, acc_value
-//   FROM salarySex_a_2012820
-//   WHERE acc_id = 1
+//
+//	SELECT
+//	  run_id, sub_id, dim0, dim1, acc_value
+//	FROM salarySex_a_2012820
+//	WHERE acc_id = 1
+//
 // )
 // SELECT
-//   A.run_id,
-//   A.sub_id,
-//   A.dim0       AS "Year",
-//   A.dim1       AS "Age Group",
-//   A.acc_value  AS "Acc0",
-//   A1.acc_value AS "Average Income",
-//   (
-//     A.acc_value / CASE WHEN ABS(A1.acc_value) > 1.0e-37 THEN A1.acc_value ELSE NULL END
-//   ) AS "Expr0"
+//
+//	A.run_id,
+//	A.sub_id,
+//	A.dim0       AS "Year",
+//	A.dim1       AS "Age Group",
+//	A.acc_value  AS "Acc0",
+//	A1.acc_value AS "Average Income",
+//	(
+//	  A.acc_value / CASE WHEN ABS(A1.acc_value) > 1.0e-37 THEN A1.acc_value ELSE NULL END
+//	) AS "Expr0"
+//
 // FROM salarySex_a_2012820 A
 // INNER JOIN va1 A1 ON (A1.run_id = A.run_id AND A1.sub_id = A.sub_id AND A1.dim0 = A.dim0 AND A1.dim1 = A.dim1)
 // WHERE A.acc_id = 0;
-//
 func sqlCreateAccAllView(dbFacet Facet, meta *TableMeta) string {
 
 	sql := withPartOfAllAccView(meta)
@@ -852,13 +863,16 @@ func sqlCreateAccAllView(dbFacet Facet, meta *TableMeta) string {
 //
 // WITH va1 AS
 // (
-//   SELECT .... FROM salarySex_a_2012820 WHERE acc_id = 1
+//
+//	SELECT .... FROM salarySex_a_2012820 WHERE acc_id = 1
+//
 // ),
 // v_all_acc AS
 // (
-//   SELECT .... FROM salarySex_a_2012820 A INNER JOIN va1 A1 ON (....) WHERE A.acc_id = 0
-// )
 //
+//	SELECT .... FROM salarySex_a_2012820 A INNER JOIN va1 A1 ON (....) WHERE A.acc_id = 0
+//
+// )
 func sqlAccAllViewAsWith(meta *TableMeta) string {
 
 	sql := withPartOfAllAccView(meta)
@@ -876,13 +890,14 @@ func sqlAccAllViewAsWith(meta *TableMeta) string {
 //
 // WITH va1 AS
 // (
-//   SELECT
-//     run_id, sub_id, dim0, dim1, acc_value
-//   FROM salarySex_a_2012820
-//   WHERE acc_id = 1
+//
+//	SELECT
+//	  run_id, sub_id, dim0, dim1, acc_value
+//	FROM salarySex_a_2012820
+//	WHERE acc_id = 1
+//
 // )
 // SELECT .... FROM salarySex_a_2012820 A INNER JOIN va1 A1 ON (....) WHERE A.acc_id = 0
-//
 func withPartOfAllAccView(meta *TableMeta) string {
 
 	// start from WITH for native accumulators CTE, excluding first accumulator
@@ -911,19 +926,20 @@ func withPartOfAllAccView(meta *TableMeta) string {
 //
 // WITH va1 AS (....)
 // SELECT
-//   A.run_id,
-//   A.sub_id,
-//   A.dim0       AS "Year",
-//   A.dim1       AS "Age Group",
-//   A.acc_value  AS "acc0",
-//   A1.acc_value AS "acc1",
-//   (
-//     A.acc_value / CASE WHEN ABS(A1.acc_value) > 1.0e-37 THEN A1.acc_value ELSE NULL END
-//   ) AS "Expr0"
+//
+//	A.run_id,
+//	A.sub_id,
+//	A.dim0       AS "Year",
+//	A.dim1       AS "Age Group",
+//	A.acc_value  AS "acc0",
+//	A1.acc_value AS "acc1",
+//	(
+//	  A.acc_value / CASE WHEN ABS(A1.acc_value) > 1.0e-37 THEN A1.acc_value ELSE NULL END
+//	) AS "Expr0"
+//
 // FROM salarySex_a_2012820 A
 // INNER JOIN va1 A1 ON (A1.run_id = A.run_id AND A1.sub_id = A.sub_id AND A1.dim0 = A.dim0 AND A1.dim1 = A.dim1)
 // WHERE A.acc_id = 0
-//
 func mainSelectOfAllAccView(meta *TableMeta, isColumnNames bool) string {
 
 	// start main SELECT body with run id, sub id and dimensions
@@ -986,25 +1002,28 @@ func mainSelectOfAllAccView(meta *TableMeta, isColumnNames bool) string {
 //
 // WITH va1 AS
 // (
-//   SELECT
-//     run_id, sub_id, dim0, dim1, acc_value
-//   FROM salarySex_a_2012820
-//   WHERE acc_id = 1
+//
+//	SELECT
+//	  run_id, sub_id, dim0, dim1, acc_value
+//	FROM salarySex_a_2012820
+//	WHERE acc_id = 1
+//
 // )
 // SELECT
-//   A.run_id,
-//   A.sub_id,
-//   A.dim0       AS "Year",
-//   A.dim1       AS "Age Group",
-//   A.acc_value  AS "acc0",
-//   A1.acc_value AS "acc1",
-//   (
-//     A.acc_value / CASE WHEN ABS(A1.acc_value) > 1.0e-37 THEN A1.acc_value ELSE NULL END
-//   ) AS "Expr0"
+//
+//	A.run_id,
+//	A.sub_id,
+//	A.dim0       AS "Year",
+//	A.dim1       AS "Age Group",
+//	A.acc_value  AS "acc0",
+//	A1.acc_value AS "acc1",
+//	(
+//	  A.acc_value / CASE WHEN ABS(A1.acc_value) > 1.0e-37 THEN A1.acc_value ELSE NULL END
+//	) AS "Expr0"
+//
 // FROM salarySex_a_2012820 A
 // INNER JOIN va1 A1 ON (A1.run_id = A.run_id AND A1.sub_id = A.sub_id AND A1.dim0 = A.dim0 AND A1.dim1 = A.dim1)
 // WHERE A.acc_id = 0
-//
 func outTableSelectAccAllView(meta *TableMeta, isColumnNames bool) string {
 
 	// start from WITH for native accumulators CTE, excluding first accumulator
