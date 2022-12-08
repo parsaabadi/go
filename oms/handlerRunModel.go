@@ -199,7 +199,7 @@ func stopModelHandler(w http.ResponseWriter, r *http.Request) {
 	isFound, submitStamp, jobPath, isRunning := theRunCatalog.stopModelRun(modelDigest, stamp)
 
 	if !isRunning {
-		moveJobQueueToFailed(jobPath, submitStamp, m.Name, m.Digest) // model was not running, move job control file to history
+		moveJobQueueToFailed(jobPath, submitStamp, m.Name, m.Digest, stamp) // model was not running, move job control file to history
 	}
 
 	// write model run key as response

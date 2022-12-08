@@ -355,12 +355,15 @@ func moveActiveJobToHistory(activePath, status string, submitStamp, modelName, m
 }
 
 // move model run request from queue to error if model run fail to start
-func moveJobQueueToFailed(queuePath string, submitStamp, modelName, modelDigest string) bool {
+func moveJobQueueToFailed(queuePath string, submitStamp, modelName, modelDigest, runStamp string) bool {
 	if !theCfg.isJobControl || queuePath == "" {
 		return true // job control disabled
 	}
+	if !helper.IsUnderscoreTimeStamp(runStamp) {
+		runStamp = submitStamp
+	}
 
-	dst := jobHistoryPath(db.ErrorRunStatus, submitStamp, modelName, modelDigest, "no-run-time-stamp")
+	dst := jobHistoryPath(db.ErrorRunStatus, submitStamp, modelName, modelDigest, runStamp)
 
 	if !fileMoveAndLog(true, queuePath, dst) {
 		fileDeleteAndLog(true, queuePath) // if move failed then delete job control file from queue

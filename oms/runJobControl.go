@@ -31,18 +31,19 @@ scan active job directory to find active model run files without run state.
 It can be a result of oms restart or server reboot.
 
 if active job file found and no run state then
-  create run job from active file
-  add it to the list of "outer" jobs (active jobs without run state)
+create run job from active file
+add it to the list of "outer" jobs (active jobs without run state)
 
 for each job in the outer list
-  find model process by pid and executable name
-  if process exist then wait until it done
-  check if file still exist
-  read run_lst row
-  if no run_lst row then move job file to history as error
-  else
-    if run state is not completed then update run state as error
-    and move file to history according to status
+
+	find model process by pid and executable name
+	if process exist then wait until it done
+	check if file still exist
+	read run_lst row
+	if no run_lst row then move job file to history as error
+	else
+	  if run state is not completed then update run state as error
+	  and move file to history according to status
 */
 func scanOuterJobs(doneC <-chan bool) {
 	if !theCfg.isJobControl {
@@ -163,7 +164,7 @@ func scanRunJobs(doneC <-chan bool) {
 			if e != nil {
 				omppLog.Log(e)
 				if qPath != "" {
-					moveJobQueueToFailed(qPath, job.SubmitStamp, job.ModelName, job.ModelDigest) // can not run this job: remove from the queue
+					moveJobQueueToFailed(qPath, job.SubmitStamp, job.ModelName, job.ModelDigest, "") // can not run this job: remove from the queue
 				}
 			}
 		}
