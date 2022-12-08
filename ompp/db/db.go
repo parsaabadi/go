@@ -15,7 +15,8 @@ After model run user can again open workset as read-write and continue input edi
 Each workset has a name (unique inside of the model) and set id (database unique positive int).
 
 Result of model run stored in output tables and also include copy of all input parameters used to run the model.
-That pair of input and output data called "run" and identified by run id (database unique positive int). */
+That pair of input and output data called "run" and identified by run id (database unique positive int).
+*/
 package db
 
 import (
@@ -42,15 +43,19 @@ const (
 const MinSchemaVersion = 102
 
 // MaxSchemaVersion is a maximum compatible db schema version
-const MaxSchemaVersion = 102
+const MaxSchemaVersion = 103
 
 // Open database connection.
 //
 // Default driver name: "SQLite" and connection string is compatible with model connection, ie:
-//     Database=modelName.sqlite; Timeout=86400; OpenMode=ReadWrite;
+//
+//	Database=modelName.sqlite; Timeout=86400; OpenMode=ReadWrite;
+//
 // Otherwise it is expected to be driver-specific connection string, ie:
-//     DSN=ms2014; UID=sa; PWD=secret;
-//     file:m1.sqlite?mode=rw&_busy_timeout=86400000
+//
+//	DSN=ms2014; UID=sa; PWD=secret;
+//	file:m1.sqlite?mode=rw&_busy_timeout=86400000
+//
 // If isFacetRequired is true then database facet determined
 func Open(dbConnStr, dbDriver string, isFacetRequired bool) (*sql.DB, Facet, error) {
 
@@ -97,7 +102,8 @@ func Open(dbConnStr, dbDriver string, isFacetRequired bool) (*sql.DB, Facet, err
 }
 
 // IfEmptyMakeDefault return SQLite connection string and driver name based on model name:
-//   Database=modelName.sqlite; Timeout=86400; OpenMode=ReadWrite;
+//
+//	Database=modelName.sqlite; Timeout=86400; OpenMode=ReadWrite;
 func IfEmptyMakeDefault(modelName, modelSqlitePath, dbConnStr, dbDriver string) (string, string) {
 	if dbDriver == "" {
 		dbDriver = SQLiteDbDriver
@@ -113,7 +119,8 @@ func IfEmptyMakeDefault(modelName, modelSqlitePath, dbConnStr, dbDriver string) 
 }
 
 // IfEmptyMakeDefaultReadOnly return read-only SQLite connection string and driver name based on model name:
-//   Database=modelName.sqlite; Timeout=86400; OpenMode=ReadWrite;
+//
+//	Database=modelName.sqlite; Timeout=86400; OpenMode=ReadWrite;
 func IfEmptyMakeDefaultReadOnly(modelName, modelSqlitePath, dbConnStr, dbDriver string) (string, string) {
 	if dbDriver == "" {
 		dbDriver = SQLiteDbDriver
@@ -129,13 +136,15 @@ func IfEmptyMakeDefaultReadOnly(modelName, modelSqlitePath, dbConnStr, dbDriver 
 }
 
 // MakeSqliteDefault return default SQLite connection string based on model.sqlite file path:
-//   Database=model.sqlite; Timeout=86400; OpenMode=ReadWrite;
+//
+//	Database=model.sqlite; Timeout=86400; OpenMode=ReadWrite;
 func MakeSqliteDefault(modelSqlitePath string) string {
 	return "Database=" + modelSqlitePath + "; Timeout=" + strconv.Itoa(SQLiteTimeout) + "; OpenMode=ReadWrite;"
 }
 
 // MakeSqliteDefaultReadOnly return default read-only SQLite connection string based on model.sqlite file path:
-//   Database=model.sqlite; Timeout=86400; OpenMode=ReadOnly;
+//
+//	Database=model.sqlite; Timeout=86400; OpenMode=ReadOnly;
 func MakeSqliteDefaultReadOnly(modelSqlitePath string) string {
 	return "Database=" + modelSqlitePath + "; Timeout=" + strconv.Itoa(SQLiteTimeout) + "; OpenMode=ReadOnly;"
 }
@@ -143,10 +152,11 @@ func MakeSqliteDefaultReadOnly(modelSqlitePath string) string {
 // Convert SQLite connection string into "sqlite3" format and delete existing db.slite file if required.
 //
 // Following parameters allowed for SQLite database connection:
-//   Database - (required) database file path or URI
-//   Timeout - (optional) table lock "busy" timeout in seconds, default=0
-//   OpenMode - (optional) database file open mode: ReadOnly, ReadWrite, Create, default=ReadOnly
-//   DeleteExisting - (optional) if true then delete existing database file, default: false
+//
+//	Database - (required) database file path or URI
+//	Timeout - (optional) table lock "busy" timeout in seconds, default=0
+//	OpenMode - (optional) database file open mode: ReadOnly, ReadWrite, Create, default=ReadOnly
+//	DeleteExisting - (optional) if true then delete existing database file, default: false
 func prepareSqlite(dbConnStr string) (string, string, error) {
 
 	// parse SQLite connection string
