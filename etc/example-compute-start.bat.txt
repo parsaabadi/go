@@ -1,5 +1,9 @@
 @echo off
 REM start computational server
+REM
+REM below is a dummy test script, it does nothing but return OK or error
+REM use it as skeletom for your own developemnt
+
 
 set srv_name=%1
 
