@@ -278,7 +278,7 @@ func (mc *ModelCatalog) UpdateWorksetParameter(
 	// convert cell from emun codes to enum id's
 	csvCvt := db.CellParamConverter{
 		ModelDef:  mc.modelLst[idx].meta,
-		ParamName: param.Name,
+		Name:      param.Name,
 		DoubleFmt: theCfg.doubleFmt,
 	}
 	cvt, e := csvCvt.CodeToIdCell(mc.modelLst[idx].meta, param.Name)
@@ -444,7 +444,7 @@ func (mc *ModelCatalog) UpdateWorksetParameterCsv(
 		// converter from csv row []string to db cell
 		csvCvt := db.CellParamConverter{
 			ModelDef:  mc.modelLst[idx].meta,
-			ParamName: param.Name,
+			Name:      param.Name,
 			DoubleFmt: theCfg.doubleFmt,
 		}
 		cvt, err := csvCvt.CsvToCell()

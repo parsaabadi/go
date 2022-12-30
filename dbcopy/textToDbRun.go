@@ -262,16 +262,6 @@ func fromRunTextToDb(
 	omppLog.Log("Model run from ", srcName, " into id: ", dstId)
 
 	// restore run parameters: all model parameters must be included in the run
-	paramLt := db.WriteParamLayout{
-		WriteLayout: db.WriteLayout{ToId: dstId},
-		DoubleFmt:   doubleFmt,
-		IsToRun:     true}
-	cvtParam := db.CellParamConverter{
-		ModelDef:  modelDef,
-		IsIdCsv:   false,
-		DoubleFmt: doubleFmt,
-	}
-
 	nP := len(modelDef.Param)
 	omppLog.Log("  Parameters: ", nP)
 	logT := time.Now().Unix()
@@ -282,9 +272,21 @@ func fromRunTextToDb(
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nP, ": ", modelDef.Param[j].Name)
 
 		// insert parameter values in model run
-		cvtParam.ParamName = modelDef.Param[j].Name
-		paramLt.Name = modelDef.Param[j].Name
-		paramLt.SubCount = meta.Param[j].SubCount
+		paramLt := db.WriteParamLayout{
+			WriteLayout: db.WriteLayout{
+				Name:     modelDef.Param[j].Name,
+				ToId:     dstId,
+				SubCount: meta.Param[j].SubCount,
+			},
+			DoubleFmt: doubleFmt,
+			IsToRun:   true,
+		}
+		cvtParam := db.CellParamConverter{
+			ModelDef:  modelDef,
+			Name:      modelDef.Param[j].Name,
+			IsIdCsv:   false,
+			DoubleFmt: doubleFmt,
+		}
 
 		err = writeParamFromCsvFile(dbConn, modelDef, paramLt, paramCsvDir, cvtParam, encodingName)
 		if err != nil {
@@ -301,16 +303,6 @@ func fromRunTextToDb(
 	}
 
 	// restore run output tables accumulators and expressions, if the table included in run results
-	tblLt := db.WriteTableLayout{
-		WriteLayout: db.WriteLayout{
-			ToId:     dstId,
-			SubCount: meta.Run.SubCount,
-		},
-		DoubleFmt: doubleFmt}
-
-	ctc := db.CellTableConverter{ModelDef: modelDef}
-	cvtExpr := db.CellExprConverter{CellTableConverter: ctc, IsIdCsv: false, DoubleFmt: doubleFmt}
-	cvtAcc := db.CellAccConverter{CellTableConverter: ctc, IsIdCsv: false, DoubleFmt: doubleFmt}
 
 	nT := len(modelDef.Table)
 	omppLog.Log("  Tables: ", nT)
@@ -330,7 +322,21 @@ func fromRunTextToDb(
 		}
 
 		// read output table accumulator(s) values from csv file
-		tblLt.Name = modelDef.Table[j].Name
+		tblLt := db.WriteTableLayout{
+			WriteLayout: db.WriteLayout{
+				Name:     modelDef.Table[j].Name,
+				ToId:     dstId,
+				SubCount: meta.Run.SubCount,
+			},
+			DoubleFmt: doubleFmt,
+		}
+		ctc := db.CellTableConverter{
+			ModelDef: modelDef,
+			Name:     modelDef.Table[j].Name,
+		}
+		cvtExpr := db.CellExprConverter{CellTableConverter: ctc, IsIdCsv: false, DoubleFmt: doubleFmt}
+		cvtAcc := db.CellAccConverter{CellTableConverter: ctc, IsIdCsv: false, DoubleFmt: doubleFmt}
+
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name)
 
 		err := fromTableCsvFile(dbConn, modelDef, tblLt, tableCsvDir, cvtExpr, cvtAcc, encodingName)

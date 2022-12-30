@@ -239,8 +239,8 @@ func digestAccumulatorsFrom(
 	// create accumulator(s) row digester append digest of parameter cells
 	cvtAcc := CellAccConverter{
 		CellTableConverter: CellTableConverter{
-			ModelDef:  modelDef,
-			TableName: meta.Name,
+			ModelDef: modelDef,
+			Name:     meta.Name,
 		},
 		IsIdCsv:   true,
 		DoubleFmt: doubleFmt,
@@ -263,8 +263,8 @@ func digestExpressionsFrom(
 	// append digest of expression(s) cells
 	cvtExpr := CellExprConverter{
 		CellTableConverter: CellTableConverter{
-			ModelDef:  modelDef,
-			TableName: meta.Name,
+			ModelDef: modelDef,
+			Name:     meta.Name,
 		},
 		IsIdCsv:   true,
 		DoubleFmt: doubleFmt,

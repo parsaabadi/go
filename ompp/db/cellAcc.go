@@ -45,9 +45,9 @@ func (cellCvt CellAccConverter) CsvFileName() (string, error) {
 
 	// make csv file name
 	if cellCvt.IsIdCsv {
-		return cellCvt.TableName + ".id.acc.csv", nil
+		return cellCvt.Name + ".id.acc.csv", nil
 	}
-	return cellCvt.TableName + ".acc.csv", nil
+	return cellCvt.Name + ".acc.csv", nil
 }
 
 // CsvHeader return first line for csv file: column names.
@@ -125,12 +125,12 @@ func (cellCvt CellAccConverter) ToCsvIdRow() (func(interface{}, []string) error,
 
 		cell, ok := src.(CellAcc)
 		if !ok {
-			return errors.New("invalid type, expected: CellAcc (internal error): " + cellCvt.TableName)
+			return errors.New("invalid type, expected: CellAcc (internal error): " + cellCvt.Name)
 		}
 
 		n := len(cell.DimIds)
 		if len(row) != n+3 {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+3) + ": " + cellCvt.TableName)
+			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+3) + ": " + cellCvt.Name)
 		}
 
 		row[0] = fmt.Sprint(cell.AccId)
@@ -173,7 +173,7 @@ func (cellCvt CellAccConverter) ToCsvRow() (func(interface{}, []string) error, e
 	fd := make([]func(itemId int) (string, error), table.Rank)
 
 	for k := 0; k < table.Rank; k++ {
-		f, err := table.Dim[k].typeOf.itemIdToCode(cellCvt.TableName+"."+table.Dim[k].Name, table.Dim[k].IsTotal)
+		f, err := table.Dim[k].typeOf.itemIdToCode(cellCvt.Name+"."+table.Dim[k].Name, table.Dim[k].IsTotal)
 		if err != nil {
 			return nil, err
 		}
@@ -184,12 +184,12 @@ func (cellCvt CellAccConverter) ToCsvRow() (func(interface{}, []string) error, e
 
 		cell, ok := src.(CellAcc)
 		if !ok {
-			return errors.New("invalid type, expected: output table accumulator cell (internal error): " + cellCvt.TableName)
+			return errors.New("invalid type, expected: output table accumulator cell (internal error): " + cellCvt.Name)
 		}
 
 		n := len(cell.DimIds)
 		if len(row) != n+3 {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+3) + ": " + cellCvt.TableName)
+			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+3) + ": " + cellCvt.Name)
 		}
 
 		row[0] = table.Acc[cell.AccId].Name
@@ -236,7 +236,7 @@ func (cellCvt CellAccConverter) CsvToCell() (func(row []string) (interface{}, er
 	fd := make([]func(src string) (int, error), table.Rank)
 
 	for k := 0; k < table.Rank; k++ {
-		f, err := table.Dim[k].typeOf.itemCodeToId(cellCvt.TableName+"."+table.Dim[k].Name, table.Dim[k].IsTotal)
+		f, err := table.Dim[k].typeOf.itemCodeToId(cellCvt.Name+"."+table.Dim[k].Name, table.Dim[k].IsTotal)
 		if err != nil {
 			return nil, err
 		}
@@ -251,7 +251,7 @@ func (cellCvt CellAccConverter) CsvToCell() (func(row []string) (interface{}, er
 
 		n := len(cell.DimIds)
 		if len(row) != n+3 {
-			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(n+3) + ": " + cellCvt.TableName)
+			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(n+3) + ": " + cellCvt.Name)
 		}
 
 		// accumulator id by name
@@ -263,7 +263,7 @@ func (cellCvt CellAccConverter) CsvToCell() (func(row []string) (interface{}, er
 			}
 		}
 		if cell.AccId < 0 {
-			return nil, errors.New("invalid accumulator name: " + row[0] + " output table: " + cellCvt.TableName)
+			return nil, errors.New("invalid accumulator name: " + row[0] + " output table: " + cellCvt.Name)
 		}
 
 		// subvalue number

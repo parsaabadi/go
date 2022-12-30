@@ -34,14 +34,14 @@ type attrValue struct {
 
 // CellMicroConverter is a converter for entity microdata row to implement CsvConverter interface.
 type CellMicroConverter struct {
-	ModelDef   *ModelMeta      // model metadata
-	EntityName string          // model entity name
-	RunDef     *RunMeta        // model run metadata
-	GenHid     int             // entity generation Hid
-	IsIdCsv    bool            // if true then use enum id's else use enum codes
-	DoubleFmt  string          // if not empty then format string is used to sprintf if value type is float, double, long double
-	theEntity  *EntityMeta     // if not nil then entity found
-	theAttrs   []EntityAttrRow // if not empty then entity generation attributes
+	ModelDef  *ModelMeta      // model metadata
+	Name      string          // model entity name
+	RunDef    *RunMeta        // model run metadata
+	GenHid    int             // entity generation Hid
+	IsIdCsv   bool            // if true then use enum id's else use enum codes
+	DoubleFmt string          // if not empty then format string is used to sprintf if value type is float, double, long double
+	theEntity *EntityMeta     // if not nil then entity found
+	theAttrs  []EntityAttrRow // if not empty then entity generation attributes
 }
 
 // retrun true if csv converter is using enum id's for dimensions
@@ -58,9 +58,9 @@ func (cellCvt CellMicroConverter) CsvFileName() (string, error) {
 
 	// make csv file name
 	if cellCvt.IsIdCsv {
-		return cellCvt.EntityName + ".id.csv", nil
+		return cellCvt.Name + ".id.csv", nil
 	}
-	return cellCvt.EntityName + ".csv", nil
+	return cellCvt.Name + ".csv", nil
 }
 
 // CsvHeader return first line for csv file: column names, it's look like: key,AgeGroup,Income.
@@ -113,12 +113,12 @@ func (cellCvt CellMicroConverter) ToCsvIdRow() (func(interface{}, []string) erro
 
 		cell, ok := src.(CellMicro)
 		if !ok {
-			return errors.New("invalid type, expected: CellMicro (internal error): " + cellCvt.EntityName)
+			return errors.New("invalid type, expected: CellMicro (internal error): " + cellCvt.Name)
 		}
 
 		n := len(cell.Attr)
 		if n != nAttr || len(row) != n+1 {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(nAttr+1) + ": " + cellCvt.EntityName)
+			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(nAttr+1) + ": " + cellCvt.Name)
 		}
 
 		row[0] = fmt.Sprint(cell.Key)
@@ -170,7 +170,7 @@ func (cellCvt CellMicroConverter) ToCsvRow() (func(interface{}, []string) error,
 			}
 		} else { // enum based attribute type: frind and return enum code by enum id
 
-			msgName := cellCvt.EntityName + "." + ea.Name // for error message, ex: Person.Income
+			msgName := cellCvt.Name + "." + ea.Name // for error message, ex: Person.Income
 			f, err := ea.typeOf.itemIdToCode(msgName, false)
 			if err != nil {
 				return nil, err
@@ -193,12 +193,12 @@ func (cellCvt CellMicroConverter) ToCsvRow() (func(interface{}, []string) error,
 
 		cell, ok := src.(CellMicro)
 		if !ok {
-			return errors.New("invalid type, expected: CellMicro (internal error): " + cellCvt.EntityName)
+			return errors.New("invalid type, expected: CellMicro (internal error): " + cellCvt.Name)
 		}
 
 		n := len(cell.Attr)
 		if n != nAttr || len(row) != n+1 {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(nAttr+1) + ": " + cellCvt.EntityName)
+			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(nAttr+1) + ": " + cellCvt.Name)
 		}
 
 		row[0] = fmt.Sprint(cell.Key)
@@ -242,7 +242,7 @@ func (cellCvt CellMicroConverter) CsvToCell() (func(row []string) (interface{}, 
 
 	for k, ea := range attrs {
 
-		msgName := cellCvt.EntityName + "." + ea.Name // for error message, ex: Person.Income
+		msgName := cellCvt.Name + "." + ea.Name // for error message, ex: Person.Income
 
 		// attribute type to create converter
 
@@ -291,12 +291,12 @@ func (cellCvt CellMicroConverter) CsvToCell() (func(row []string) (interface{}, 
 
 		n := len(cell.Attr)
 		if n != nAttr || len(row) != n+1 {
-			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(nAttr+1) + ": " + cellCvt.EntityName)
+			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(nAttr+1) + ": " + cellCvt.Name)
 		}
 
 		// convert microdata key, it is uint 64 bit
 		if row[0] == "" || row[0] == "null" {
-			return nil, errors.New("invalid microdata key, it cannot be NULL: " + cellCvt.EntityName)
+			return nil, errors.New("invalid microdata key, it cannot be NULL: " + cellCvt.Name)
 		}
 
 		mKey, err := strconv.ParseUint(row[0], 10, 64)
@@ -335,14 +335,14 @@ func (cellCvt CellMicroConverter) entityByName() (*EntityMeta, error) {
 	if cellCvt.ModelDef == nil {
 		return nil, errors.New("invalid (empty) model metadata, look like model not found")
 	}
-	if cellCvt.EntityName == "" {
+	if cellCvt.Name == "" {
 		return nil, errors.New("invalid (empty) entity name")
 	}
 
 	// find entity index by name
-	idx, ok := cellCvt.ModelDef.EntityByName(cellCvt.EntityName)
+	idx, ok := cellCvt.ModelDef.EntityByName(cellCvt.Name)
 	if !ok {
-		return nil, errors.New("entity not found: " + cellCvt.EntityName)
+		return nil, errors.New("entity not found: " + cellCvt.Name)
 	}
 	cellCvt.theEntity = &cellCvt.ModelDef.Entity[idx]
 
@@ -357,7 +357,7 @@ func (cellCvt CellMicroConverter) entityAttrs() (*EntityMeta, []EntityAttrRow, e
 	}
 	// validate parameters
 	if cellCvt.RunDef == nil {
-		return nil, []EntityAttrRow{}, errors.New("invalid (empty) entity microdata generation, look like model run not found or there is no microdata: " + cellCvt.EntityName)
+		return nil, []EntityAttrRow{}, errors.New("invalid (empty) entity microdata generation, look like model run not found or there is no microdata: " + cellCvt.Name)
 	}
 
 	// find entity by name and entity generation by Hid
@@ -369,7 +369,7 @@ func (cellCvt CellMicroConverter) entityAttrs() (*EntityMeta, []EntityAttrRow, e
 	// find entity generation in model run
 	idx, ok := cellCvt.RunDef.EntityGenByGenHid(cellCvt.GenHid)
 	if !ok {
-		return nil, []EntityAttrRow{}, errors.New("entity microdata generation not found: " + strconv.Itoa(cellCvt.GenHid) + " " + cellCvt.EntityName)
+		return nil, []EntityAttrRow{}, errors.New("entity microdata generation not found: " + strconv.Itoa(cellCvt.GenHid) + " " + cellCvt.Name)
 	}
 	entGen := &cellCvt.RunDef.EntityGen[idx]
 
@@ -380,7 +380,7 @@ func (cellCvt CellMicroConverter) entityAttrs() (*EntityMeta, []EntityAttrRow, e
 
 		aIdx, ok := ent.AttrByKey(ga.AttrId)
 		if !ok {
-			return nil, []EntityAttrRow{}, errors.New("entity attribute not found by id: " + strconv.Itoa(ga.AttrId) + " " + cellCvt.EntityName)
+			return nil, []EntityAttrRow{}, errors.New("entity attribute not found by id: " + strconv.Itoa(ga.AttrId) + " " + cellCvt.Name)
 		}
 		attrs[k] = ent.Attr[aIdx]
 	}

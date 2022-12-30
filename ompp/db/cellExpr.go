@@ -24,9 +24,9 @@ type CellCodeExpr struct {
 
 // CellTableConverter is a parent for for output table converters.
 type CellTableConverter struct {
-	ModelDef  *ModelMeta // model metadata
-	TableName string     // output table name
-	theTable  *TableMeta // if not nil then output table already found
+	ModelDef *ModelMeta // model metadata
+	Name     string     // output table name
+	theTable *TableMeta // if not nil then output table already found
 }
 
 // CellExprConverter is a converter for output table expression to implement CsvConverter interface.
@@ -50,9 +50,9 @@ func (cellCvt CellExprConverter) CsvFileName() (string, error) {
 
 	// make csv file name
 	if cellCvt.IsIdCsv {
-		return cellCvt.TableName + ".id.csv", nil
+		return cellCvt.Name + ".id.csv", nil
 	}
-	return cellCvt.TableName + ".csv", nil
+	return cellCvt.Name + ".csv", nil
 }
 
 // CsvHeader return first line for csv file: column names.
@@ -127,12 +127,12 @@ func (cellCvt CellExprConverter) ToCsvIdRow() (func(interface{}, []string) error
 
 		cell, ok := src.(CellExpr)
 		if !ok {
-			return errors.New("invalid type, expected: CellExpr (internal error): " + cellCvt.TableName)
+			return errors.New("invalid type, expected: CellExpr (internal error): " + cellCvt.Name)
 		}
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.TableName)
+			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.Name)
 		}
 
 		row[0] = fmt.Sprint(cell.ExprId)
@@ -174,7 +174,7 @@ func (cellCvt CellExprConverter) ToCsvRow() (func(interface{}, []string) error, 
 	fd := make([]func(itemId int) (string, error), table.Rank)
 
 	for k := 0; k < table.Rank; k++ {
-		f, err := table.Dim[k].typeOf.itemIdToCode(cellCvt.TableName+"."+table.Dim[k].Name, table.Dim[k].IsTotal)
+		f, err := table.Dim[k].typeOf.itemIdToCode(cellCvt.Name+"."+table.Dim[k].Name, table.Dim[k].IsTotal)
 		if err != nil {
 			return nil, err
 		}
@@ -185,12 +185,12 @@ func (cellCvt CellExprConverter) ToCsvRow() (func(interface{}, []string) error, 
 
 		cell, ok := src.(CellExpr)
 		if !ok {
-			return errors.New("invalid type, expected: output table expression cell (internal error): " + cellCvt.TableName)
+			return errors.New("invalid type, expected: output table expression cell (internal error): " + cellCvt.Name)
 		}
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.TableName)
+			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.Name)
 		}
 
 		row[0] = table.Expr[cell.ExprId].Name
@@ -236,7 +236,7 @@ func (cellCvt CellExprConverter) CsvToCell() (func(row []string) (interface{}, e
 	fd := make([]func(src string) (int, error), table.Rank)
 
 	for k := 0; k < table.Rank; k++ {
-		f, err := table.Dim[k].typeOf.itemCodeToId(cellCvt.TableName+"."+table.Dim[k].Name, table.Dim[k].IsTotal)
+		f, err := table.Dim[k].typeOf.itemCodeToId(cellCvt.Name+"."+table.Dim[k].Name, table.Dim[k].IsTotal)
 		if err != nil {
 			return nil, err
 		}
@@ -251,7 +251,7 @@ func (cellCvt CellExprConverter) CsvToCell() (func(row []string) (interface{}, e
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {
-			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.TableName)
+			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.Name)
 		}
 
 		// expression id by name
@@ -263,7 +263,7 @@ func (cellCvt CellExprConverter) CsvToCell() (func(row []string) (interface{}, e
 			}
 		}
 		if cell.ExprId < 0 {
-			return nil, errors.New("invalid expression name: " + row[0] + " output table: " + cellCvt.TableName)
+			return nil, errors.New("invalid expression name: " + row[0] + " output table: " + cellCvt.Name)
 		}
 
 		// convert dimensions: enum code to enum id or integer value for simple type dimension
@@ -363,14 +363,14 @@ func (cellCvt CellTableConverter) tableByName() (*TableMeta, error) {
 	if cellCvt.ModelDef == nil {
 		return nil, errors.New("invalid (empty) model metadata, look like model not found")
 	}
-	if cellCvt.TableName == "" {
+	if cellCvt.Name == "" {
 		return nil, errors.New("invalid (empty) output table name")
 	}
 
 	// find output table by name
-	idx, ok := cellCvt.ModelDef.OutTableByName(cellCvt.TableName)
+	idx, ok := cellCvt.ModelDef.OutTableByName(cellCvt.Name)
 	if !ok {
-		return nil, errors.New("output table not found: " + cellCvt.TableName)
+		return nil, errors.New("output table not found: " + cellCvt.Name)
 	}
 	cellCvt.theTable = &cellCvt.ModelDef.Table[idx]
 

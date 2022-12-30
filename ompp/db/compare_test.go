@@ -306,8 +306,8 @@ func TestCompareOutputTable(t *testing.T) {
 
 	csvCvt := CellTableCmpConverter{
 		CellTableConverter: CellTableConverter{
-			ModelDef:  modelDef,
-			TableName: tableName,
+			ModelDef: modelDef,
+			Name:     tableName,
 		},
 		IsIdCsv:    true,
 		IdToDigest: map[int]string{},

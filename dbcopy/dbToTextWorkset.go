@@ -199,7 +199,7 @@ func toWorksetText(
 
 		cvtParam := db.CellParamConverter{
 			ModelDef:  modelDef,
-			ParamName: modelDef.Param[j].Name,
+			Name:      modelDef.Param[j].Name,
 			IsIdCsv:   isIdCsv,
 			DoubleFmt: doubleFmt,
 		}

@@ -285,7 +285,7 @@ func toWorksetCsv(
 
 		cvtParam := db.CellParamConverter{
 			ModelDef:  modelDef,
-			ParamName: modelDef.Param[idx].Name,
+			Name:      modelDef.Param[idx].Name,
 			IsIdCsv:   isIdCsv,
 			DoubleFmt: doubleFmt,
 		}

@@ -27,7 +27,7 @@ type CellCodeParam struct {
 // CellParamConverter is a converter for input parameter to implement CsvConverter interface.
 type CellParamConverter struct {
 	ModelDef  *ModelMeta // model metadata
-	ParamName string     // parameter name
+	Name      string     // parameter name
 	IsIdCsv   bool       // if true then use enum id's else use enum codes
 	DoubleFmt string     // if not empty then format string is used to sprintf if value type is float, double, long double
 	theParam  *ParamMeta // if not nil then parameter found
@@ -47,9 +47,9 @@ func (cellCvt CellParamConverter) CsvFileName() (string, error) {
 
 	// make csv file name
 	if cellCvt.IsIdCsv {
-		return cellCvt.ParamName + ".id.csv", nil
+		return cellCvt.Name + ".id.csv", nil
 	}
-	return cellCvt.ParamName + ".csv", nil
+	return cellCvt.Name + ".csv", nil
 }
 
 // CsvHeader return first line for csv file: column names, it's look like: sub_id,dim0,dim1,param_value.
@@ -120,12 +120,12 @@ func (cellCvt CellParamConverter) ToCsvIdRow() (func(interface{}, []string) erro
 
 		cell, ok := src.(CellParam)
 		if !ok {
-			return errors.New("invalid type, expected: CellParam (internal error): " + cellCvt.ParamName)
+			return errors.New("invalid type, expected: CellParam (internal error): " + cellCvt.Name)
 		}
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.ParamName)
+			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.Name)
 		}
 
 		row[0] = fmt.Sprint(cell.SubId)
@@ -166,7 +166,7 @@ func (cellCvt CellParamConverter) ToCsvRow() (func(interface{}, []string) error,
 	fd := make([]func(itemId int) (string, error), param.Rank)
 
 	for k := 0; k < param.Rank; k++ {
-		f, err := param.Dim[k].typeOf.itemIdToCode(cellCvt.ParamName+"."+param.Dim[k].Name, false)
+		f, err := param.Dim[k].typeOf.itemIdToCode(cellCvt.Name+"."+param.Dim[k].Name, false)
 		if err != nil {
 			return nil, err
 		}
@@ -181,7 +181,7 @@ func (cellCvt CellParamConverter) ToCsvRow() (func(interface{}, []string) error,
 	var fv func(itemId int) (string, error)
 
 	if isUseEnum {
-		f, err := param.typeOf.itemIdToCode(cellCvt.ParamName, false)
+		f, err := param.typeOf.itemIdToCode(cellCvt.Name, false)
 		if err != nil {
 			return nil, err
 		}
@@ -192,12 +192,12 @@ func (cellCvt CellParamConverter) ToCsvRow() (func(interface{}, []string) error,
 
 		cell, ok := src.(CellParam)
 		if !ok {
-			return errors.New("invalid type, expected: parameter cell (internal error): " + cellCvt.ParamName)
+			return errors.New("invalid type, expected: parameter cell (internal error): " + cellCvt.Name)
 		}
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.ParamName)
+			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.Name)
 		}
 
 		row[0] = fmt.Sprint(cell.SubId)
@@ -225,7 +225,7 @@ func (cellCvt CellParamConverter) ToCsvRow() (func(interface{}, []string) error,
 			// depending on sql + driver it can be different type
 			iv, ok := helper.ToIntValue(cell.Value)
 			if !ok {
-				return errors.New("invalid parameter value type, expected: integer enum: " + cellCvt.ParamName)
+				return errors.New("invalid parameter value type, expected: integer enum: " + cellCvt.Name)
 			}
 
 			v, err := fv(int(iv))
@@ -261,7 +261,7 @@ func (cellCvt CellParamConverter) CsvToCell() (func(row []string) (interface{}, 
 	fd := make([]func(src string) (int, error), param.Rank)
 
 	for k := 0; k < param.Rank; k++ {
-		f, err := param.Dim[k].typeOf.itemCodeToId(cellCvt.ParamName+"."+param.Dim[k].Name, false)
+		f, err := param.Dim[k].typeOf.itemCodeToId(cellCvt.Name+"."+param.Dim[k].Name, false)
 		if err != nil {
 			return nil, err
 		}
@@ -278,7 +278,7 @@ func (cellCvt CellParamConverter) CsvToCell() (func(row []string) (interface{}, 
 
 	switch {
 	case isEnum:
-		f, err := param.typeOf.itemCodeToId(cellCvt.ParamName, false)
+		f, err := param.typeOf.itemCodeToId(cellCvt.Name, false)
 		if err != nil {
 			return nil, err
 		}
@@ -291,7 +291,7 @@ func (cellCvt CellParamConverter) CsvToCell() (func(row []string) (interface{}, 
 					return true, 0.0, nil
 				}
 				// else parameter is not nullable
-				return true, 0.0, errors.New("invalid parameter value, it cannot be NULL: " + cellCvt.ParamName)
+				return true, 0.0, errors.New("invalid parameter value, it cannot be NULL: " + cellCvt.Name)
 			}
 			vf, e := strconv.ParseFloat(src, 64)
 			if e != nil {
@@ -306,7 +306,7 @@ func (cellCvt CellParamConverter) CsvToCell() (func(row []string) (interface{}, 
 	case param.typeOf.IsInt():
 		fc = func(src string) (interface{}, error) { return strconv.Atoi(src) }
 	default:
-		return nil, errors.New("invalid (not supported) parameter type: " + cellCvt.ParamName)
+		return nil, errors.New("invalid (not supported) parameter type: " + cellCvt.Name)
 	}
 
 	// do conversion
@@ -317,7 +317,7 @@ func (cellCvt CellParamConverter) CsvToCell() (func(row []string) (interface{}, 
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {
-			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.ParamName)
+			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.Name)
 		}
 
 		// subvalue number
@@ -554,14 +554,14 @@ func (cellCvt CellParamConverter) paramByName() (*ParamMeta, error) {
 	if cellCvt.ModelDef == nil {
 		return nil, errors.New("invalid (empty) model metadata, look like model not found")
 	}
-	if cellCvt.ParamName == "" {
+	if cellCvt.Name == "" {
 		return nil, errors.New("invalid (empty) parameter name")
 	}
 
 	// find parameter by name
-	idx, ok := cellCvt.ModelDef.ParamByName(cellCvt.ParamName)
+	idx, ok := cellCvt.ModelDef.ParamByName(cellCvt.Name)
 	if !ok {
-		return nil, errors.New("parameter not found: " + cellCvt.ParamName)
+		return nil, errors.New("parameter not found: " + cellCvt.Name)
 	}
 	cellCvt.theParam = &cellCvt.ModelDef.Param[idx]
 

@@ -234,7 +234,7 @@ func toRunText(
 
 		cvtParam := db.CellParamConverter{
 			ModelDef:  modelDef,
-			ParamName: modelDef.Param[j].Name,
+			Name:      modelDef.Param[j].Name,
 			IsIdCsv:   isIdCsv,
 			DoubleFmt: doubleFmt,
 		}
@@ -252,11 +252,6 @@ func toRunText(
 	}
 
 	// write output tables into csv files, if the table included in run results
-	tblLt := db.ReadTableLayout{ReadLayout: db.ReadLayout{FromId: runId}}
-	ctc := db.CellTableConverter{ModelDef: modelDef}
-	cvtExpr := db.CellExprConverter{CellTableConverter: ctc, IsIdCsv: isIdCsv, DoubleFmt: doubleFmt}
-	cvtAcc := db.CellAccConverter{CellTableConverter: ctc, IsIdCsv: isIdCsv, DoubleFmt: doubleFmt}
-	cvtAll := db.CellAllAccConverter{CellTableConverter: ctc, IsIdCsv: isIdCsv, DoubleFmt: doubleFmt, ValueName: ""}
 
 	nT := len(modelDef.Table)
 	omppLog.Log("  Tables: ", nT)
@@ -276,12 +271,19 @@ func toRunText(
 		}
 
 		// write output table expression values into csv file
-		cvtExpr.TableName = modelDef.Table[j].Name
-		cvtAcc.TableName = modelDef.Table[j].Name
-		cvtAll.TableName = modelDef.Table[j].Name
-		tblLt.Name = modelDef.Table[j].Name
-		tblLt.IsAccum = false
-		tblLt.IsAllAccum = false
+		tblLt := db.ReadTableLayout{
+			ReadLayout: db.ReadLayout{
+				Name:   modelDef.Table[j].Name,
+				FromId: runId,
+			},
+		}
+		ctc := db.CellTableConverter{
+			ModelDef: modelDef,
+			Name:     modelDef.Table[j].Name,
+		}
+		cvtExpr := db.CellExprConverter{CellTableConverter: ctc, IsIdCsv: isIdCsv, DoubleFmt: doubleFmt}
+		cvtAcc := db.CellAccConverter{CellTableConverter: ctc, IsIdCsv: isIdCsv, DoubleFmt: doubleFmt}
+		cvtAll := db.CellAllAccConverter{CellTableConverter: ctc, IsIdCsv: isIdCsv, DoubleFmt: doubleFmt, ValueName: ""}
 
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name)
 
@@ -335,12 +337,12 @@ func toRunText(
 			}
 
 			cvtMicro := db.CellMicroConverter{
-				ModelDef:   modelDef,
-				EntityName: modelDef.Entity[eIdx].Name,
-				RunDef:     meta,
-				GenHid:     gHid,
-				IsIdCsv:    isIdCsv,
-				DoubleFmt:  doubleFmt,
+				ModelDef:  modelDef,
+				Name:      modelDef.Entity[eIdx].Name,
+				RunDef:    meta,
+				GenHid:    gHid,
+				IsIdCsv:   isIdCsv,
+				DoubleFmt: doubleFmt,
 			}
 			microLt := db.ReadMicroLayout{
 				ReadLayout: db.ReadLayout{Name: modelDef.Entity[eIdx].Name, FromId: runId},

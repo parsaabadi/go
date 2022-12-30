@@ -421,7 +421,7 @@ func digestParameterFrom(modelDef *ModelMeta, param *ParamMeta, doubleFmt string
 	// create parameter row digester append digest of parameter cells
 	cvtParam := CellParamConverter{
 		ModelDef:  modelDef,
-		ParamName: param.Name,
+		Name:      param.Name,
 		IsIdCsv:   true,
 		DoubleFmt: doubleFmt,
 	}

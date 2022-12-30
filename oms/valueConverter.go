@@ -46,7 +46,7 @@ func (mc *ModelCatalog) ParameterCellConverter(
 	// create converter
 	csvCvt := db.CellParamConverter{
 		ModelDef:  mc.modelLst[idx].meta,
-		ParamName: name,
+		Name:      name,
 		DoubleFmt: theCfg.doubleFmt,
 	}
 	var cvt func(interface{}) (interface{}, error)
@@ -96,39 +96,34 @@ func (mc *ModelCatalog) TableToCodeCellConverter(dn string, name string, isAcc, 
 	}
 
 	// create converter
+	ctc := db.CellTableConverter{
+		ModelDef: mc.modelLst[idx].meta,
+		Name:     name,
+	}
 	var cvt func(interface{}) (interface{}, error)
 	var err error
 
 	switch {
-	case isAllAcc:
+	case isAcc && isAllAcc:
 		csvCvt := db.CellAllAccConverter{
-			CellTableConverter: db.CellTableConverter{
-				ModelDef:  mc.modelLst[idx].meta,
-				TableName: name,
-			},
-			IsIdCsv:   true,
-			DoubleFmt: theCfg.doubleFmt,
-			ValueName: "",
+			CellTableConverter: ctc,
+			IsIdCsv:            true,
+			DoubleFmt:          theCfg.doubleFmt,
+			ValueName:          "",
 		}
 		cvt, err = csvCvt.IdToCodeCell(mc.modelLst[idx].meta, name)
 	case isAcc:
 		csvCvt := db.CellAccConverter{
-			CellTableConverter: db.CellTableConverter{
-				ModelDef:  mc.modelLst[idx].meta,
-				TableName: name,
-			},
-			IsIdCsv:   true,
-			DoubleFmt: theCfg.doubleFmt,
+			CellTableConverter: ctc,
+			IsIdCsv:            true,
+			DoubleFmt:          theCfg.doubleFmt,
 		}
 		cvt, err = csvCvt.IdToCodeCell(mc.modelLst[idx].meta, name)
 	default:
 		csvCvt := db.CellExprConverter{
-			CellTableConverter: db.CellTableConverter{
-				ModelDef:  mc.modelLst[idx].meta,
-				TableName: name,
-			},
-			IsIdCsv:   true,
-			DoubleFmt: theCfg.doubleFmt,
+			CellTableConverter: ctc,
+			IsIdCsv:            true,
+			DoubleFmt:          theCfg.doubleFmt,
 		}
 		cvt, err = csvCvt.IdToCodeCell(mc.modelLst[idx].meta, name)
 	}
@@ -173,7 +168,7 @@ func (mc *ModelCatalog) ParameterToCsvConverter(dn string, isCode bool, name str
 	// make csv header
 	csvCvt := db.CellParamConverter{
 		ModelDef:  mc.modelLst[idx].meta,
-		ParamName: name,
+		Name:      name,
 		IsIdCsv:   !isCode,
 		DoubleFmt: theCfg.doubleFmt,
 	}
@@ -230,33 +225,32 @@ func (mc *ModelCatalog) TableToCsvConverter(dn string, isCode bool, name string,
 		return []string{}, nil, false // return empty result: output table not found or error
 	}
 
-	ctc := db.CellTableConverter{
-		ModelDef:  mc.modelLst[idx].meta,
-		TableName: name,
-	}
-
 	// set cell conveter to csv
+	ctc := db.CellTableConverter{
+		ModelDef: mc.modelLst[idx].meta,
+		Name:     name,
+	}
 	var csvCvt db.CsvConverter
-	if !isAcc {
-		csvCvt = db.CellExprConverter{
+
+	switch {
+	case isAcc && isAllAcc:
+		csvCvt = db.CellAllAccConverter{
+			CellTableConverter: ctc,
+			IsIdCsv:            !isCode,
+			DoubleFmt:          theCfg.doubleFmt,
+			ValueName:          "",
+		}
+	case isAcc:
+		csvCvt = db.CellAccConverter{
 			CellTableConverter: ctc,
 			IsIdCsv:            !isCode,
 			DoubleFmt:          theCfg.doubleFmt,
 		}
-	} else {
-		if !isAllAcc {
-			csvCvt = db.CellAccConverter{
-				CellTableConverter: ctc,
-				IsIdCsv:            !isCode,
-				DoubleFmt:          theCfg.doubleFmt,
-			}
-		} else {
-			csvCvt = db.CellAllAccConverter{
-				CellTableConverter: ctc,
-				IsIdCsv:            !isCode,
-				DoubleFmt:          theCfg.doubleFmt,
-				ValueName:          "",
-			}
+	default:
+		csvCvt = db.CellExprConverter{
+			CellTableConverter: ctc,
+			IsIdCsv:            !isCode,
+			DoubleFmt:          theCfg.doubleFmt,
 		}
 	}
 
