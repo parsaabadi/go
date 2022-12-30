@@ -282,7 +282,7 @@ func DeepCopy(src interface{}, dst interface{}) error {
 	return nil
 }
 
-// ParseKeyValue string of multiple key=value; pairs separated by semicolon.
+// ParseKeyValue string of multiple key = value; pairs separated by semicolon.
 // Key cannot be empty, value can be.
 // Value can be escaped with "double" or 'single' quotes
 func ParseKeyValue(src string) (map[string]string, error) {

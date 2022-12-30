@@ -36,7 +36,7 @@ func (mc *ModelCatalog) loadModelText(digest string) int {
 	}
 
 	// read model_dic_txt rows from database
-	txt, err := db.GetModelTextById(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, "")
+	txt, err := db.GetModelTextRowById(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, "")
 	if err != nil {
 		omppLog.Log("Error at get model_dic_txt: ", digest, ": ", err.Error())
 		return -1
@@ -218,6 +218,7 @@ func (mc *ModelCatalog) ModelMetaTextByDigestOrName(dn string, preferredLang []l
 		TypeTxt:           make([]TypeDescrNote, len(mc.modelLst[idx].meta.Type)),
 		ParamTxt:          make([]ParamDescrNote, len(mc.modelLst[idx].meta.Param)),
 		TableTxt:          make([]TableDescrNote, len(mc.modelLst[idx].meta.Table)),
+		EntityTxt:         make([]EntityDescrNote, len(mc.modelLst[idx].meta.Entity)),
 		GroupTxt:          make([]GroupDescrNote, len(mc.modelLst[idx].meta.Group))}
 
 	// model types
@@ -257,6 +258,16 @@ func (mc *ModelCatalog) ModelMetaTextByDigestOrName(dn string, preferredLang []l
 		for j := range mt.TableTxt[k].TableExprTxt {
 			mt.TableTxt[k].TableExprTxt[j].Expr = mc.modelLst[idx].meta.Table[k].Expr[j]
 			mt.TableTxt[k].TableExprTxt[j].Expr.ExprSql = "" // remove sql of expression
+		}
+	}
+
+	// model entities
+	for k := range mt.EntityTxt {
+		mt.EntityTxt[k].Entity = mc.modelLst[idx].meta.Entity[k].EntityDicRow
+		mt.EntityTxt[k].EntityAttrTxt = make([]EntityAttrDescrNote, len(mc.modelLst[idx].meta.Entity[k].Attr))
+
+		for j := range mt.EntityTxt[k].EntityAttrTxt {
+			mt.EntityTxt[k].EntityAttrTxt[j].Attr = mc.modelLst[idx].meta.Entity[k].Attr[j]
 		}
 	}
 
@@ -1046,6 +1057,190 @@ func (mc *ModelCatalog) ModelMetaTextByDigestOrName(dn string, preferredLang []l
 					LangCode: mc.modelLst[idx].txtMeta.TableExprTxt[ni].LangCode,
 					Descr:    mc.modelLst[idx].txtMeta.TableExprTxt[ni].Descr,
 					Note:     mc.modelLst[idx].txtMeta.TableExprTxt[ni].Note}
+			}
+		}
+	}
+
+	// set entity description and notes
+	if len(mt.EntityTxt) > 0 && len(mc.modelLst[idx].txtMeta.EntityTxt) > 0 {
+
+		var isKey, isFound, isMatch bool
+		var nf, ni, si, di int
+
+		for ; si < len(mc.modelLst[idx].txtMeta.EntityTxt); si++ {
+
+			// destination rows must be defined by [di] index
+			if di >= len(mt.EntityTxt) {
+				break // done with all destination text
+			}
+
+			// check if source and destination keys equal
+			mId := mt.EntityTxt[di].Entity.ModelId
+			tId := mt.EntityTxt[di].Entity.EntityId
+
+			isKey = mc.modelLst[idx].txtMeta.EntityTxt[si].ModelId == mId &&
+				mc.modelLst[idx].txtMeta.EntityTxt[si].EntityId == tId
+
+			// start of next key: set value
+			if !isKey && isFound {
+
+				if !isMatch { // if no match then use default
+					ni = nf
+				}
+				mt.EntityTxt[di].DescrNote = db.DescrNote{
+					LangCode: mc.modelLst[idx].txtMeta.EntityTxt[ni].LangCode,
+					Descr:    mc.modelLst[idx].txtMeta.EntityTxt[ni].Descr,
+					Note:     mc.modelLst[idx].txtMeta.EntityTxt[ni].Note}
+
+				// reset to start next search
+				isFound = false
+				isMatch = false
+				di++ // move to next entity
+				si-- // repeat current source row
+				continue
+			}
+
+			// inside of key
+			if isKey {
+
+				if !isFound {
+					isFound = true // first key found
+					nf = si
+				}
+				// match the language
+				isMatch = mc.modelLst[idx].txtMeta.EntityTxt[si].LangCode == lc
+				if isMatch {
+					ni = si // perefred language match
+				}
+				if mc.modelLst[idx].txtMeta.EntityTxt[si].LangCode == lcd {
+					nf = si // index of default language
+				}
+			}
+
+			// if keys not equal and destination key behind source
+			// then move to next destination row and repeat current source row
+			if !isKey &&
+				(mc.modelLst[idx].txtMeta.EntityTxt[si].ModelId > mId ||
+					mc.modelLst[idx].txtMeta.EntityTxt[si].ModelId == mId &&
+						mc.modelLst[idx].txtMeta.EntityTxt[si].EntityId > tId) {
+
+				di++ // move to next entity
+				si-- // repeat current source row
+				continue
+			}
+		} // for
+
+		// last row
+		if isFound && di < len(mt.EntityTxt) {
+
+			if !isMatch { // if no match then use default
+				ni = nf
+			}
+			if ni < len(mc.modelLst[idx].txtMeta.EntityTxt) {
+				mt.EntityTxt[di].DescrNote = db.DescrNote{
+					LangCode: mc.modelLst[idx].txtMeta.EntityTxt[ni].LangCode,
+					Descr:    mc.modelLst[idx].txtMeta.EntityTxt[ni].Descr,
+					Note:     mc.modelLst[idx].txtMeta.EntityTxt[ni].Note}
+			}
+		}
+	}
+
+	// set entity attributes description and notes
+	if len(mt.EntityTxt) > 0 && len(mc.modelLst[idx].txtMeta.EntityAttrTxt) > 0 {
+
+		var isKey, isFound, isMatch bool
+		var nf, ni, si, pi, ci int
+
+		for ; si < len(mc.modelLst[idx].txtMeta.EntityAttrTxt); si++ {
+
+			// destination rows: parent and child must be defined by valid (pi, ci) indexes
+			if pi >= len(mt.EntityTxt) {
+				break // done with all destination text
+			}
+			if pi < len(mt.EntityTxt) &&
+				ci >= len(mt.EntityTxt[pi].EntityAttrTxt) {
+
+				if pi++; pi >= len(mt.EntityTxt) {
+					break // done with all destination text
+				}
+
+				ci = 0 // move to next type
+				si--   // repeat current source row
+				continue
+			}
+
+			// check if source and destination keys equal
+			mId := mt.EntityTxt[pi].Entity.ModelId
+			eId := mt.EntityTxt[pi].Entity.EntityId
+			aId := mt.EntityTxt[pi].EntityAttrTxt[ci].Attr.AttrId
+
+			isKey = mc.modelLst[idx].txtMeta.EntityAttrTxt[si].ModelId == mId &&
+				mc.modelLst[idx].txtMeta.EntityAttrTxt[si].EntityId == eId &&
+				mc.modelLst[idx].txtMeta.EntityAttrTxt[si].AttrId == aId
+
+			// start of next key: set value
+			if !isKey && isFound {
+
+				if !isMatch { // if no match then use default
+					ni = nf
+				}
+				mt.EntityTxt[pi].EntityAttrTxt[ci].DescrNote = db.DescrNote{
+					LangCode: mc.modelLst[idx].txtMeta.EntityAttrTxt[ni].LangCode,
+					Descr:    mc.modelLst[idx].txtMeta.EntityAttrTxt[ni].Descr,
+					Note:     mc.modelLst[idx].txtMeta.EntityAttrTxt[ni].Note}
+
+				// reset to start next search
+				isFound = false
+				isMatch = false
+				ci++ // move to next type
+				si-- // repeat current source row
+				continue
+			}
+
+			// inside of key
+			if isKey {
+
+				if !isFound {
+					isFound = true // first key found
+					nf = si
+				}
+				// match the language
+				isMatch = mc.modelLst[idx].txtMeta.EntityAttrTxt[si].LangCode == lc
+				if isMatch {
+					ni = si // perefred language match
+				}
+				if mc.modelLst[idx].txtMeta.EntityAttrTxt[si].LangCode == lcd {
+					nf = si // index of default language
+				}
+			}
+
+			// if keys not equal and destination key behind source
+			// then move to next destination row and repeat current source row
+			if !isKey &&
+				(mc.modelLst[idx].txtMeta.EntityAttrTxt[si].ModelId > mId ||
+					mc.modelLst[idx].txtMeta.EntityAttrTxt[si].ModelId == mId &&
+						mc.modelLst[idx].txtMeta.EntityAttrTxt[si].EntityId > eId ||
+					mc.modelLst[idx].txtMeta.EntityAttrTxt[si].ModelId == mId &&
+						mc.modelLst[idx].txtMeta.EntityAttrTxt[si].EntityId == eId &&
+						mc.modelLst[idx].txtMeta.EntityAttrTxt[si].AttrId > aId) {
+
+				ci++ // move to next type
+				si-- // repeat current source row
+				continue
+			}
+		} // for
+
+		// last row
+		if isFound && pi < len(mt.EntityTxt) && ci < len(mt.EntityTxt[pi].EntityAttrTxt) {
+
+			if !isMatch { // if no match then use default
+				ni = nf
+			}
+			if ni < len(mc.modelLst[idx].txtMeta.EntityAttrTxt) {
+				mt.EntityTxt[pi].EntityAttrTxt[ci].DescrNote = db.DescrNote{
+					LangCode: mc.modelLst[idx].txtMeta.EntityAttrTxt[ni].LangCode,
+					Descr:    mc.modelLst[idx].txtMeta.EntityAttrTxt[ni].Descr,
+					Note:     mc.modelLst[idx].txtMeta.EntityAttrTxt[ni].Note}
 			}
 		}
 	}

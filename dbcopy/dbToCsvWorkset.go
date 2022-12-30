@@ -24,7 +24,7 @@ func toWorksetListCsv(
 	doubleFmt string,
 	isIdCsv bool,
 	isWriteUtf8bom bool,
-	doUseIdNames useIdNames,
+	isUseIdNames bool,
 	isAllInOne bool) error {
 
 	// get all readonly worksets
@@ -36,8 +36,6 @@ func toWorksetListCsv(
 	// read all workset parameters and dump it into csv files
 	fu := make([]bool, len(modelDef.Param))
 	for k := range wl {
-
-		isUseIdNames := doUseIdNames == yesUseIdNames // usage of id's to make names: yes, no, default
 
 		err := toWorksetCsv(
 			dbConn, modelDef, &wl[k], outDir, doubleFmt, isIdCsv, isWriteUtf8bom, isUseIdNames, fu, isAllInOne)
@@ -274,9 +272,6 @@ func toWorksetCsv(
 	}
 
 	// write parameter into csv file
-	paramLt := db.ReadParamLayout{ReadLayout: db.ReadLayout{FromId: setId}, IsFromSet: true}
-	cvtParam := db.CellParamConverter{DoubleFmt: doubleFmt}
-
 	nP := len(meta.Param)
 	omppLog.Log("  Parameters: ", nP)
 	logT := time.Now().Unix()
@@ -285,13 +280,26 @@ func toWorksetCsv(
 
 		idx, ok := modelDef.ParamByHid(meta.Param[j].ParamHid)
 		if !ok {
-			return errors.New("missing workset parameter Hid: " + strconv.Itoa(meta.Param[j].ParamHid) + " workset: " + strconv.Itoa(paramLt.FromId) + " " + meta.Set.Name)
+			return errors.New("missing workset parameter Hid: " + strconv.Itoa(meta.Param[j].ParamHid) + " workset: " + strconv.Itoa(setId) + " " + meta.Set.Name)
 		}
-		paramLt.Name = modelDef.Param[idx].Name
+
+		cvtParam := db.CellParamConverter{
+			ModelDef:  modelDef,
+			ParamName: modelDef.Param[idx].Name,
+			IsIdCsv:   isIdCsv,
+			DoubleFmt: doubleFmt,
+		}
+		paramLt := db.ReadParamLayout{
+			ReadLayout: db.ReadLayout{
+				Name:   modelDef.Param[idx].Name,
+				FromId: setId,
+			},
+			IsFromSet: true,
+		}
 
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nP, ": ", paramLt.Name)
 
-		err = toCellCsvFile(dbConn, modelDef, paramLt.Name, true, paramLt, cvtParam, firstUse[idx] && isAllInOne, csvDir, isIdCsv, isWriteUtf8bom, firstCol, firstVal)
+		err = toCellCsvFile(dbConn, modelDef, paramLt, cvtParam, firstUse[idx] && isAllInOne, csvDir, isWriteUtf8bom, firstCol, firstVal)
 		if err != nil {
 			return err
 		}
@@ -320,7 +328,7 @@ func toWorksetCsv(
 					}
 
 					// write notes into parameterName.LANG.md file
-					err = toMdFile(
+					err = toDotMdFile(
 						csvDir,
 						paramName+"."+meta.Param[j].Txt[i].LangCode,
 						isWriteUtf8bom, meta.Param[j].Txt[i].Note)

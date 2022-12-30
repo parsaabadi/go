@@ -276,7 +276,11 @@ func (mc *ModelCatalog) UpdateWorksetParameter(
 	}
 
 	// convert cell from emun codes to enum id's
-	csvCvt := db.CellParamConverter{DoubleFmt: theCfg.doubleFmt}
+	csvCvt := db.CellParamConverter{
+		ModelDef:  mc.modelLst[idx].meta,
+		ParamName: param.Name,
+		DoubleFmt: theCfg.doubleFmt,
+	}
 	cvt, e := csvCvt.CodeToIdCell(mc.modelLst[idx].meta, param.Name)
 	if e != nil {
 		return false, errors.New("Failed to create parameter cell value converter: " + param.Name + " : " + e.Error())
@@ -438,8 +442,12 @@ func (mc *ModelCatalog) UpdateWorksetParameterCsv(
 	if csvRd != nil {
 
 		// converter from csv row []string to db cell
-		csvCvt := db.CellParamConverter{DoubleFmt: theCfg.doubleFmt}
-		cvt, err := csvCvt.CsvToCell(mc.modelLst[idx].meta, param.Name, param.SubCount)
+		csvCvt := db.CellParamConverter{
+			ModelDef:  mc.modelLst[idx].meta,
+			ParamName: param.Name,
+			DoubleFmt: theCfg.doubleFmt,
+		}
+		cvt, err := csvCvt.CsvToCell()
 		if err != nil {
 			return false, errors.New("invalid converter from csv row: " + err.Error())
 		}
@@ -452,7 +460,7 @@ func (mc *ModelCatalog) UpdateWorksetParameterCsv(
 		case err != nil:
 			return false, errors.New("Failed to read csv parameter values " + param.Name + ": " + e.Error())
 		}
-		if chs, e := csvCvt.CsvHeader(mc.modelLst[idx].meta, param.Name); e != nil {
+		if chs, e := csvCvt.CsvHeader(); e != nil {
 			return false, errors.New("Error at building csv parameter header " + param.Name)
 		} else {
 			fh := strings.Join(fhs, ",")

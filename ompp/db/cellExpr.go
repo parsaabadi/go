@@ -22,59 +22,54 @@ type CellCodeExpr struct {
 	ExprId        int // output table expression id
 }
 
-// CellExprConverter is a converter for output table expression to implement CsvConverter interface.
-type CellExprConverter struct {
-	DoubleFmt  string // if not empty then format string is used to sprintf if value type is float, double, long double
-	IsIdHeader bool   // if isIdHeader is true then column names: expr_id,dim0,dim1,expr_value else: expr_name,dim0,dim1,expr_value
+// CellTableConverter is a parent for for output table converters.
+type CellTableConverter struct {
+	ModelDef  *ModelMeta // model metadata
+	TableName string     // output table name
+	theTable  *TableMeta // if not nil then output table already found
 }
 
-// CsvFileName return file name of csv file to store output table expression rows
-func (cellCvt CellExprConverter) CsvFileName(modelDef *ModelMeta, name string, isIdCsv bool) (string, error) {
+// CellExprConverter is a converter for output table expression to implement CsvConverter interface.
+type CellExprConverter struct {
+	CellTableConverter        // model metadata and output table name
+	IsIdCsv            bool   // if true then use enum id's else use enum codes
+	DoubleFmt          string // if not empty then format string is used to sprintf if value type is float, double, long double
+}
 
-	// validate parameters
-	if modelDef == nil {
-		return "", errors.New("invalid (empty) model metadata, look like model not found")
-	}
-	if name == "" {
-		return "", errors.New("invalid (empty) output table name")
-	}
+// retrun true if csv converter is using enum id's for dimensions
+func (cellCvt CellExprConverter) IsUseEnumId() bool { return cellCvt.IsIdCsv }
+
+// CsvFileName return file name of csv file to store output table expression rows
+func (cellCvt CellExprConverter) CsvFileName() (string, error) {
 
 	// find output table by name
-	k, ok := modelDef.OutTableByName(name)
-	if !ok {
-		return "", errors.New("output table not found: " + name)
+	_, err := cellCvt.tableByName()
+	if err != nil {
+		return "", err
 	}
 
-	if isIdCsv {
-		return modelDef.Table[k].Name + ".id.csv", nil
+	// make csv file name
+	if cellCvt.IsIdCsv {
+		return cellCvt.TableName + ".id.csv", nil
 	}
-	return modelDef.Table[k].Name + ".csv", nil
+	return cellCvt.TableName + ".csv", nil
 }
 
 // CsvHeader return first line for csv file: column names.
 // Column names can be like: expr_name,dim0,dim1,expr_value
-// or if isIdHeader is true: expr_id,dim0,dim1,expr_value
-func (cellCvt CellExprConverter) CsvHeader(modelDef *ModelMeta, name string) ([]string, error) {
-
-	// validate parameters
-	if modelDef == nil {
-		return nil, errors.New("invalid (empty) model metadata, look like model not found")
-	}
-	if name == "" {
-		return nil, errors.New("invalid (empty) output table name")
-	}
+// or if IsIdCsv is true: expr_id,dim0,dim1,expr_value
+func (cellCvt CellExprConverter) CsvHeader() ([]string, error) {
 
 	// find output table by name
-	k, ok := modelDef.OutTableByName(name)
-	if !ok {
-		return nil, errors.New("output table not found: " + name)
+	table, err := cellCvt.tableByName()
+	if err != nil {
+		return []string{}, err
 	}
-	table := &modelDef.Table[k]
 
 	// make first line columns
 	h := make([]string, table.Rank+2)
 
-	if cellCvt.IsIdHeader {
+	if cellCvt.IsIdCsv {
 		h[0] = "expr_id"
 	} else {
 		h[0] = "expr_name"
@@ -101,7 +96,7 @@ func (cellCvt CellExprConverter) KeyIds(name string) (func(interface{}, []int) e
 
 		n := len(cell.DimIds)
 		if len(key) != n+1 {
-			return errors.New("invalid size of key buffer, expected: " + strconv.Itoa(n+2) + ": " + name)
+			return errors.New("invalid size of key buffer, expected: " + strconv.Itoa(n+1) + ": " + name)
 		}
 
 		key[0] = cell.ExprId
@@ -115,22 +110,29 @@ func (cellCvt CellExprConverter) KeyIds(name string) (func(interface{}, []int) e
 	return cvt, nil
 }
 
-// CsvToIdRow return converter from output table cell (expr_id, dimensions, value) to csv row []string.
+// ToCsvIdRow return converter from output table cell (expr_id, dimensions, value) to csv row []string.
 //
 // Converter simply does Sprint() for each dimension item id, expression id and value.
 // Converter will return error if len(row) not equal to number of fields in csv record.
-func (cellCvt CellExprConverter) CsvToIdRow(modelDef *ModelMeta, name string) (func(interface{}, []string) error, error) {
+func (cellCvt CellExprConverter) ToCsvIdRow() (func(interface{}, []string) error, error) {
 
+	// find output table by name
+	_, err := cellCvt.tableByName()
+	if err != nil {
+		return nil, err
+	}
+
+	// return converter from id based cell to csv string array
 	cvt := func(src interface{}, row []string) error {
 
 		cell, ok := src.(CellExpr)
 		if !ok {
-			return errors.New("invalid type, expected: CellExpr (internal error): " + name)
+			return errors.New("invalid type, expected: CellExpr (internal error): " + cellCvt.TableName)
 		}
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + name)
+			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.TableName)
 		}
 
 		row[0] = fmt.Sprint(cell.ExprId)
@@ -155,33 +157,24 @@ func (cellCvt CellExprConverter) CsvToIdRow(modelDef *ModelMeta, name string) (f
 	return cvt, nil
 }
 
-// CsvToRow return converter from output table cell (expr_id, dimensions, value)
+// ToCsvRow return converter from output table cell (expr_id, dimensions, value)
 // to csv row []string (expr_name, dimensions, value).
 //
 // Converter will return error if len(row) not equal to number of fields in csv record.
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
-func (cellCvt CellExprConverter) CsvToRow(modelDef *ModelMeta, name string) (func(interface{}, []string) error, error) {
-
-	// validate parameters
-	if modelDef == nil {
-		return nil, errors.New("invalid (empty) model metadata, look like model not found")
-	}
-	if name == "" {
-		return nil, errors.New("invalid (empty) output table name")
-	}
+func (cellCvt CellExprConverter) ToCsvRow() (func(interface{}, []string) error, error) {
 
 	// find output table by name
-	k, ok := modelDef.OutTableByName(name)
-	if !ok {
-		return nil, errors.New("output table not found: " + name)
+	table, err := cellCvt.tableByName()
+	if err != nil {
+		return nil, err
 	}
-	table := &modelDef.Table[k]
 
 	// for each dimension create converter from item id to code
 	fd := make([]func(itemId int) (string, error), table.Rank)
 
 	for k := 0; k < table.Rank; k++ {
-		f, err := cvtItemIdToCode(name+"."+table.Dim[k].Name, table.Dim[k].typeOf, table.Dim[k].IsTotal)
+		f, err := table.Dim[k].typeOf.itemIdToCode(cellCvt.TableName+"."+table.Dim[k].Name, table.Dim[k].IsTotal)
 		if err != nil {
 			return nil, err
 		}
@@ -192,12 +185,12 @@ func (cellCvt CellExprConverter) CsvToRow(modelDef *ModelMeta, name string) (fun
 
 		cell, ok := src.(CellExpr)
 		if !ok {
-			return errors.New("invalid type, expected: output table expression cell (internal error): " + name)
+			return errors.New("invalid type, expected: output table expression cell (internal error): " + cellCvt.TableName)
 		}
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + name)
+			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.TableName)
 		}
 
 		row[0] = table.Expr[cell.ExprId].Name
@@ -231,28 +224,19 @@ func (cellCvt CellExprConverter) CsvToRow(modelDef *ModelMeta, name string) (fun
 //
 // It does return error if len(row) not equal to number of fields in cell db-record.
 // If dimension type is enum based then csv row is enum code and it is converted into cell.DimIds (into dimension type type enum ids).
-func (cellCvt CellExprConverter) CsvToCell(modelDef *ModelMeta, name string, subCount int) (func(row []string) (interface{}, error), error) {
-
-	// validate parameters
-	if modelDef == nil {
-		return nil, errors.New("invalid (empty) model metadata, look like model not found")
-	}
-	if name == "" {
-		return nil, errors.New("invalid (empty) output table name")
-	}
+func (cellCvt CellExprConverter) CsvToCell() (func(row []string) (interface{}, error), error) {
 
 	// find output table by name
-	k, ok := modelDef.OutTableByName(name)
-	if !ok {
-		return nil, errors.New("output table not found: " + name)
+	table, err := cellCvt.tableByName()
+	if err != nil {
+		return nil, err
 	}
-	table := &modelDef.Table[k]
 
 	// for each dimension create converter from item code to id
 	fd := make([]func(src string) (int, error), table.Rank)
 
 	for k := 0; k < table.Rank; k++ {
-		f, err := cvtItemCodeToId(name+"."+table.Dim[k].Name, table.Dim[k].typeOf, table.Dim[k].IsTotal)
+		f, err := table.Dim[k].typeOf.itemCodeToId(cellCvt.TableName+"."+table.Dim[k].Name, table.Dim[k].IsTotal)
 		if err != nil {
 			return nil, err
 		}
@@ -267,7 +251,7 @@ func (cellCvt CellExprConverter) CsvToCell(modelDef *ModelMeta, name string, sub
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {
-			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(n+2) + ": " + name)
+			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.TableName)
 		}
 
 		// expression id by name
@@ -279,7 +263,7 @@ func (cellCvt CellExprConverter) CsvToCell(modelDef *ModelMeta, name string, sub
 			}
 		}
 		if cell.ExprId < 0 {
-			return nil, errors.New("invalid expression name: " + row[0] + " output table: " + name)
+			return nil, errors.New("invalid expression name: " + row[0] + " output table: " + cellCvt.TableName)
 		}
 
 		// convert dimensions: enum code to enum id or integer value for simple type dimension
@@ -316,26 +300,17 @@ func (cellCvt CellExprConverter) CsvToCell(modelDef *ModelMeta, name string, sub
 // If dimension type is simple (bool or int) then dimension value converted to string.
 func (cellCvt CellExprConverter) IdToCodeCell(modelDef *ModelMeta, name string) (func(interface{}) (interface{}, error), error) {
 
-	// validate parameters
-	if modelDef == nil {
-		return nil, errors.New("invalid (empty) model metadata, look like model not found")
-	}
-	if name == "" {
-		return nil, errors.New("invalid (empty) output table name")
-	}
-
 	// find output table by name
-	k, ok := modelDef.OutTableByName(name)
-	if !ok {
-		return nil, errors.New("output table not found: " + name)
+	table, err := cellCvt.tableByName()
+	if err != nil {
+		return nil, err
 	}
-	table := &modelDef.Table[k]
 
 	// for each dimension create converter from item id to code
 	fd := make([]func(itemId int) (string, error), table.Rank)
 
 	for k := 0; k < table.Rank; k++ {
-		f, err := cvtItemIdToCode(name+"."+table.Dim[k].Name, table.Dim[k].typeOf, table.Dim[k].IsTotal)
+		f, err := table.Dim[k].typeOf.itemIdToCode(name+"."+table.Dim[k].Name, table.Dim[k].IsTotal)
 		if err != nil {
 			return nil, err
 		}
@@ -375,4 +350,29 @@ func (cellCvt CellExprConverter) IdToCodeCell(modelDef *ModelMeta, name string) 
 	}
 
 	return cvt, nil
+}
+
+// return output table metadata by output table name
+func (cellCvt CellTableConverter) tableByName() (*TableMeta, error) {
+
+	if cellCvt.theTable != nil {
+		return cellCvt.theTable, nil // output table already found
+	}
+
+	// validate parameters
+	if cellCvt.ModelDef == nil {
+		return nil, errors.New("invalid (empty) model metadata, look like model not found")
+	}
+	if cellCvt.TableName == "" {
+		return nil, errors.New("invalid (empty) output table name")
+	}
+
+	// find output table by name
+	idx, ok := cellCvt.ModelDef.OutTableByName(cellCvt.TableName)
+	if !ok {
+		return nil, errors.New("output table not found: " + cellCvt.TableName)
+	}
+	cellCvt.theTable = &cellCvt.ModelDef.Table[idx]
+
+	return cellCvt.theTable, nil
 }

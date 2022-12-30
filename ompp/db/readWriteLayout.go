@@ -33,33 +33,37 @@ type WriteTableLayout struct {
 	DoubleFmt   string // used for float model types digest calculation
 }
 
-// ReadLayout describes source and size of data page to read input parameter or output table values.
+// ReadLayout describes source and size of data page to read input parameter, output table values or microdata.
 //
-// Row filters combined by AND and allow to select dimension items,
+// Row filters combined by AND and allow to select dimension or attribute items,
 // it can be enum codes or enum id's, ex.: dim0 = 'CA' AND dim1 IN (2010, 2011, 2012)
 //
-// Order by applied to output columns, dimension columns always contain enum id's,
+// Order by applied to output columns.
+// Because dimension or attribute columns always contain enum id's,
 // therefore result ordered by id's and not by enum codes.
 // Columns list depending on output table or parameter query:
 //
 // parameter values:
-//   SELECT sub_id, dim0, dim1, param_value FROM parameterTable ORDER BY...
+//
+//	SELECT sub_id, dim0, dim1, param_value FROM parameterTable ORDER BY...
 //
 // output table expressions:
-//   SELECT expr_id, dim0, dim1, expr_value FROM outputTable ORDER BY...
+//
+//	SELECT expr_id, dim0, dim1, expr_value FROM outputTable ORDER BY...
 //
 // output table accumulators:
-//   SELECT acc_id, sub_id, dim0, dim1, acc_value FROM outputTable ORDER BY...
+//
+//	SELECT acc_id, sub_id, dim0, dim1, acc_value FROM outputTable ORDER BY...
 //
 // all-accumulators view:
-//   SELECT sub_id, dim0, dim1, acc0_value, acc1_value... FROM outputTable ORDER BY...
 //
+//	SELECT sub_id, dim0, dim1, acc0_value, acc1_value... FROM outputTable ORDER BY...
 type ReadLayout struct {
-	Name           string           // parameter name or output table name
-	FromId         int              // run id or set id to select input parameter or output table values
+	Name           string           // parameter name, output table name or entity microdata name
+	FromId         int              // run id or set id to select input parameter, output table values or microdata from
 	ReadPageLayout                  // read page first row offset, size and last page flag
-	Filter         []FilterColumn   // dimension filters, final WHERE does join all filters by AND
-	FilterById     []FilterIdColumn // dimension filters by enum ids, final WHERE does join filters by AND
+	Filter         []FilterColumn   // dimension or attribute filters, final WHERE does join all filters by AND
+	FilterById     []FilterIdColumn // dimension or attribute filters by enum ids, final WHERE does join filters by AND
 	OrderBy        []OrderByColumn  // order by columnns, if empty then dimension id ascending order is used
 }
 
@@ -68,7 +72,7 @@ type ReadLayout struct {
 // It can read parameter values from model run results or from input working set (workset).
 // If this is read from workset then it can be read-only or read-write (editable) workset.
 type ReadParamLayout struct {
-	ReadLayout      // parameter name, page size, where filters and order by
+	ReadLayout      // parameter name, run id or set id page size, where filters and order by
 	IsFromSet  bool // if true then select from workset else from model run
 	IsEditSet  bool // if true then workset must be editable (readonly = false)
 }
@@ -78,10 +82,18 @@ type ReadParamLayout struct {
 // If ValueName is not empty then only accumulator or output expression
 // with that name selected (i.e: "acc1" or "expr4") else all output table accumulators (expressions) selected.
 type ReadTableLayout struct {
-	ReadLayout        // output table name, page size, where filters and order by
+	ReadLayout        // output table name, run id, page size, where filters and order by
 	ValueName  string // if not empty then expression or accumulator name to select
 	IsAccum    bool   // if true then select output table accumulator else expression
 	IsAllAccum bool   // if true then select from all accumulators view else from accumulators table
+}
+
+// ReadMicroLayout describes source and size of data page to read entity microdata.
+//
+// Entity generation Hid expected to be unique for each run id + entity name, but there is no such constarint in db schema.
+type ReadMicroLayout struct {
+	ReadLayout     // entity name, run id, page size, where filters and order by
+	GenHid     int // entity generation Hid to select microdata from
 }
 
 // ReadPageLayout describes first row offset and size of data page to read input parameter or output table values.
@@ -106,7 +118,7 @@ type CompareTableLayout struct {
 // FilterOp is enum type for filter operators in select where conditions
 type FilterOp string
 
-// Select filter operators for dimension enum ids.
+// Select filter operators for dimension or attribute enum ids.
 const (
 	InAutoOpFilter  FilterOp = "IN_AUTO" // auto convert IN list filter into equal or BETWEEN if possible
 	InOpFilter      FilterOp = "IN"      // dimension enum ids in: dim2 IN (11, 22, 33)
@@ -114,16 +126,16 @@ const (
 	BetweenOpFilter FilterOp = "BETWEEN" // dimension enum ids between: dim3 BETWEEN 44 AND 88
 )
 
-// FilterColumn define dimension column and condition to filter enum codes to build select where
+// FilterColumn define dimension or attribute column and condition to filter enum codes to build select where
 type FilterColumn struct {
-	DimName string   // dimension name
-	Op      FilterOp // filter operator: equal, IN, BETWEEN
-	Enums   []string // enum code(s): one, two or many ids depending on filter condition
+	Name  string   // dimension or attribute name
+	Op    FilterOp // filter operator: equal, IN, BETWEEN
+	Enums []string // enum code(s): one, two or many ids depending on filter condition
 }
 
-// FilterIdColumn define dimension column and condition to filter enum ids to build select where
+// FilterIdColumn define dimension or attribute column and condition to filter enum ids to build select where
 type FilterIdColumn struct {
-	DimName string   // dimension name
+	Name    string   // dimension or attribute name
 	Op      FilterOp // filter operator: equal, IN, BETWEEN
 	EnumIds []int    // enum id(s): one, two or many ids depending on filter condition
 }
@@ -135,9 +147,10 @@ type OrderByColumn struct {
 }
 
 // makeOrderBy return ORDER BY clause either from explicitly specified column list
-// or default: 1,...rank+1
+// or by default: 1,...,rank
 // or empty if rank zero
-func makeOrderBy(rank int, orderBy []OrderByColumn, extraIdColumns int) string {
+// if prefixIdColumns > 0 then before order by 1,..., prefixIdColumns,..., prefixIdColumns+rank+1
+func makeOrderBy(rank int, orderBy []OrderByColumn, prefixIdColumns int) string {
 
 	if len(orderBy) > 0 { // if order by excplicitly specified
 
@@ -154,20 +167,20 @@ func makeOrderBy(rank int, orderBy []OrderByColumn, extraIdColumns int) string {
 		return q
 	}
 	// else
-	if rank > 0 || extraIdColumns > 0 { // default: order by  acc_id, sub_id, dimensions
+	if rank > 0 || prefixIdColumns > 0 { // default: order by acc_id, sub_id, dimensions
 
 		q := " ORDER BY "
-		for k := 1; k <= extraIdColumns; k++ {
+		for k := 1; k <= prefixIdColumns; k++ {
 			if k > 1 {
 				q += ", "
 			}
 			q += strconv.Itoa(k)
 		}
 		for k := 1; k <= rank; k++ {
-			if k > 1 || extraIdColumns > 0 {
+			if k > 1 || prefixIdColumns > 0 {
 				q += ", "
 			}
-			q += strconv.Itoa(extraIdColumns + k)
+			q += strconv.Itoa(prefixIdColumns + k)
 		}
 		return q
 	}
@@ -175,18 +188,18 @@ func makeOrderBy(rank int, orderBy []OrderByColumn, extraIdColumns int) string {
 	return ""
 }
 
-// makeDimFilter convert dimension enum codes to enum ids and return filter condition, eg: dim1 IN (1, 2, 3, 4)
-func makeDimFilter(
-	modelDef *ModelMeta, flt *FilterColumn, alias string, dimName string, colName string, typeOf *TypeMeta, isTotalEnabled bool, msgName string,
+// makeWhereFilter convert dimension or attribute enum codes to enum ids and return filter condition, eg: dim1 IN (1, 2, 3, 4)
+func makeWhereFilter(
+	flt *FilterColumn, alias string, colName string, typeOf *TypeMeta, isTotalEnabled bool, msgName string, msgParent string,
 ) (string, error) {
 
 	// convert enum codes to ids
-	cvt, err := cvtItemCodeToId(dimName, typeOf, isTotalEnabled)
+	cvt, err := typeOf.itemCodeToId(msgName, isTotalEnabled)
 	if err != nil {
 		return "", err
 	}
 	fltId := FilterIdColumn{
-		DimName: flt.DimName,
+		Name:    flt.Name,
 		Op:      flt.Op,
 		EnumIds: make([]int, len(flt.Enums)),
 	}
@@ -199,17 +212,17 @@ func makeDimFilter(
 	}
 
 	// return filter condition
-	return makeDimIdFilter(modelDef, &fltId, alias, dimName, colName, typeOf, msgName)
+	return makeWhereIdFilter(&fltId, alias, colName, typeOf, msgName, msgParent)
 }
 
-// makeDimIdFilter return dimension filter condition for enum ids, eg: dim1 IN (1, 2, 3, 4)
+// makeWhereIdFilter return dimension or attribute filter condition for enum ids, eg: dim1 IN (1, 2, 3, 4)
 // It is also can be equal or BETWEEN fitler.
-func makeDimIdFilter(
-	modelDef *ModelMeta, flt *FilterIdColumn, alias string, dimName string, colName string, typeOf *TypeMeta, msgName string) (string, error) {
+func makeWhereIdFilter(
+	flt *FilterIdColumn, alias string, colName string, typeOf *TypeMeta, msgName string, msgParent string) (string, error) {
 
 	// validate number of enum ids in enum list
 	if len(flt.EnumIds) <= 0 || flt.Op == EqOpFilter && len(flt.EnumIds) != 1 || flt.Op == BetweenOpFilter && len(flt.EnumIds) != 2 {
-		return "", errors.New("invalid number of arguments to filter " + msgName + " dimension " + dimName)
+		return "", errors.New("invalid number of arguments to filter " + msgParent + " " + msgName)
 	}
 
 	emin := flt.EnumIds[0]
@@ -225,7 +238,7 @@ func makeDimIdFilter(
 	if op == InAutoOpFilter {
 
 		if len(typeOf.Enum) <= 0 {
-			return "", errors.New("auto filter cannot be applied to " + msgName + " dimension " + dimName)
+			return "", errors.New("auto filter cannot be applied to " + msgParent + " " + msgName)
 		}
 
 		if len(flt.EnumIds) == 1 {
@@ -276,7 +289,7 @@ func makeDimIdFilter(
 		}
 	}
 
-	// make dimension filter
+	// make dimension or attribute filter
 	q := ""
 	if alias != "" {
 		q += alias + "."
@@ -297,7 +310,7 @@ func makeDimIdFilter(
 	case BetweenOpFilter: // AND dim1 BETWEEN 100 AND 200
 		q += " BETWEEN " + strconv.Itoa(emin) + " AND " + strconv.Itoa(emax)
 	default:
-		return "", errors.New("invalid filter operation to read " + msgName + " dimension " + dimName)
+		return "", errors.New("invalid filter operation to read " + msgParent + " " + msgName)
 	}
 	return q, nil
 }

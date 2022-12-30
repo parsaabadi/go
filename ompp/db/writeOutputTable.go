@@ -237,7 +237,14 @@ func digestAccumulatorsFrom(
 	}
 
 	// create accumulator(s) row digester append digest of parameter cells
-	cvtAcc := CellAccConverter{DoubleFmt: doubleFmt, IsIdHeader: true}
+	cvtAcc := CellAccConverter{
+		CellTableConverter: CellTableConverter{
+			ModelDef:  modelDef,
+			TableName: meta.Name,
+		},
+		IsIdCsv:   true,
+		DoubleFmt: doubleFmt,
+	}
 
 	digestRow, isOrderBy, err := digestCellsFrom(hMd5, modelDef, meta.Name, cvtAcc)
 	if err != nil {
@@ -254,7 +261,14 @@ func digestExpressionsFrom(
 
 	// create expression(s) row digester append digest of parameter cells
 	// append digest of expression(s) cells
-	cvtExpr := CellExprConverter{DoubleFmt: doubleFmt, IsIdHeader: true}
+	cvtExpr := CellExprConverter{
+		CellTableConverter: CellTableConverter{
+			ModelDef:  modelDef,
+			TableName: meta.Name,
+		},
+		IsIdCsv:   true,
+		DoubleFmt: doubleFmt,
+	}
 
 	digestRow, isOrderBy, err := digestCellsFrom(hSum, modelDef, meta.Name, cvtExpr)
 	if err != nil {

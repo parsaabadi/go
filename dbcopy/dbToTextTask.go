@@ -38,11 +38,6 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 		return errors.New("dbcopy invalid argument(s) for task id: " + runOpts.String(taskIdArgKey) + " and/or task name: " + runOpts.String(taskNameArgKey))
 	}
 
-	// use of run and set id's in directory names:
-	// do this by default or if use id name = true
-	// only if use id name = false then do not use id's in directory names
-	isUseIdNames := !runOpts.IsExist(useIdNamesArgKey) || runOpts.Bool(useIdNamesArgKey)
-
 	// open source database connection and check is it valid
 	cs, dn := db.IfEmptyMakeDefaultReadOnly(modelName, runOpts.String(fromSqliteArgKey), runOpts.String(dbConnStrArgKey), runOpts.String(dbDriverArgKey))
 
@@ -89,6 +84,58 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 		return err
 	}
 
+	// use of run and set id's in directory names:
+	// if true then always use id's in the names, false never use it
+	// by default: only if name conflict
+	isUseIdNames := false
+	if runOpts.IsExist(useIdNamesArgKey) {
+		isUseIdNames = runOpts.Bool(useIdNamesArgKey)
+
+	} else { // default: check if run names in conflict, workset names are unique by db constraint
+
+		rIdLst := make([]int, 0, len(meta.TaskRun)*len(meta.Set))
+		rNameLst := make([]string, 0, len(meta.TaskRun)*len(meta.Set))
+
+		for j := range meta.TaskRun {
+		nxtRun:
+			for k := range meta.TaskRun[j].TaskRunSet {
+
+				// check is this run id already processed
+				runId := meta.TaskRun[j].TaskRunSet[k].RunId
+				for i := range rIdLst {
+					if runId == rIdLst[i] {
+						continue nxtRun // skip this run id, it is already processed
+					}
+				}
+				rIdLst = append(rIdLst, runId)
+
+				// find model run metadata by id
+				runRow, err := db.GetRun(srcDb, runId)
+				if err != nil {
+					return err
+				}
+
+				// check if there is any other run with the same name
+				if runRow != nil {
+
+					for _, name := range rNameLst {
+						isUseIdNames = name == runRow.Name
+						if isUseIdNames {
+							break // other run with the same name found
+						}
+					}
+					if isUseIdNames {
+						break
+					}
+					rNameLst = append(rNameLst, runRow.Name)
+				}
+			}
+			if isUseIdNames {
+				break
+			}
+		}
+	}
+
 	// create new output directory for task metadata
 	err = os.MkdirAll(outDir, 0750)
 	if err != nil {
@@ -106,7 +153,8 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
 	isWriteUtf8bom := runOpts.Bool(useUtf8CsvArgKey)
-	isWriteAccum := !runOpts.Bool(noAccumCsv)
+	isWriteAcc := !runOpts.Bool(noAccCsv)
+	isWriteMicro := !runOpts.Bool(noMicroCsv)
 
 	for j := range meta.TaskRun {
 	nextRun:
@@ -143,7 +191,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 			}
 
 			// write model run metadata into json, parameters and output result values into csv files
-			if err = toRunText(srcDb, modelDef, rm, outDir, "", dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames, isWriteAccum); err != nil {
+			if err = toRunText(srcDb, modelDef, rm, outDir, "", dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames, isWriteAcc, isWriteMicro); err != nil {
 				return err
 			}
 		}

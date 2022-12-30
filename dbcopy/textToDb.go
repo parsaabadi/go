@@ -200,17 +200,17 @@ func fromTableCsvFile(
 	encodingName string) error {
 
 	// accumulator converter from csv row []string to db cell
-	aToCell, err := cvtAcc.CsvToCell(modelDef, layout.Name, layout.SubCount)
+	aToCell, err := cvtAcc.CsvToCell()
 	if err != nil {
 		return errors.New("invalid converter from accumulators csv row: " + err.Error())
 	}
 
 	// open accumulators csv file
-	aFn, err := cvtAcc.CsvFileName(modelDef, layout.Name, false)
+	aFn, err := cvtAcc.CsvFileName()
 	if err != nil {
 		return errors.New("invalid accumulators csv file name: " + err.Error())
 	}
-	ahs, err := cvtAcc.CsvHeader(modelDef, layout.Name)
+	ahs, err := cvtAcc.CsvHeader()
 	if err != nil {
 		return errors.New("Error at building csv accumulators header " + layout.Name + ": " + err.Error())
 	}
@@ -228,17 +228,17 @@ func fromTableCsvFile(
 	}
 
 	// expression converter from csv row []string to db cell
-	eToCell, err := cvtExpr.CsvToCell(modelDef, layout.Name, layout.SubCount)
+	eToCell, err := cvtExpr.CsvToCell()
 	if err != nil {
 		return errors.New("invalid converter from expressions csv row: " + err.Error())
 	}
 
 	// open expressions csv file
-	eFn, err := cvtExpr.CsvFileName(modelDef, layout.Name, false)
+	eFn, err := cvtExpr.CsvFileName()
 	if err != nil {
 		return errors.New("invalid expressions csv file name: " + err.Error())
 	}
-	ehs, err := cvtExpr.CsvHeader(modelDef, layout.Name)
+	ehs, err := cvtExpr.CsvHeader()
 	if err != nil {
 		return errors.New("Error at building csv expressions header " + layout.Name + ": " + err.Error())
 	}

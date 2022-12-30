@@ -446,9 +446,70 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 		return nil, err
 	}
 
-	// set db column name for output tables dimnesions, expressions and accumulators
+	// set db column name for output tables dimnesions, expressions, accumulators and entity attributes
 	for k := range meta.Table {
 		meta.Table[k].updateTableColumnNames()
+	}
+
+	// select db rows from entity_dic join to model_entity_dic table
+	err = SelectRows(dbConn,
+		"SELECT"+
+			" M.model_id, M.model_entity_id, ET.entity_hid, ET.entity_name, ET.entity_digest"+
+			" FROM entity_dic ET"+
+			" INNER JOIN model_entity_dic M ON (M.entity_hid = ET.entity_hid)"+
+			" WHERE M.model_id = "+smId+
+			" ORDER BY 1, 2",
+		func(rows *sql.Rows) error {
+			var r EntityDicRow
+			if err := rows.Scan(&r.ModelId, &r.EntityId, &r.EntityHid, &r.Name, &r.Digest); err != nil {
+				return err
+			}
+
+			meta.Entity = append(meta.Entity, EntityMeta{EntityDicRow: r, Attr: []EntityAttrRow{}})
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	// select db rows from entity_attr join to model_entity_dic table
+	err = SelectRows(dbConn,
+		"SELECT"+
+			" M.model_id, M.model_entity_id, A.attr_id, A.attr_name, T.model_type_id, A.is_internal"+
+			" FROM entity_attr A"+
+			" INNER JOIN model_entity_dic M ON (M.entity_hid = A.entity_hid)"+
+			" INNER JOIN model_type_dic T ON (T.type_hid = A.type_hid AND T.model_id = M.model_id)"+
+			" WHERE M.model_id = "+smId+
+			" ORDER BY 1, 2, 3",
+		func(rows *sql.Rows) error {
+			var r EntityAttrRow
+			nInternal := 0
+			if err := rows.Scan(
+				&r.ModelId, &r.EntityId, &r.AttrId, &r.Name, &r.TypeId, &nInternal); err != nil {
+				return err
+			}
+			r.IsInternal = nInternal != 0 // oracle: smallint is float64
+
+			idx, ok := meta.EntityByKey(r.EntityId) // find entity row for that attribute
+			if !ok {
+				return errors.New("entity " + strconv.Itoa(r.EntityId) + " not found for " + r.Name)
+			}
+			k, ok := meta.TypeByKey(r.TypeId) // find attribute type
+			if !ok {
+				return errors.New("type " + strconv.Itoa(r.TypeId) + " not found for " + r.Name)
+			}
+			r.typeOf = &meta.Type[k]
+
+			meta.Entity[idx].Attr = append(meta.Entity[idx].Attr, r)
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	// set db column name for entity attributes: attr0, attr1
+	for k := range meta.Entity {
+		meta.Entity[k].updateEntityColumnNames()
 	}
 
 	// select db rows from group_lst

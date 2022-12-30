@@ -221,10 +221,16 @@ func fromRunTextToDb(
 	// check if run subdir exist
 	d, f := filepath.Split(metaPath)
 	c := strings.TrimSuffix(strings.TrimPrefix(f, pub.ModelName+"."), ".json")
+	pDir := filepath.Join(c, "parameters")
+	tDir := filepath.Join(c, "output-tables")
 
-	csvDir := filepath.Join(d, c)
-	if _, err := os.Stat(csvDir); err != nil {
-		return 0, errors.New("csv run directory not found: " + c)
+	paramCsvDir := filepath.Join(d, pDir)
+	if _, err := os.Stat(paramCsvDir); err != nil {
+		return 0, errors.New("csv parameters directory not found: " + pDir)
+	}
+	tableCsvDir := filepath.Join(d, tDir)
+	if _, err := os.Stat(tableCsvDir); err != nil {
+		return 0, errors.New("csv output tables directory not found: " + tDir)
 	}
 
 	// run name: use run name from json metadata if json metadata not empty, else use supplied run name
@@ -260,7 +266,11 @@ func fromRunTextToDb(
 		WriteLayout: db.WriteLayout{ToId: dstId},
 		DoubleFmt:   doubleFmt,
 		IsToRun:     true}
-	cvtParam := db.CellParamConverter{DoubleFmt: doubleFmt}
+	cvtParam := db.CellParamConverter{
+		ModelDef:  modelDef,
+		IsIdCsv:   false,
+		DoubleFmt: doubleFmt,
+	}
 
 	nP := len(modelDef.Param)
 	omppLog.Log("  Parameters: ", nP)
@@ -272,10 +282,11 @@ func fromRunTextToDb(
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nP, ": ", modelDef.Param[j].Name)
 
 		// insert parameter values in model run
+		cvtParam.ParamName = modelDef.Param[j].Name
 		paramLt.Name = modelDef.Param[j].Name
 		paramLt.SubCount = meta.Param[j].SubCount
 
-		err = writeParamFromCsvFile(dbConn, modelDef, paramLt, csvDir, cvtParam, encodingName)
+		err = writeParamFromCsvFile(dbConn, modelDef, paramLt, paramCsvDir, cvtParam, encodingName)
 		if err != nil {
 			omppLog.Log("Error at: ", paramLt.Name, ": ", err.Error())
 			omppLog.Log("Cleanup on error: delete model run ", srcName, " ", dstId)
@@ -296,8 +307,10 @@ func fromRunTextToDb(
 			SubCount: meta.Run.SubCount,
 		},
 		DoubleFmt: doubleFmt}
-	cvtExpr := db.CellExprConverter{DoubleFmt: doubleFmt, IsIdHeader: false}
-	cvtAcc := db.CellAccConverter{DoubleFmt: doubleFmt, IsIdHeader: false}
+
+	ctc := db.CellTableConverter{ModelDef: modelDef}
+	cvtExpr := db.CellExprConverter{CellTableConverter: ctc, IsIdCsv: false, DoubleFmt: doubleFmt}
+	cvtAcc := db.CellAccConverter{CellTableConverter: ctc, IsIdCsv: false, DoubleFmt: doubleFmt}
 
 	nT := len(modelDef.Table)
 	omppLog.Log("  Tables: ", nT)
@@ -320,7 +333,7 @@ func fromRunTextToDb(
 		tblLt.Name = modelDef.Table[j].Name
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name)
 
-		err := fromTableCsvFile(dbConn, modelDef, tblLt, csvDir, cvtExpr, cvtAcc, encodingName)
+		err := fromTableCsvFile(dbConn, modelDef, tblLt, tableCsvDir, cvtExpr, cvtAcc, encodingName)
 		if err != nil {
 			if err != nil {
 				omppLog.Log("Error at: ", tblLt.Name, ": ", err.Error())
@@ -359,18 +372,18 @@ func writeParamFromCsvFile(
 	encodingName string) error {
 
 	// converter from csv row []string to db cell
-	cvt, err := csvCvt.CsvToCell(modelDef, layout.Name, layout.SubCount)
+	cvt, err := csvCvt.CsvToCell()
 	if err != nil {
 		return errors.New("invalid converter from csv row: " + err.Error())
 	}
 
 	// open csv file, convert to utf-8 and parse csv into db cells
 	// reading from .id.csv files not supported by converters
-	fn, err := csvCvt.CsvFileName(modelDef, layout.Name, false)
+	fn, err := csvCvt.CsvFileName()
 	if err != nil {
 		return errors.New("invalid csv file name: " + err.Error())
 	}
-	chs, err := csvCvt.CsvHeader(modelDef, layout.Name)
+	chs, err := csvCvt.CsvHeader()
 	if err != nil {
 		return errors.New("Error at building csv parameter header " + layout.Name + ": " + err.Error())
 	}

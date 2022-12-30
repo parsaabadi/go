@@ -44,7 +44,11 @@ func (mc *ModelCatalog) ParameterCellConverter(
 	}
 
 	// create converter
-	csvCvt := db.CellParamConverter{DoubleFmt: theCfg.doubleFmt}
+	csvCvt := db.CellParamConverter{
+		ModelDef:  mc.modelLst[idx].meta,
+		ParamName: name,
+		DoubleFmt: theCfg.doubleFmt,
+	}
 	var cvt func(interface{}) (interface{}, error)
 	var err error
 
@@ -97,13 +101,35 @@ func (mc *ModelCatalog) TableToCodeCellConverter(dn string, name string, isAcc, 
 
 	switch {
 	case isAllAcc:
-		csvCvt := db.CellAllAccConverter{DoubleFmt: theCfg.doubleFmt, ValueName: ""}
+		csvCvt := db.CellAllAccConverter{
+			CellTableConverter: db.CellTableConverter{
+				ModelDef:  mc.modelLst[idx].meta,
+				TableName: name,
+			},
+			IsIdCsv:   true,
+			DoubleFmt: theCfg.doubleFmt,
+			ValueName: "",
+		}
 		cvt, err = csvCvt.IdToCodeCell(mc.modelLst[idx].meta, name)
 	case isAcc:
-		csvCvt := db.CellAccConverter{DoubleFmt: theCfg.doubleFmt, IsIdHeader: false}
+		csvCvt := db.CellAccConverter{
+			CellTableConverter: db.CellTableConverter{
+				ModelDef:  mc.modelLst[idx].meta,
+				TableName: name,
+			},
+			IsIdCsv:   true,
+			DoubleFmt: theCfg.doubleFmt,
+		}
 		cvt, err = csvCvt.IdToCodeCell(mc.modelLst[idx].meta, name)
 	default:
-		csvCvt := db.CellExprConverter{DoubleFmt: theCfg.doubleFmt, IsIdHeader: false}
+		csvCvt := db.CellExprConverter{
+			CellTableConverter: db.CellTableConverter{
+				ModelDef:  mc.modelLst[idx].meta,
+				TableName: name,
+			},
+			IsIdCsv:   true,
+			DoubleFmt: theCfg.doubleFmt,
+		}
 		cvt, err = csvCvt.IdToCodeCell(mc.modelLst[idx].meta, name)
 	}
 	if err != nil {
@@ -145,11 +171,16 @@ func (mc *ModelCatalog) ParameterToCsvConverter(dn string, isCode bool, name str
 	}
 
 	// make csv header
-	csvCvt := db.CellParamConverter{DoubleFmt: theCfg.doubleFmt}
+	csvCvt := db.CellParamConverter{
+		ModelDef:  mc.modelLst[idx].meta,
+		ParamName: name,
+		IsIdCsv:   !isCode,
+		DoubleFmt: theCfg.doubleFmt,
+	}
 
-	hdr, err := csvCvt.CsvHeader(mc.modelLst[idx].meta, name)
+	hdr, err := csvCvt.CsvHeader()
 	if err != nil {
-		omppLog.Log("Failed  to make parameter csv header: ", dn, ": ", name, ": ", err.Error())
+		omppLog.Log("Failed to make parameter csv header: ", dn, ": ", name, ": ", err.Error())
 		return []string{}, nil, false
 	}
 
@@ -157,9 +188,9 @@ func (mc *ModelCatalog) ParameterToCsvConverter(dn string, isCode bool, name str
 	var cvt func(interface{}, []string) error
 
 	if isCode {
-		cvt, err = csvCvt.CsvToRow(mc.modelLst[idx].meta, name)
+		cvt, err = csvCvt.ToCsvRow()
 	} else {
-		cvt, err = csvCvt.CsvToIdRow(mc.modelLst[idx].meta, name)
+		cvt, err = csvCvt.ToCsvIdRow()
 	}
 	if err != nil {
 		omppLog.Log("Failed to create parameter converter to csv: ", dn, ": ", name, ": ", err.Error())
@@ -199,22 +230,40 @@ func (mc *ModelCatalog) TableToCsvConverter(dn string, isCode bool, name string,
 		return []string{}, nil, false // return empty result: output table not found or error
 	}
 
+	ctc := db.CellTableConverter{
+		ModelDef:  mc.modelLst[idx].meta,
+		TableName: name,
+	}
+
 	// set cell conveter to csv
 	var csvCvt db.CsvConverter
 	if !isAcc {
-		csvCvt = db.CellExprConverter{DoubleFmt: theCfg.doubleFmt, IsIdHeader: !isCode}
+		csvCvt = db.CellExprConverter{
+			CellTableConverter: ctc,
+			IsIdCsv:            !isCode,
+			DoubleFmt:          theCfg.doubleFmt,
+		}
 	} else {
 		if !isAllAcc {
-			csvCvt = db.CellAccConverter{DoubleFmt: theCfg.doubleFmt, IsIdHeader: !isCode}
+			csvCvt = db.CellAccConverter{
+				CellTableConverter: ctc,
+				IsIdCsv:            !isCode,
+				DoubleFmt:          theCfg.doubleFmt,
+			}
 		} else {
-			csvCvt = db.CellAllAccConverter{ValueName: "", DoubleFmt: theCfg.doubleFmt}
+			csvCvt = db.CellAllAccConverter{
+				CellTableConverter: ctc,
+				IsIdCsv:            !isCode,
+				DoubleFmt:          theCfg.doubleFmt,
+				ValueName:          "",
+			}
 		}
 	}
 
 	// make csv header
-	hdr, err := csvCvt.CsvHeader(mc.modelLst[idx].meta, name)
+	hdr, err := csvCvt.CsvHeader()
 	if err != nil {
-		omppLog.Log("Failed  to make output table csv header: ", dn, ": ", name, ": ", err.Error())
+		omppLog.Log("Failed to make output table csv header: ", dn, ": ", name, ": ", err.Error())
 		return []string{}, nil, false
 	}
 
@@ -222,9 +271,9 @@ func (mc *ModelCatalog) TableToCsvConverter(dn string, isCode bool, name string,
 	var cvt func(interface{}, []string) error
 
 	if isCode {
-		cvt, err = csvCvt.CsvToRow(mc.modelLst[idx].meta, name)
+		cvt, err = csvCvt.ToCsvRow()
 	} else {
-		cvt, err = csvCvt.CsvToIdRow(mc.modelLst[idx].meta, name)
+		cvt, err = csvCvt.ToCsvIdRow()
 	}
 	if err != nil {
 		omppLog.Log("Failed to create output table converter to csv: ", dn, ": ", name, ": ", err.Error())

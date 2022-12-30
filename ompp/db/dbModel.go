@@ -36,27 +36,30 @@ const stringDbMax = 32000 // max database string length: parameter varchar (clob
 // Unless otherwise specified each array is ordered by model-specific id's and binary search can be used.
 // For example type array is ordered by (model_id, type_id) and type enum array by (model_id, type_id, enum_id).
 type ModelMeta struct {
-	Model ModelDicRow // model_dic table row
-	Type  []TypeMeta  // types metadata: type name and enums
-	Param []ParamMeta // parameters metadata: parameter name, type, dimensions
-	Table []TableMeta // output tables metadata: table name, dimensions, accumulators, expressions
-	Group []GroupMeta // groups of parameters or output tables
+	Model  ModelDicRow  // model_dic table row
+	Type   []TypeMeta   // types metadata: type name and enums
+	Param  []ParamMeta  // parameters metadata: parameter name, type, dimensions
+	Table  []TableMeta  // output tables metadata: table name, dimensions, accumulators, expressions
+	Entity []EntityMeta // model entities and attributes
+	Group  []GroupMeta  // groups of parameters or output tables
 }
 
 // ModelTxtMeta is language-specific portion of model metadata db rows.
 type ModelTxtMeta struct {
-	ModelName    string            // model name for text metadata
-	ModelDigest  string            // model digest for text metadata
-	ModelTxt     []ModelTxtRow     // model text rows: model_dic_txt
-	TypeTxt      []TypeTxtRow      // model type text rows: type_dic_txt join to model_type_dic
-	TypeEnumTxt  []TypeEnumTxtRow  // type enum text rows: type_enum_txt join to model_type_dic
-	ParamTxt     []ParamTxtRow     // model parameter text rows: parameter_dic_txt join to model_parameter_dic
-	ParamDimsTxt []ParamDimsTxtRow // parameter dimension text rows: parameter_dims_txt join to model_parameter_dic
-	TableTxt     []TableTxtRow     // model output table text rows: table_dic_txt join to model_table_dic
-	TableDimsTxt []TableDimsTxtRow // output table dimension text rows: table_dims_txt join to model_table_dic
-	TableAccTxt  []TableAccTxtRow  // output table accumulator text rows: table_acc_txt join to model_table_dic
-	TableExprTxt []TableExprTxtRow // output table expression text rows: table_expr_txt join to model_table_dic
-	GroupTxt     []GroupTxtRow     // group text rows: group_txt
+	ModelName     string             // model name for text metadata
+	ModelDigest   string             // model digest for text metadata
+	ModelTxt      []ModelTxtRow      // model text rows: model_dic_txt
+	TypeTxt       []TypeTxtRow       // model type text rows: type_dic_txt join to model_type_dic
+	TypeEnumTxt   []TypeEnumTxtRow   // type enum text rows: type_enum_txt join to model_type_dic
+	ParamTxt      []ParamTxtRow      // model parameter text rows: parameter_dic_txt join to model_parameter_dic
+	ParamDimsTxt  []ParamDimsTxtRow  // parameter dimension text rows: parameter_dims_txt join to model_parameter_dic
+	TableTxt      []TableTxtRow      // model output table text rows: table_dic_txt join to model_table_dic
+	TableDimsTxt  []TableDimsTxtRow  // output table dimension text rows: table_dims_txt join to model_table_dic
+	TableAccTxt   []TableAccTxtRow   // output table accumulator text rows: table_acc_txt join to model_table_dic
+	TableExprTxt  []TableExprTxtRow  // output table expression text rows: table_expr_txt join to model_table_dic
+	EntityTxt     []EntityTxtRow     // model entities text rows: entity_dic_txt join to model_entity_dic table
+	EntityAttrTxt []EntityAttrTxtRow // entity attributes: entity_attr_txt join to model_entity_dic table
+	GroupTxt      []GroupTxtRow      // group text rows: group_txt
 }
 
 // TypeMeta is type metadata: type name and enums
@@ -360,6 +363,55 @@ type TableExprTxtRow struct {
 	LangCode string // lang_code      VARCHAR(32)  NOT NULL
 	Descr    string // descr          VARCHAR(255) NOT NULL
 	Note     string // note           VARCHAR(32000)
+}
+
+// EntityMeta is entity metadata: entity name, digest, attributes
+type EntityMeta struct {
+	EntityDicRow                 // model entity row: entity_dic join to model_entity_dic table
+	Attr         []EntityAttrRow // entity attribute rows: entity_attr join to model_entity_dic table
+}
+
+// EntityDicRow is db row of entity_dic join to model_entity_dic table.
+//
+// EntityHid (entity_dic.entity_hid) is db-unique id of the entity, use digest to find same table in other db.
+// EntityId (model_entity_dic.model_entity_id) is model-unique entity id, assigned by model compiler.
+type EntityDicRow struct {
+	ModelId   int    // model_id         INT          NOT NULL
+	EntityId  int    // model_entity_id  INT          NOT NULL
+	EntityHid int    // entity_hid       INT          NOT NULL, -- unique entity id
+	Name      string // entity_name      VARCHAR(255) NOT NULL
+	Digest    string // entity_digest    VARCHAR(32)  NOT NULL
+}
+
+// EntityTxtRow is db row of entity_dic_txt join to model_entity_dic table
+type EntityTxtRow struct {
+	ModelId  int    // model_id         INT          NOT NULL
+	EntityId int    // model_entity_id  INT          NOT NULL
+	LangCode string // lang_code        VARCHAR(32)  NOT NULL
+	Descr    string // descr            VARCHAR(255) NOT NULL
+	Note     string // note             VARCHAR(32000)
+}
+
+// EntityAttrRow is db row of entity_attr join to model_entity_dic table
+type EntityAttrRow struct {
+	ModelId    int       // model_id        INT          NOT NULL
+	EntityId   int       // model_entity_id INT          NOT NULL
+	AttrId     int       // attr_id         INT          NOT NULL
+	Name       string    // attr_name       VARCHAR(255) NOT NULL
+	TypeId     int       // model_type_id   INT          NOT NULL
+	IsInternal bool      // is_internal     SMALLINT     NOT NULL
+	typeOf     *TypeMeta // type of attribute
+	colName    string    // db column name: attr1
+}
+
+// EntityAttrTxtRow is db row of entity_attr_txt join to model_entity_dic table
+type EntityAttrTxtRow struct {
+	ModelId  int    // model_id        INT          NOT NULL
+	EntityId int    // model_entity_id INT          NOT NULL
+	AttrId   int    // attr_id         INT          NOT NULL
+	LangCode string // lang_code       VARCHAR(32)  NOT NULL
+	Descr    string // descr           VARCHAR(255) NOT NULL
+	Note     string // note            VARCHAR(32000)
 }
 
 // GroupMeta is db rows to describe parent-child group of parameters or output tables,

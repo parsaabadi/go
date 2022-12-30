@@ -28,52 +28,41 @@ type CellCodeAllAcc struct {
 
 // CellAllAccConverter is a converter for multiple output table accumulators to implement CsvConverter interface.
 type CellAllAccConverter struct {
-	DoubleFmt string // if not empty then format string is used to sprintf if value type is float, double, long double
-	ValueName string // If ValueName is "" empty then all accumulators use for csv else one
+	CellTableConverter        // model metadata and output table name
+	IsIdCsv            bool   // if true then use enum id's else use enum codes
+	DoubleFmt          string // if not empty then format string is used to sprintf if value type is float, double, long double
+	ValueName          string // If ValueName is "" empty then all accumulators use for csv else one
 }
 
-// CsvFileName return file name of csv file to store all accumulators rows
-func (cellCvt CellAllAccConverter) CsvFileName(modelDef *ModelMeta, name string, isIdCsv bool) (string, error) {
+// retrun true if csv converter is using enum id's for dimensions
+func (cellCvt CellAllAccConverter) IsUseEnumId() bool { return cellCvt.IsIdCsv }
 
-	// validate parameters
-	if modelDef == nil {
-		return "", errors.New("invalid (empty) model metadata, look like model not found")
-	}
-	if name == "" {
-		return "", errors.New("invalid (empty) output table name")
-	}
+// CsvFileName return file name of csv file to store all accumulators rows
+func (cellCvt CellAllAccConverter) CsvFileName() (string, error) {
 
 	// find output table by name
-	k, ok := modelDef.OutTableByName(name)
-	if !ok {
-		return "", errors.New("output table not found: " + name)
+	_, err := cellCvt.tableByName()
+	if err != nil {
+		return "", err
 	}
 
-	if isIdCsv {
-		return modelDef.Table[k].Name + ".id.acc-all.csv", nil
+	// make csv file name
+	if cellCvt.IsIdCsv {
+		return cellCvt.TableName + ".id.acc-all.csv", nil
 	}
-	return modelDef.Table[k].Name + ".acc-all.csv", nil
+	return cellCvt.TableName + ".acc-all.csv", nil
 }
 
 // CsvHeader return first line for csv file: column names.
 // Column names can be like: sub_id,dim0,dim1,acc0,acc1,acc2
 // If ValueName is "" empty then use all accumulators for csv else only one where accumulator name is ValueName
-func (cellCvt CellAllAccConverter) CsvHeader(modelDef *ModelMeta, name string) ([]string, error) {
-
-	// validate parameters
-	if modelDef == nil {
-		return nil, errors.New("invalid (empty) model metadata, look like model not found")
-	}
-	if name == "" {
-		return nil, errors.New("invalid (empty) output table name")
-	}
+func (cellCvt CellAllAccConverter) CsvHeader() ([]string, error) {
 
 	// find output table by name
-	k, ok := modelDef.OutTableByName(name)
-	if !ok {
-		return nil, errors.New("output table not found: " + name)
+	table, err := cellCvt.tableByName()
+	if err != nil {
+		return []string{}, err
 	}
-	table := &modelDef.Table[k]
 
 	// make first line columns:
 	// if accumulator name specified then only one column else all accumlators
@@ -112,7 +101,7 @@ func (cellCvt CellAllAccConverter) KeyIds(name string) (func(interface{}, []int)
 
 		n := len(cell.DimIds)
 		if len(key) != n+1 {
-			return errors.New("invalid size of key buffer, expected: " + strconv.Itoa(n+2) + ": " + name)
+			return errors.New("invalid size of key buffer, expected: " + strconv.Itoa(n+1) + ": " + name)
 		}
 
 		key[0] = cell.SubId
@@ -126,28 +115,19 @@ func (cellCvt CellAllAccConverter) KeyIds(name string) (func(interface{}, []int)
 	return cvt, nil
 }
 
-// CsvToIdRow return converter from output table cell (sub_id, dimensions, acc0, acc1, acc2) to csv row []string.
+// ToCsvIdRow return converter from output table cell (sub_id, dimensions, acc0, acc1, acc2) to csv row []string.
 //
 // Converter simply does Sprint() for each dimension item id, subvalue number and value(s).
 // Converter will return error if len(row) not equal to number of fields in csv record.
 // Double format string is used if parameter type is float, double, long double
 // If ValueName is "" empty then all accumulators converted else one
-func (cellCvt CellAllAccConverter) CsvToIdRow(modelDef *ModelMeta, name string) (func(interface{}, []string) error, error) {
-
-	// validate parameters
-	if modelDef == nil {
-		return nil, errors.New("invalid (empty) model metadata, look like model not found")
-	}
-	if name == "" {
-		return nil, errors.New("invalid (empty) output table name")
-	}
+func (cellCvt CellAllAccConverter) ToCsvIdRow() (func(interface{}, []string) error, error) {
 
 	// find output table by name
-	k, ok := modelDef.OutTableByName(name)
-	if !ok {
-		return nil, errors.New("output table not found: " + name)
+	table, err := cellCvt.tableByName()
+	if err != nil {
+		return nil, err
 	}
-	table := &modelDef.Table[k]
 
 	// number of dimensions and number of accumulators to be converted
 	nAcc := 1
@@ -161,11 +141,11 @@ func (cellCvt CellAllAccConverter) CsvToIdRow(modelDef *ModelMeta, name string) 
 
 		cell, ok := src.(CellAllAcc)
 		if !ok {
-			return errors.New("invalid type, expected: CellAllAcc (internal error): " + name)
+			return errors.New("invalid type, expected: CellAllAcc (internal error): " + cellCvt.TableName)
 		}
 
 		if len(row) != 1+nRank+nAcc || len(cell.DimIds) != nRank || len(cell.IsNull) != nAcc || len(cell.Value) != nAcc {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(1+nRank+nAcc) + ": " + name)
+			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(1+nRank+nAcc) + ": " + cellCvt.TableName)
 		}
 
 		row[0] = fmt.Sprint(cell.SubId)
@@ -193,29 +173,20 @@ func (cellCvt CellAllAccConverter) CsvToIdRow(modelDef *ModelMeta, name string) 
 	return cvt, nil
 }
 
-// CsvToRow return converter from output table cell (sub_id, dimensions, acc0, acc1, acc2
+// ToCsvRow return converter from output table cell (sub_id, dimensions, acc0, acc1, acc2
 // to csv row []string (acc_name, sub_id, dimensions, value).
 //
 // Converter will return error if len(row) not equal to number of fields in csv record.
 // Double format string is used if parameter type is float, double, long double
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
 // If ValueName is "" empty then all accumulators converted else one
-func (cellCvt CellAllAccConverter) CsvToRow(modelDef *ModelMeta, name string) (func(interface{}, []string) error, error) {
-
-	// validate parameters
-	if modelDef == nil {
-		return nil, errors.New("invalid (empty) model metadata, look like model not found")
-	}
-	if name == "" {
-		return nil, errors.New("invalid (empty) output table name")
-	}
+func (cellCvt CellAllAccConverter) ToCsvRow() (func(interface{}, []string) error, error) {
 
 	// find output table by name
-	k, ok := modelDef.OutTableByName(name)
-	if !ok {
-		return nil, errors.New("output table not found: " + name)
+	table, err := cellCvt.tableByName()
+	if err != nil {
+		return nil, err
 	}
-	table := &modelDef.Table[k]
 
 	// number of dimensions and number of accumulators to be converted
 	nAcc := 1
@@ -228,7 +199,7 @@ func (cellCvt CellAllAccConverter) CsvToRow(modelDef *ModelMeta, name string) (f
 	fd := make([]func(itemId int) (string, error), nRank)
 
 	for k := 0; k < nRank; k++ {
-		f, err := cvtItemIdToCode(name+"."+table.Dim[k].Name, table.Dim[k].typeOf, table.Dim[k].IsTotal)
+		f, err := table.Dim[k].typeOf.itemIdToCode(cellCvt.TableName+"."+table.Dim[k].Name, table.Dim[k].IsTotal)
 		if err != nil {
 			return nil, err
 		}
@@ -239,11 +210,11 @@ func (cellCvt CellAllAccConverter) CsvToRow(modelDef *ModelMeta, name string) (f
 
 		cell, ok := src.(CellAllAcc)
 		if !ok {
-			return errors.New("invalid type, expected: output table accumulator cell (internal error): " + name)
+			return errors.New("invalid type, expected: output table accumulator cell (internal error): " + cellCvt.TableName)
 		}
 
 		if len(row) != 1+nRank+nAcc || len(cell.DimIds) != nRank || len(cell.IsNull) != nAcc || len(cell.Value) != nAcc {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(1+nRank+nAcc) + ": " + name)
+			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(1+nRank+nAcc) + ": " + cellCvt.TableName)
 		}
 
 		row[0] = fmt.Sprint(cell.SubId)
@@ -280,22 +251,13 @@ func (cellCvt CellAllAccConverter) CsvToRow(modelDef *ModelMeta, name string) (f
 //
 // It does return error if len(row) not equal to number of fields in cell db-record.
 // If dimension type is enum based then csv row is enum code and it is converted into cell.DimIds (into dimension type type enum ids).
-func (cellCvt CellAllAccConverter) CsvToCell(modelDef *ModelMeta, name string, subCount int) (func(row []string) (interface{}, error), error) {
-
-	// validate parameters
-	if modelDef == nil {
-		return nil, errors.New("invalid (empty) model metadata, look like model not found")
-	}
-	if name == "" {
-		return nil, errors.New("invalid (empty) output table name")
-	}
+func (cellCvt CellAllAccConverter) CsvToCell() (func(row []string) (interface{}, error), error) {
 
 	// find output table by name
-	k, ok := modelDef.OutTableByName(name)
-	if !ok {
-		return nil, errors.New("output table not found: " + name)
+	table, err := cellCvt.tableByName()
+	if err != nil {
+		return nil, err
 	}
-	table := &modelDef.Table[k]
 
 	// number of dimensions and number of accumulators to be converted
 	nAcc := 1
@@ -308,7 +270,7 @@ func (cellCvt CellAllAccConverter) CsvToCell(modelDef *ModelMeta, name string, s
 	fd := make([]func(src string) (int, error), nRank)
 
 	for k := 0; k < nRank; k++ {
-		f, err := cvtItemCodeToId(name+"."+table.Dim[k].Name, table.Dim[k].typeOf, table.Dim[k].IsTotal)
+		f, err := table.Dim[k].typeOf.itemCodeToId(cellCvt.TableName+"."+table.Dim[k].Name, table.Dim[k].IsTotal)
 		if err != nil {
 			return nil, err
 		}
@@ -325,7 +287,7 @@ func (cellCvt CellAllAccConverter) CsvToCell(modelDef *ModelMeta, name string, s
 			Value:  make([]float64, nAcc)}
 
 		if len(row) != 1+nRank+nAcc {
-			return nil, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(1+nRank+nAcc) + ": " + name)
+			return nil, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(1+nRank+nAcc) + ": " + cellCvt.TableName)
 		}
 
 		// subvalue number
@@ -377,26 +339,17 @@ func (cellCvt CellAllAccConverter) CsvToCell(modelDef *ModelMeta, name string, s
 // If dimension type is simple (bool or int) then dimension value converted to string.
 func (cellCvt CellAllAccConverter) IdToCodeCell(modelDef *ModelMeta, name string) (func(interface{}) (interface{}, error), error) {
 
-	// validate parameters
-	if modelDef == nil {
-		return nil, errors.New("invalid (empty) model metadata, look like model not found")
-	}
-	if name == "" {
-		return nil, errors.New("invalid (empty) output table name")
-	}
-
 	// find output table by name
-	k, ok := modelDef.OutTableByName(name)
-	if !ok {
-		return nil, errors.New("output table not found: " + name)
+	table, err := cellCvt.tableByName()
+	if err != nil {
+		return nil, err
 	}
-	table := &modelDef.Table[k]
 
 	// for each dimension create converter from item id to code
 	fd := make([]func(itemId int) (string, error), table.Rank)
 
 	for k := 0; k < table.Rank; k++ {
-		f, err := cvtItemIdToCode(name+"."+table.Dim[k].Name, table.Dim[k].typeOf, table.Dim[k].IsTotal)
+		f, err := table.Dim[k].typeOf.itemIdToCode(name+"."+table.Dim[k].Name, table.Dim[k].IsTotal)
 		if err != nil {
 			return nil, err
 		}

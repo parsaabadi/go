@@ -199,17 +199,17 @@ func ReadOutputTableTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLay
 		// find dimension index by name
 		dix := -1
 		for j := range table.Dim {
-			if table.Dim[j].Name == layout.Filter[k].DimName {
+			if table.Dim[j].Name == layout.Filter[k].Name {
 				dix = j
 				break
 			}
 		}
 		if dix < 0 {
-			return nil, errors.New("output table " + table.Name + " does not have dimension " + layout.Filter[k].DimName)
+			return nil, errors.New("output table " + table.Name + " does not have dimension " + layout.Filter[k].Name)
 		}
 
-		f, err := makeDimFilter(
-			modelDef, &layout.Filter[k], "", table.Dim[dix].Name, table.Dim[dix].colName, table.Dim[dix].typeOf, table.Dim[dix].IsTotal, "output table "+table.Name)
+		f, err := makeWhereFilter(
+			&layout.Filter[k], "", table.Dim[dix].colName, table.Dim[dix].typeOf, table.Dim[dix].IsTotal, table.Dim[dix].Name, "output table "+table.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -223,17 +223,17 @@ func ReadOutputTableTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLay
 		// find dimension index by name
 		dix := -1
 		for j := range table.Dim {
-			if table.Dim[j].Name == layout.FilterById[k].DimName {
+			if table.Dim[j].Name == layout.FilterById[k].Name {
 				dix = j
 				break
 			}
 		}
 		if dix < 0 {
-			return nil, errors.New("output table " + table.Name + " does not have dimension " + layout.FilterById[k].DimName)
+			return nil, errors.New("output table " + table.Name + " does not have dimension " + layout.FilterById[k].Name)
 		}
 
-		f, err := makeDimIdFilter(
-			modelDef, &layout.FilterById[k], "", table.Dim[dix].Name, table.Dim[dix].colName, table.Dim[dix].typeOf, "output table "+table.Name)
+		f, err := makeWhereIdFilter(
+			&layout.FilterById[k], "", table.Dim[dix].colName, table.Dim[dix].typeOf, table.Dim[dix].Name, "output table "+table.Name)
 		if err != nil {
 			return nil, err
 		}

@@ -419,7 +419,12 @@ func digestParameterFrom(modelDef *ModelMeta, param *ParamMeta, doubleFmt string
 	}
 
 	// create parameter row digester append digest of parameter cells
-	cvtParam := CellParamConverter{DoubleFmt: doubleFmt}
+	cvtParam := CellParamConverter{
+		ModelDef:  modelDef,
+		ParamName: param.Name,
+		IsIdCsv:   true,
+		DoubleFmt: doubleFmt,
+	}
 
 	digestRow, isOrderBy, err := digestCellsFrom(hMd5, modelDef, param.Name, cvtParam)
 	if err != nil {

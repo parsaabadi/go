@@ -12,14 +12,15 @@ import (
 // It is also return reference to bool flag to indicate all source rows are ordered by primary key.
 // If there is no order by primery key then digest calculation is incorrect.
 // It is a hash of text values identical to csv file hash, for example:
-//   acc_id,sub_id,dim0,dim1,acc_value\n
-//   0,1,0,0,1234.5678\n
-func digestCellsFrom(hSum hash.Hash, modelDef *ModelMeta, name string, csvCvt CsvConverter) (func(interface{}) error, *bool, error) {
+//
+//	acc_id,sub_id,dim0,dim1,acc_value\n
+//	0,1,0,0,1234.5678\n
+func digestCellsFrom(hSum hash.Hash, modelDef *ModelMeta, name string, csvCvt CsvIntKeysConverter) (func(interface{}) error, *bool, error) {
 
 	isOrderBy := true // return true if rows ordered by primary key
 
 	// append header, like: acc_id,sub_id,dim0,dim1,acc_value\n
-	cs, err := csvCvt.CsvHeader(modelDef, name)
+	cs, err := csvCvt.CsvHeader()
 	if err != nil {
 		return nil, &isOrderBy, err
 	}
@@ -51,7 +52,7 @@ func digestCellsFrom(hSum hash.Hash, modelDef *ModelMeta, name string, csvCvt Cs
 	}
 
 	// append dimensions and value to digest
-	cvt, err := csvCvt.CsvToIdRow(modelDef, name) // converter from cell id's to csv row []string
+	cvt, err := csvCvt.ToCsvIdRow() // converter from cell id's to csv row []string
 	if err != nil {
 		return nil, &isOrderBy, err
 	}

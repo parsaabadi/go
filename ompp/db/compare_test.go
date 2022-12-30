@@ -304,7 +304,15 @@ func TestCompareOutputTable(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	csvCvt := CellTableCmpConverter{IdToDigest: map[int]string{}, DigestToId: map[string]int{}}
+	csvCvt := CellTableCmpConverter{
+		CellTableConverter: CellTableConverter{
+			ModelDef:  modelDef,
+			TableName: tableName,
+		},
+		IsIdCsv:    true,
+		IdToDigest: map[int]string{},
+		DigestToId: map[string]int{},
+	}
 	for _, r := range rLst {
 		csvCvt.IdToDigest[r.RunId] = r.RunDigest
 		csvCvt.DigestToId[r.RunDigest] = r.RunId
@@ -393,13 +401,13 @@ func writeToCsvIdFile(
 	cellLst *list.List) error {
 
 	// converter from db cell to csv id row []string
-	cvt, err := csvCvt.CsvToIdRow(modelDef, name)
+	cvt, err := csvCvt.ToCsvIdRow()
 	if err != nil {
 		return err
 	}
 
 	// create csv file
-	fn, err := csvCvt.CsvFileName(modelDef, name, true)
+	fn, err := csvCvt.CsvFileName()
 	if err != nil {
 		return err
 	}
@@ -415,7 +423,7 @@ func writeToCsvIdFile(
 	wr := csv.NewWriter(f)
 
 	// write header line: column names
-	cs, err := csvCvt.CsvHeader(modelDef, name)
+	cs, err := csvCvt.CsvHeader()
 	if err != nil {
 		return err
 	}

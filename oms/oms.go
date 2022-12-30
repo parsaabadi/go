@@ -8,40 +8,49 @@ Web-service allow to view and update model database(s) and run openM++ models fr
 Web-server allow to serve static html (css, images, javascipt) content from html subdirectory.
 
 Arguments for oms can be specified on command line or through .ini file:
-  oms -ini my-oms.ini
-  oms -OpenM.IniFile my-oms.ini
+
+	oms -ini my-oms.ini
+	oms -OpenM.IniFile my-oms.ini
+
 Command line arguments take precedence over ini-file options.
 
 Following arguments supporetd by oms:
 
-  -oms.RootDir om/root
+	-oms.RootDir om/root
+
 oms root directory, default: current directory.
 Recommended to have log/ subdirectory to store oms web-service log files.
 
-  -oms.ModelDir models/bin
+	-oms.ModelDir models/bin
+
 models executable and model.sqlite database files directory, default: models/bin,
 If relative then must be relative to oms root directory.
 
-  -oms.ModelLogDir models/log
+	-oms.ModelLogDir models/log
+
 models log directory, default: models/log, if relative then must be relative to oms root directory.
 
-  -oms.HtmlDir html
+	-oms.HtmlDir html
+
 front-end UI directory, default: html.
 If relative then must be relative to oms root directory.
 It is not used if -oms.ApiOnly specified.
 
-  -oms.EtcDir etc
+	-oms.EtcDir etc
+
 configuration files directory, default: etc.
 If relative then must be relative to oms root directory.
 It is an optional directory, it may contain configuration files,for example, templates to run models on MPI cluster.
 
-  -oms.JobDir job
+	-oms.JobDir job
+
 jobs control directory.
 If relative then must be relative to oms root directory.
 Jobs control allow to manage computational resources (e.g. CPUs) and organize model run queue.
 Default value is empty "" string and it is disable jobs control.
 
-  -oms.Name someName
+	-oms.Name someName
+
 instance name which used for job control.
 
 -oms.HomeDir models/home
@@ -49,57 +58,69 @@ user personal home directory to store files and settings.
 If relative then must be relative to oms root directory.
 Default value is empty "" string and it is disable use of home directory.
 
-  -oms.AllowDownload false
+	-oms.AllowDownload false
+
 if true then allow download from user home/io/download directory.
 
-  -oms.AllowUpload false
+	-oms.AllowUpload false
+
 if true then allow upload to user home/io/upload directory.
 
-  -l localhost:4040
-  -oms.Listen localhost:4040
+	-l localhost:4040
+	-oms.Listen localhost:4040
+
 address to listen, default: localhost:4040.
 Use -l :4040 if you need to access oms web-service from other computer (make sure firewall configured properly).
 
-  -oms.UrlSaveTo someModel.ui.url.txt
+	-oms.UrlSaveTo someModel.ui.url.txt
+
 file path to save oms URL which can be used to open web UI in browser.
 Default: empty value, URL is not saved in a file by default.
 Example of URL file content: http://localhost:4040
 
-  -oms.ApiOnly false
+	-oms.ApiOnly false
+
 if true then API only web-service, it is false by default and oms also act as http server for openM++ UI.
 
-  -oms.LogRequest false
+	-oms.LogRequest false
+
 if true then log HTTP requests on console and/or log file.
 
-  -oms.MaxRowCount 100
+	-oms.MaxRowCount 100
+
 default number of rows to return from read parameters or output tables, default: 100.
 This value is used if web-service method call does not provide explicit number of rows to read.
 
-  -oms.Languages en
+	-oms.Languages en
+
 comma-separated list of supported languages, default: en.
 That list is matched with request language list and model language list in order to return proper text results.
 
-  -oms.DoubleFormat %.15g
+	-oms.DoubleFormat %.15g
+
 format to convert float or double value to string, default: %.15g.
 OpenM++ is using hash digest to compare models, input parameters and output values.
 By default float and double values converted into text with "%.15g" format.
 
-  -oms.CodePage
+	-oms.CodePage
+
 "code page" to convert source file into utf-8, for example: windows-1252.
 It is used only for compatibility with old Windows files.
 
-  -oms.MaxRunHistory 100
+	-oms.MaxRunHistory 100
+
 max number of completed model runs to keep in run list history, default: 100.
 
 Also oms support OpenM++ standard log settings (described in openM++ wiki):
-  -OpenM.LogToConsole:     if true then log to standard output, default: true
-  -v:                      short form of: -OpenM.LogToConsole
-  -OpenM.LogToFile:        if true then log to file
-  -OpenM.LogFilePath:      path to log file, default = current/dir/exeName.log
-  -OpenM.LogUseDailyStamp: if true then use dayily stamp in log file name (rotate log files dayily)
-  -OpenM.LogUseTs:         if true then use time-stamp in log file name
-  -OpenM.LogUsePid:        if true then use pid-stamp in log file name
-  -OpenM.LogSql:           if true then log sql statements into log file
+
+	-OpenM.LogToConsole:     if true then log to standard output, default: true
+	-v:                      short form of: -OpenM.LogToConsole
+	-OpenM.LogToFile:        if true then log to file
+	-OpenM.LogFilePath:      path to log file, default = current/dir/exeName.log
+	-OpenM.LogUseDailyStamp: if true then use dayily stamp in log file name (rotate log files dayily)
+	-OpenM.LogUseTs:         if true then use time-stamp in log file name
+	-OpenM.LogUsePid:        if true then use pid-stamp in log file name
+	-OpenM.LogSql:           if true then log sql statements into log file
 */
 package main
 
@@ -576,8 +597,10 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 
 // downloadHandler is static file download handler from user home/io/download and home/io/upload folders.
 // Files served from home/io directory URLs are:
-//   https://domain.name/download/file.name
-//   https://domain.name/upload/file.name
+//
+//	https://domain.name/download/file.name
+//	https://domain.name/upload/file.name
+//
 // Only GET requests expected.
 func downloadHandler(w http.ResponseWriter, r *http.Request) {
 	setContentType(http.FileServer(http.Dir(theCfg.inOutDir))).ServeHTTP(w, r)
@@ -597,14 +620,17 @@ func apiGetRoutes(router *vestigo.Router) {
 	// GET /api/model-list/text/lang/:lang
 	router.Get("/api/model-list/text", modelTextListHandler, logRequest)
 	router.Get("/api/model-list/text/lang/:lang", modelTextListHandler, logRequest)
+	router.Get("/api/model-list/text/lang/", http.NotFound)
 
 	// GET /api/model/:model
 	router.Get("/api/model/:model", modelMetaHandler, logRequest)
+	router.Get("/api/model/", http.NotFound)
 
 	// GET /api/model/:model/text
 	// GET /api/model/:model/text/lang/:lang
 	router.Get("/api/model/:model/text", modelTextHandler, logRequest)
 	router.Get("/api/model/:model/text/lang/:lang", modelTextHandler, logRequest)
+	router.Get("/api/model/:model/text/lang/", http.NotFound)
 
 	// GET /api/model/:model/text/all
 	router.Get("/api/model/:model/text/all", modelAllTextHandler, logRequest)
@@ -620,9 +646,11 @@ func apiGetRoutes(router *vestigo.Router) {
 	// GET /api/model/:model/word-list/lang/:lang
 	router.Get("/api/model/:model/word-list", wordListHandler, logRequest)
 	router.Get("/api/model/:model/word-list/lang/:lang", wordListHandler, logRequest)
+	router.Get("/api/model/:model/word-list/lang/", http.NotFound)
 
 	// GET /api/model/:model/profile/:profile
 	router.Get("/api/model/:model/profile/:profile", modelProfileHandler, logRequest)
+	router.Get("/api/model/:model/profile/", http.NotFound)
 
 	// GET /api/model/:model/profile-list
 	router.Get("/api/model/:model/profile-list", modelProfileListHandler, logRequest)
@@ -638,6 +666,7 @@ func apiGetRoutes(router *vestigo.Router) {
 	// GET /api/model/:model/run-list/text/lang/:lang
 	router.Get("/api/model/:model/run-list/text", runListTextHandler, logRequest)
 	router.Get("/api/model/:model/run-list/text/lang/:lang", runListTextHandler, logRequest)
+	router.Get("/api/model/:model/run-list/text/lang/", http.NotFound)
 
 	// GET /api/model/:model/run/:run/status
 	router.Get("/api/model/:model/run/:run/status", runStatusHandler, logRequest)
@@ -656,8 +685,8 @@ func apiGetRoutes(router *vestigo.Router) {
 
 	// GET /api/model/:model/run/:run
 	router.Get("/api/model/:model/run/:run", runFullHandler, logRequest)
-
-	router.Get("/api/model/:model/run/:run/", http.NotFound) // reject if request ill-formed
+	router.Get("/api/model/:model/run/", http.NotFound)
+	router.Get("/api/model/:model/run/:run/", http.NotFound)
 
 	// GET /api/model/:model/run/:run/text
 	// GET /api/model/:model/run/:run/text/lang/:lang
@@ -681,6 +710,7 @@ func apiGetRoutes(router *vestigo.Router) {
 	// GET /api/model/:model/workset-list/text/lang/:lang
 	router.Get("/api/model/:model/workset-list/text", worksetListTextHandler, logRequest)
 	router.Get("/api/model/:model/workset-list/text/lang/:lang", worksetListTextHandler, logRequest)
+	router.Get("/api/model/:model/workset-list/text/lang/", http.NotFound)
 
 	// GET /api/model/:model/workset/:set/status
 	router.Get("/api/model/:model/workset/:set/status", worksetStatusHandler, logRequest)
@@ -692,10 +722,9 @@ func apiGetRoutes(router *vestigo.Router) {
 	// GET /api/model/:model/workset/:set/text/lang/:lang
 	router.Get("/api/model/:model/workset/:set/text", worksetTextHandler, logRequest)
 	router.Get("/api/model/:model/workset/:set/text/lang/:lang", worksetTextHandler, logRequest)
-	// reject if request ill-formed
+	router.Get("/api/model/:model/workset/:set/text/lang/", http.NotFound)
 	router.Get("/api/model/:model/workset/:set/", http.NotFound)
 	router.Get("/api/model/:model/workset/:set/text/", http.NotFound)
-	router.Get("/api/model/:model/workset/:set/text/lang/", http.NotFound)
 
 	// GET /api/model/:model/workset/:set/text/all
 	router.Get("/api/model/:model/workset/:set/text/all", worksetAllTextHandler, logRequest)
@@ -711,6 +740,7 @@ func apiGetRoutes(router *vestigo.Router) {
 	// GET /api/model/:model/task-list/text/lang/:lang
 	router.Get("/api/model/:model/task-list/text", taskListTextHandler, logRequest)
 	router.Get("/api/model/:model/task-list/text/lang/:lang", taskListTextHandler, logRequest)
+	router.Get("/api/model/:model/task-list/text/lang/", http.NotFound)
 
 	// GET /api/model/:model/task/:task/sets
 	router.Get("/api/model/:model/task/:task/sets", taskSetsHandler, logRequest)
@@ -720,9 +750,11 @@ func apiGetRoutes(router *vestigo.Router) {
 
 	// GET /api/model/:model/task/:task/run-status/run/:run
 	router.Get("/api/model/:model/task/:task/run-status/run/:run", taskRunStatusHandler, logRequest)
+	router.Get("/api/model/:model/task/:task/run-status/run/", http.NotFound)
 
 	// GET /api/model/:model/task/:task/run-status/list/:run
 	router.Get("/api/model/:model/task/:task/run-status/list/:run", taskRunStatusListHandler, logRequest)
+	router.Get("/api/model/:model/task/:task/run-status/list/", http.NotFound)
 
 	// GET /api/model/:model/task/:task/run-status/first
 	router.Get("/api/model/:model/task/:task/run-status/first", firstTaskRunStatusHandler, logRequest)
@@ -900,15 +932,19 @@ func apiUpdateRoutes(router *vestigo.Router) {
 
 	// PATCH /api/model/:model/profile
 	router.Patch("/api/model/:model/profile", profileReplaceHandler, logRequest)
+	router.Patch("/api/model/:model/profile/", http.NotFound)
 
 	// DELETE /api/model/:model/profile/:profile
 	router.Delete("/api/model/:model/profile/:profile", profileDeleteHandler, logRequest)
+	router.Delete("/api/model/:model/profile/", http.NotFound)
 
 	// POST /api/model/:model/profile/:profile/key/:key/value/:value
 	router.Post("/api/model/:model/profile/:profile/key/:key/value/:value", profileOptionReplaceHandler, logRequest)
+	router.Post("/api/model/:model/profile/:profile/key/:key/value/", http.NotFound)
 
 	// DELETE /api/model/:model/profile/:profile/key/:key
 	router.Delete("/api/model/:model/profile/:profile/key/:key", profileOptionDeleteHandler, logRequest)
+	router.Delete("/api/model/:model/profile/:profile/key/", http.NotFound)
 
 	//
 	// update model set of input parameters (workset)
@@ -916,6 +952,7 @@ func apiUpdateRoutes(router *vestigo.Router) {
 
 	// POST /api/model/:model/workset/:set/readonly/:readonly
 	router.Post("/api/model/:model/workset/:set/readonly/:readonly", worksetReadonlyUpdateHandler, logRequest)
+	router.Post("/api/model/:model/workset/:set/readonly/", http.NotFound)
 
 	// PUT  /api/workset-create
 	router.Put("/api/workset-create", worksetCreateHandler, logRequest)
@@ -928,6 +965,7 @@ func apiUpdateRoutes(router *vestigo.Router) {
 
 	// DELETE /api/model/:model/workset/:set
 	router.Delete("/api/model/:model/workset/:set", worksetDeleteHandler, logRequest)
+	router.Delete("/api/model/:model/workset/", http.NotFound)
 
 	// PATCH /api/model/:model/workset/:set/parameter/:name/new/value
 	router.Patch("/api/model/:model/workset/:set/parameter/:name/new/value", parameterPageUpdateHandler, logRequest)
@@ -937,18 +975,23 @@ func apiUpdateRoutes(router *vestigo.Router) {
 
 	// DELETE /api/model/:model/workset/:set/parameter/:name
 	router.Delete("/api/model/:model/workset/:set/parameter/:name", worksetParameterDeleteHandler, logRequest)
+	router.Delete("/api/model/:model/workset/:set/parameter/", http.NotFound)
 
 	// PUT  /api/model/:model/workset/:set/copy/parameter/:name/from-run/:run
 	router.Put("/api/model/:model/workset/:set/copy/parameter/:name/from-run/:run", worksetParameterRunCopyHandler, logRequest)
+	router.Put("/api/model/:model/workset/:set/copy/parameter/:name/from-run/", http.NotFound)
 
 	// PATCH  /api/model/:model/workset/:set/merge/parameter/:name/from-run/:run
 	router.Patch("/api/model/:model/workset/:set/merge/parameter/:name/from-run/:run", worksetParameterRunMergeHandler, logRequest)
+	router.Patch("/api/model/:model/workset/:set/merge/parameter/:name/from-run/", http.NotFound)
 
 	// PUT /api/model/:model/workset/:set/copy/parameter/:name/from-workset/:from-set
 	router.Put("/api/model/:model/workset/:set/copy/parameter/:name/from-workset/:from-set", worksetParameterCopyFromWsHandler, logRequest)
+	router.Put("/api/model/:model/workset/:set/copy/parameter/:name/from-workset/", http.NotFound)
 
 	// PATCH /api/model/:model/workset/:set/merge/parameter/:name/from-workset/:from-set
 	router.Patch("/api/model/:model/workset/:set/merge/parameter/:name/from-workset/:from-set", worksetParameterMergeFromWsHandler, logRequest)
+	router.Patch("/api/model/:model/workset/:set/merge/parameter/:name/from-workset/", http.NotFound)
 
 	// PATCH /api/model/:model/workset/:set/parameter-text
 	router.Patch("/api/model/:model/workset/:set/parameter-text", worksetParameterTextMergeHandler, logRequest)
@@ -962,6 +1005,7 @@ func apiUpdateRoutes(router *vestigo.Router) {
 
 	// DELETE /api/model/:model/run/:run
 	router.Delete("/api/model/:model/run/:run", runDeleteHandler, logRequest)
+	router.Delete("/api/model/:model/run/", http.NotFound)
 
 	// PATCH /api/model/:model/run/:run/parameter-text
 	router.Patch("/api/model/:model/run/:run/parameter-text", runParameterTextMergeHandler, logRequest)
@@ -978,6 +1022,7 @@ func apiUpdateRoutes(router *vestigo.Router) {
 
 	// DELETE /api/model/:model/task/:task
 	router.Delete("/api/model/:model/task/:task", taskDeleteHandler, logRequest)
+	router.Delete("/api/model/:model/task/", http.NotFound)
 }
 
 // add web-service /api routes to run the model and monitor progress
@@ -991,16 +1036,16 @@ func apiRunModelRoutes(router *vestigo.Router) {
 	router.Get("/api/run/log/model/:model/stamp/:stamp", runLogPageHandler, logRequest)
 	router.Get("/api/run/log/model/:model/stamp/:stamp/start/:start", runLogPageHandler, logRequest)
 	router.Get("/api/run/log/model/:model/stamp/:stamp/start/:start/count/:count", runLogPageHandler, logRequest)
-
-	// PUT /api/run/stop/model/:model/stamp/:stamp
-	router.Put("/api/run/stop/model/:model/stamp/:stamp", stopModelHandler, logRequest)
-
-	// reject run log if request ill-formed
-	router.Get("/api/run/log/model/", http.NotFound)
 	router.Get("/api/run/log/model/:model/stamp/", http.NotFound)
 	router.Get("/api/run/log/model/:model/stamp/:stamp/start/", http.NotFound)
 	router.Get("/api/run/log/model/:model/stamp/:stamp/start/:start/count/", http.NotFound)
-	router.Put("/api/run/log/model/:model/stamp/", http.NotFound)
+
+	// PUT /api/run/stop/model/:model/stamp/:stamp
+	router.Put("/api/run/stop/model/:model/stamp/:stamp", stopModelHandler, logRequest)
+	router.Put("/api/run/stop/model/:model/stamp/", http.NotFound)
+
+	// reject run log if request ill-formed
+	router.Get("/api/run/log/model/", http.NotFound)
 }
 
 // add http web-service /api routes to download and manage files from home/io/download folder
@@ -1011,34 +1056,37 @@ func apiDownloadRoutes(router *vestigo.Router) {
 
 	// GET /api/download/log/model/:model
 	router.Get("/api/download/log/model/:model", modelLogDownloadGetHandler, logRequest)
+	router.Get("/api/download/log/model/", http.NotFound)
 
 	// GET /api/download/log/file/:name
 	router.Get("/api/download/log/file/:name", fileLogDownloadGetHandler, logRequest)
+	router.Get("/api/download/log/file/", http.NotFound)
 
 	// GET /api/download/file-tree/:folder
 	router.Get("/api/download/file-tree/:folder", fileTreeDownloadGetHandler, logRequest)
+	router.Get("/api/download/file-tree/", http.NotFound)
 
 	// POST /api/download/model/:model
 	router.Post("/api/download/model/:model", modelDownloadPostHandler, logRequest)
+	router.Post("/api/download/model/", http.NotFound)
 
 	// POST /api/download/model/:model/run/:run
 	router.Post("/api/download/model/:model/run/:run", runDownloadPostHandler, logRequest)
+	router.Post("/api/download/model/:model/run/", http.NotFound)
+	router.Post("/api/download/model/run/", http.NotFound)
 
 	// POST /api/download/model/:model/workset/:set
 	router.Post("/api/download/model/:model/workset/:set", worksetDownloadPostHandler, logRequest)
-
-	// reject if request ill-formed
-	// POST /api/download/model/:model/run/
-	// POST /api/download/model/:model/workset/
-	router.Post("/api/download/model/", http.NotFound)
-	router.Post("/api/download/model/run/", http.NotFound)
+	router.Post("/api/download/model/:model/workset/", http.NotFound)
 	router.Post("/api/download/model/workset/", http.NotFound)
 
 	// DELETE /api/download/delete/:folder
 	router.Delete("/api/download/delete/:folder", downloadDeleteHandler, logRequest)
+	router.Delete("/api/download/delete/", http.NotFound)
 
 	// DELETE /api/download/start/delete/:folder
 	router.Delete("/api/download/start/delete/:folder", downloadAsyncDeleteHandler, logRequest)
+	router.Delete("/api/download/start/delete/", http.NotFound)
 }
 
 // add http web-service /api routes to upload and manage files at home/io/upload folder
@@ -1049,33 +1097,36 @@ func apiUploadRoutes(router *vestigo.Router) {
 
 	// GET /api/upload/log/model/:model
 	router.Get("/api/upload/log/model/:model", modelLogUploadGetHandler, logRequest)
+	router.Get("/api/upload/log/model/", http.NotFound)
 
 	// GET /api/upload/log/file/:name
 	router.Get("/api/upload/log/file/:name", fileLogUploadGetHandler, logRequest)
+	router.Get("/api/upload/log/file/", http.NotFound)
 
 	// GET /api/upload/file-tree/:folder
 	router.Get("/api/upload/file-tree/:folder", fileTreeUploadGetHandler, logRequest)
+	router.Get("/api/upload/file-tree/", http.NotFound)
 
 	// POST /api/upload/model/:model/workset
 	// POST /api/upload/model/:model/workset/:set
 	router.Post("/api/upload/model/:model/workset", worksetUploadPostHandler, logRequest)
 	router.Post("/api/upload/model/:model/workset/:set", worksetUploadPostHandler, logRequest)
+	router.Post("/api/upload/model/:model/workset/", http.NotFound)
 
 	// POST /api/upload/model/:model/run
 	// POST /api/upload/model/:model/run/:run
 	router.Post("/api/upload/model/:model/run", runUploadPostHandler, logRequest)
 	router.Post("/api/upload/model/:model/run/:run", runUploadPostHandler, logRequest)
-
-	// reject if request ill-formed
-	router.Post("/api/upload/model/", http.NotFound)
-	router.Post("/api/upload/model/:model/workset/", http.NotFound)
 	router.Post("/api/upload/model/:model/run/", http.NotFound)
+	router.Post("/api/upload/model/", http.NotFound)
 
 	// DELETE /api/upload/delete/:folder
 	router.Delete("/api/upload/delete/:folder", uploadDeleteHandler, logRequest)
+	router.Delete("/api/upload/delete/", http.NotFound)
 
 	// DELETE /api/upload/start/delete/:folder
 	router.Delete("/api/upload/start/delete/:folder", uploadAsyncDeleteHandler, logRequest)
+	router.Delete("/api/upload/start/delete/", http.NotFound)
 }
 
 // add http web-service /api routes to upload, download and manage files at home/io/files folder
@@ -1105,12 +1156,15 @@ func apiUserRoutes(router *vestigo.Router) {
 
 	// GET /api/user/view/model/:model
 	router.Get("/api/user/view/model/:model", userViewGetHandler, logRequest)
+	router.Get("/api/user/view/model/", http.NotFound)
 
 	// PUT  /api/user/view/model/:model
 	router.Put("/api/user/view/model/:model", userViewPutHandler, logRequest)
+	router.Put("/api/user/view/model/", http.NotFound)
 
 	// DELETE /api/user/view/model/:model
 	router.Delete("/api/user/view/model/:model", userViewDeleteHandler, logRequest)
+	router.Delete("/api/user/view/model/", http.NotFound)
 }
 
 // add web-service /api routes service state
@@ -1128,12 +1182,18 @@ func apiServiceRoutes(router *vestigo.Router) {
 	router.Get("/api/service/job/active/:job", jobActiveHandler, logRequest)
 	router.Get("/api/service/job/queue/:job", jobQueueHandler, logRequest)
 	router.Get("/api/service/job/history/:job", jobHistoryHandler, logRequest)
+	router.Get("/api/service/job/active/", http.NotFound)
+	router.Get("/api/service/job/queue/", http.NotFound)
+	router.Get("/api/service/job/history/", http.NotFound)
 
 	// PUT /api/service/job/move/:pos/:job
 	router.Put("/api/service/job/move/:pos/:job", jobMoveHandler, logRequest)
+	router.Put("/api/service/job/move/:pos/", http.NotFound)
+	router.Put("/api/service/job/move/", http.NotFound)
 
 	// DELETE /api/service/job/delete/history/:job
 	router.Delete("/api/service/job/delete/history/:job", jobHistoryDeleteHandler, logRequest)
+	router.Delete("/api/service/job/delete/history/", http.NotFound)
 }
 
 // add web-service /api routes for administrative tasks
@@ -1147,6 +1207,7 @@ func apiAdminRoutes(router *vestigo.Router) {
 
 	// POST /api/admin/jobs-pause/:pause
 	router.Post("/api/admin/jobs-pause/:pause", jobsPauseHandler, logRequest)
+	router.Post("/api/admin/jobs-pause/", http.NotFound)
 
 	// DO NOT USE in production, development only
 	//

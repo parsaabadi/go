@@ -108,17 +108,6 @@ func (meta *ModelMeta) ParamByKey(paramId int) (int, bool) {
 	return k, (k >= 0 && k < n && meta.Param[k].ParamId == paramId)
 }
 
-// ParamByDigest return index of parameter by parameter digest
-func (meta *ModelMeta) ParamByDigest(digest string) (int, bool) {
-
-	for k := range meta.Param {
-		if meta.Param[k].Digest == digest {
-			return k, true
-		}
-	}
-	return len(meta.Param), false
-}
-
 // ParamByName return index of parameter by name
 func (meta *ModelMeta) ParamByName(name string) (int, bool) {
 
@@ -139,15 +128,6 @@ func (meta *ModelMeta) ParamByHid(paramHid int) (int, bool) {
 		}
 	}
 	return len(meta.Param), false
-}
-
-// ParamIdByHid return parameter id by Hid or -1 if not found
-func (meta *ModelMeta) ParamIdByHid(paramHid int) int {
-
-	if k, ok := meta.ParamByHid(paramHid); ok {
-		return meta.Param[k].ParamId
-	}
-	return -1
 }
 
 // ParamHidById return parameter Hid by id or -1 if not found
@@ -190,17 +170,6 @@ func (meta *ModelMeta) OutTableByName(name string) (int, bool) {
 	return len(meta.Table), false
 }
 
-// OutTableByDigest return index of output table by digest
-func (meta *ModelMeta) OutTableByDigest(digest string) (int, bool) {
-
-	for k := range meta.Table {
-		if meta.Table[k].Digest == digest {
-			return k, true
-		}
-	}
-	return len(meta.Table), false
-}
-
 // OutTableByHid return index of output table by table Hid
 func (meta *ModelMeta) OutTableByHid(tableHid int) (int, bool) {
 
@@ -210,15 +179,6 @@ func (meta *ModelMeta) OutTableByHid(tableHid int) (int, bool) {
 		}
 	}
 	return len(meta.Table), false
-}
-
-// OutTableIdByHid return output table id by Hid or -1 if not found
-func (meta *ModelMeta) OutTableIdByHid(tableHid int) int {
-
-	if k, ok := meta.OutTableByHid(tableHid); ok {
-		return meta.Table[k].TableId
-	}
-	return -1
 }
 
 // OutTableHidById return output table Hid by id or -1 if not found
@@ -240,19 +200,86 @@ func (table *TableMeta) DimByKey(dimId int) (int, bool) {
 	return k, (k >= 0 && k < n && table.Dim[k].DimId == dimId)
 }
 
+// EntityByKey return index of entity by key: entityId
+func (meta *ModelMeta) EntityByKey(entityId int) (int, bool) {
+
+	n := len(meta.Entity)
+	k := sort.Search(n, func(i int) bool {
+		return meta.Entity[i].EntityId >= entityId
+	})
+	return k, (k >= 0 && k < n && meta.Entity[k].EntityId == entityId)
+}
+
+// EntityByName return index of entity by name
+func (meta *ModelMeta) EntityByName(name string) (int, bool) {
+
+	for k := range meta.Entity {
+		if meta.Entity[k].Name == name {
+			return k, true
+		}
+	}
+	return len(meta.Entity), false
+}
+
+// EntityByHid return index of entity by entity Hid
+func (meta *ModelMeta) EntityByHid(entityHid int) (int, bool) {
+
+	for k := range meta.Entity {
+		if meta.Entity[k].EntityHid == entityHid {
+			return k, true
+		}
+	}
+	return len(meta.Entity), false
+}
+
+// EntityHidById return entity Hid by id or -1 if not found
+func (meta *ModelMeta) EntityHidById(entityId int) int {
+
+	if k, ok := meta.EntityByKey(entityId); ok {
+		return meta.Entity[k].EntityHid
+	}
+	return -1
+}
+
+// AttrByKey return index of entity attribute by key: attrId
+func (entity *EntityMeta) AttrByKey(attrId int) (int, bool) {
+
+	n := len(entity.Attr)
+	k := sort.Search(n, func(i int) bool {
+		return entity.Attr[i].AttrId >= attrId
+	})
+	return k, (k >= 0 && k < n && entity.Attr[k].AttrId == attrId)
+}
+
+// EntityGenByGenHid return index of entity generation by generation Hid
+func (meta *RunMeta) EntityGenByGenHid(genHid int) (int, bool) {
+
+	for k := range meta.EntityGen {
+		if meta.EntityGen[k].GenHid == genHid {
+			return k, true
+		}
+	}
+	return len(meta.EntityGen), false
+}
+
 // IsBool return true if model type is boolean.
 func (typeRow *TypeDicRow) IsBool() bool { return strings.ToLower(typeRow.Name) == "bool" }
 
 // IsString return true if model type is string.
 func (typeRow *TypeDicRow) IsString() bool { return strings.ToLower(typeRow.Name) == "file" }
 
-// IsFloat return true if model type is float.
+// IsFloat return true if model type is any of float family.
 func (typeRow *TypeDicRow) IsFloat() bool {
 	switch strings.ToLower(typeRow.Name) {
 	case "float", "double", "ldouble", "time", "real":
 		return true
 	}
 	return false
+}
+
+// IsFloat32 return true if model type is float 32 bit.
+func (typeRow *TypeDicRow) IsFloat32() bool {
+	return strings.ToLower(typeRow.Name) == "float"
 }
 
 // IsInt return true if model type is integer (not float, string or boolean).
@@ -325,6 +352,116 @@ func (typeRow *TypeDicRow) sqlColumnType(dbFacet Facet) (string, error) {
 	}
 
 	return "", errors.New("invalid type id: " + strconv.Itoa(typeRow.TypeId))
+}
+
+// itemCodeToId return converter from dimension item code to id.
+// It is also used for parameter values if parameter type is enum-based.
+// If dimension is enum-based then from enum code to enum id or to the total enum id;
+// If dimension is simple integer type then parse integer;
+// If dimension is boolean then false=>0, true=>1
+func (typeOf *TypeMeta) itemCodeToId(msgName string, isTotalEnabled bool) (func(src string) (int, error), error) {
+
+	var cvt func(src string) (int, error)
+
+	switch {
+	case !typeOf.IsBuiltIn(): // enum dimension: find enum id by code
+
+		cvt = func(src string) (int, error) {
+			for j := range typeOf.Enum {
+				if src == typeOf.Enum[j].Name {
+					return typeOf.Enum[j].EnumId, nil
+				}
+			}
+			if isTotalEnabled && src == TotalEnumCode { // check is it total item
+				return typeOf.TotalEnumId, nil
+			}
+			return 0, errors.New("invalid value: " + src + " of: " + msgName)
+		}
+
+	case typeOf.IsBool(): // boolean dimension: false=>0, true=>1
+
+		cvt = func(src string) (int, error) {
+			if isTotalEnabled && src == TotalEnumCode { // check is it total item
+				return typeOf.TotalEnumId, nil
+			}
+			// convert boolean enum codes to id's
+			is, err := strconv.ParseBool(src)
+			if err != nil {
+				return 0, errors.New("invalid value: " + src + " of: " + msgName)
+			}
+			if is {
+				return 1, nil
+			}
+			return 0, nil
+		}
+
+	case typeOf.IsInt(): // integer dimension
+
+		cvt = func(src string) (int, error) {
+			i, err := strconv.Atoi(src)
+			if err != nil {
+				return 0, errors.New("invalid value: " + src + " of: " + msgName)
+			}
+			return i, nil
+		}
+
+	default:
+		return nil, errors.New("invalid (not supported) type: " + typeOf.Name + " of: " + msgName)
+	}
+
+	return cvt, nil
+}
+
+// itemIdToCode return converter from dimension item id to code.
+// It is also used for parameter values if parameter type is enum-based.
+// If dimension is enum-based then from enum id to enum code or to the "all" total enum code;
+// If dimension is simple integer type then use Itoa(integer id) as code;
+// If dimension is boolean then 0=>false, (1 or -1)=>true else error
+func (typeOf *TypeMeta) itemIdToCode(msgName string, isTotalEnabled bool) (func(itemId int) (string, error), error) {
+
+	var cvt func(itemId int) (string, error)
+
+	switch {
+	case !typeOf.IsBuiltIn(): // enum dimension: find enum code by id
+
+		cvt = func(itemId int) (string, error) {
+			for j := range typeOf.Enum {
+				if itemId == typeOf.Enum[j].EnumId {
+					return typeOf.Enum[j].Name, nil
+				}
+			}
+			if isTotalEnabled && itemId == typeOf.TotalEnumId { // check is it total item
+				return TotalEnumCode, nil
+			}
+			return "", errors.New("invalid value: " + strconv.Itoa(itemId) + " of: " + msgName)
+		}
+
+	case typeOf.IsBool(): // boolean dimension: 0=>false, (1 or -1)=>true else error
+
+		cvt = func(itemId int) (string, error) {
+			switch itemId {
+			case 0:
+				return "false", nil
+			case 1, -1:
+				return "true", nil
+			}
+			if isTotalEnabled && itemId == typeOf.TotalEnumId { // check is it total item
+				return TotalEnumCode, nil
+			}
+			return "", errors.New("invalid value: " + strconv.Itoa(itemId) + " of: " + msgName)
+		}
+
+	case typeOf.IsInt(): // integer dimension
+
+		cvt = func(itemId int) (string, error) {
+			return strconv.Itoa(itemId), nil
+		}
+
+	default:
+		return nil, errors.New("invalid (not supported) type: " + typeOf.Name + " of: " + msgName)
+	}
+
+	return cvt, nil
 }
 
 // IsRunCompleted return true if run status one of: s=success, x=exit, e=error

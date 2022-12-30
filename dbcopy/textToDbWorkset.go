@@ -361,12 +361,17 @@ func fromWorksetTextToDb(
 	logT := time.Now().Unix()
 
 	// read all workset parameters from csv files
-	cvtParam := db.CellParamConverter{DoubleFmt: doubleFmt}
-
 	for j := range paramLst {
 
 		// read parameter values from csv file
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nP, ": ", paramLst[j].Name)
+
+		cvtParam := db.CellParamConverter{
+			ModelDef:  modelDef,
+			ParamName: paramLst[j].Name,
+			IsIdCsv:   false,
+			DoubleFmt: doubleFmt,
+		}
 
 		err = updateWorksetParamFromCsvFile(dbConn, modelDef, ws, &paramLst[j], csvDir, langDef, cvtParam, encodingName)
 		if err != nil {
@@ -395,18 +400,18 @@ func updateWorksetParamFromCsvFile(
 	encodingName string) error {
 
 	// converter from csv row []string to db cell
-	cvt, err := csvCvt.CsvToCell(modelDef, paramPub.Name, paramPub.SubCount)
+	cvt, err := csvCvt.CsvToCell()
 	if err != nil {
 		return errors.New("invalid converter from csv row: " + err.Error())
 	}
 
 	// open csv file, convert to utf-8 and parse csv into db cells
 	// reading from .id.csv files not supported by converters
-	fn, err := csvCvt.CsvFileName(modelDef, paramPub.Name, false)
+	fn, err := csvCvt.CsvFileName()
 	if err != nil {
 		return errors.New("invalid csv file name: " + err.Error())
 	}
-	chs, err := csvCvt.CsvHeader(modelDef, paramPub.Name)
+	chs, err := csvCvt.CsvHeader()
 	if err != nil {
 		return errors.New("Error at building csv parameter header " + paramPub.Name + ": " + err.Error())
 	}

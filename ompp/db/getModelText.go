@@ -12,7 +12,7 @@ import (
 // GetModelTextById return model_dic_txt table rows by model id.
 //
 // If langCode not empty then only specified language selected else all languages.
-func GetModelTextById(dbConn *sql.DB, modelId int, langCode string) ([]ModelTxtRow, error) {
+func GetModelTextRowById(dbConn *sql.DB, modelId int, langCode string) ([]ModelTxtRow, error) {
 
 	// select db rows from model_dic_txt
 	txtLst := make([]ModelTxtRow, 0)
@@ -323,6 +323,60 @@ func GetModelText(dbConn *sql.DB, modelId int, langCode string) (*ModelTxtMeta, 
 				r.Note = note.String
 			}
 			meta.TableExprTxt = append(meta.TableExprTxt, r)
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	// select db rows from entity_dic_txt join to model_entity_dic table
+	err = SelectRows(dbConn,
+		"SELECT"+
+			" M.model_id, M.model_entity_id, T.lang_id, L.lang_code, T.descr, T.note"+
+			" FROM entity_dic_txt T"+
+			" INNER JOIN model_entity_dic M ON (M.entity_hid = T.entity_hid)"+
+			" INNER JOIN lang_lst L ON (L.lang_id = T.lang_id)"+
+			where+
+			" ORDER BY 1, 2, 3",
+		func(rows *sql.Rows) error {
+			var r EntityTxtRow
+			var lId int
+			var note sql.NullString
+			if err := rows.Scan(
+				&r.ModelId, &r.EntityId, &lId, &r.LangCode, &r.Descr, &note); err != nil {
+				return err
+			}
+			if note.Valid {
+				r.Note = note.String
+			}
+			meta.EntityTxt = append(meta.EntityTxt, r)
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	// select db rows from entity_attr_txt join to model_entity_dic table
+	err = SelectRows(dbConn,
+		"SELECT"+
+			" M.model_id, M.model_entity_id, T.attr_id, T.lang_id, L.lang_code, T.descr, T.note"+
+			" FROM entity_attr_txt T"+
+			" INNER JOIN model_entity_dic M ON (M.entity_hid = T.entity_hid)"+
+			" INNER JOIN lang_lst L ON (L.lang_id = T.lang_id)"+
+			where+
+			" ORDER BY 1, 2, 3, 4",
+		func(rows *sql.Rows) error {
+			var r EntityAttrTxtRow
+			var lId int
+			var note sql.NullString
+			if err := rows.Scan(
+				&r.ModelId, &r.EntityId, &r.AttrId, &lId, &r.LangCode, &r.Descr, &note); err != nil {
+				return err
+			}
+			if note.Valid {
+				r.Note = note.String
+			}
+			meta.EntityAttrTxt = append(meta.EntityAttrTxt, r)
 			return nil
 		})
 	if err != nil {

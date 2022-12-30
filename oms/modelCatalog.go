@@ -68,19 +68,20 @@ type modelBasic struct {
 // ModelMetaFull is full model metadata: language-neutral db rows
 // and language-specific rows in all languages.
 type ModelMetaFull struct {
-	db.ModelMeta    // model text rows: model_dic_txt
-	db.ModelTxtMeta // model type text rows: type_dic_txt join to model_type_dic
+	db.ModelMeta    // model metadata db rows, language-neutral portion of it
+	db.ModelTxtMeta // language-specific portion of model metadata db rows
 }
 
 // ModelMetaDescrNote is language-specific model metadata db rows.
 // It is sliced by one single language, but it can be different single language for each row.
 // It is either user preferred language, model default language, first of the row or empty "" language.
 type ModelMetaDescrNote struct {
-	ModelDicDescrNote                  // model text rows: model_dic_txt
-	TypeTxt           []TypeDescrNote  // model type text rows: type_dic_txt join to model_type_dic
-	ParamTxt          []ParamDescrNote // model parameter text rows: parameter_dic_txt join to model_parameter_dic
-	TableTxt          []TableDescrNote // model output table text rows: table_dic_txt join to model_table_dic
-	GroupTxt          []GroupDescrNote // model group text rows: group_txt join to group_lst
+	ModelDicDescrNote                   // model text rows: model_dic_txt
+	TypeTxt           []TypeDescrNote   // model type text rows: type_dic_txt join to model_type_dic
+	ParamTxt          []ParamDescrNote  // model parameter text rows: parameter_dic, model_parameter_dic, parameter_dic_txt, parameter_dims_txt
+	TableTxt          []TableDescrNote  // model output table text rows: table_dic, model_table_dic, table_dic_txt, table_dims_txt, table_acc_txt, table_expr_txt
+	EntityTxt         []EntityDescrNote // model entity text rows: join of entity_dic, model_entity_dic, entity_dic_txt, entity_attr_txt
+	GroupTxt          []GroupDescrNote  // model group text rows: group_txt join to group_lst
 }
 
 // ModelDicDescrNote is join of model_dic db row and model_dic_txt row
@@ -102,7 +103,7 @@ type TypeEnumDescrNote struct {
 	DescrNote db.DescrNote   // from type_enum_txt
 }
 
-// ParamDescrNote is join of parameter_dic, model_parameter_dic, parameter_dic_txt
+// ParamDescrNote is join of parameter_dic, model_parameter_dic, parameter_dic_txt, parameter_dims_txt
 type ParamDescrNote struct {
 	Param        db.ParamDicRow       // parameter row: parameter_dic join to model_parameter_dic table
 	DescrNote    db.DescrNote         // from parameter_dic_txt
@@ -115,7 +116,7 @@ type ParamDimsDescrNote struct {
 	DescrNote db.DescrNote    // from parameter_dims_txt
 }
 
-// TableDescrNote is join of table_dic, model_table_dic, table_dic_txt
+// TableDescrNote is join of table_dic, model_table_dic, table_dic_txt, table_dims_txt, table_acc_txt, table_expr_txt
 type TableDescrNote struct {
 	Table        db.TableDicRow       // output table row: table_dic join to model_table_dic
 	LangCode     string               // table_dic_txt.lang_code
@@ -144,6 +145,19 @@ type TableAccDescrNote struct {
 type TableExprDescrNote struct {
 	Expr      db.TableExprRow // output table expression row: table_expr join to model_table_dic
 	DescrNote db.DescrNote    // from table_expr_txt
+}
+
+// EntityDescrNote is join of entity_dic, model_entity_dic, entity_dic_txt, entity_attr_txt
+type EntityDescrNote struct {
+	Entity        db.EntityDicRow       // entity row: entity_dic join to model_entity_dic
+	DescrNote     db.DescrNote          // from entity_dic_txt
+	EntityAttrTxt []EntityAttrDescrNote // entity attribute text rows: entity_attr, model_entity_dic, entity_attr_txt
+}
+
+// EntityAttrDescrNote is join of entity_attr, model_entity_dic, entity_attr_txt
+type EntityAttrDescrNote struct {
+	Attr      db.EntityAttrRow // entity attribute row: entity_attr join to model_entity_dic table
+	DescrNote db.DescrNote     // from entity_attr_txt
 }
 
 // GroupDescrNote is join of group_lst, group_pc and group_txt

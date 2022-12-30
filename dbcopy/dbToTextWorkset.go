@@ -106,10 +106,11 @@ func dbToTextWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 		return err
 	}
 
-	// use of run and set id's in directory names:
-	// do this by default or if use id name = true
-	// only if use id name = false then do not use id's in directory names
-	isUseIdNames := !runOpts.IsExist(useIdNamesArgKey) || runOpts.Bool(useIdNamesArgKey)
+	// for single run or single workset output to text
+	// do not use of run and set id's in directory names by default
+	// only use id's in directory names if:
+	// dbcopy option use id name = true or user specified run id or workset id
+	isUseIdNames := runOpts.Bool(useIdNamesArgKey)
 
 	// write workset metadata into json and parameter values into csv files
 	dblFmt := runOpts.String(doubleFormatArgKey)
@@ -189,9 +190,6 @@ func toWorksetText(
 		return err
 	}
 
-	paramLt := db.ReadParamLayout{ReadLayout: db.ReadLayout{FromId: setId}, IsFromSet: true}
-	cvtParam := db.CellParamConverter{DoubleFmt: doubleFmt}
-
 	// write all parameters into csv files
 	nP := len(pub.Param)
 	omppLog.Log("  Parameters: ", nP)
@@ -199,11 +197,23 @@ func toWorksetText(
 
 	for j := 0; j < nP; j++ {
 
-		paramLt.Name = pub.Param[j].Name
+		cvtParam := db.CellParamConverter{
+			ModelDef:  modelDef,
+			ParamName: modelDef.Param[j].Name,
+			IsIdCsv:   isIdCsv,
+			DoubleFmt: doubleFmt,
+		}
+		paramLt := db.ReadParamLayout{
+			ReadLayout: db.ReadLayout{
+				Name:   modelDef.Param[j].Name,
+				FromId: setId,
+			},
+			IsFromSet: true,
+		}
 
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nP, ": ", paramLt.Name)
 
-		err = toCellCsvFile(dbConn, modelDef, paramLt.Name, true, paramLt, cvtParam, false, csvDir, isIdCsv, isWriteUtf8bom, "", "")
+		err = toCellCsvFile(dbConn, modelDef, paramLt, cvtParam, false, csvDir, isWriteUtf8bom, "", "")
 		if err != nil {
 			return err
 		}

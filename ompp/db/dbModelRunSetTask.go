@@ -22,12 +22,14 @@ const (
 
 // RunMeta is metadata of model run: name, status, run options, description, notes.
 type RunMeta struct {
-	Run      RunRow            // model run master row: run_lst
-	Txt      []RunTxtRow       // run text rows: run_txt
-	Opts     map[string]string // options used to run the model: run_option
-	Param    []runParam        // run parameters: parameter_hid, sub-value count, run_parameter_txt table rows
-	Table    []runTable        // run tables: table_hid fom run_table rows
-	Progress []RunProgress     // run progress by sub-values: run_progress table rows
+	Run       RunRow            // model run master row: run_lst
+	Txt       []RunTxtRow       // run text rows: run_txt
+	Opts      map[string]string // options used to run the model: run_option
+	Param     []runParam        // run parameters: parameter_hid, sub-value count, run_parameter_txt table rows
+	Table     []runTable        // run tables: table_hid fom run_table rows
+	EntityGen []entityGen       // run entity generation: entity_gen, entity_gen_attr table rows
+	RunEntity []runEntity       // run microdata entities: run_entity table rows
+	Progress  []RunProgress     // run progress by sub-values: run_progress table rows
 }
 
 // RunPub is "public" model run metadata for json import-export
@@ -144,6 +146,38 @@ type RunProgress struct {
 type runProgressRow struct {
 	RunId    int         // run_id         INT         NOT NULL
 	Progress RunProgress // sub-value run progress
+}
+
+// entityGen is a holder of entity generation db rows from entity_gen, model_entity_dic, entity_gen_attr and run_entity tables
+// Entity generation is a model entity with set of attributes included in particular model run(s).
+// Model run typically include less attributes in microdata output than entity has in model metadata.
+type entityGen struct {
+	entityGenRow                    // entity generation: entity_gen join to model_entity_dic table
+	GenAttr      []entityGenAttrRow // entity generation attributes: entity_gen join to model_entity_dic
+}
+
+// entityGen is db row of entity_gen join to model_entity_dic table where row exist in run_entity.
+// Entity generation is a model entity with set of attributes included in particular model run(s).
+// Model run typically include less attributes in microdata output than entity has in model metadata.
+type entityGenRow struct {
+	GenHid        int    // entity_gen_hid  INT         NOT NULL, -- entity generation unique id
+	ModelId       int    // model_id        INT         NOT NULL
+	EntityId      int    // model_entity_id INT         NOT NULL
+	EntityHid     int    // entity_hid      INT         NOT NULL, -- unique entity id
+	DbEntityTable string // db_entity_table VARCHAR(64) NOT NULL, -- db table name: Person_g87abcdef
+	Digest        string // gen_digest      VARCHAR(32) NOT NULL, -- digest of entity generation
+}
+
+// entityGenAttrRow is db row of entity_gen_attr join to entity_gen table where row exist in run_entity
+type entityGenAttrRow struct {
+	GenHid int // entity_gen_hid  INT NOT NULL, -- entity generation unique id
+	AttrId int // attr_id         INT NOT NULL
+}
+
+// runEntity is db row of run_entity join to entity_gen table
+type runEntity struct {
+	GenHid      int    // entity_gen_hid INT NOT NULL
+	ValueDigest string // value_digest  VARCHAR(32), -- if not NULL then digest of table value for the run
 }
 
 // WorksetMeta is a model workset metadata: name, parameters, decription, notes.

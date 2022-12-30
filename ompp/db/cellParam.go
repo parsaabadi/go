@@ -26,49 +26,40 @@ type CellCodeParam struct {
 
 // CellParamConverter is a converter for input parameter to implement CsvConverter interface.
 type CellParamConverter struct {
-	DoubleFmt string // if not empty then format string is used to sprintf if value type is float, double, long double
+	ModelDef  *ModelMeta // model metadata
+	ParamName string     // parameter name
+	IsIdCsv   bool       // if true then use enum id's else use enum codes
+	DoubleFmt string     // if not empty then format string is used to sprintf if value type is float, double, long double
+	theParam  *ParamMeta // if not nil then parameter found
 }
 
-// CsvFileName return file name of csv file to store parameter rows
-func (cellCvt CellParamConverter) CsvFileName(modelDef *ModelMeta, name string, isIdCsv bool) (string, error) {
+// retrun true if csv converter is using enum id's for dimensions
+func (cellCvt CellParamConverter) IsUseEnumId() bool { return cellCvt.IsIdCsv }
 
-	// validate parameters
-	if modelDef == nil {
-		return "", errors.New("invalid (empty) model metadata, look like model not found")
-	}
-	if name == "" {
-		return "", errors.New("invalid (empty) output table name")
-	}
+// CsvFileName return file name of csv file to store parameter rows
+func (cellCvt CellParamConverter) CsvFileName() (string, error) {
 
 	// find parameter by name
-	k, ok := modelDef.ParamByName(name)
-	if !ok {
-		return "", errors.New("parameter not found: " + name)
+	_, err := cellCvt.paramByName()
+	if err != nil {
+		return "", err
 	}
 
-	if isIdCsv {
-		return modelDef.Param[k].Name + ".id.csv", nil
+	// make csv file name
+	if cellCvt.IsIdCsv {
+		return cellCvt.ParamName + ".id.csv", nil
 	}
-	return modelDef.Param[k].Name + ".csv", nil
+	return cellCvt.ParamName + ".csv", nil
 }
 
 // CsvHeader return first line for csv file: column names, it's look like: sub_id,dim0,dim1,param_value.
-func (cellCvt CellParamConverter) CsvHeader(modelDef *ModelMeta, name string) ([]string, error) {
-
-	// validate parameters
-	if modelDef == nil {
-		return nil, errors.New("invalid (empty) model metadata, look like model not found")
-	}
-	if name == "" {
-		return nil, errors.New("invalid (empty) parameter name")
-	}
+func (cellCvt CellParamConverter) CsvHeader() ([]string, error) {
 
 	// find parameter by name
-	k, ok := modelDef.ParamByName(name)
-	if !ok {
-		return nil, errors.New("parameter not found: " + name)
+	param, err := cellCvt.paramByName()
+	if err != nil {
+		return []string{}, err
 	}
-	param := &modelDef.Param[k]
 
 	// make first line columns
 	h := make([]string, param.Rank+2)
@@ -96,7 +87,7 @@ func (cellCvt CellParamConverter) KeyIds(name string) (func(interface{}, []int) 
 
 		n := len(cell.DimIds)
 		if len(key) != n+1 {
-			return errors.New("invalid size of key buffer, expected: " + strconv.Itoa(n+2) + ": " + name)
+			return errors.New("invalid size of key buffer, expected: " + strconv.Itoa(n+1) + ": " + name)
 		}
 
 		key[0] = cell.SubId
@@ -110,26 +101,17 @@ func (cellCvt CellParamConverter) KeyIds(name string) (func(interface{}, []int) 
 	return cvt, nil
 }
 
-// CsvToIdRow return converter from parameter cell (sub id, dimensions, value) to csv row []string.
+// ToCsvIdRow return converter from parameter cell (sub id, dimensions, value) to csv row []string.
 //
 // Converter simply does Sprint() for each sub-value id, dimension item id and value.
 // Converter will return error if len(row) not equal to number of fields in csv record.
-func (cellCvt CellParamConverter) CsvToIdRow(modelDef *ModelMeta, name string) (func(interface{}, []string) error, error) {
-
-	// validate parameters
-	if modelDef == nil {
-		return nil, errors.New("invalid (empty) model metadata, look like model not found")
-	}
-	if name == "" {
-		return nil, errors.New("invalid (empty) parameter name")
-	}
+func (cellCvt CellParamConverter) ToCsvIdRow() (func(interface{}, []string) error, error) {
 
 	// find parameter by name
-	k, ok := modelDef.ParamByName(name)
-	if !ok {
-		return nil, errors.New("parameter not found: " + name)
+	param, err := cellCvt.paramByName()
+	if err != nil {
+		return nil, err
 	}
-	param := &modelDef.Param[k]
 
 	// for float model types use format if specified
 	isUseFmt := param.typeOf.IsFloat() && cellCvt.DoubleFmt != ""
@@ -138,12 +120,12 @@ func (cellCvt CellParamConverter) CsvToIdRow(modelDef *ModelMeta, name string) (
 
 		cell, ok := src.(CellParam)
 		if !ok {
-			return errors.New("invalid type, expected: CellParam (internal error): " + name)
+			return errors.New("invalid type, expected: CellParam (internal error): " + cellCvt.ParamName)
 		}
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + name)
+			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.ParamName)
 		}
 
 		row[0] = fmt.Sprint(cell.SubId)
@@ -167,33 +149,24 @@ func (cellCvt CellParamConverter) CsvToIdRow(modelDef *ModelMeta, name string) (
 	return cvt, nil
 }
 
-// CsvToRow return converter from parameter cell (sub id, dimensions, value) to csv row []string.
+// ToCsvRow return converter from parameter cell (sub id, dimensions, value) to csv row []string.
 //
 // Converter will return error if len(row) not equal to number of fields in csv record.
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
 // If parameter type is enum based then csv row value is enum code and cell value is enum id.
-func (cellCvt CellParamConverter) CsvToRow(modelDef *ModelMeta, name string) (func(interface{}, []string) error, error) {
-
-	// validate parameters
-	if modelDef == nil {
-		return nil, errors.New("invalid (empty) model metadata, look like model not found")
-	}
-	if name == "" {
-		return nil, errors.New("invalid (empty) parameter name")
-	}
+func (cellCvt CellParamConverter) ToCsvRow() (func(interface{}, []string) error, error) {
 
 	// find parameter by name
-	k, ok := modelDef.ParamByName(name)
-	if !ok {
-		return nil, errors.New("parameter not found: " + name)
+	param, err := cellCvt.paramByName()
+	if err != nil {
+		return nil, err
 	}
-	param := &modelDef.Param[k]
 
 	// for each dimension create converter from item id to code
 	fd := make([]func(itemId int) (string, error), param.Rank)
 
 	for k := 0; k < param.Rank; k++ {
-		f, err := cvtItemIdToCode(name+"."+param.Dim[k].Name, param.Dim[k].typeOf, false)
+		f, err := param.Dim[k].typeOf.itemIdToCode(cellCvt.ParamName+"."+param.Dim[k].Name, false)
 		if err != nil {
 			return nil, err
 		}
@@ -208,7 +181,7 @@ func (cellCvt CellParamConverter) CsvToRow(modelDef *ModelMeta, name string) (fu
 	var fv func(itemId int) (string, error)
 
 	if isUseEnum {
-		f, err := cvtItemIdToCode(name, param.typeOf, false)
+		f, err := param.typeOf.itemIdToCode(cellCvt.ParamName, false)
 		if err != nil {
 			return nil, err
 		}
@@ -219,12 +192,12 @@ func (cellCvt CellParamConverter) CsvToRow(modelDef *ModelMeta, name string) (fu
 
 		cell, ok := src.(CellParam)
 		if !ok {
-			return errors.New("invalid type, expected: parameter cell (internal error): " + name)
+			return errors.New("invalid type, expected: parameter cell (internal error): " + cellCvt.ParamName)
 		}
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + name)
+			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.ParamName)
 		}
 
 		row[0] = fmt.Sprint(cell.SubId)
@@ -252,7 +225,7 @@ func (cellCvt CellParamConverter) CsvToRow(modelDef *ModelMeta, name string) (fu
 			// depending on sql + driver it can be different type
 			iv, ok := helper.ToIntValue(cell.Value)
 			if !ok {
-				return errors.New("invalid parameter value type, expected: integer enum: " + name)
+				return errors.New("invalid parameter value type, expected: integer enum: " + cellCvt.ParamName)
 			}
 
 			v, err := fv(int(iv))
@@ -276,28 +249,19 @@ func (cellCvt CellParamConverter) CsvToRow(modelDef *ModelMeta, name string) (fu
 // It does return error if len(row) not equal to number of fields in cell db-record.
 // If dimension type is enum based then csv row is enum code and it is converted into cell.DimIds (into dimension type type enum ids).
 // If parameter type is enum based then csv row value is enum code and it is converted into value enum id.
-func (cellCvt CellParamConverter) CsvToCell(modelDef *ModelMeta, name string, subCount int) (func(row []string) (interface{}, error), error) {
-
-	// validate parameters
-	if modelDef == nil {
-		return nil, errors.New("invalid (empty) model metadata, look like model not found")
-	}
-	if name == "" {
-		return nil, errors.New("invalid (empty) parameter name")
-	}
+func (cellCvt CellParamConverter) CsvToCell() (func(row []string) (interface{}, error), error) {
 
 	// find parameter by name
-	idx, ok := modelDef.ParamByName(name)
-	if !ok {
-		return nil, errors.New("parameter not found: " + name)
+	param, err := cellCvt.paramByName()
+	if err != nil {
+		return nil, err
 	}
-	param := &modelDef.Param[idx]
 
 	// for each dimension create converter from item code to id
 	fd := make([]func(src string) (int, error), param.Rank)
 
 	for k := 0; k < param.Rank; k++ {
-		f, err := cvtItemCodeToId(name+"."+param.Dim[k].Name, param.Dim[k].typeOf, false)
+		f, err := param.Dim[k].typeOf.itemCodeToId(cellCvt.ParamName+"."+param.Dim[k].Name, false)
 		if err != nil {
 			return nil, err
 		}
@@ -314,7 +278,7 @@ func (cellCvt CellParamConverter) CsvToCell(modelDef *ModelMeta, name string, su
 
 	switch {
 	case isEnum:
-		f, err := cvtItemCodeToId(name, param.typeOf, false)
+		f, err := param.typeOf.itemCodeToId(cellCvt.ParamName, false)
 		if err != nil {
 			return nil, err
 		}
@@ -327,7 +291,7 @@ func (cellCvt CellParamConverter) CsvToCell(modelDef *ModelMeta, name string, su
 					return true, 0.0, nil
 				}
 				// else parameter is not nullable
-				return true, 0.0, errors.New("invalid parameter value, it cannot be NULL: " + name)
+				return true, 0.0, errors.New("invalid parameter value, it cannot be NULL: " + cellCvt.ParamName)
 			}
 			vf, e := strconv.ParseFloat(src, 64)
 			if e != nil {
@@ -342,7 +306,7 @@ func (cellCvt CellParamConverter) CsvToCell(modelDef *ModelMeta, name string, su
 	case param.typeOf.IsInt():
 		fc = func(src string) (interface{}, error) { return strconv.Atoi(src) }
 	default:
-		return nil, errors.New("invalid (not supported) parameter type: " + name)
+		return nil, errors.New("invalid (not supported) parameter type: " + cellCvt.ParamName)
 	}
 
 	// do conversion
@@ -353,7 +317,7 @@ func (cellCvt CellParamConverter) CsvToCell(modelDef *ModelMeta, name string, su
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {
-			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(n+2) + ": " + name)
+			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.ParamName)
 		}
 
 		// subvalue number
@@ -410,26 +374,17 @@ func (cellCvt CellParamConverter) CsvToCell(modelDef *ModelMeta, name string, su
 // If parameter type is enum based then cell value enum id converted to enum code.
 func (cellCvt CellParamConverter) IdToCodeCell(modelDef *ModelMeta, name string) (func(interface{}) (interface{}, error), error) {
 
-	// validate parameters
-	if modelDef == nil {
-		return nil, errors.New("invalid (empty) model metadata, look like model not found")
-	}
-	if name == "" {
-		return nil, errors.New("invalid (empty) parameter name")
-	}
-
 	// find parameter by name
-	k, ok := modelDef.ParamByName(name)
-	if !ok {
-		return nil, errors.New("parameter not found: " + name)
+	param, err := cellCvt.paramByName()
+	if err != nil {
+		return nil, err
 	}
-	param := &modelDef.Param[k]
 
 	// for each dimension create converter from item id to code
 	fd := make([]func(itemId int) (string, error), param.Rank)
 
 	for k := 0; k < param.Rank; k++ {
-		f, err := cvtItemIdToCode(name+"."+param.Dim[k].Name, param.Dim[k].typeOf, false)
+		f, err := param.Dim[k].typeOf.itemIdToCode(name+"."+param.Dim[k].Name, false)
 		if err != nil {
 			return nil, err
 		}
@@ -441,7 +396,7 @@ func (cellCvt CellParamConverter) IdToCodeCell(modelDef *ModelMeta, name string)
 	var fv func(itemId int) (string, error)
 
 	if isUseEnum {
-		f, err := cvtItemIdToCode(name, param.typeOf, false)
+		f, err := param.typeOf.itemIdToCode(name, false)
 		if err != nil {
 			return nil, err
 		}
@@ -509,26 +464,17 @@ func (cellCvt CellParamConverter) IdToCodeCell(modelDef *ModelMeta, name string)
 // If parameter type is enum based then cell value enum code converted to enum id.
 func (cellCvt CellParamConverter) CodeToIdCell(modelDef *ModelMeta, name string) (func(interface{}) (interface{}, error), error) {
 
-	// validate parameters
-	if modelDef == nil {
-		return nil, errors.New("invalid (empty) model metadata, look like model not found")
-	}
-	if name == "" {
-		return nil, errors.New("invalid (empty) parameter name")
-	}
-
 	// find parameter by name
-	k, ok := modelDef.ParamByName(name)
-	if !ok {
-		return nil, errors.New("parameter not found: " + name)
+	param, err := cellCvt.paramByName()
+	if err != nil {
+		return nil, err
 	}
-	param := &modelDef.Param[k]
 
 	// for each dimension create converter from item code to id
 	fd := make([]func(itemCode string) (int, error), param.Rank)
 
 	for k := 0; k < param.Rank; k++ {
-		f, err := cvtItemCodeToId(name+"."+param.Dim[k].Name, param.Dim[k].typeOf, false)
+		f, err := param.Dim[k].typeOf.itemCodeToId(name+"."+param.Dim[k].Name, false)
 		if err != nil {
 			return nil, err
 		}
@@ -540,7 +486,7 @@ func (cellCvt CellParamConverter) CodeToIdCell(modelDef *ModelMeta, name string)
 	var fv func(itemCode string) (int, error)
 
 	if isUseEnum {
-		f, err := cvtItemCodeToId(name, param.typeOf, false)
+		f, err := param.typeOf.itemCodeToId(name, false)
 		if err != nil {
 			return nil, err
 		}
@@ -595,4 +541,29 @@ func (cellCvt CellParamConverter) CodeToIdCell(modelDef *ModelMeta, name string)
 	}
 
 	return cvt, nil
+}
+
+// return parameter metadata by parameter name
+func (cellCvt CellParamConverter) paramByName() (*ParamMeta, error) {
+
+	if cellCvt.theParam != nil {
+		return cellCvt.theParam, nil // parameter already found
+	}
+
+	// validate parameters
+	if cellCvt.ModelDef == nil {
+		return nil, errors.New("invalid (empty) model metadata, look like model not found")
+	}
+	if cellCvt.ParamName == "" {
+		return nil, errors.New("invalid (empty) parameter name")
+	}
+
+	// find parameter by name
+	idx, ok := cellCvt.ModelDef.ParamByName(cellCvt.ParamName)
+	if !ok {
+		return nil, errors.New("parameter not found: " + cellCvt.ParamName)
+	}
+	cellCvt.theParam = &cellCvt.ModelDef.Param[idx]
+
+	return cellCvt.theParam, nil
 }

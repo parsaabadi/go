@@ -114,6 +114,16 @@ func (mc *ModelCatalog) loadModelMeta(dn string) (int, bool) {
 		return 0, false
 	}
 
+	// remove sql for accumulators and expressions
+	for k := range m.Table {
+		for j := range m.Table[k].Acc {
+			m.Table[k].Acc[j].AccSql = "" // remove sql of accumulator
+		}
+		for j := range m.Table[k].Expr {
+			m.Table[k].Expr[j].ExprSql = "" // remove sql of expression
+		}
+	}
+
 	// store model metadata
 	mc.modelLst[idx].isMetaFull = true
 	mc.modelLst[idx].meta = m

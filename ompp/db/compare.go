@@ -47,7 +47,7 @@ func CompareOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *CompareTabl
 		return nil, nil, err
 	}
 
-	// prepare db-row conversion buffer: run_id, dimensions, value
+	// prepare db-row scan conversion buffer: run_id, dimensions, value
 	var runId int
 	d := make([]int, table.Rank)
 	var vf sql.NullFloat64
@@ -69,7 +69,7 @@ func CompareOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *CompareTabl
 			}
 
 			// make new cell from conversion buffer
-			var c = CellTableCmp{
+			c := CellTableCmp{
 				cellIdValue: cellIdValue{DimIds: make([]int, table.Rank)},
 				RunId:       runId,
 			}

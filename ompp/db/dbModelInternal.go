@@ -34,7 +34,7 @@ func (param *ParamMeta) updateParameterColumnNames() {
 // updateTableColumnNames sets internal db column names for output table dimensions, expressions and accumulators.
 // For example: dim0, dim1, acc0, expr1.
 // Accumulator db column name for native accumulator is acc1 = "acc" + id,
-// for derived accumulators it is the same as expression db column name: expr0 = "expr" + ecpression id.
+// for derived accumulators it is the same as expression db column name: expr0 = "expr" + expression id.
 func (table *TableMeta) updateTableColumnNames() {
 
 	// dimensions column name: dim0
@@ -66,9 +66,17 @@ func (table *TableMeta) updateTableColumnNames() {
 	}
 }
 
+// updateEntityColumnNames sets internal db column names for entity attributes: attr0, attr1
+func (entity *EntityMeta) updateEntityColumnNames() {
+
+	for i := range entity.Attr {
+		entity.Attr[i].colName = "attr" + strconv.Itoa(entity.Attr[i].AttrId)
+	}
+}
+
 // updateInternals model metadata internal members.
 // It must be called after restoring from json.
-// It does recalculate digest of type, parameter, output table, model if digest is "" empty.
+// It does recalculate digest of type, parameter, output table, entity, model if digest is "" empty.
 func (meta *ModelMeta) updateInternals() error {
 
 	hMd5 := md5.New()
@@ -320,7 +328,7 @@ func (meta *ModelMeta) updateInternals() error {
 		}
 	}
 
-	// update model digest if it is "" empty
+	// update model digest if it is "" empty, it does not include entities digest
 	if isDigestUpdated || meta.Model.Digest == "" {
 
 		// digest model header: name and model type
@@ -372,6 +380,54 @@ func (meta *ModelMeta) updateInternals() error {
 		}
 
 		meta.Model.Digest = fmt.Sprintf("%x", hMd5.Sum(nil)) // set model digest string
+	}
+
+	// update entity attributes type
+	// update entity digest, if digest is empty
+	for idx := range meta.Entity {
+
+		// update entity attributes type
+		for i := range meta.Entity[idx].Attr {
+
+			j, ok := meta.TypeByKey(meta.Entity[idx].Attr[i].TypeId)
+			if !ok {
+				return errors.New("type " + strconv.Itoa(meta.Entity[idx].Attr[i].TypeId) + " not found for " + meta.Entity[idx].Name)
+			}
+			meta.Entity[idx].Attr[i].typeOf = &meta.Type[j]
+		}
+		meta.Entity[idx].updateEntityColumnNames() // set attributes db column name
+
+		// update entity digest, if digest is empty
+		if meta.Entity[idx].Digest == "" {
+
+			// make digest header as entity name
+			hMd5.Reset()
+			_, err := hMd5.Write([]byte("entity_name\n"))
+			if err != nil {
+				return err
+			}
+			_, err = hMd5.Write([]byte(meta.Entity[idx].Name + "\n"))
+			if err != nil {
+				return err
+			}
+
+			// digest entity attributes: name and attribute type digest
+			_, err = hMd5.Write([]byte("attr_name,type_digest\n"))
+			if err != nil {
+				return err
+			}
+
+			for k := range meta.Entity[idx].Attr {
+				bt := []byte(meta.Entity[idx].Attr[k].Name + "," + meta.Entity[idx].Attr[k].typeOf.Digest + "\n")
+
+				_, err = hMd5.Write(bt)
+				if err != nil {
+					return err
+				}
+			}
+
+			meta.Entity[idx].Digest = fmt.Sprintf("%x", hMd5.Sum(nil))
+		}
 	}
 
 	return nil

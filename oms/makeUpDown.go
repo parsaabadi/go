@@ -47,12 +47,15 @@ type PathItem struct {
 }
 
 // make dbcopy command to prepare full model download
-func makeModelDownloadCommand(mb modelBasic, logPath string, isNoAcc bool, isCsvBom bool) (*exec.Cmd, string) {
+func makeModelDownloadCommand(mb modelBasic, logPath string, isNoAcc bool, isNoMd bool, isCsvBom bool) (*exec.Cmd, string) {
 
 	// make dbcopy message for user log
 	cmdMsg := "dbcopy -m " + mb.name + " -dbcopy.Zip -dbcopy.OutputDir " + theCfg.downloadDir
 	if isNoAcc {
 		cmdMsg += " -dbcopy.NoAccumulatorsCsv"
+	}
+	if isNoMd {
+		cmdMsg += " -dbcopy.NoMicrodataCsv"
 	}
 	if isCsvBom {
 		cmdMsg += " -dbcopy.Utf8BomIntoCsv"
@@ -70,6 +73,9 @@ func makeModelDownloadCommand(mb modelBasic, logPath string, isNoAcc bool, isCsv
 	if isNoAcc {
 		cArgs = append(cArgs, "-dbcopy.NoAccumulatorsCsv")
 	}
+	if isNoMd {
+		cArgs = append(cArgs, "-dbcopy.NoMicrodataCsv")
+	}
 	if isCsvBom {
 		cArgs = append(cArgs, "-dbcopy.Utf8BomIntoCsv")
 	}
@@ -81,7 +87,7 @@ func makeModelDownloadCommand(mb modelBasic, logPath string, isNoAcc bool, isCsv
 }
 
 // make dbcopy command to prepare model run download
-func makeRunDownloadCommand(mb modelBasic, runId int, logPath string, isNoAcc bool, isCsvBom bool) (*exec.Cmd, string) {
+func makeRunDownloadCommand(mb modelBasic, runId int, logPath string, isNoAcc bool, isNoMd bool, isCsvBom bool) (*exec.Cmd, string) {
 
 	// make dbcopy message for user log
 	cmdMsg := "dbcopy -m " + mb.name +
@@ -91,6 +97,9 @@ func makeRunDownloadCommand(mb modelBasic, runId int, logPath string, isNoAcc bo
 		" -dbcopy.OutputDir " + theCfg.downloadDir
 	if isNoAcc {
 		cmdMsg += " -dbcopy.NoAccumulatorsCsv"
+	}
+	if isNoMd {
+		cmdMsg += " -dbcopy.NoMicrodataCsv"
 	}
 	if isCsvBom {
 		cmdMsg += " -dbcopy.Utf8BomIntoCsv"
@@ -114,6 +123,9 @@ func makeRunDownloadCommand(mb modelBasic, runId int, logPath string, isNoAcc bo
 	}
 	if isNoAcc {
 		cArgs = append(cArgs, "-dbcopy.NoAccumulatorsCsv")
+	}
+	if isNoMd {
+		cArgs = append(cArgs, "-dbcopy.NoMicrodataCsv")
 	}
 	if isCsvBom {
 		cArgs = append(cArgs, "-dbcopy.Utf8BomIntoCsv")
@@ -566,22 +578,24 @@ func parseUpDownLogFileList(upDown string, preffix string, dirEntryLst []fs.DirE
 
 // parse log file content to get folder name, log file kind and keys
 // kind and keys are:
-//   model:   model digest
-//   run:     model digest, run digest
-//   workset: model digest, workset name
-//   delete:  folder
-//   upload:  zip file name
+//
+//	model:   model digest
+//	run:     model digest, run digest
+//	workset: model digest, workset name
+//	delete:  folder
+//	upload:  zip file name
 func parseDownloadLog(fileName, fileContent string) UpDownStatusLog {
 	return parseUpDownLog("download", fileName, fileContent)
 }
 
 // parse log file content to get folder name, log file kind and keys
 // kind and keys are:
-//   model:   model digest
-//   run:     model digest, run digest
-//   workset: model digest, workset name
-//   delete:  folder
-//   upload:  zip file name
+//
+//	model:   model digest
+//	run:     model digest, run digest
+//	workset: model digest, workset name
+//	delete:  folder
+//	upload:  zip file name
 func parseUpDownLog(upDown, fileName, fileContent string) UpDownStatusLog {
 
 	uds := UpDownStatusLog{LogFileName: fileName}

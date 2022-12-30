@@ -52,27 +52,36 @@ func dbToText(modelName string, modelDigest string, runOpts *config.RunOptions) 
 	}
 
 	// use of run and set id's in directory names:
-	// do this by default or if use id name = true
-	// only if use id name = false then do not use id's in directory names
-	isUseIdNames := !runOpts.IsExist(useIdNamesArgKey) || runOpts.Bool(useIdNamesArgKey)
+	// if true then always use id's in the names, false never use it
+	// by default: only if name conflict
+	doUseIdNames := defaultUseIdNames
+	if runOpts.IsExist(useIdNamesArgKey) {
+		if runOpts.Bool(useIdNamesArgKey) {
+			doUseIdNames = yesUseIdNames
+		} else {
+			doUseIdNames = noUseIdNames
+		}
+	}
+	isIdNames := false
 
 	// write all model run data into csv files: parameters, output expressions and accumulators
 	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
 	isWriteUtf8bom := runOpts.Bool(useUtf8CsvArgKey)
-	isWriteAccum := !runOpts.Bool(noAccumCsv)
+	isWriteAcc := !runOpts.Bool(noAccCsv)
+	isWriteMicro := !runOpts.Bool(noMicroCsv)
 
-	if err = toRunListText(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames, isWriteAccum); err != nil {
+	if isIdNames, err = toRunListText(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom, doUseIdNames, isWriteAcc, isWriteMicro); err != nil {
 		return err
 	}
 
 	// write all readonly workset data into csv files: input parameters
-	if err = toWorksetListText(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames); err != nil {
+	if err = toWorksetListText(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom, isIdNames); err != nil {
 		return err
 	}
 
 	// write all modeling tasks and task run history to json files
-	if err = toTaskListJson(srcDb, modelDef, outDir, isUseIdNames); err != nil {
+	if err = toTaskListJson(srcDb, modelDef, outDir, isIdNames); err != nil {
 		return err
 	}
 
@@ -135,19 +144,15 @@ func toModelJson(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 	return nil
 }
 
-// toCellCsvFile convert parameter or output table values and write into csvDir/fileName.csv file.
-// if isIdCsv is true then csv contains enum id's, default: enum code
-// The readLayout argument is db.ReadParamLayout if isParam is true else it is db.ReadTableLayout
+// toCellCsvFile convert parameter, output table values or microdata and write into csvDir/fileName.csv file.
+// if IsIdCsv is true then csv contains enum id's, default: enum code
 func toCellCsvFile(
 	dbConn *sql.DB,
 	modelDef *db.ModelMeta,
-	name string,
-	isParam bool,
 	readLayout interface{},
 	csvCvt db.CsvConverter,
 	isAppend bool,
 	csvDir string,
-	isIdCsv bool,
 	isWriteUtf8bom bool,
 	extraFirstName string,
 	extraFirstValue string) error {
@@ -155,17 +160,17 @@ func toCellCsvFile(
 	// converter from db cell to csv row []string
 	var cvtRow func(interface{}, []string) error
 	var err error
-	if !isIdCsv {
-		cvtRow, err = csvCvt.CsvToRow(modelDef, name)
+	if !csvCvt.IsUseEnumId() {
+		cvtRow, err = csvCvt.ToCsvRow()
 	} else {
-		cvtRow, err = csvCvt.CsvToIdRow(modelDef, name)
+		cvtRow, err = csvCvt.ToCsvIdRow()
 	}
 	if err != nil {
 		return err
 	}
 
 	// create csv file or open existing for append
-	fn, err := csvCvt.CsvFileName(modelDef, name, isIdCsv)
+	fn, err := csvCvt.CsvFileName()
 	if err != nil {
 		return err
 	}
@@ -190,7 +195,7 @@ func toCellCsvFile(
 	wr := csv.NewWriter(f)
 
 	// if not append to already existing csv file then write header line: column names
-	cs, err := csvCvt.CsvHeader(modelDef, name)
+	cs, err := csvCvt.CsvHeader()
 	if err != nil {
 		return err
 	}
@@ -227,24 +232,18 @@ func toCellCsvFile(
 	}
 
 	// select parameter or output table rows and write into csv file
-	if isParam {
-		lt, ok := readLayout.(db.ReadParamLayout)
-		if !ok {
-			return errors.New("invalid type, expected: ReadParamLayout (internal error)")
-		}
+	switch lt := readLayout.(type) {
+	case db.ReadParamLayout:
 		_, err = db.ReadParameterTo(dbConn, modelDef, &lt, cvtWr)
-		if err != nil {
-			return err
-		}
-	} else {
-		lt, ok := readLayout.(db.ReadTableLayout)
-		if !ok {
-			return errors.New("invalid type, expected: ReadTableLayout (internal error)")
-		}
+	case db.ReadTableLayout:
 		_, err = db.ReadOutputTableTo(dbConn, modelDef, &lt, cvtWr)
-		if err != nil {
-			return err
-		}
+	case db.ReadMicroLayout:
+		_, err = db.ReadMicrodataTo(dbConn, modelDef, &lt, cvtWr)
+	default:
+		err = errors.New("fail to write from database into CSV: layout type is unknown")
+	}
+	if err != nil {
+		return err
 	}
 
 	// flush and return error, if any
@@ -252,8 +251,8 @@ func toCellCsvFile(
 	return wr.Error()
 }
 
-// toMdFile write parameter value notes or output table values notes into Md file, for example into csvDir/ageSex.FR.md file.
-func toMdFile(
+// toDotMdFile write parameter value notes or output table values notes into .md file, for example into csvDir/ageSex.FR.md file.
+func toDotMdFile(
 	csvDir string,
 	name string,
 	isWriteUtf8bom bool,

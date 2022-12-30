@@ -311,6 +311,69 @@ func toModelTextCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom b
 		return errors.New("failed to write output table expressions text into csv " + err.Error())
 	}
 
+	// write entity text rows into csv
+	row = make([]string, 5)
+	row[0] = strconv.Itoa(modelId)
+
+	idx = 0
+	err = toCsvFile(
+		outDir,
+		"entity_dic_txt.csv",
+		isWriteUtf8bom,
+		[]string{"model_id", "model_entity_id", "lang_code", "descr", "note"},
+		func() (bool, []string, error) {
+
+			if 0 <= idx && idx < len(modelTxt.EntityTxt) {
+				row[1] = strconv.Itoa(modelTxt.EntityTxt[idx].EntityId)
+				row[2] = modelTxt.EntityTxt[idx].LangCode
+				row[3] = modelTxt.EntityTxt[idx].Descr
+
+				if modelTxt.EntityTxt[idx].Note == "" { // empty "" string is NULL
+					row[4] = "NULL"
+				} else {
+					row[4] = modelTxt.EntityTxt[idx].Note
+				}
+				idx++
+				return false, row, nil
+			}
+			return true, row, nil // end of entity text rows
+		})
+	if err != nil {
+		return errors.New("failed to write model entities text into csv " + err.Error())
+	}
+
+	// write entity attributes text rows into csv
+	row = make([]string, 6)
+	row[0] = strconv.Itoa(modelId)
+
+	idx = 0
+	err = toCsvFile(
+		outDir,
+		"entity_attr_txt.csv",
+		isWriteUtf8bom,
+		[]string{"model_id", "model_entity_id", "attr_id", "lang_code", "descr", "note"},
+		func() (bool, []string, error) {
+
+			if 0 <= idx && idx < len(modelTxt.EntityAttrTxt) {
+				row[1] = strconv.Itoa(modelTxt.EntityAttrTxt[idx].EntityId)
+				row[2] = strconv.Itoa(modelTxt.EntityAttrTxt[idx].AttrId)
+				row[3] = modelTxt.EntityAttrTxt[idx].LangCode
+				row[4] = modelTxt.EntityAttrTxt[idx].Descr
+
+				if modelTxt.EntityAttrTxt[idx].Note == "" { // empty "" string is NULL
+					row[5] = "NULL"
+				} else {
+					row[5] = modelTxt.EntityAttrTxt[idx].Note
+				}
+				idx++
+				return false, row, nil
+			}
+			return true, row, nil // end of entity attributes text rows
+		})
+	if err != nil {
+		return errors.New("failed to write entity attributes text into csv " + err.Error())
+	}
+
 	// write group text rows into csv
 	row = make([]string, 5)
 	row[0] = strconv.Itoa(modelId)

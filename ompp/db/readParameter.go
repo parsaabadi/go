@@ -135,17 +135,17 @@ func ReadParameterTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayou
 		// find dimension index by name
 		dix := -1
 		for j := range param.Dim {
-			if param.Dim[j].Name == layout.Filter[k].DimName {
+			if param.Dim[j].Name == layout.Filter[k].Name {
 				dix = j
 				break
 			}
 		}
 		if dix < 0 {
-			return nil, errors.New("parameter " + param.Name + " does not have dimension " + layout.Filter[k].DimName)
+			return nil, errors.New("parameter " + param.Name + " does not have dimension " + layout.Filter[k].Name)
 		}
 
-		f, err := makeDimFilter(
-			modelDef, &layout.Filter[k], "", param.Dim[dix].Name, param.Dim[dix].colName, param.Dim[dix].typeOf, false, "parameter "+param.Name)
+		f, err := makeWhereFilter(
+			&layout.Filter[k], "", param.Dim[dix].colName, param.Dim[dix].typeOf, false, param.Dim[dix].Name, "parameter "+param.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -159,17 +159,17 @@ func ReadParameterTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayou
 		// find dimension index by name
 		dix := -1
 		for j := range param.Dim {
-			if param.Dim[j].Name == layout.FilterById[k].DimName {
+			if param.Dim[j].Name == layout.FilterById[k].Name {
 				dix = j
 				break
 			}
 		}
 		if dix < 0 {
-			return nil, errors.New("parameter " + param.Name + " does not have dimension " + layout.FilterById[k].DimName)
+			return nil, errors.New("parameter " + param.Name + " does not have dimension " + layout.FilterById[k].Name)
 		}
 
-		f, err := makeDimIdFilter(
-			modelDef, &layout.FilterById[k], "", param.Dim[dix].Name, param.Dim[dix].colName, param.Dim[dix].typeOf, "parameter "+param.Name)
+		f, err := makeWhereIdFilter(
+			&layout.FilterById[k], "", param.Dim[dix].colName, param.Dim[dix].typeOf, param.Dim[dix].Name, "parameter "+param.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -180,8 +180,8 @@ func ReadParameterTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayou
 	// append order by
 	q += makeOrderBy(param.Rank, layout.OrderBy, 1)
 
-	// prepare db-row conversion buffer: sub_id, dimensions, value
-	// define conversion functin to make new cell from scan buffer
+	// prepare db-row scan conversion buffer: sub_id, dimensions, value
+	// and define conversion function to make new cell from scan buffer
 	scanBuf, fc := scanSqlRowToCellParam(param)
 
 	// adjust page layout: starting offset and page size
@@ -221,7 +221,8 @@ func ReadParameterTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayou
 			lt.Size++
 
 			// make new cell from conversion buffer
-			var c = CellParam{cellIdValue: cellIdValue{DimIds: make([]int, param.Rank)}}
+			c := CellParam{cellIdValue: cellIdValue{DimIds: make([]int, param.Rank)}}
+
 			if e := fc(&c); e != nil {
 				return false, e
 			}
@@ -267,7 +268,7 @@ func trxReadParameterTo(trx *sql.Tx, param *ParamMeta, query string, cvtTo func(
 }
 
 // prepare to scan sql rows and convert each row to CellParam
-// retun scan buffer to to be popualted by rows.Scan() and closure to that buffer into CellParam
+// retun scan buffer to be popualted by rows.Scan() and closure to that buffer into CellParam
 func scanSqlRowToCellParam(param *ParamMeta) ([]interface{}, func(*CellParam) error) {
 
 	var nSub int

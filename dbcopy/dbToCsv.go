@@ -80,7 +80,8 @@ func dbToCsv(modelName string, modelDigest string, isAllInOne bool, runOpts *con
 	// write all model run data into csv files: parameters, output expressions and accumulators
 	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
-	isWriteAccum := !runOpts.Bool(noAccumCsv)
+	isWriteAcc := !runOpts.Bool(noAccCsv)
+	isWriteMicro := !runOpts.Bool(noMicroCsv)
 
 	// use of run and set id's in directory names:
 	// if true then always use id's in the names, false never use it
@@ -93,13 +94,14 @@ func dbToCsv(modelName string, modelDigest string, isAllInOne bool, runOpts *con
 			doUseIdNames = noUseIdNames
 		}
 	}
+	isIdNames := false
 
-	if err = toRunListCsv(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom, doUseIdNames, isAllInOne, isWriteAccum); err != nil {
+	if isIdNames, err = toRunListCsv(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom, doUseIdNames, isAllInOne, isWriteAcc, isWriteMicro); err != nil {
 		return err
 	}
 
 	// write all readonly workset data into csv files: input parameters
-	if err = toWorksetListCsv(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom, doUseIdNames, isAllInOne); err != nil {
+	if err = toWorksetListCsv(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom, isIdNames, isAllInOne); err != nil {
 		return err
 	}
 
@@ -509,6 +511,76 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, isWriteUt
 		})
 	if err != nil {
 		return errors.New("failed to write output table expressions into csv " + err.Error())
+	}
+
+	// write model entity rows into csv
+	row = make([]string, 5)
+	row[0] = strconv.Itoa(modelDef.Model.ModelId)
+
+	idx = 0
+	err = toCsvFile(
+		outDir,
+		"entity_dic.csv",
+		isWriteUtf8bom,
+		[]string{
+			"model_id", "model_entity_id", "entity_hid", "entity_name", "entity_digest"},
+		func() (bool, []string, error) {
+			if 0 <= idx && idx < len(modelDef.Entity) {
+				row[1] = strconv.Itoa(modelDef.Entity[idx].EntityId)
+				row[2] = strconv.Itoa(modelDef.Entity[idx].EntityHid)
+				row[3] = modelDef.Entity[idx].Name
+				row[4] = modelDef.Entity[idx].Digest
+				idx++
+				return false, row, nil
+			}
+			return true, row, nil // end of model entity rows
+		})
+	if err != nil {
+		return errors.New("failed to write model entities into csv " + err.Error())
+	}
+
+	// write entity attribute rows into csv
+	row = make([]string, 6)
+	row[0] = strconv.Itoa(modelDef.Model.ModelId)
+
+	idx = 0
+	j = 0
+	err = toCsvFile(
+		outDir,
+		"entity_attr.csv",
+		isWriteUtf8bom,
+		[]string{"model_id", "model_entity_id", "attr_id", "attr_name", "model_type_id", "is_internal"},
+		func() (bool, []string, error) {
+
+			if idx < 0 || idx >= len(modelDef.Entity) { // end of entity rows
+				return true, row, nil
+			}
+
+			// if end of current entity attributes then find next entity with attribute list
+			if j < 0 || j >= len(modelDef.Entity[idx].Attr) {
+				j = 0
+				for {
+					idx++
+					if idx < 0 || idx >= len(modelDef.Entity) { // end of entity rows
+						return true, row, nil
+					}
+					if len(modelDef.Entity[idx].Attr) > 0 {
+						break
+					}
+				}
+			}
+
+			// make entity attribute []string row
+			row[1] = strconv.Itoa(modelDef.Entity[idx].Attr[j].EntityId)
+			row[2] = strconv.Itoa(modelDef.Entity[idx].Attr[j].AttrId)
+			row[3] = modelDef.Entity[idx].Attr[j].Name
+			row[4] = strconv.Itoa(modelDef.Entity[idx].Attr[j].TypeId)
+			row[5] = strconv.FormatBool(modelDef.Entity[idx].Attr[j].IsInternal)
+			j++
+			return false, row, nil
+		})
+	if err != nil {
+		return errors.New("failed to write entity attributes into csv " + err.Error())
 	}
 
 	// write model group rows into csv
