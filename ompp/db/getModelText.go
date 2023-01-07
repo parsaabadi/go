@@ -54,16 +54,19 @@ func GetModelText(dbConn *sql.DB, modelId int, langCode string) (*ModelTxtMeta, 
 
 	// select model name and digest by id
 	meta := &ModelTxtMeta{
-		ModelTxt:     []ModelTxtRow{},
-		TypeTxt:      []TypeTxtRow{},
-		TypeEnumTxt:  []TypeEnumTxtRow{},
-		ParamTxt:     []ParamTxtRow{},
-		ParamDimsTxt: []ParamDimsTxtRow{},
-		TableTxt:     []TableTxtRow{},
-		TableDimsTxt: []TableDimsTxtRow{},
-		TableAccTxt:  []TableAccTxtRow{},
-		TableExprTxt: []TableExprTxtRow{},
-		GroupTxt:     []GroupTxtRow{}}
+		ModelTxt:      []ModelTxtRow{},
+		TypeTxt:       []TypeTxtRow{},
+		TypeEnumTxt:   []TypeEnumTxtRow{},
+		ParamTxt:      []ParamTxtRow{},
+		ParamDimsTxt:  []ParamDimsTxtRow{},
+		TableTxt:      []TableTxtRow{},
+		TableDimsTxt:  []TableDimsTxtRow{},
+		TableAccTxt:   []TableAccTxtRow{},
+		TableExprTxt:  []TableExprTxtRow{},
+		EntityTxt:     []EntityTxtRow{},
+		EntityAttrTxt: []EntityAttrTxtRow{},
+		GroupTxt:      []GroupTxtRow{},
+	}
 
 	err := SelectFirst(dbConn,
 		"SELECT model_name, model_digest FROM model_dic WHERE model_id = "+strconv.Itoa(modelId),

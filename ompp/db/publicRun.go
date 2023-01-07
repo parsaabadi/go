@@ -4,8 +4,11 @@
 package db
 
 import (
+	"crypto/md5"
 	"database/sql"
 	"errors"
+	"fmt"
+	"sort"
 	"strconv"
 )
 
@@ -37,6 +40,7 @@ func (meta *RunMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunPub, err
 		Txt:                 make([]DescrNote, len(meta.Txt)),
 		Param:               make([]ParamRunSetPub, len(meta.Param)),
 		Table:               make([]TableRunPub, len(meta.Table)),
+		Entity:              make([]EntityRunPub, len(meta.RunEntity)),
 		Progress:            make([]RunProgress, len(meta.Progress)),
 	}
 
@@ -92,6 +96,45 @@ func (meta *RunMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunPub, err
 		}
 	}
 
+	// run entity generations and attributes for each entity generation
+	for k := range meta.RunEntity {
+
+		// find entity generation index by Hid
+		var entGen *EntityGenMeta = nil
+
+		for j := range meta.EntityGen {
+
+			if meta.EntityGen[j].GenHid == meta.RunEntity[k].GenHid {
+				entGen = &meta.EntityGen[j]
+				break
+			}
+		}
+		if entGen == nil {
+			return nil, errors.New("model run: " + strconv.Itoa(meta.Run.RunId) + " " + meta.Run.Name + ", entity Hid: " + strconv.Itoa(meta.RunEntity[k].GenHid) + " not found")
+		}
+
+		// find entity index by entity id (model_entity_id)
+		eIdx, ok := modelDef.EntityByKey(entGen.EntityId)
+		if !ok {
+			return nil, errors.New("model run: " + strconv.Itoa(meta.Run.RunId) + " " + meta.Run.Name + ", entity " + strconv.Itoa(entGen.EntityId) + " not found")
+		}
+		ent := &modelDef.Entity[eIdx]
+		pub.Entity[k].Name = ent.Name
+		pub.Entity[k].GenDigest = entGen.GenDigest
+		pub.Entity[k].ValueDigest = meta.RunEntity[k].ValueDigest
+		pub.Entity[k].Attr = make([]string, len(entGen.GenAttr))
+
+		// find entity generation attributes
+		for j, ga := range entGen.GenAttr {
+
+			aIdx, ok := ent.AttrByKey(ga.AttrId)
+			if !ok {
+				return nil, errors.New("entity attribute not found by id: " + strconv.Itoa(ga.AttrId) + " " + ent.Name)
+			}
+			pub.Entity[k].Attr[j] = ent.Attr[aIdx].Name
+		}
+	}
+
 	// copy run_progress rows
 	copy(pub.Progress, meta.Progress)
 
@@ -131,11 +174,13 @@ func (pub *RunPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunMeta, er
 			ValueDigest:    pub.ValueDigest,
 			RunStamp:       pub.RunStamp,
 		},
-		Txt:      make([]RunTxtRow, len(pub.Txt)),
-		Opts:     make(map[string]string, len(pub.Opts)),
-		Param:    make([]runParam, len(pub.Param)),
-		Table:    make([]runTable, len(pub.Table)),
-		Progress: make([]RunProgress, len(pub.Progress)),
+		Txt:       make([]RunTxtRow, len(pub.Txt)),
+		Opts:      make(map[string]string, len(pub.Opts)),
+		Param:     make([]runParam, len(pub.Param)),
+		Table:     make([]runTable, len(pub.Table)),
+		EntityGen: make([]EntityGenMeta, len(pub.Entity)),
+		RunEntity: []runEntityRow{},
+		Progress:  make([]RunProgress, len(pub.Progress)),
 	}
 
 	// model run description and notes: run_txt rows
@@ -188,8 +233,125 @@ func (pub *RunPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunMeta, er
 		// meta.Table[k].ValueDigest = modelDef.Table[idx].ValueDigest // do not use input value digest
 	}
 
+	// run entity generations and attributes for each entity generation
+	// use default zero for generation Hid
+	// use default empty "" db table name, generation digest and microdata value digest
+	for k, ePub := range pub.Entity {
+
+		// find model entity by name
+		eIdx, ok := modelDef.EntityByName(ePub.Name)
+		if !ok {
+			return nil, errors.New("model entity not found: " + ePub.Name)
+		}
+		ent := &modelDef.Entity[eIdx]
+
+		meta.EntityGen[k].ModelId = modelDef.Model.ModelId
+		meta.EntityGen[k].EntityId = ent.EntityId
+		meta.EntityGen[k].EntityHid = ent.EntityHid
+		meta.EntityGen[k].GenDigest = ePub.GenDigest
+		// use default GenHid = 0, DbEntityTable = ""
+
+		// find generation attributes by names, attributes must be ordered by attribute id
+		nAttr := len(ePub.Attr)
+		if nAttr <= 0 {
+			return nil, errors.New("invalid (empty) model run entity generation attribute list: " + ePub.Name)
+		}
+		ai := make([]int, nAttr)
+
+		for j := range ePub.Attr {
+
+			n, ok := ent.AttrByName(ePub.Attr[j])
+			if !ok {
+				return nil, errors.New("invalid model run entity generation attribute: " + ePub.Attr[j] + " : " + ePub.Name)
+			}
+			ai[j] = ent.Attr[n].AttrId
+		}
+
+		sort.Ints(ai) // attributes order by id
+
+		// check attribute list for duplicates
+		iPrev := ai[0]
+		for j := 1; j < nAttr; j++ {
+			if ai[j] == iPrev {
+				return nil, errors.New("invalid model run entity generation attribute list, it contains duplicates: " + ePub.Name)
+			}
+			iPrev = ai[j]
+		}
+
+		meta.EntityGen[k].GenAttr = make([]entityGenAttrRow, nAttr)
+
+		for j := 0; j < nAttr; j++ {
+
+			meta.EntityGen[k].GenAttr[j].AttrId = ai[j]
+			// use default GenHid = 0
+		}
+	}
+
+	meta.updateEntityGenInternals(modelDef) // set entity generation digest and db table name
+
 	// copy run_progress rows
 	copy(meta.Progress, pub.Progress)
 
 	return &meta, nil
+}
+
+// Set entity generation internal members: generation digest and db table name.
+// It must be called after restoring from json.
+func (meta *RunMeta) updateEntityGenInternals(modelDef *ModelMeta) error {
+
+	hMd5 := md5.New()
+
+	for k := range meta.EntityGen {
+
+		eGen := &meta.EntityGen[k]
+
+		// find model entity
+		eIdx, ok := modelDef.EntityByKey(eGen.EntityId)
+		if !ok {
+			return errors.New("model entity not found by id: " + strconv.Itoa(eGen.EntityId))
+		}
+		ent := &modelDef.Entity[eIdx]
+
+		// entity generation digest header
+		hMd5.Reset()
+
+		_, err := hMd5.Write([]byte("entity_digest\n"))
+		if err != nil {
+			return err
+		}
+		_, err = hMd5.Write([]byte(
+			ent.Digest + "\n"))
+		if err != nil {
+			return err
+		}
+
+		// add attributes: name and attribute type digest
+		_, err = hMd5.Write([]byte("attr_name,type_digest\n"))
+		if err != nil {
+			return err
+		}
+
+		for j := range eGen.GenAttr {
+
+			// find entity attribute
+			aIdx, ok := ent.AttrByKey(eGen.GenAttr[j].AttrId)
+			if !ok {
+				return errors.New("model entity attribute not found by id: " + strconv.Itoa(eGen.GenAttr[j].AttrId))
+			}
+			_, err = hMd5.Write([]byte(
+				ent.Attr[aIdx].Name + "," + ent.Attr[aIdx].typeOf.Digest + "\n"))
+			if err != nil {
+				return err
+			}
+		}
+
+		eGen.GenDigest = fmt.Sprintf("%x", hMd5.Sum(nil)) // set generation digest string
+
+		// make entity generation table name
+		p, s := makeDbTablePrefixSuffix(ent.Name, eGen.GenDigest)
+
+		eGen.DbEntityTable = p + "_g" + s
+	}
+
+	return nil
 }

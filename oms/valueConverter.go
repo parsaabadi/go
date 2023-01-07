@@ -234,20 +234,20 @@ func (mc *ModelCatalog) TableToCsvConverter(dn string, isCode bool, name string,
 
 	switch {
 	case isAcc && isAllAcc:
-		csvCvt = db.CellAllAccConverter{
+		csvCvt = &db.CellAllAccConverter{
 			CellTableConverter: ctc,
 			IsIdCsv:            !isCode,
 			DoubleFmt:          theCfg.doubleFmt,
 			ValueName:          "",
 		}
 	case isAcc:
-		csvCvt = db.CellAccConverter{
+		csvCvt = &db.CellAccConverter{
 			CellTableConverter: ctc,
 			IsIdCsv:            !isCode,
 			DoubleFmt:          theCfg.doubleFmt,
 		}
 	default:
-		csvCvt = db.CellExprConverter{
+		csvCvt = &db.CellExprConverter{
 			CellTableConverter: ctc,
 			IsIdCsv:            !isCode,
 			DoubleFmt:          theCfg.doubleFmt,

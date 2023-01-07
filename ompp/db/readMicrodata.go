@@ -43,20 +43,20 @@ func ReadMicrodataTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadMicroLayou
 	}
 
 	// find entity generation and generation attributes
-	geLst, err := getEntityGen(dbConn, layout.FromId)
+	egLst, err := getEntityGen(dbConn, layout.FromId)
 	if err != nil {
 		return nil, err
 	}
-	var entGen *entityGen
+	var entGen *EntityGenMeta
 
-	for k := range geLst {
-		if geLst[k].GenHid == layout.GenHid {
-			entGen = &geLst[k]
+	for k := range egLst {
+		if egLst[k].GenDigest == layout.GenDigest {
+			entGen = &egLst[k]
 			break
 		}
 	}
 	if entGen == nil {
-		return nil, errors.New("model run does not contain entity generation: " + strconv.Itoa(layout.GenHid) + " " + entity.Name + " in run, id: " + strconv.Itoa(layout.FromId))
+		return nil, errors.New("model run does not contain entity generation: " + layout.GenDigest + " " + entity.Name + " in run, id: " + strconv.Itoa(layout.FromId))
 	}
 
 	entityAttrs := make([]EntityAttrRow, len(entGen.GenAttr))
@@ -86,7 +86,7 @@ func ReadMicrodataTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadMicroLayou
 		" WHERE run_id =" +
 		" (SELECT base_run_id FROM run_entity" +
 		" WHERE run_id = " + strconv.Itoa(layout.FromId) +
-		" AND entity_gen_hid = " + strconv.Itoa(layout.GenHid) + ")"
+		" AND entity_gen_hid = " + strconv.Itoa(entGen.GenHid) + ")"
 
 	// append attribute enum code filters, if specified
 	for k := range layout.Filter {
@@ -188,7 +188,7 @@ func ReadMicrodataTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadMicroLayou
 
 			return cvtTo(c) // process cell
 		})
-	if err != nil {
+	if err != nil && err != sql.ErrNoRows { // microdata not found is not an error
 		return nil, err
 	}
 

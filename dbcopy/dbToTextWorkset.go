@@ -197,7 +197,7 @@ func toWorksetText(
 
 	for j := 0; j < nP; j++ {
 
-		cvtParam := db.CellParamConverter{
+		cvtParam := &db.CellParamConverter{
 			ModelDef:  modelDef,
 			Name:      modelDef.Param[j].Name,
 			IsIdCsv:   isIdCsv,

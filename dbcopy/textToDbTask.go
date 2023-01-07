@@ -89,7 +89,7 @@ func textToDbTask(modelName string, modelDigest string, runOpts *config.RunOptio
 	}
 	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(toSqliteArgKey), runOpts.String(toDbConnStrArgKey), dn)
 
-	dstDb, _, err := db.Open(cs, dn, true)
+	dstDb, dbFacet, err := db.Open(cs, dn, true)
 	if err != nil {
 		return err
 	}
@@ -206,7 +206,7 @@ func textToDbTask(modelName string, modelDigest string, runOpts *config.RunOptio
 			}
 
 			// read from metadata json and csv files and update target database
-			dstId, err := fromRunTextToDb(dstDb, modelDef, langDef, runName, jsonPath, isNoModelDigestCheck, dblFmt, encName)
+			dstId, err := fromRunTextToDb(dstDb, dbFacet, modelDef, langDef, runName, jsonPath, isNoModelDigestCheck, dblFmt, encName)
 			if err != nil {
 				return err
 			}

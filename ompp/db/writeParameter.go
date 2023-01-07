@@ -19,7 +19,6 @@ import (
 //
 // If this is model run update (layout.IsToRun is true) then model run must exist and be in completed state (i.e. success or error state).
 // Model run should not already contain parameter values: parameter can be inserted only once in model run and cannot be updated after.
-// Parameter values must come in the order of primary key otherwise digest calculated incorrectly.
 //
 // If workset already contain parameter values then values updated else inserted.
 // If only "page" of workset parameter rows supplied (layout.IsPage is true)
@@ -99,10 +98,10 @@ func doWriteRunParameterFrom(
 	trx *sql.Tx, modelDef *ModelMeta, param *ParamMeta, runId int, subCount int, from func() (interface{}, error), doubleFmt string,
 ) error {
 
-	// start run update
+	// update model run master record to prevent run use
 	srId := strconv.Itoa(runId)
 	err := TrxUpdate(trx,
-		"UPDATE run_lst SET update_dt = "+ToQuoted(helper.MakeDateTime(time.Now()))+" WHERE run_id = "+srId)
+		"UPDATE run_lst SET sub_restart = sub_restart - 1 WHERE run_id = "+srId)
 	if err != nil {
 		return err
 	}
@@ -123,7 +122,7 @@ func doWriteRunParameterFrom(
 	case err != nil:
 		return err
 	}
-	if st != DoneRunStatus && st != ExitRunStatus && st != ErrorRunStatus {
+	if !IsRunCompleted(st) {
 		return errors.New("model run not completed, id: " + srId)
 	}
 
@@ -146,7 +145,7 @@ func doWriteRunParameterFrom(
 		return errors.New("model run with id: " + srId + " already contain parameter values " + param.Name)
 	}
 
-	// insert into run_parameter with digest and current run id as base run id and NULL digest
+	// insert into run_parameter with current run id as base run id and NULL digest
 	err = TrxUpdate(trx,
 		"INSERT INTO run_parameter (run_id, parameter_hid, base_run_id, sub_count, value_digest)"+
 			" VALUES ("+
@@ -246,6 +245,12 @@ func doWriteRunParameterFrom(
 		}
 	}
 
+	// completed OK, restore run_lst values
+	err = TrxUpdate(trx,
+		"UPDATE run_lst SET sub_restart = sub_restart + 1 WHERE run_id = "+srId)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -345,9 +350,9 @@ func putInsertParamFrom(
 ) func() (bool, []interface{}, error) {
 
 	// converter from value into db value
-	fv := cvtValue(param)
+	fv := cvtToSqlDbValue(param.IsExtendable, param.typeOf, param.Name)
 
-	//  for each cell put into row of sql statement parameters
+	// for each cell put into row of sql statement parameters
 	row := make([]interface{}, param.Rank+2)
 
 	put := func() (bool, []interface{}, error) {
@@ -419,14 +424,14 @@ func digestParameterFrom(modelDef *ModelMeta, param *ParamMeta, doubleFmt string
 	}
 
 	// create parameter row digester append digest of parameter cells
-	cvtParam := CellParamConverter{
+	cvtParam := &CellParamConverter{
 		ModelDef:  modelDef,
 		Name:      param.Name,
 		IsIdCsv:   true,
 		DoubleFmt: doubleFmt,
 	}
 
-	digestRow, isOrderBy, err := digestCellsFrom(hMd5, modelDef, param.Name, cvtParam)
+	digestRow, isOrderBy, err := digestIntKeysCellsFrom(hMd5, modelDef, param.Name, cvtParam)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -455,7 +460,7 @@ func doDeleteInsertParamRows(
 	ins += "param_value) VALUES (" + strconv.Itoa(setId) + ", "
 
 	// converter from value into sql string to insert, if parameter type is string the return is 'sql quoted value'
-	fv := cvtValueToSqlString(param, doubleFmt)
+	fv := cvtParamValueToSqlString(param, doubleFmt)
 
 	for {
 		// get next input row
@@ -517,146 +522,12 @@ func doDeleteInsertParamRows(
 	return nil
 }
 
-// cvtValue return converter from source value into db value
-// converter does type validation
-// for non built-it types validate enum id presense in enum list
-// only float parameter values can be NULL, for any other parameter types NULL values rejected.
-func cvtValue(param *ParamMeta) func(bool, interface{}) (interface{}, error) {
-
-	// float parameter: check if isNull flag, validate and convert type
-	// cell value is nullable for extended parameters only
-	var isNullable = param.IsExtendable
-
-	if param.typeOf.IsFloat() {
-		return func(isNull bool, src interface{}) (interface{}, error) {
-			if isNull && !isNullable || !isNull && src == nil {
-				return nil, errors.New("invalid parameter value, it cannot be NULL")
-			}
-			if isNull {
-				return sql.NullFloat64{Float64: 0.0, Valid: false}, nil
-			}
-			switch v := src.(type) {
-			case float64:
-				return sql.NullFloat64{Float64: v, Valid: !isNull}, nil
-			case float32:
-				return sql.NullFloat64{Float64: float64(v), Valid: !isNull}, nil
-			case int:
-				return sql.NullFloat64{Float64: float64(v), Valid: !isNull}, nil
-			case uint:
-				return sql.NullFloat64{Float64: float64(v), Valid: !isNull}, nil
-			case int64:
-				return sql.NullFloat64{Float64: float64(v), Valid: !isNull}, nil
-			case uint64:
-				return sql.NullFloat64{Float64: float64(v), Valid: !isNull}, nil
-			case int32:
-				return sql.NullFloat64{Float64: float64(v), Valid: !isNull}, nil
-			case uint32:
-				return sql.NullFloat64{Float64: float64(v), Valid: !isNull}, nil
-			case int16:
-				return sql.NullFloat64{Float64: float64(v), Valid: !isNull}, nil
-			case uint16:
-				return sql.NullFloat64{Float64: float64(v), Valid: !isNull}, nil
-			case int8:
-				return sql.NullFloat64{Float64: float64(v), Valid: !isNull}, nil
-			case uint8:
-				return sql.NullFloat64{Float64: float64(v), Valid: !isNull}, nil
-			}
-			return nil, errors.New("invalid parameter value type, expected: float or double")
-		}
-	}
-
-	// integer parameter: check value is not null and validate type
-	if param.typeOf.IsInt() {
-		return func(isNull bool, src interface{}) (interface{}, error) {
-			if isNull || src == nil {
-				return nil, errors.New("invalid parameter value, it cannot be NULL")
-			}
-			switch src.(type) {
-			case int:
-				return src, nil
-			case uint:
-				return src, nil
-			case int64:
-				return src, nil
-			case uint64:
-				return src, nil
-			case int32:
-				return src, nil
-			case uint32:
-				return src, nil
-			case int16:
-				return src, nil
-			case uint16:
-				return src, nil
-			case int8:
-				return src, nil
-			case uint8:
-				return src, nil
-			case float64: // from json or oracle (often)
-				return src, nil
-			case float32: // from json or oracle (unlikely)
-				return src, nil
-			}
-			return nil, errors.New("invalid parameter value type, expected: integer")
-		}
-	}
-
-	// string parameter: check value is not null and validate type
-	if param.typeOf.IsString() {
-		return func(isNull bool, src interface{}) (interface{}, error) {
-			if isNull || src == nil {
-				return nil, errors.New("invalid parameter value, it cannot be NULL")
-			}
-			switch src.(type) {
-			case string:
-				return src, nil
-			}
-			return nil, errors.New("invalid parameter value type, expected: string")
-		}
-	}
-
-	// boolean is a special case because not all drivers correctly handle conversion to smallint
-	if param.typeOf.IsBool() {
-		return func(isNull bool, src interface{}) (interface{}, error) {
-			if isNull || src == nil {
-				return nil, errors.New("invalid parameter value, it cannot be NULL")
-			}
-			if is, ok := src.(bool); ok && is {
-				return 1, nil
-			}
-			return 0, nil
-		}
-	}
-
-	// enum-based type: enum id must be in enum list
-	return func(isNull bool, src interface{}) (interface{}, error) {
-
-		if isNull || src == nil {
-			return nil, errors.New("invalid parameter value, it cannot be NULL")
-		}
-
-		// validate type and convert to int
-		iv, ok := helper.ToIntValue(src)
-		if !ok {
-			return nil, errors.New("invalid parameter value type, expected: integer enum id")
-		}
-
-		// validate enum id: it must be in enum list
-		for j := range param.typeOf.Enum {
-			if iv == param.typeOf.Enum[j].EnumId {
-				return iv, nil
-			}
-		}
-		return nil, errors.New("invalid parameter value type, enum id not found: " + strconv.Itoa(iv))
-	}
-}
-
-// cvtValueToSqlString return converter from value into sql string to insert
+// cvtParamValueToSqlString return converter from value into sql string to insert
 // if parameter type is string then return is 'sql quoted value'
 // converter does type validation
 // for non built-it types validate enum id presense in enum list
 // only float parameter values can be NULL, for any other parameter types NULL values rejected.
-func cvtValueToSqlString(param *ParamMeta, doubleFmt string) func(cell CellParam) (string, error) {
+func cvtParamValueToSqlString(param *ParamMeta, doubleFmt string) func(cell CellParam) (string, error) {
 
 	// float parameter: check if isNull flag, validate and convert type
 	// cell value is nullable for extended parameters only

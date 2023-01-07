@@ -116,7 +116,7 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 	}
 	cs, dn := db.IfEmptyMakeDefault(modelName, runOpts.String(toSqliteArgKey), runOpts.String(toDbConnStrArgKey), dn)
 
-	dstDb, _, err := db.Open(cs, dn, true)
+	dstDb, dbFacet, err := db.Open(cs, dn, true)
 	if err != nil {
 		return err
 	}
@@ -143,7 +143,7 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 	encName := runOpts.String(encodingArgKey)
 	isNoModelDigestCheck := runOpts.Bool(noDigestCheck)
 
-	dstId, err := fromRunTextToDb(dstDb, modelDef, langDef, runName, metaPath, isNoModelDigestCheck, dblFmt, encName)
+	dstId, err := fromRunTextToDb(dstDb, dbFacet, modelDef, langDef, runName, metaPath, isNoModelDigestCheck, dblFmt, encName)
 	if err != nil {
 		return err
 	}
@@ -158,7 +158,14 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 // from csv and json files, convert it to db cells and insert into database.
 // Double format is used for float model types digest calculation, if non-empty format supplied
 func fromRunTextListToDb(
-	dbConn *sql.DB, modelDef *db.ModelMeta, langDef *db.LangMeta, inpDir string, isNoModelDigestCheck bool, doubleFmt string, encodingName string,
+	dbConn *sql.DB,
+	dbFacet db.Facet,
+	modelDef *db.ModelMeta,
+	langDef *db.LangMeta,
+	inpDir string,
+	isNoModelDigestCheck bool,
+	doubleFmt string,
+	encodingName string,
 ) error {
 
 	// get list of model run json files
@@ -176,7 +183,7 @@ func fromRunTextListToDb(
 	// update model run digest
 	for k := range fl {
 
-		_, err := fromRunTextToDb(dbConn, modelDef, langDef, "", fl[k], isNoModelDigestCheck, doubleFmt, encodingName)
+		_, err := fromRunTextToDb(dbConn, dbFacet, modelDef, langDef, "", fl[k], isNoModelDigestCheck, doubleFmt, encodingName)
 		if err != nil {
 			return err
 		}
@@ -193,6 +200,7 @@ func fromRunTextListToDb(
 // it return source run id (run id from metadata json file) and destination run id
 func fromRunTextToDb(
 	dbConn *sql.DB,
+	dbFacet db.Facet,
 	modelDef *db.ModelMeta,
 	langDef *db.LangMeta,
 	srcName string,
@@ -223,6 +231,8 @@ func fromRunTextToDb(
 	c := strings.TrimSuffix(strings.TrimPrefix(f, pub.ModelName+"."), ".json")
 	pDir := filepath.Join(c, "parameters")
 	tDir := filepath.Join(c, "output-tables")
+	mDir := filepath.Join(c, "microdata")
+	nMd := len(pub.Entity)
 
 	paramCsvDir := filepath.Join(d, pDir)
 	if _, err := os.Stat(paramCsvDir); err != nil {
@@ -231,6 +241,12 @@ func fromRunTextToDb(
 	tableCsvDir := filepath.Join(d, tDir)
 	if _, err := os.Stat(tableCsvDir); err != nil {
 		return 0, errors.New("csv output tables directory not found: " + tDir)
+	}
+	microCsvDir := filepath.Join(d, mDir)
+	if nMd > 0 {
+		if _, err := os.Stat(microCsvDir); err != nil {
+			return 0, errors.New("csv microdata directory not found: " + mDir)
+		}
 	}
 
 	// run name: use run name from json metadata if json metadata not empty, else use supplied run name
@@ -274,10 +290,10 @@ func fromRunTextToDb(
 		// insert parameter values in model run
 		paramLt := db.WriteParamLayout{
 			WriteLayout: db.WriteLayout{
-				Name:     modelDef.Param[j].Name,
-				ToId:     dstId,
-				SubCount: meta.Param[j].SubCount,
+				Name: modelDef.Param[j].Name,
+				ToId: dstId,
 			},
+			SubCount:  meta.Param[j].SubCount,
 			DoubleFmt: doubleFmt,
 			IsToRun:   true,
 		}
@@ -296,14 +312,13 @@ func fromRunTextToDb(
 			// delete model run on error to rollback results of UpdateRun() call above
 			e := db.DeleteRun(dbConn, dstId)
 			if e != nil {
-				omppLog.Log("Failed to delete model run ", srcName, " ", dstId, ": ", e.Error())
+				omppLog.Log("Failed to delete model run: ", srcName, " id: ", dstId, ": ", e.Error())
 			}
 			return 0, err // return original error
 		}
 	}
 
 	// restore run output tables accumulators and expressions, if the table included in run results
-
 	nT := len(modelDef.Table)
 	omppLog.Log("  Tables: ", nT)
 
@@ -324,10 +339,10 @@ func fromRunTextToDb(
 		// read output table accumulator(s) values from csv file
 		tblLt := db.WriteTableLayout{
 			WriteLayout: db.WriteLayout{
-				Name:     modelDef.Table[j].Name,
-				ToId:     dstId,
-				SubCount: meta.Run.SubCount,
+				Name: modelDef.Table[j].Name,
+				ToId: dstId,
 			},
+			SubCount:  meta.Run.SubCount,
 			DoubleFmt: doubleFmt,
 		}
 		ctc := db.CellTableConverter{
@@ -339,7 +354,7 @@ func fromRunTextToDb(
 
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name)
 
-		err := fromTableCsvFile(dbConn, modelDef, tblLt, tableCsvDir, cvtExpr, cvtAcc, encodingName)
+		err := writeTableFromCsvFiles(dbConn, modelDef, tblLt, tableCsvDir, cvtExpr, cvtAcc, encodingName)
 		if err != nil {
 			if err != nil {
 				omppLog.Log("Error at: ", tblLt.Name, ": ", err.Error())
@@ -348,7 +363,7 @@ func fromRunTextToDb(
 				// delete model run on error to rollback results of UpdateRun() call above
 				e := db.DeleteRun(dbConn, dstId)
 				if e != nil {
-					omppLog.Log("Failed to delete model run ", srcName, " ", dstId, ": ", e.Error())
+					omppLog.Log("Failed to delete model run: ", srcName, " id: ", dstId, ": ", e.Error())
 				}
 				return 0, err // return original error
 			}
@@ -365,52 +380,46 @@ func fromRunTextToDb(
 		meta.Run.ValueDigest = svd
 	}
 
+	// read entity microdata values from csv file
+	if nMd > 0 {
+
+		omppLog.Log("  Microdata: ", nMd)
+
+		for j := 0; j < nMd; j++ {
+
+			// read microdata values from csv file
+			microLt := db.WriteMicroLayout{
+				WriteLayout: db.WriteLayout{
+					Name: pub.Entity[j].Name,
+					ToId: dstId,
+				},
+				DoubleFmt: doubleFmt,
+			}
+			cvtMicro := db.CellMicroConverter{
+				ModelDef:  modelDef,
+				Name:      pub.Entity[j].Name,
+				RunDef:    meta,
+				GenDigest: meta.EntityGen[j].GenDigest, // entity generation converted from "public" and has the same item order
+				IsIdCsv:   false,
+				DoubleFmt: doubleFmt,
+			}
+
+			logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nMd, ": ", microLt.Name)
+
+			err := writeMicroFromCsvFile(dbConn, dbFacet, modelDef, meta, microLt, microCsvDir, cvtMicro, encodingName)
+			if err != nil {
+				omppLog.Log("Error at: ", pub.Entity[j].Name, ": ", err.Error())
+				omppLog.Log("Cleanup on error: delete model run ", srcName, " ", dstId)
+
+				// delete model run on error to rollback results of UpdateRun() call above
+				e := db.DeleteRun(dbConn, dstId)
+				if e != nil {
+					omppLog.Log("Failed to delete model run: ", srcName, " id: ", dstId, ": ", e.Error())
+				}
+				return 0, err // return original error
+			}
+		}
+	}
+
 	return dstId, nil
-}
-
-// writeParamFromCsvFile read parameter csv file and write into db parameter value table.
-func writeParamFromCsvFile(
-	dbConn *sql.DB,
-	modelDef *db.ModelMeta,
-	layout db.WriteParamLayout,
-	csvDir string,
-	csvCvt db.CellParamConverter,
-	encodingName string) error {
-
-	// converter from csv row []string to db cell
-	cvt, err := csvCvt.CsvToCell()
-	if err != nil {
-		return errors.New("invalid converter from csv row: " + err.Error())
-	}
-
-	// open csv file, convert to utf-8 and parse csv into db cells
-	// reading from .id.csv files not supported by converters
-	fn, err := csvCvt.CsvFileName()
-	if err != nil {
-		return errors.New("invalid csv file name: " + err.Error())
-	}
-	chs, err := csvCvt.CsvHeader()
-	if err != nil {
-		return errors.New("Error at building csv parameter header " + layout.Name + ": " + err.Error())
-	}
-	ch := strings.Join(chs, ",")
-
-	f, err := os.Open(filepath.Join(csvDir, fn))
-	if err != nil {
-		return errors.New("csv file open error: " + err.Error())
-	}
-	defer f.Close()
-
-	from, err := makeFromCsvReader(fn, f, encodingName, ch, cvt)
-	if err != nil {
-		return errors.New("fail to create expressions csv reader: " + err.Error())
-	}
-
-	// write each csv row into parameter or output table
-	err = db.WriteParameterFrom(dbConn, modelDef, &layout, from)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }

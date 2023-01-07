@@ -34,10 +34,10 @@ type CellParamConverter struct {
 }
 
 // retrun true if csv converter is using enum id's for dimensions
-func (cellCvt CellParamConverter) IsUseEnumId() bool { return cellCvt.IsIdCsv }
+func (cellCvt *CellParamConverter) IsUseEnumId() bool { return cellCvt.IsIdCsv }
 
 // CsvFileName return file name of csv file to store parameter rows
-func (cellCvt CellParamConverter) CsvFileName() (string, error) {
+func (cellCvt *CellParamConverter) CsvFileName() (string, error) {
 
 	// find parameter by name
 	_, err := cellCvt.paramByName()
@@ -53,7 +53,7 @@ func (cellCvt CellParamConverter) CsvFileName() (string, error) {
 }
 
 // CsvHeader return first line for csv file: column names, it's look like: sub_id,dim0,dim1,param_value.
-func (cellCvt CellParamConverter) CsvHeader() ([]string, error) {
+func (cellCvt *CellParamConverter) CsvHeader() ([]string, error) {
 
 	// find parameter by name
 	param, err := cellCvt.paramByName()
@@ -76,7 +76,7 @@ func (cellCvt CellParamConverter) CsvHeader() ([]string, error) {
 // KeyIds return converter to copy primary key: (sub id, dimension ids) into key []int.
 //
 // Converter will return error if len(key) not equal to row key size.
-func (cellCvt CellParamConverter) KeyIds(name string) (func(interface{}, []int) error, error) {
+func (cellCvt *CellParamConverter) KeyIds(name string) (func(interface{}, []int) error, error) {
 
 	cvt := func(src interface{}, key []int) error {
 
@@ -105,7 +105,7 @@ func (cellCvt CellParamConverter) KeyIds(name string) (func(interface{}, []int) 
 //
 // Converter simply does Sprint() for each sub-value id, dimension item id and value.
 // Converter will return error if len(row) not equal to number of fields in csv record.
-func (cellCvt CellParamConverter) ToCsvIdRow() (func(interface{}, []string) error, error) {
+func (cellCvt *CellParamConverter) ToCsvIdRow() (func(interface{}, []string) error, error) {
 
 	// find parameter by name
 	param, err := cellCvt.paramByName()
@@ -154,7 +154,7 @@ func (cellCvt CellParamConverter) ToCsvIdRow() (func(interface{}, []string) erro
 // Converter will return error if len(row) not equal to number of fields in csv record.
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
 // If parameter type is enum based then csv row value is enum code and cell value is enum id.
-func (cellCvt CellParamConverter) ToCsvRow() (func(interface{}, []string) error, error) {
+func (cellCvt *CellParamConverter) ToCsvRow() (func(interface{}, []string) error, error) {
 
 	// find parameter by name
 	param, err := cellCvt.paramByName()
@@ -249,7 +249,7 @@ func (cellCvt CellParamConverter) ToCsvRow() (func(interface{}, []string) error,
 // It does return error if len(row) not equal to number of fields in cell db-record.
 // If dimension type is enum based then csv row is enum code and it is converted into cell.DimIds (into dimension type type enum ids).
 // If parameter type is enum based then csv row value is enum code and it is converted into value enum id.
-func (cellCvt CellParamConverter) CsvToCell() (func(row []string) (interface{}, error), error) {
+func (cellCvt *CellParamConverter) CsvToCell() (func(row []string) (interface{}, error), error) {
 
 	// find parameter by name
 	param, err := cellCvt.paramByName()
@@ -372,7 +372,7 @@ func (cellCvt CellParamConverter) CsvToCell() (func(row []string) (interface{}, 
 // If dimension type is enum based then dimensions enum ids can be converted to enum code.
 // If dimension type is simple (bool or int) then dimension value converted to string.
 // If parameter type is enum based then cell value enum id converted to enum code.
-func (cellCvt CellParamConverter) IdToCodeCell(modelDef *ModelMeta, name string) (func(interface{}) (interface{}, error), error) {
+func (cellCvt *CellParamConverter) IdToCodeCell(modelDef *ModelMeta, name string) (func(interface{}) (interface{}, error), error) {
 
 	// find parameter by name
 	param, err := cellCvt.paramByName()
@@ -462,7 +462,7 @@ func (cellCvt CellParamConverter) IdToCodeCell(modelDef *ModelMeta, name string)
 // If dimension type is enum based then dimensions enum codes converted to enum ids.
 // If dimension type is simple (bool or int) then dimension code converted from string to dimension type.
 // If parameter type is enum based then cell value enum code converted to enum id.
-func (cellCvt CellParamConverter) CodeToIdCell(modelDef *ModelMeta, name string) (func(interface{}) (interface{}, error), error) {
+func (cellCvt *CellParamConverter) CodeToIdCell(modelDef *ModelMeta, name string) (func(interface{}) (interface{}, error), error) {
 
 	// find parameter by name
 	param, err := cellCvt.paramByName()
@@ -544,7 +544,7 @@ func (cellCvt CellParamConverter) CodeToIdCell(modelDef *ModelMeta, name string)
 }
 
 // return parameter metadata by parameter name
-func (cellCvt CellParamConverter) paramByName() (*ParamMeta, error) {
+func (cellCvt *CellParamConverter) paramByName() (*ParamMeta, error) {
 
 	if cellCvt.theParam != nil {
 		return cellCvt.theParam, nil // parameter already found

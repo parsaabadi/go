@@ -304,7 +304,7 @@ func TestCompareOutputTable(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	csvCvt := CellTableCmpConverter{
+	csvCvt := &CellTableCmpConverter{
 		CellTableConverter: CellTableConverter{
 			ModelDef: modelDef,
 			Name:     tableName,

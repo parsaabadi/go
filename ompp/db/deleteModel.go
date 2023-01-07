@@ -127,8 +127,10 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 			" ("+
 			" SELECT MIN(NR.run_id)"+
 			" FROM run_parameter NR"+
+			" INNER JOIN run_lst NL ON (NL.run_id = NR.run_id)"+
 			" WHERE NR.base_run_id = MRP.base_run_id AND NR.parameter_hid = MRP.parameter_hid"+
 			" AND NR.run_id <> MRP.base_run_id"+
+			" AND NL.model_id <> "+smId+
 			" )"+
 			" FROM run_parameter MRP"+
 			" INNER JOIN run_lst MRL ON (MRL.run_id = MRP.run_id)"+
@@ -156,7 +158,7 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 	for k := range rbArr {
 
 		// find db table name for parameter run value
-		// if not same parameter as before
+		// if not same parameter as previous
 		if hId == 0 || hId != rbArr[k].hId {
 
 			err = TrxSelectFirst(trx,
@@ -173,7 +175,7 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 		}
 
 		// re-base run values in parameter value table and in run_parameter list
-		// if not same parameter and base run id as before
+		// if not same parameter and base run id as previous
 		if hId == 0 || oldId == 0 || hId != rbArr[k].hId || oldId != rbArr[k].oldBase {
 
 			hId = rbArr[k].hId
@@ -209,8 +211,10 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 			" ("+
 			" SELECT MIN(NR.run_id)"+
 			" FROM run_table NR"+
+			" INNER JOIN run_lst NL ON (NL.run_id = NR.run_id)"+
 			" WHERE NR.base_run_id = MRT.base_run_id AND NR.table_hid = MRT.table_hid"+
 			" AND NR.run_id <> MRT.base_run_id"+
+			" AND NL.model_id <> "+smId+
 			" )"+
 			" FROM run_table MRT"+
 			" INNER JOIN run_lst MRL ON (MRL.run_id = MRT.run_id)"+
@@ -239,7 +243,7 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 	for k := range rbArr {
 
 		// find db table names for accumulators and expressions run value
-		// if not same output table as before
+		// if not same output table as previous
 		if hId == 0 || hId != rbArr[k].hId {
 
 			err = TrxSelectFirst(trx,
@@ -258,7 +262,7 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 		// re-base run values:
 		// update run id in accumulators and expression tables with new base run id
 		// update output value base run id in run_table list
-		// if not same output table and base run id as before
+		// if not same output table and base run id as previous
 		if hId == 0 || oldId == 0 || hId != rbArr[k].hId || oldId != rbArr[k].oldBase {
 
 			hId = rbArr[k].hId
@@ -292,10 +296,101 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 	}
 
 	// delete model runs:
+	// for all run entities microdata
+	// where entity shared between models and microdata run value shared between runs
+	// build list of new base run id's
+	rbArr, err = selectBaseRunsOfSharedValues(trx,
+		"SELECT"+
+			" MRE.entity_gen_hid, MRE.run_id, MRE.base_run_id,"+
+			" ("+
+			" SELECT MIN(NR.run_id)"+
+			" FROM run_entity NR"+
+			" INNER JOIN run_lst NL ON (NL.run_id = NR.run_id)"+
+			" WHERE NR.base_run_id = MRE.base_run_id AND NR.entity_gen_hid = MRE.entity_gen_hid"+
+			" AND NR.run_id <> MRE.base_run_id"+
+			" AND NL.model_id <> "+smId+
+			" )"+
+			" FROM run_entity MRE"+
+			" INNER JOIN run_lst MRL ON (MRL.run_id = MRE.run_id)"+
+			" WHERE EXISTS"+
+			" ("+
+			" SELECT RE.run_id"+
+			" FROM run_entity RE"+
+			" INNER JOIN run_lst RL ON (RL.run_id = RE.base_run_id)"+
+			" WHERE RE.run_id = MRE.run_id"+
+			" AND RE.entity_gen_hid = MRE.entity_gen_hid"+
+			" AND RL.model_id <> MRL.model_id"+
+			" AND RL.model_id = "+smId+
+			" )"+
+			" ORDER BY 1, 3")
+	if err != nil {
+		return err
+	}
+
+	// delete model runs:
+	// where entity shared between models and microdata run value shared between runs
+	// re-base run values: update run id for microdata values with new base run id
+	tblName = ""
+	hId = 0
+	oldId = 0
+	for k := range rbArr {
+
+		// find db table name for microdata run value
+		// if not same microdata as previous
+		if hId == 0 || hId != rbArr[k].hId {
+
+			err = TrxSelectFirst(trx,
+				"SELECT db_run_table FROM entity_gen WHERE entity_gen_hid = "+strconv.Itoa(rbArr[k].hId),
+				func(row *sql.Row) error {
+					if err := row.Scan(&tblName); err != nil {
+						return err
+					}
+					return nil
+				})
+			if err != nil {
+				return err
+			}
+		}
+
+		// re-base run values in microdata value table and in run_entity list
+		// if not same microdata and base run id as previous
+		if hId == 0 || oldId == 0 || hId != rbArr[k].hId || oldId != rbArr[k].oldBase {
+
+			hId = rbArr[k].hId
+			oldId = rbArr[k].oldBase
+
+			// update microdata value run id with new base run id
+			err = TrxUpdate(trx,
+				"UPDATE "+tblName+
+					" SET run_id = "+strconv.Itoa(rbArr[k].newBase)+
+					" WHERE run_id = "+strconv.Itoa(rbArr[k].oldBase))
+			if err != nil {
+				return err
+			}
+
+			// set new base run id in run_entity table
+			err = TrxUpdate(trx,
+				"UPDATE run_entity SET base_run_id = "+strconv.Itoa(rbArr[k].newBase)+
+					" WHERE base_run_id = "+strconv.Itoa(rbArr[k].oldBase)+
+					" AND entity_gen_hid = "+strconv.Itoa(rbArr[k].hId))
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// delete model runs:
 	// delete run metadata
 	err = TrxUpdate(trx,
 		"DELETE FROM run_progress WHERE EXISTS"+
 			" (SELECT run_id FROM run_lst M WHERE M.run_id = run_progress.run_id AND M.model_id = "+smId+")")
+	if err != nil {
+		return err
+	}
+
+	err = TrxUpdate(trx,
+		"DELETE FROM run_entity WHERE EXISTS"+
+			" (SELECT run_id FROM run_lst M WHERE M.run_id = run_entity.run_id AND M.model_id = "+smId+")")
 	if err != nil {
 		return err
 	}
@@ -366,6 +461,151 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 	}
 
 	err = TrxUpdate(trx, "DELETE FROM group_lst WHERE model_id = "+smId)
+	if err != nil {
+		return err
+	}
+
+	// delete model entities:
+	// build list of model entities where entity not shared between models
+	type mdItem struct {
+		eHId int    // entity Hid
+		gHId int    // entity generation Hid
+		tbl  string // entity microdata db table
+	}
+	var mdArr []mdItem
+
+	err = TrxSelectRows(trx,
+		"SELECT"+
+			" EG.entity_hid, EG.entity_gen_hid, EG.db_entity_table"+
+			" FROM entity_gen EG"+
+			" WHERE EXISTS"+
+			" ("+
+			" SELECT entity_hid"+
+			" FROM model_entity_dic M"+
+			" WHERE M.entity_hid = EG.entity_hid AND M.model_id = "+smId+
+			" )"+
+			" AND NOT EXISTS"+
+			" ("+
+			" SELECT entity_hid"+
+			" FROM model_entity_dic NE"+
+			" WHERE NE.entity_hid = EG.entity_hid AND NE.model_id <> "+smId+
+			" )"+
+			" ORDER BY 1, 2",
+		func(rows *sql.Rows) error {
+			var r mdItem
+			if err := rows.Scan(&r.eHId, &r.gHId, &r.tbl); err != nil {
+				return err
+			}
+			mdArr = append(mdArr, r)
+			return nil
+		})
+	if err != nil {
+		return err
+	}
+
+	err = TrxUpdate(trx,
+		"DELETE FROM entity_gen_attr"+
+			" WHERE EXISTS"+
+			" ("+
+			" SELECT M.entity_hid"+
+			" FROM model_entity_dic M"+
+			" WHERE M.entity_hid = entity_gen_attr.entity_hid AND M.model_id = "+smId+
+			" )"+
+			" AND NOT EXISTS"+
+			" ("+
+			" SELECT NE.entity_hid"+
+			" FROM model_entity_dic NE"+
+			" WHERE NE.entity_hid = entity_gen_attr.entity_hid AND NE.model_id <> "+smId+
+			" )")
+	if err != nil {
+		return err
+	}
+
+	err = TrxUpdate(trx,
+		"DELETE FROM entity_gen"+
+			" WHERE EXISTS"+
+			" ("+
+			" SELECT M.entity_hid"+
+			" FROM model_entity_dic M"+
+			" WHERE M.entity_hid = entity_gen.entity_hid AND M.model_id = "+smId+
+			" )"+
+			" AND NOT EXISTS"+
+			" ("+
+			" SELECT NE.entity_hid"+
+			" FROM model_entity_dic NE"+
+			" WHERE NE.entity_hid = entity_gen.entity_hid AND NE.model_id <> "+smId+
+			" )")
+	if err != nil {
+		return err
+	}
+
+	err = TrxUpdate(trx,
+		"DELETE FROM entity_attr_txt"+
+			" WHERE EXISTS"+
+			" ("+
+			" SELECT M.entity_hid"+
+			" FROM model_entity_dic M"+
+			" WHERE M.entity_hid = entity_attr_txt.entity_hid AND M.model_id = "+smId+
+			" )"+
+			" AND NOT EXISTS"+
+			" ("+
+			" SELECT NE.entity_hid"+
+			" FROM model_entity_dic NE"+
+			" WHERE NE.entity_hid = entity_attr_txt.entity_hid AND NE.model_id <> "+smId+
+			" )")
+	if err != nil {
+		return err
+	}
+
+	err = TrxUpdate(trx,
+		"DELETE FROM entity_attr"+
+			" WHERE EXISTS"+
+			" ("+
+			" SELECT M.entity_hid"+
+			" FROM model_entity_dic M"+
+			" WHERE M.entity_hid = entity_attr.entity_hid AND M.model_id = "+smId+
+			" )"+
+			" AND NOT EXISTS"+
+			" ("+
+			" SELECT NE.entity_hid"+
+			" FROM model_entity_dic NE"+
+			" WHERE NE.entity_hid = entity_attr.entity_hid AND NE.model_id <> "+smId+
+			" )")
+	if err != nil {
+		return err
+	}
+
+	err = TrxUpdate(trx,
+		"DELETE FROM entity_dic_txt"+
+			" WHERE EXISTS"+
+			" ("+
+			" SELECT M.entity_hid"+
+			" FROM model_entity_dic M"+
+			" WHERE M.entity_hid = entity_dic_txt.entity_hid AND M.model_id = "+smId+
+			" )"+
+			" AND NOT EXISTS"+
+			" ("+
+			" SELECT NE.entity_hid"+
+			" FROM model_entity_dic NE"+
+			" WHERE NE.entity_hid = entity_dic_txt.entity_hid AND NE.model_id <> "+smId+
+			" )")
+	if err != nil {
+		return err
+	}
+
+	// delete model entities:
+	// delete model entity master rows
+	err = TrxUpdate(trx, "DELETE FROM model_entity_dic WHERE model_id = "+smId)
+	if err != nil {
+		return err
+	}
+
+	// delete model entities:
+	// delete entity master rows where entity does not belong to any model
+	err = TrxUpdate(trx,
+		"DELETE FROM entity_dic"+
+			" WHERE NOT EXISTS"+
+			" (SELECT NE.entity_hid FROM model_entity_dic NE WHERE NE.entity_hid = entity_dic.entity_hid)")
 	if err != nil {
 		return err
 	}
@@ -762,6 +1002,16 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 		return err
 	}
 
+	// drop db-tables for entities microdata values
+	// where entity not shared between models
+	for k := range mdArr {
+
+		err = TrxUpdate(trx, "DROP TABLE "+mdArr[k].tbl)
+		if err != nil {
+			return err
+		}
+	}
+
 	// drop db tables and views for accumulators and expressions
 	// where output table not shared between models
 	for k := range tblArr {
@@ -800,8 +1050,8 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 	return nil
 }
 
-// runBaseItem is holder for Hid base run id's of parameter or output table.
-// It is used to update base run during delete operations (re-base) in run_parameter and run_table.
+// runBaseItem is holder for Hid base run id's of parameter, output table or entity microdata.
+// It is used to update base run during delete operations (re-base) in run_parameter, run_table or run_entity.
 type runBaseItem struct {
 	hId     int // output table Hid
 	runId   int // run id in run_table

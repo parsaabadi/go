@@ -208,7 +208,7 @@ func toRunText(
 	paramCsvDir := filepath.Join(outDir, csvName, "parameters")
 	tableCsvDir := filepath.Join(outDir, csvName, "output-tables")
 	microCsvDir := filepath.Join(outDir, csvName, "microdata")
-	nMd := len(meta.RunEntity)
+	nMd := len(meta.EntityGen)
 
 	err = os.MkdirAll(paramCsvDir, 0750)
 	if err != nil {
@@ -232,7 +232,7 @@ func toRunText(
 
 	for j := 0; j < nP; j++ {
 
-		cvtParam := db.CellParamConverter{
+		cvtParam := &db.CellParamConverter{
 			ModelDef:  modelDef,
 			Name:      modelDef.Param[j].Name,
 			IsIdCsv:   isIdCsv,
@@ -281,9 +281,9 @@ func toRunText(
 			ModelDef: modelDef,
 			Name:     modelDef.Table[j].Name,
 		}
-		cvtExpr := db.CellExprConverter{CellTableConverter: ctc, IsIdCsv: isIdCsv, DoubleFmt: doubleFmt}
-		cvtAcc := db.CellAccConverter{CellTableConverter: ctc, IsIdCsv: isIdCsv, DoubleFmt: doubleFmt}
-		cvtAll := db.CellAllAccConverter{CellTableConverter: ctc, IsIdCsv: isIdCsv, DoubleFmt: doubleFmt, ValueName: ""}
+		cvtExpr := &db.CellExprConverter{CellTableConverter: ctc, IsIdCsv: isIdCsv, DoubleFmt: doubleFmt}
+		cvtAcc := &db.CellAccConverter{CellTableConverter: ctc, IsIdCsv: isIdCsv, DoubleFmt: doubleFmt}
+		cvtAll := &db.CellAllAccConverter{CellTableConverter: ctc, IsIdCsv: isIdCsv, DoubleFmt: doubleFmt, ValueName: ""}
 
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name)
 
@@ -325,28 +325,26 @@ func toRunText(
 
 		for j := 0; j < nMd; j++ {
 
-			gHid := meta.RunEntity[j].GenHid
-			gIdx, isFound := meta.EntityGenByGenHid(gHid)
-			if !isFound {
-				return errors.New("error: entity generation not found by Hid: " + strconv.Itoa(gHid) + " " + meta.RunEntity[j].ValueDigest)
-			}
-			eId := meta.EntityGen[gIdx].EntityId
+			eId := meta.EntityGen[j].EntityId
 			eIdx, isFound := modelDef.EntityByKey(eId)
 			if !isFound {
-				return errors.New("error: entity not found by Id: " + strconv.Itoa(eId) + " " + meta.EntityGen[gIdx].Digest)
+				return errors.New("error: entity not found by Id: " + strconv.Itoa(eId) + " " + meta.EntityGen[j].GenDigest)
 			}
 
-			cvtMicro := db.CellMicroConverter{
+			cvtMicro := &db.CellMicroConverter{
 				ModelDef:  modelDef,
 				Name:      modelDef.Entity[eIdx].Name,
 				RunDef:    meta,
-				GenHid:    gHid,
+				GenDigest: meta.EntityGen[j].GenDigest,
 				IsIdCsv:   isIdCsv,
 				DoubleFmt: doubleFmt,
 			}
 			microLt := db.ReadMicroLayout{
-				ReadLayout: db.ReadLayout{Name: modelDef.Entity[eIdx].Name, FromId: runId},
-				GenHid:     gHid,
+				ReadLayout: db.ReadLayout{
+					Name:   modelDef.Entity[eIdx].Name,
+					FromId: runId,
+				},
+				GenDigest: meta.EntityGen[j].GenDigest,
 			}
 
 			logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nMd, ": ", microLt.Name)

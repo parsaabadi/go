@@ -100,7 +100,7 @@ func dbDeleteRun(modelName string, modelDigest string, runOpts *config.RunOption
 
 	err = db.DeleteRun(srcDb, runRow.RunId)
 	if err != nil {
-		return errors.New("failed to delete model run " + strconv.Itoa(runRow.RunId) + " " + runRow.Name + " " + runRow.RunDigest + ": " + err.Error())
+		return errors.New("failed to delete model run, id: " + strconv.Itoa(runRow.RunId) + ": " + runRow.Name + " " + runRow.RunDigest + ": " + err.Error())
 	}
 	return nil
 }

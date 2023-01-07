@@ -12,24 +12,35 @@ import (
 //
 // Name is a parameter or output table name to read.
 type WriteLayout struct {
-	Name     string // parameter name or output table name
-	ToId     int    // run id or set id to write parameter or output table values
-	SubCount int    // sub-values count
+	Name string // parameter name or output table name
+	ToId int    // run id or set id to write parameter or output table values
 }
 
 // WriteParamLayout describes parameter values for insert or update.
+//
 // Double format string is used for digest calcultion if value type if float or double.
 type WriteParamLayout struct {
 	WriteLayout        // common write layout: parameter name, run or set id
+	SubCount    int    // sub-values count
 	IsToRun     bool   // if true then write into into model run else into workset
 	IsPage      bool   // if true then write only page of data else all parameter values
 	DoubleFmt   string // used for float model types digest calculation
 }
 
 // WriteTableLayout describes output table values for insert or update.
+//
 // Double format string is used for digest calcultion if value type if float or double.
 type WriteTableLayout struct {
-	WriteLayout        // common write layout: output table name, run or set id
+	WriteLayout        // common write layout: output table name and run id
+	SubCount    int    // sub-values count
+	DoubleFmt   string // used for float model types digest calculation
+}
+
+// WriteMicroLayout describes source and size of data page to read entity microdata.
+//
+// Double format string is used for digest calcultion if value type if float or double.
+type WriteMicroLayout struct {
+	WriteLayout        // common write layout: entity name and run id
 	DoubleFmt   string // used for float model types digest calculation
 }
 
@@ -90,10 +101,10 @@ type ReadTableLayout struct {
 
 // ReadMicroLayout describes source and size of data page to read entity microdata.
 //
-// Entity generation Hid expected to be unique for each run id + entity name, but there is no such constarint in db schema.
+// Entity generation digest expected to be unique for each run id + entity name, but there is no such constarint in db schema.
 type ReadMicroLayout struct {
-	ReadLayout     // entity name, run id, page size, where filters and order by
-	GenHid     int // entity generation Hid to select microdata from
+	ReadLayout        // entity name, run id, page size, where filters and order by
+	GenDigest  string // entity generation digest
 }
 
 // ReadPageLayout describes first row offset and size of data page to read input parameter or output table values.

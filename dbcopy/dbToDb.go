@@ -96,7 +96,7 @@ func copyDbToDb(
 	// deep copy of model metadata and languages is required
 	// because during db writing metadata structs updated with destination database id's,
 	// for example, in source db model id can be 11 and in destination it will be 200,
-	// same for all other id's: type Hid, parameter Hid, table Hid, run id, set id, task id, etc.
+	// same for all other id's: type Hid, parameter Hid, table Hid, entity Hid. run id, set id, task id, etc.
 	dstModel, err := srcModel.Clone()
 	if err != nil {
 		return err
@@ -138,7 +138,7 @@ func copyDbToDb(
 	}
 
 	// source to destination: copy model runs: parameters, output expressions and accumulators
-	err = copyRunListDbToDb(srcDb, dstDb, srcModel, dstModel, dstLang, doubleFmt)
+	err = copyRunListDbToDb(srcDb, dstDb, dbFacet, srcModel, dstModel, dstLang, doubleFmt)
 	if err != nil {
 		return err
 	}

@@ -27,8 +27,8 @@ type RunMeta struct {
 	Opts      map[string]string // options used to run the model: run_option
 	Param     []runParam        // run parameters: parameter_hid, sub-value count, run_parameter_txt table rows
 	Table     []runTable        // run tables: table_hid fom run_table rows
-	EntityGen []entityGen       // run entity generation: entity_gen, entity_gen_attr table rows
-	RunEntity []runEntity       // run microdata entities: run_entity table rows
+	EntityGen []EntityGenMeta   // run entity generation: entity_gen, entity_gen_attr table rows
+	RunEntity []runEntityRow    // run microdata entities: run_entity table rows
 	Progress  []RunProgress     // run progress by sub-values: run_progress table rows
 }
 
@@ -52,6 +52,7 @@ type RunPub struct {
 	Opts                map[string]string // options used to run the model: run_option
 	Param               []ParamRunSetPub  // run parameters: name, sub-value count and value notes by language
 	Table               []TableRunPub     // run tables: name for tables included in run_table
+	Entity              []EntityRunPub    // run entities: entity generation and attributes
 	Progress            []RunProgress     // run progress by sub-values: run_progress table rows
 }
 
@@ -81,6 +82,14 @@ type ParamValuePub struct {
 type TableRunPub struct {
 	Name        string // parameter name
 	ValueDigest string // value digest, not empty only as result of select from table_parameter; input from "public" value digest is ignored
+}
+
+// EntityRunPub is "public" metadata of entity run generation and attributes for json import-export
+type EntityRunPub struct {
+	Name        string   // entity name
+	GenDigest   string   // digest of entity generation, not empty only as result of select from run_entity; input from "public" digest is ignored
+	ValueDigest string   // value digest, not empty only as result of select from run_entity; input from "public" value digest is ignored
+	Attr        []string // names of entity generation attributes
 }
 
 // RunRow is model run row: run_lst table row.
@@ -148,12 +157,12 @@ type runProgressRow struct {
 	Progress RunProgress // sub-value run progress
 }
 
-// entityGen is a holder of entity generation db rows from entity_gen, model_entity_dic, entity_gen_attr and run_entity tables
+// EntityGenMeta is a holder of entity generation db rows from entity_gen, model_entity_dic, entity_gen_attr and run_entity tables
 // Entity generation is a model entity with set of attributes included in particular model run(s).
 // Model run typically include less attributes in microdata output than entity has in model metadata.
-type entityGen struct {
+type EntityGenMeta struct {
 	entityGenRow                    // entity generation: entity_gen join to model_entity_dic table
-	GenAttr      []entityGenAttrRow // entity generation attributes: entity_gen join to model_entity_dic
+	GenAttr      []entityGenAttrRow // entity generation attributes: entity_gen_attr join to entity_gen
 }
 
 // entityGen is db row of entity_gen join to model_entity_dic table where row exist in run_entity.
@@ -165,7 +174,7 @@ type entityGenRow struct {
 	EntityId      int    // model_entity_id INT         NOT NULL
 	EntityHid     int    // entity_hid      INT         NOT NULL, -- unique entity id
 	DbEntityTable string // db_entity_table VARCHAR(64) NOT NULL, -- db table name: Person_g87abcdef
-	Digest        string // gen_digest      VARCHAR(32) NOT NULL, -- digest of entity generation
+	GenDigest     string // gen_digest      VARCHAR(32) NOT NULL, -- digest of entity generation
 }
 
 // entityGenAttrRow is db row of entity_gen_attr join to entity_gen table where row exist in run_entity
@@ -174,8 +183,8 @@ type entityGenAttrRow struct {
 	AttrId int // attr_id         INT NOT NULL
 }
 
-// runEntity is db row of run_entity join to entity_gen table
-type runEntity struct {
+// runEntityRow is db row of run_entity join to entity_gen table
+type runEntityRow struct {
 	GenHid      int    // entity_gen_hid INT NOT NULL
 	ValueDigest string // value_digest  VARCHAR(32), -- if not NULL then digest of table value for the run
 }

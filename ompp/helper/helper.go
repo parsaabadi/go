@@ -48,7 +48,7 @@ func MakeTimeStamp(t time.Time) string {
 	return fmt.Sprintf("%04d_%02d_%02d_%02d_%02d_%02d_%03d", y, mm, dd, h, mi, s, ms)
 }
 
-// IsUnderscoreTimeStamp return true if src is timestamp string: 2021_07_16_13_40_53_882
+// IsUnderscoreTimeStamp return true if src is underscore timestamp string: 2021_07_16_13_40_53_882
 func IsUnderscoreTimeStamp(src string) bool {
 
 	if len(src) != TimeStampLength {
@@ -58,6 +58,40 @@ func IsUnderscoreTimeStamp(src string) bool {
 		switch {
 		case k == 4 || k == 7 || k == 10 || k == 13 || k == 16 || k == 19:
 			if r != '_' {
+				return false
+			}
+		default:
+			if !unicode.IsDigit(r) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// IsTimeStamp return true if src is  timestamp string: 2021-07-16 13:40:53.882
+func IsTimeStamp(src string) bool {
+
+	if len(src) != TimeStampLength {
+		return false
+	}
+
+	for k, r := range src {
+		switch {
+		case k == 4 || k == 7:
+			if r != '-' {
+				return false
+			}
+		case k == 10:
+			if r != '\x20' {
+				return false
+			}
+		case k == 13 || k == 16:
+			if r != ':' {
+				return false
+			}
+		case k == 19:
+			if r != '.' {
 				return false
 			}
 		default:

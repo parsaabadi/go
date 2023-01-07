@@ -37,10 +37,10 @@ type CellExprConverter struct {
 }
 
 // retrun true if csv converter is using enum id's for dimensions
-func (cellCvt CellExprConverter) IsUseEnumId() bool { return cellCvt.IsIdCsv }
+func (cellCvt *CellExprConverter) IsUseEnumId() bool { return cellCvt.IsIdCsv }
 
 // CsvFileName return file name of csv file to store output table expression rows
-func (cellCvt CellExprConverter) CsvFileName() (string, error) {
+func (cellCvt *CellExprConverter) CsvFileName() (string, error) {
 
 	// find output table by name
 	_, err := cellCvt.tableByName()
@@ -58,7 +58,7 @@ func (cellCvt CellExprConverter) CsvFileName() (string, error) {
 // CsvHeader return first line for csv file: column names.
 // Column names can be like: expr_name,dim0,dim1,expr_value
 // or if IsIdCsv is true: expr_id,dim0,dim1,expr_value
-func (cellCvt CellExprConverter) CsvHeader() ([]string, error) {
+func (cellCvt *CellExprConverter) CsvHeader() ([]string, error) {
 
 	// find output table by name
 	table, err := cellCvt.tableByName()
@@ -85,7 +85,7 @@ func (cellCvt CellExprConverter) CsvHeader() ([]string, error) {
 // KeyIds return converter to copy primary key: (expr_id, dimension ids) into key []int.
 //
 // Converter will return error if len(key) not equal to row key size.
-func (cellCvt CellExprConverter) KeyIds(name string) (func(interface{}, []int) error, error) {
+func (cellCvt *CellExprConverter) KeyIds(name string) (func(interface{}, []int) error, error) {
 
 	cvt := func(src interface{}, key []int) error {
 
@@ -114,7 +114,7 @@ func (cellCvt CellExprConverter) KeyIds(name string) (func(interface{}, []int) e
 //
 // Converter simply does Sprint() for each dimension item id, expression id and value.
 // Converter will return error if len(row) not equal to number of fields in csv record.
-func (cellCvt CellExprConverter) ToCsvIdRow() (func(interface{}, []string) error, error) {
+func (cellCvt *CellExprConverter) ToCsvIdRow() (func(interface{}, []string) error, error) {
 
 	// find output table by name
 	_, err := cellCvt.tableByName()
@@ -162,7 +162,7 @@ func (cellCvt CellExprConverter) ToCsvIdRow() (func(interface{}, []string) error
 //
 // Converter will return error if len(row) not equal to number of fields in csv record.
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
-func (cellCvt CellExprConverter) ToCsvRow() (func(interface{}, []string) error, error) {
+func (cellCvt *CellExprConverter) ToCsvRow() (func(interface{}, []string) error, error) {
 
 	// find output table by name
 	table, err := cellCvt.tableByName()
@@ -224,7 +224,7 @@ func (cellCvt CellExprConverter) ToCsvRow() (func(interface{}, []string) error, 
 //
 // It does return error if len(row) not equal to number of fields in cell db-record.
 // If dimension type is enum based then csv row is enum code and it is converted into cell.DimIds (into dimension type type enum ids).
-func (cellCvt CellExprConverter) CsvToCell() (func(row []string) (interface{}, error), error) {
+func (cellCvt *CellExprConverter) CsvToCell() (func(row []string) (interface{}, error), error) {
 
 	// find output table by name
 	table, err := cellCvt.tableByName()
@@ -298,7 +298,7 @@ func (cellCvt CellExprConverter) CsvToCell() (func(row []string) (interface{}, e
 //
 // If dimension type is enum based then dimensions enum ids can be converted to enum code.
 // If dimension type is simple (bool or int) then dimension value converted to string.
-func (cellCvt CellExprConverter) IdToCodeCell(modelDef *ModelMeta, name string) (func(interface{}) (interface{}, error), error) {
+func (cellCvt *CellExprConverter) IdToCodeCell(modelDef *ModelMeta, name string) (func(interface{}) (interface{}, error), error) {
 
 	// find output table by name
 	table, err := cellCvt.tableByName()
@@ -353,7 +353,7 @@ func (cellCvt CellExprConverter) IdToCodeCell(modelDef *ModelMeta, name string) 
 }
 
 // return output table metadata by output table name
-func (cellCvt CellTableConverter) tableByName() (*TableMeta, error) {
+func (cellCvt *CellTableConverter) tableByName() (*TableMeta, error) {
 
 	if cellCvt.theTable != nil {
 		return cellCvt.theTable, nil // output table already found

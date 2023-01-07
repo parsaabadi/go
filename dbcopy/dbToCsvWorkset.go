@@ -283,7 +283,7 @@ func toWorksetCsv(
 			return errors.New("missing workset parameter Hid: " + strconv.Itoa(meta.Param[j].ParamHid) + " workset: " + strconv.Itoa(setId) + " " + meta.Set.Name)
 		}
 
-		cvtParam := db.CellParamConverter{
+		cvtParam := &db.CellParamConverter{
 			ModelDef:  modelDef,
 			Name:      modelDef.Param[idx].Name,
 			IsIdCsv:   isIdCsv,

@@ -6,11 +6,7 @@ package db
 import (
 	"database/sql"
 	"errors"
-	"fmt"
-	"hash/crc32"
 	"strconv"
-
-	"github.com/openmpp/go/ompp/helper"
 )
 
 // UpdateModel insert new model metadata in database, return true if model inserted or false if already exist.
@@ -59,7 +55,7 @@ func UpdateModel(dbConn *sql.DB, dbFacet Facet, modelDef *ModelMeta) (bool, erro
 
 // doInsertModel insert new existing model metadata in database.
 // It does update as part of transaction
-// Parameters and output tables Hid's and db table names updated with actual database values
+// Parameters, output tables, entities Hid's and db table names updated with actual database values
 // If new model inserted then modelDef updated with actual id's (model id, parameter Hid...)
 // If parameter (output table) not exist then create db tables for parameter values (output table values)
 // If db table names is "" empty or too long then make db table names for parameter values (output table values)
@@ -360,7 +356,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 			}
 		}
 
-		// append type into model parameter list, if not in the list
+		// append parameter into model parameter list, if not in the list
 		//
 		// INSERT INTO model_parameter_dic (model_id, model_parameter_id, parameter_hid, is_hidden)
 		// SELECT 1234, 0, D.parameter_hid, 1
@@ -590,7 +586,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 			}
 		}
 
-		// append type into model output table list, if not in the list
+		// append into model output table list, if not in the list
 		//
 		// INSERT INTO model_table_dic (model_id, model_table_id, table_hid, is_user, expr_dim_pos, is_hidden)
 		// SELECT 1234, 0, D.table_hid, 0, 1
@@ -615,6 +611,126 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 				" (SELECT * FROM model_table_dic E"+
 				" WHERE E.model_id = "+smId+
 				" AND E.model_table_id = "+strconv.Itoa(modelDef.Table[idx].TableId)+
+				" )")
+		if err != nil {
+			return err
+		}
+	}
+
+	// for each entity:
+	// if entity not exist then insert into entity_dic, entity_attr
+	// update entity Hid with actual db value
+	// insert into model_entity_dic to append this entity to the model
+	for idx := range modelDef.Entity {
+
+		modelDef.Entity[idx].ModelId = modelDef.Model.ModelId // update model id with db value
+
+		// get new entity Hid
+		// UPDATE id_lst SET id_value =
+		//   CASE
+		//     WHEN 0 = (SELECT COUNT(*) FROM entity_dic WHERE entity_digest = '978abf5')
+		//       THEN id_value + 1
+		//     ELSE id_value
+		//   END
+		// WHERE id_key = 'entity_hid'
+		err = TrxUpdate(trx,
+			"UPDATE id_lst SET id_value ="+
+				" CASE"+
+				" WHEN 0 = (SELECT COUNT(*) FROM entity_dic WHERE entity_digest = "+ToQuoted(modelDef.Entity[idx].Digest)+")"+
+				" THEN id_value + 1"+
+				" ELSE id_value"+
+				" END"+
+				" WHERE id_key = 'entity_hid'")
+		if err != nil {
+			return err
+		}
+
+		// check if this entity already exist
+		modelDef.Entity[idx].EntityHid = 0
+		err = TrxSelectFirst(trx,
+			"SELECT entity_hid FROM entity_dic WHERE entity_digest = "+ToQuoted(modelDef.Entity[idx].Digest),
+			func(row *sql.Row) error {
+				return row.Scan(&modelDef.Entity[idx].EntityHid)
+			})
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+
+		// if entity not exists then insert into entity_dic and entity_attr
+		if modelDef.Entity[idx].EntityHid <= 0 {
+
+			// get new entity Hid
+			err = TrxSelectFirst(trx,
+				"SELECT id_value FROM id_lst WHERE id_key = 'entity_hid'",
+				func(row *sql.Row) error {
+					return row.Scan(&modelDef.Entity[idx].EntityHid)
+				})
+			switch {
+			case err == sql.ErrNoRows:
+				return errors.New("invalid destination database, likely not an openM++ database")
+			case err != nil:
+				return err
+			}
+
+			// INSERT INTO entity_dic (entity_hid, entity_name, entity_digest) VALUES (101, 'Person', '7890abcd')
+			err = TrxUpdate(trx,
+				"INSERT INTO entity_dic"+
+					" (entity_hid, entity_name, entity_digest)"+
+					" VALUES ("+
+					strconv.Itoa(modelDef.Entity[idx].EntityHid)+", "+
+					toQuotedMax(modelDef.Entity[idx].Name, nameDbMax)+", "+
+					toQuotedMax(modelDef.Entity[idx].Digest, codeDbMax)+
+					")")
+			if err != nil {
+				return err
+			}
+
+			// INSERT INTO entity_attr
+			//   (entity_hid, attr_id, attr_name, type_hid, is_internal)
+			// VALUES
+			//   (101, 2, 'Age', 7, 1)
+			for j := range modelDef.Entity[idx].Attr {
+
+				modelDef.Entity[idx].Attr[j].ModelId = modelDef.Model.ModelId // update model id with db value
+
+				err = TrxUpdate(trx,
+					"INSERT INTO entity_attr"+
+						" (entity_hid, attr_id, attr_name, type_hid, is_internal)"+
+						" VALUES ("+
+						strconv.Itoa(modelDef.Entity[idx].EntityHid)+", "+
+						strconv.Itoa(modelDef.Entity[idx].Attr[j].AttrId)+", "+
+						ToQuoted(modelDef.Entity[idx].Attr[j].Name)+", "+
+						strconv.Itoa(modelDef.Entity[idx].Attr[j].typeOf.TypeHid)+", "+
+						toBoolSqlConst(modelDef.Entity[idx].Attr[j].IsInternal)+
+						")")
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		// append entity into model list, if not in the list
+		//
+		// INSERT INTO model_entity_dic (model_id, model_entity_id, entity_hid)
+		// SELECT 1234, 1, D.entity_hid
+		// FROM entity_dic D
+		// WHERE D.entity_digest = '7890abcd'
+		// AND NOT EXISTS
+		// (
+		//   SELECT * FROM model_entity_dic E WHERE E.model_id = 1234 AND E.model_entity_id = 1
+		// )
+		err = TrxUpdate(trx,
+			"INSERT INTO model_entity_dic (model_id, model_entity_id, entity_hid)"+
+				" SELECT "+
+				smId+", "+
+				strconv.Itoa(modelDef.Entity[idx].EntityId)+", "+
+				" D.entity_hid"+
+				" FROM entity_dic D"+
+				" WHERE D.entity_digest = "+ToQuoted(modelDef.Entity[idx].Digest)+
+				" AND NOT EXISTS"+
+				" (SELECT * FROM model_entity_dic E"+
+				" WHERE E.model_id = "+smId+
+				" AND E.model_entity_id = "+strconv.Itoa(modelDef.Entity[idx].EntityId)+
 				" )")
 		if err != nil {
 			return err
@@ -705,26 +821,22 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 //
 // CREATE TABLE ageSex_p20120817
 // (
-//
-//	run_id      INT      NOT NULL,
-//	sub_id      SMALLINT NOT NULL,
-//	dim0        INT      NOT NULL,
-//	dim1        INT      NOT NULL,
-//	param_value FLOAT    NOT NULL, -- can be NULL
-//	PRIMARY KEY (run_id, sub_id, dim0, dim1)
-//
+// run_id      INT      NOT NULL,
+// sub_id      SMALLINT NOT NULL,
+// dim0        INT      NOT NULL,
+// dim1        INT      NOT NULL,
+// param_value FLOAT    NOT NULL, -- can be NULL
+// PRIMARY KEY (run_id, sub_id, dim0, dim1)
 // )
 //
 // CREATE TABLE ageSex_w20120817
 // (
-//
-//	set_id      INT      NOT NULL,
-//	sub_id      SMALLINT NOT NULL,
-//	dim0        INT      NOT NULL,
-//	dim1        INT      NOT NULL,
-//	param_value FLOAT    NOT NULL, -- can be NULL
-//	PRIMARY KEY (set_id, sub_id, dim0, dim1)
-//
+// set_id      INT      NOT NULL,
+// sub_id      SMALLINT NOT NULL,
+// dim0        INT      NOT NULL,
+// dim1        INT      NOT NULL,
+// param_value FLOAT    NOT NULL, -- can be NULL
+// PRIMARY KEY (set_id, sub_id, dim0, dim1)
 // )
 func sqlCreateParamTable(dbFacet Facet, param *ParamMeta) (string, string, error) {
 
@@ -767,27 +879,23 @@ func sqlCreateParamTable(dbFacet Facet, param *ParamMeta) (string, string, error
 //
 // CREATE TABLE salarySex_v20120820
 // (
-//
-//	run_id     INT      NOT NULL,
-//	expr_id    SMALLINT NOT NULL,
-//	dim0       INT      NOT NULL,
-//	dim1       INT      NOT NULL,
-//	expr_value FLOAT    NULL,
-//	PRIMARY KEY (run_id, expr_id, dim0, dim1)
-//
+// run_id     INT      NOT NULL,
+// expr_id    SMALLINT NOT NULL,
+// dim0       INT      NOT NULL,
+// dim1       INT      NOT NULL,
+// expr_value FLOAT    NULL,
+// PRIMARY KEY (run_id, expr_id, dim0, dim1)
 // )
 //
 // CREATE TABLE salarySex_a20120820
 // (
-//
-//	run_id    INT      NOT NULL,
-//	acc_id    SMALLINT NOT NULL,
-//	sub_id    SMALLINT NOT NULL,
-//	dim0      INT      NOT NULL,
-//	dim1      INT      NOT NULL,
-//	acc_value FLOAT    NULL,
-//	PRIMARY KEY (run_id, acc_id, sub_id, dim0, dim1)
-//
+// run_id    INT      NOT NULL,
+// acc_id    SMALLINT NOT NULL,
+// sub_id    SMALLINT NOT NULL,
+// dim0      INT      NOT NULL,
+// dim1      INT      NOT NULL,
+// acc_value FLOAT    NULL,
+// PRIMARY KEY (run_id, acc_id, sub_id, dim0, dim1)
 // )
 func sqlCreateOutTable(dbFacet Facet, meta *TableMeta) (string, string) {
 
@@ -1097,43 +1205,4 @@ func outTableSelectAccAllView(meta *TableMeta, isColumnNames bool) string {
 	sql += " WHERE A.acc_id = " + strconv.Itoa(meta.Acc[0].AccId)
 
 	return sql
-}
-
-// return prefix and suffix for parameter value db tables or output table value db tables.
-// db table name is: paramNameAsPrefix + _p + md5Suffix, for example: ageSex_p12345678abcdef
-// prefix based on parameter name or output table name
-// suffix is 32 chars of md5 or 8 chars of crc32
-// there is extra 2 chars: _p, _w, _v, _a in table name between prefix and suffix.
-func makeDbTablePrefixSuffix(name string, digest string) (string, string) {
-
-	// if max size of db table name is too short then use crc32(md5) digest
-	// isCrc32Name := maxTableNameSize() < 50
-	isCrc32Name := true // 2016-08-17: always use short crc32 name suffix
-
-	dbSuffixSize := 32
-	if isCrc32Name {
-		dbSuffixSize = 8
-	}
-
-	dbPrefixSize := maxTableNameSize - (2 + dbSuffixSize)
-	if dbPrefixSize < 2 {
-		dbPrefixSize = 2
-	}
-
-	// make prefix part of db table name by using only [A-Z,a-z,0-9] and _ underscore
-	// also shorten source name, ie: ageSexProvince => ageSexPr
-	prefix := helper.ToAlphaNumeric(name)
-	if len(prefix) > dbPrefixSize {
-		prefix = prefix[:dbPrefixSize]
-	}
-
-	// make unique suffix of db table name by using digest or crc32(digest)
-	suffix := digest
-	if isCrc32Name {
-		hCrc32 := crc32.NewIEEE()
-		hCrc32.Write([]byte(digest))
-		suffix = fmt.Sprintf("%x", hCrc32.Sum(nil))
-	}
-
-	return prefix, suffix
 }

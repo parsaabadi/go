@@ -35,10 +35,10 @@ type CellAllAccConverter struct {
 }
 
 // retrun true if csv converter is using enum id's for dimensions
-func (cellCvt CellAllAccConverter) IsUseEnumId() bool { return cellCvt.IsIdCsv }
+func (cellCvt *CellAllAccConverter) IsUseEnumId() bool { return cellCvt.IsIdCsv }
 
 // CsvFileName return file name of csv file to store all accumulators rows
-func (cellCvt CellAllAccConverter) CsvFileName() (string, error) {
+func (cellCvt *CellAllAccConverter) CsvFileName() (string, error) {
 
 	// find output table by name
 	_, err := cellCvt.tableByName()
@@ -56,7 +56,7 @@ func (cellCvt CellAllAccConverter) CsvFileName() (string, error) {
 // CsvHeader return first line for csv file: column names.
 // Column names can be like: sub_id,dim0,dim1,acc0,acc1,acc2
 // If ValueName is "" empty then use all accumulators for csv else only one where accumulator name is ValueName
-func (cellCvt CellAllAccConverter) CsvHeader() ([]string, error) {
+func (cellCvt *CellAllAccConverter) CsvHeader() ([]string, error) {
 
 	// find output table by name
 	table, err := cellCvt.tableByName()
@@ -90,7 +90,7 @@ func (cellCvt CellAllAccConverter) CsvHeader() ([]string, error) {
 // KeyIds return converter to copy primary key: (sub id, dimension ids) into key []int.
 //
 // Converter will return error if len(key) not equal to row key size.
-func (cellCvt CellAllAccConverter) KeyIds(name string) (func(interface{}, []int) error, error) {
+func (cellCvt *CellAllAccConverter) KeyIds(name string) (func(interface{}, []int) error, error) {
 
 	cvt := func(src interface{}, key []int) error {
 
@@ -121,7 +121,7 @@ func (cellCvt CellAllAccConverter) KeyIds(name string) (func(interface{}, []int)
 // Converter will return error if len(row) not equal to number of fields in csv record.
 // Double format string is used if parameter type is float, double, long double
 // If ValueName is "" empty then all accumulators converted else one
-func (cellCvt CellAllAccConverter) ToCsvIdRow() (func(interface{}, []string) error, error) {
+func (cellCvt *CellAllAccConverter) ToCsvIdRow() (func(interface{}, []string) error, error) {
 
 	// find output table by name
 	table, err := cellCvt.tableByName()
@@ -180,7 +180,7 @@ func (cellCvt CellAllAccConverter) ToCsvIdRow() (func(interface{}, []string) err
 // Double format string is used if parameter type is float, double, long double
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
 // If ValueName is "" empty then all accumulators converted else one
-func (cellCvt CellAllAccConverter) ToCsvRow() (func(interface{}, []string) error, error) {
+func (cellCvt *CellAllAccConverter) ToCsvRow() (func(interface{}, []string) error, error) {
 
 	// find output table by name
 	table, err := cellCvt.tableByName()
@@ -251,7 +251,7 @@ func (cellCvt CellAllAccConverter) ToCsvRow() (func(interface{}, []string) error
 //
 // It does return error if len(row) not equal to number of fields in cell db-record.
 // If dimension type is enum based then csv row is enum code and it is converted into cell.DimIds (into dimension type type enum ids).
-func (cellCvt CellAllAccConverter) CsvToCell() (func(row []string) (interface{}, error), error) {
+func (cellCvt *CellAllAccConverter) CsvToCell() (func(row []string) (interface{}, error), error) {
 
 	// find output table by name
 	table, err := cellCvt.tableByName()
@@ -337,7 +337,7 @@ func (cellCvt CellAllAccConverter) CsvToCell() (func(row []string) (interface{},
 //
 // If dimension type is enum based then dimensions enum ids can be converted to enum code.
 // If dimension type is simple (bool or int) then dimension value converted to string.
-func (cellCvt CellAllAccConverter) IdToCodeCell(modelDef *ModelMeta, name string) (func(interface{}) (interface{}, error), error) {
+func (cellCvt *CellAllAccConverter) IdToCodeCell(modelDef *ModelMeta, name string) (func(interface{}) (interface{}, error), error) {
 
 	// find output table by name
 	table, err := cellCvt.tableByName()

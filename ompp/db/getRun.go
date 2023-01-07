@@ -458,9 +458,9 @@ func getRunProgress(dbConn *sql.DB, query string) ([]runProgressRow, error) {
 }
 
 // getEntityGen return entity generation rows by run id: entity_gen and entity_gen_attr table rows.
-func getEntityGen(dbConn *sql.DB, runId int) ([]entityGen, error) {
+func getEntityGen(dbConn *sql.DB, runId int) ([]EntityGenMeta, error) {
 
-	genLst := []entityGen{}
+	genLst := []EntityGenMeta{}
 
 	// append entity_gen rows: generation Hid, db table name and generation digest
 	// where this entity generation has microdata for that run id
@@ -476,13 +476,16 @@ func getEntityGen(dbConn *sql.DB, runId int) ([]entityGen, error) {
 		func(rows *sql.Rows) error {
 			var r entityGenRow
 			var nId int
-			if err := rows.Scan(&nId, &r.GenHid, &r.ModelId, &r.EntityId, &r.EntityHid, &r.DbEntityTable, &r.Digest); err != nil {
+			if err := rows.Scan(&nId, &r.GenHid, &r.ModelId, &r.EntityId, &r.EntityHid, &r.DbEntityTable, &r.GenDigest); err != nil {
 				return err
 			}
-			genLst = append(genLst, entityGen{entityGenRow: r, GenAttr: []entityGenAttrRow{}})
+			genLst = append(genLst, EntityGenMeta{entityGenRow: r, GenAttr: []entityGenAttrRow{}})
 			return nil
 		})
-	if err != nil {
+	switch {
+	case err == sql.ErrNoRows: // no entity microdata
+		return nil, nil
+	case err != nil:
 		return nil, err
 	}
 
@@ -520,20 +523,19 @@ func getEntityGen(dbConn *sql.DB, runId int) ([]entityGen, error) {
 }
 
 // getRunEntity return run entity rows: run_entity table rows.
-func getRunEntity(dbConn *sql.DB, runId int) ([]runEntity, error) {
+func getRunEntity(dbConn *sql.DB, runId int) ([]runEntityRow, error) {
 
-	reLst := []runEntity{}
+	reLst := []runEntityRow{}
 
 	// append run_entity rows: generation Hid and value digest
-	q := "SELECT H.run_id, RE.entity_gen_hid, RE.value_digest" +
-		" FROM run_lst H" +
-		" INNER JOIN run_entity RE ON (RE.run_id = H.run_id)" +
-		" WHERE H.run_id = " + strconv.Itoa(runId) +
+	q := "SELECT run_id, entity_gen_hid, value_digest" +
+		" FROM run_entity" +
+		" WHERE run_id = " + strconv.Itoa(runId) +
 		" ORDER BY 1, 2"
 
 	err := SelectRows(dbConn, q,
 		func(rows *sql.Rows) error {
-			var r runEntity
+			var r runEntityRow
 			var nId int
 			var svd sql.NullString
 			if err := rows.Scan(&nId, &r.GenHid, &svd); err != nil {
@@ -562,7 +564,7 @@ func GetRunFull(dbConn *sql.DB, runRow *RunRow) (*RunMeta, error) {
 	sRunId := strconv.Itoa(runRow.RunId)
 
 	// run meta header: run_lst row, model name and digest
-	meta := &RunMeta{Run: *runRow, Txt: []RunTxtRow{}, EntityGen: []entityGen{}, RunEntity: []runEntity{}}
+	meta := &RunMeta{Run: *runRow, Txt: []RunTxtRow{}, EntityGen: []EntityGenMeta{}, RunEntity: []runEntityRow{}}
 
 	// get run options by run id
 	q := "SELECT" +
@@ -637,11 +639,11 @@ func GetRunFull(dbConn *sql.DB, runRow *RunRow) (*RunMeta, error) {
 	meta.Progress = rpRs
 
 	// get entity generation and run entity for that run id
-	geLst, err := getEntityGen(dbConn, runRow.RunId)
+	egLst, err := getEntityGen(dbConn, runRow.RunId)
 	if err != nil {
 		return nil, err
 	}
-	meta.EntityGen = geLst
+	meta.EntityGen = egLst
 
 	reLst, err := getRunEntity(dbConn, runRow.RunId)
 	if err != nil {
@@ -681,7 +683,7 @@ func GetRunFullText(dbConn *sql.DB, runRow *RunRow, isSuccess bool, langCode str
 	}
 
 	// run meta header: run_lst row, model name and digest
-	meta := &RunMeta{Run: *runRow, Txt: []RunTxtRow{}, EntityGen: []entityGen{}, RunEntity: []runEntity{}}
+	meta := &RunMeta{Run: *runRow, Txt: []RunTxtRow{}, EntityGen: []EntityGenMeta{}, RunEntity: []runEntityRow{}}
 
 	// get run description and notes by run id and language
 	q := "SELECT M.run_id, M.lang_id, L.lang_code, M.descr, M.note" +
@@ -797,11 +799,11 @@ func GetRunFullText(dbConn *sql.DB, runRow *RunRow, isSuccess bool, langCode str
 	meta.Progress = rpRs
 
 	// get entity generation and run entity for that run id
-	geLst, err := getEntityGen(dbConn, runRow.RunId)
+	egLst, err := getEntityGen(dbConn, runRow.RunId)
 	if err != nil {
 		return nil, err
 	}
-	meta.EntityGen = geLst
+	meta.EntityGen = egLst
 
 	reLst, err := getRunEntity(dbConn, runRow.RunId)
 	if err != nil {
@@ -917,8 +919,8 @@ func GetRunFullTextList(dbConn *sql.DB, modelId int, isSuccess bool, langCode st
 		runId := runRs[k].RunId
 		rl[k].Run = runRs[k]
 		rl[k].Opts = optRs[runId]
-		rl[k].EntityGen = []entityGen{}
-		rl[k].RunEntity = []runEntity{}
+		rl[k].EntityGen = []EntityGenMeta{}
+		rl[k].RunEntity = []runEntityRow{}
 		rl[k].Progress = []RunProgress{}
 		m[runId] = k
 	}
@@ -1039,7 +1041,7 @@ func GetRunFullTextList(dbConn *sql.DB, modelId int, isSuccess bool, langCode st
 		func(rows *sql.Rows) error {
 			var r entityGenRow
 			var nId int
-			if err := rows.Scan(&nId, &r.GenHid, &r.ModelId, &r.EntityId, &r.EntityHid, &r.DbEntityTable, &r.Digest); err != nil {
+			if err := rows.Scan(&nId, &r.GenHid, &r.ModelId, &r.EntityId, &r.EntityHid, &r.DbEntityTable, &r.GenDigest); err != nil {
 				return err
 			}
 
@@ -1049,7 +1051,7 @@ func GetRunFullTextList(dbConn *sql.DB, modelId int, isSuccess bool, langCode st
 			}
 
 			i := len(rl[idx].EntityGen)
-			rl[idx].EntityGen = append(rl[idx].EntityGen, entityGen{entityGenRow: r, GenAttr: []entityGenAttrRow{}}) // append entity_gen row
+			rl[idx].EntityGen = append(rl[idx].EntityGen, EntityGenMeta{entityGenRow: r, GenAttr: []entityGenAttrRow{}}) // append entity_gen row
 
 			if _, ok = ei[nId]; !ok {
 				ei[nId] = make(map[int]int)
@@ -1107,7 +1109,7 @@ func GetRunFullTextList(dbConn *sql.DB, modelId int, isSuccess bool, langCode st
 
 	err = SelectRows(dbConn, q,
 		func(rows *sql.Rows) error {
-			var r runEntity
+			var r runEntityRow
 			var nId int
 			var svd sql.NullString
 			if err := rows.Scan(&nId, &r.GenHid, &svd); err != nil {

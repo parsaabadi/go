@@ -38,7 +38,7 @@ func dbToDbRun(modelName string, modelDigest string, runOpts *config.RunOptions)
 	}
 
 	// open destination database and check is it valid
-	dstDb, _, err := db.Open(csOut, dnOut, true)
+	dstDb, dbFacet, err := db.Open(csOut, dnOut, true)
 	if err != nil {
 		return err
 	}
@@ -110,7 +110,7 @@ func dbToDbRun(modelName string, modelDigest string, runOpts *config.RunOptions)
 	// copy source model run metadata, parameter values, output results into destination database
 	dblFmt := runOpts.String(doubleFormatArgKey)
 
-	_, err = copyRunDbToDb(srcDb, dstDb, srcModel, dstModel, meta.Run.RunId, pub, dstLang, dblFmt)
+	_, err = copyRunDbToDb(srcDb, dstDb, dbFacet, srcModel, dstModel, meta.Run.RunId, pub, dstLang, dblFmt)
 	if err != nil {
 		return err
 	}
@@ -121,7 +121,7 @@ func dbToDbRun(modelName string, modelDigest string, runOpts *config.RunOptions)
 // copyRunListDbToDb do copy all model runs parameters and output tables from source to destination database
 // Double format is used for float model types digest calculation, if non-empty format supplied
 func copyRunListDbToDb(
-	srcDb *sql.DB, dstDb *sql.DB, srcModel *db.ModelMeta, dstModel *db.ModelMeta, dstLang *db.LangMeta, doubleFmt string) error {
+	srcDb *sql.DB, dstDb *sql.DB, dbFacet db.Facet, srcModel *db.ModelMeta, dstModel *db.ModelMeta, dstLang *db.LangMeta, doubleFmt string) error {
 
 	// source: get all successfully completed model runs in all languages
 	srcRl, err := db.GetRunFullTextList(srcDb, srcModel.Model.ModelId, true, "")
@@ -143,7 +143,7 @@ func copyRunListDbToDb(
 		}
 
 		// save into destination database
-		_, err = copyRunDbToDb(srcDb, dstDb, srcModel, dstModel, srcRl[k].Run.RunId, pub, dstLang, doubleFmt)
+		_, err = copyRunDbToDb(srcDb, dstDb, dbFacet, srcModel, dstModel, srcRl[k].Run.RunId, pub, dstLang, doubleFmt)
 		if err != nil {
 			return err
 		}
@@ -154,7 +154,7 @@ func copyRunListDbToDb(
 // copyRunDbToDb do copy model run metadata, run parameters and output tables from source to destination database
 // it return destination run id (run id in destination database)
 func copyRunDbToDb(
-	srcDb *sql.DB, dstDb *sql.DB, srcModel *db.ModelMeta, dstModel *db.ModelMeta, srcId int, pub *db.RunPub, dstLang *db.LangMeta, doubleFmt string) (int, error) {
+	srcDb *sql.DB, dstDb *sql.DB, dbFacet db.Facet, srcModel *db.ModelMeta, dstModel *db.ModelMeta, srcId int, pub *db.RunPub, dstLang *db.LangMeta, doubleFmt string) (int, error) {
 
 	// validate parameters
 	if pub == nil {
@@ -184,20 +184,19 @@ func copyRunDbToDb(
 	omppLog.Log("  Parameters: ", nP)
 	logT := time.Now().Unix()
 
-	paramLt := db.ReadParamLayout{ReadLayout: db.ReadLayout{FromId: srcId}}
-	dstParamLt := db.WriteParamLayout{
-		WriteLayout: db.WriteLayout{ToId: dstId},
-		DoubleFmt:   doubleFmt,
-		IsToRun:     true}
-
 	// copy all parameters values for that model run
 	for j := range srcModel.Param {
 
 		// source: read parameter values
-		paramLt.Name = srcModel.Param[j].Name
-		cLst := list.New()
-
+		paramLt := db.ReadParamLayout{
+			ReadLayout: db.ReadLayout{
+				Name:   srcModel.Param[j].Name,
+				FromId: srcId,
+			},
+		}
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nP, ": ", paramLt.Name)
+
+		cLst := list.New()
 
 		_, err := db.ReadParameterTo(srcDb, srcModel, &paramLt, func(src interface{}) (bool, error) {
 			cLst.PushBack(src)
@@ -211,8 +210,15 @@ func copyRunDbToDb(
 		}
 
 		// destination: insert parameter values in model run
-		dstParamLt.Name = dstModel.Param[j].Name
-		dstParamLt.SubCount = dstRun.Param[j].SubCount
+		dstParamLt := db.WriteParamLayout{
+			WriteLayout: db.WriteLayout{
+				Name: dstModel.Param[j].Name,
+				ToId: dstId,
+			},
+			SubCount:  dstRun.Param[j].SubCount,
+			IsToRun:   true,
+			DoubleFmt: doubleFmt,
+		}
 
 		if err = db.WriteParameterFrom(dstDb, dstModel, &dstParamLt, makeFromList(cLst)); err != nil {
 			return 0, err
@@ -220,14 +226,6 @@ func copyRunDbToDb(
 	}
 
 	// copy all output tables values for that model run, if the table included in run results
-	tblLt := db.ReadTableLayout{ReadLayout: db.ReadLayout{FromId: srcId}}
-	dstTblLt := db.WriteTableLayout{
-		WriteLayout: db.WriteLayout{
-			ToId:     dstId,
-			SubCount: dstRun.Run.SubCount,
-		},
-		DoubleFmt: doubleFmt}
-
 	nT := len(srcModel.Table)
 	omppLog.Log("  Tables: ", nT)
 
@@ -246,11 +244,16 @@ func copyRunDbToDb(
 		}
 
 		// source: read output table accumulator
-		tblLt.Name = srcModel.Table[j].Name
-		tblLt.IsAccum = true
-		acLst := list.New()
-
+		tblLt := db.ReadTableLayout{
+			ReadLayout: db.ReadLayout{
+				Name:   srcModel.Table[j].Name,
+				FromId: srcId,
+			},
+			IsAccum: true,
+		}
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name)
+
+		acLst := list.New()
 
 		_, err = db.ReadOutputTableTo(srcDb, srcModel, &tblLt, func(src interface{}) (bool, error) {
 			acLst.PushBack(src)
@@ -273,11 +276,64 @@ func copyRunDbToDb(
 		}
 
 		// insert output table values (accumulators and expressions) in model run
-		dstTblLt.Name = dstModel.Table[j].Name
+		dstTblLt := db.WriteTableLayout{
+			WriteLayout: db.WriteLayout{
+				Name: dstModel.Table[j].Name,
+				ToId: dstId,
+			},
+			SubCount:  dstRun.Run.SubCount,
+			DoubleFmt: doubleFmt,
+		}
 
 		err = db.WriteOutputTableFrom(dstDb, dstModel, &dstTblLt, makeFromList(acLst), makeFromList(ecLst))
 		if err != nil {
 			return 0, err
+		}
+	}
+
+	// copy entity microdata values from source run into destination
+	nMd := len(pub.Entity)
+
+	if nMd > 0 {
+
+		omppLog.Log("  Microdata: ", nMd)
+
+		for j := 0; j < nMd; j++ {
+
+			// source: read microdata values
+			microLt := db.ReadMicroLayout{
+				ReadLayout: db.ReadLayout{
+					Name:   pub.Entity[j].Name,
+					FromId: srcId},
+				GenDigest: pub.Entity[j].GenDigest,
+			}
+			logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nMd, ": ", microLt.Name)
+
+			cLst := list.New()
+
+			_, err := db.ReadMicrodataTo(srcDb, srcModel, &microLt, func(src interface{}) (bool, error) {
+				cLst.PushBack(src)
+				return true, nil
+			})
+			if err != nil {
+				return 0, err
+			}
+			if cLst.Len() <= 0 { // microdata rows must exist if entity generation exist for that run
+				return 0, errors.New("missing run microdata values " + microLt.Name + " run id: " + strconv.Itoa(microLt.FromId))
+			}
+
+			// destination: insert microdata values into model run
+			dstMicroLt := db.WriteMicroLayout{
+				WriteLayout: db.WriteLayout{
+					Name: pub.Entity[j].Name,
+					ToId: dstId,
+				},
+				DoubleFmt: doubleFmt,
+			}
+
+			if err = db.WriteMicrodataFrom(dstDb, dbFacet, dstModel, dstRun, &dstMicroLt, makeFromList(cLst)); err != nil {
+				return 0, err
+			}
 		}
 	}
 

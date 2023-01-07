@@ -157,11 +157,12 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 
 	// select db rows from type_dic join to model_type_dic
 	meta := &ModelMeta{
-		Model: *modelRow,
-		Type:  []TypeMeta{},
-		Param: []ParamMeta{},
-		Table: []TableMeta{},
-		Group: []GroupMeta{},
+		Model:  *modelRow,
+		Type:   []TypeMeta{},
+		Param:  []ParamMeta{},
+		Table:  []TableMeta{},
+		Entity: []EntityMeta{},
+		Group:  []GroupMeta{},
 	}
 	smId := strconv.Itoa(meta.Model.ModelId)
 

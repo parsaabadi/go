@@ -352,7 +352,7 @@ func toRunListCsv(
 			row[3] = strconv.Itoa(rl[idx].EntityGen[j].EntityId)
 			row[4] = strconv.Itoa(rl[idx].EntityGen[j].EntityHid)
 			row[5] = rl[idx].EntityGen[j].DbEntityTable
-			row[6] = rl[idx].EntityGen[j].Digest
+			row[6] = rl[idx].EntityGen[j].GenDigest
 			j++
 			return false, row, nil
 		})

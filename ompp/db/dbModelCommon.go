@@ -89,52 +89,52 @@ func (langDef *LangMeta) CodeById(langId int) (string, bool) {
 }
 
 // TypeByKey return index of type by key: typeId
-func (meta *ModelMeta) TypeByKey(typeId int) (int, bool) {
+func (modelDef *ModelMeta) TypeByKey(typeId int) (int, bool) {
 
-	n := len(meta.Type)
+	n := len(modelDef.Type)
 	k := sort.Search(n, func(i int) bool {
-		return meta.Type[i].TypeId >= typeId
+		return modelDef.Type[i].TypeId >= typeId
 	})
-	return k, (k >= 0 && k < n && meta.Type[k].TypeId == typeId)
+	return k, (k >= 0 && k < n && modelDef.Type[k].TypeId == typeId)
 }
 
 // ParamByKey return index of parameter by key: paramId
-func (meta *ModelMeta) ParamByKey(paramId int) (int, bool) {
+func (modelDef *ModelMeta) ParamByKey(paramId int) (int, bool) {
 
-	n := len(meta.Param)
+	n := len(modelDef.Param)
 	k := sort.Search(n, func(i int) bool {
-		return meta.Param[i].ParamId >= paramId
+		return modelDef.Param[i].ParamId >= paramId
 	})
-	return k, (k >= 0 && k < n && meta.Param[k].ParamId == paramId)
+	return k, (k >= 0 && k < n && modelDef.Param[k].ParamId == paramId)
 }
 
 // ParamByName return index of parameter by name
-func (meta *ModelMeta) ParamByName(name string) (int, bool) {
+func (modelDef *ModelMeta) ParamByName(name string) (int, bool) {
 
-	for k := range meta.Param {
-		if meta.Param[k].Name == name {
+	for k := range modelDef.Param {
+		if modelDef.Param[k].Name == name {
 			return k, true
 		}
 	}
-	return len(meta.Param), false
+	return len(modelDef.Param), false
 }
 
 // ParamByHid return index of parameter by parameter Hid
-func (meta *ModelMeta) ParamByHid(paramHid int) (int, bool) {
+func (modelDef *ModelMeta) ParamByHid(paramHid int) (int, bool) {
 
-	for k := range meta.Param {
-		if meta.Param[k].ParamHid == paramHid {
+	for k := range modelDef.Param {
+		if modelDef.Param[k].ParamHid == paramHid {
 			return k, true
 		}
 	}
-	return len(meta.Param), false
+	return len(modelDef.Param), false
 }
 
 // ParamHidById return parameter Hid by id or -1 if not found
-func (meta *ModelMeta) ParamHidById(paramId int) int {
+func (modelDef *ModelMeta) ParamHidById(paramId int) int {
 
-	if k, ok := meta.ParamByKey(paramId); ok {
-		return meta.Param[k].ParamHid
+	if k, ok := modelDef.ParamByKey(paramId); ok {
+		return modelDef.Param[k].ParamHid
 	}
 	return -1
 }
@@ -150,42 +150,42 @@ func (param *ParamMeta) DimByKey(dimId int) (int, bool) {
 }
 
 // OutTableByKey return index of output table by key: tableId
-func (meta *ModelMeta) OutTableByKey(tableId int) (int, bool) {
+func (modelDef *ModelMeta) OutTableByKey(tableId int) (int, bool) {
 
-	n := len(meta.Table)
+	n := len(modelDef.Table)
 	k := sort.Search(n, func(i int) bool {
-		return meta.Table[i].TableId >= tableId
+		return modelDef.Table[i].TableId >= tableId
 	})
-	return k, (k >= 0 && k < n && meta.Table[k].TableId == tableId)
+	return k, (k >= 0 && k < n && modelDef.Table[k].TableId == tableId)
 }
 
 // OutTableByName return index of output table by name
-func (meta *ModelMeta) OutTableByName(name string) (int, bool) {
+func (modelDef *ModelMeta) OutTableByName(name string) (int, bool) {
 
-	for k := range meta.Table {
-		if meta.Table[k].Name == name {
+	for k := range modelDef.Table {
+		if modelDef.Table[k].Name == name {
 			return k, true
 		}
 	}
-	return len(meta.Table), false
+	return len(modelDef.Table), false
 }
 
 // OutTableByHid return index of output table by table Hid
-func (meta *ModelMeta) OutTableByHid(tableHid int) (int, bool) {
+func (modelDef *ModelMeta) OutTableByHid(tableHid int) (int, bool) {
 
-	for k := range meta.Table {
-		if meta.Table[k].TableHid == tableHid {
+	for k := range modelDef.Table {
+		if modelDef.Table[k].TableHid == tableHid {
 			return k, true
 		}
 	}
-	return len(meta.Table), false
+	return len(modelDef.Table), false
 }
 
 // OutTableHidById return output table Hid by id or -1 if not found
-func (meta *ModelMeta) OutTableHidById(tableId int) int {
+func (modelDef *ModelMeta) OutTableHidById(tableId int) int {
 
-	if k, ok := meta.OutTableByKey(tableId); ok {
-		return meta.Table[k].TableHid
+	if k, ok := modelDef.OutTableByKey(tableId); ok {
+		return modelDef.Table[k].TableHid
 	}
 	return -1
 }
@@ -201,42 +201,31 @@ func (table *TableMeta) DimByKey(dimId int) (int, bool) {
 }
 
 // EntityByKey return index of entity by key: entityId
-func (meta *ModelMeta) EntityByKey(entityId int) (int, bool) {
+func (modelDef *ModelMeta) EntityByKey(entityId int) (int, bool) {
 
-	n := len(meta.Entity)
+	n := len(modelDef.Entity)
 	k := sort.Search(n, func(i int) bool {
-		return meta.Entity[i].EntityId >= entityId
+		return modelDef.Entity[i].EntityId >= entityId
 	})
-	return k, (k >= 0 && k < n && meta.Entity[k].EntityId == entityId)
+	return k, (k >= 0 && k < n && modelDef.Entity[k].EntityId == entityId)
 }
 
 // EntityByName return index of entity by name
-func (meta *ModelMeta) EntityByName(name string) (int, bool) {
+func (modelDef *ModelMeta) EntityByName(name string) (int, bool) {
 
-	for k := range meta.Entity {
-		if meta.Entity[k].Name == name {
+	for k := range modelDef.Entity {
+		if modelDef.Entity[k].Name == name {
 			return k, true
 		}
 	}
-	return len(meta.Entity), false
-}
-
-// EntityByHid return index of entity by entity Hid
-func (meta *ModelMeta) EntityByHid(entityHid int) (int, bool) {
-
-	for k := range meta.Entity {
-		if meta.Entity[k].EntityHid == entityHid {
-			return k, true
-		}
-	}
-	return len(meta.Entity), false
+	return len(modelDef.Entity), false
 }
 
 // EntityHidById return entity Hid by id or -1 if not found
-func (meta *ModelMeta) EntityHidById(entityId int) int {
+func (modelDef *ModelMeta) EntityHidById(entityId int) int {
 
-	if k, ok := meta.EntityByKey(entityId); ok {
-		return meta.Entity[k].EntityHid
+	if k, ok := modelDef.EntityByKey(entityId); ok {
+		return modelDef.Entity[k].EntityHid
 	}
 	return -1
 }
@@ -251,15 +240,38 @@ func (entity *EntityMeta) AttrByKey(attrId int) (int, bool) {
 	return k, (k >= 0 && k < n && entity.Attr[k].AttrId == attrId)
 }
 
-// EntityGenByGenHid return index of entity generation by generation Hid
-func (meta *RunMeta) EntityGenByGenHid(genHid int) (int, bool) {
+// AttrByName return index of entity attribute by name
+func (entity *EntityMeta) AttrByName(name string) (int, bool) {
 
-	for k := range meta.EntityGen {
-		if meta.EntityGen[k].GenHid == genHid {
+	for k := range entity.Attr {
+		if entity.Attr[k].Name == name {
 			return k, true
 		}
 	}
-	return len(meta.EntityGen), false
+	return len(entity.Attr), false
+}
+
+// EntityGenByEntityId return index of entity generation by model entity id.
+// As it is today model do not insert more than one run for each entity into model run, but there is no such costraint in db schema.
+func (run *RunMeta) EntityGenByEntityId(entityId int) (int, bool) {
+
+	for k := range run.EntityGen {
+		if run.EntityGen[k].EntityId == entityId {
+			return k, true
+		}
+	}
+	return len(run.EntityGen), false
+}
+
+// EntityGenByDigest return index of entity generation by generation digest
+func (run *RunMeta) EntityGenByDigest(digest string) (int, bool) {
+
+	for k := range run.EntityGen {
+		if run.EntityGen[k].GenDigest == digest {
+			return k, true
+		}
+	}
+	return len(run.EntityGen), false
 }
 
 // IsBool return true if model type is boolean.

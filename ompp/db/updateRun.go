@@ -404,7 +404,7 @@ func doInsertRun(trx *sql.Tx, modelDef *ModelMeta, meta *RunMeta, langDef *LangM
 	meta.Run.ModelId = modelDef.Model.ModelId // update model id
 
 	// update date-time should not be empty if run completed
-	if meta.Run.UpdateDateTime == "" {
+	if meta.Run.UpdateDateTime == "" || !helper.IsTimeStamp(meta.Run.UpdateDateTime) {
 		meta.Run.UpdateDateTime = meta.Run.CreateDateTime
 	}
 

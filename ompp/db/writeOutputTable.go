@@ -10,9 +10,6 @@ import (
 	"fmt"
 	"hash"
 	"strconv"
-	"time"
-
-	"github.com/openmpp/go/ompp/helper"
 )
 
 // WriteOutputTableFrom insert output table values (accumulators or expressions) into model run from accFrom() and exprFrom() readers.
@@ -73,10 +70,10 @@ func doWriteOutputTableFrom(
 	trx *sql.Tx, modelDef *ModelMeta, meta *TableMeta, runId int, doubleFmt string, accFrom func() (interface{}, error), exprFrom func() (interface{}, error),
 ) error {
 
-	// start run update
+	// update model run master record to prevent run use
 	srId := strconv.Itoa(runId)
 	err := TrxUpdate(trx,
-		"UPDATE run_lst SET update_dt = "+ToQuoted(helper.MakeDateTime(time.Now()))+" WHERE run_id = "+srId)
+		"UPDATE run_lst SET sub_restart = sub_restart - 1 WHERE run_id = "+srId)
 	if err != nil {
 		return err
 	}
@@ -97,7 +94,7 @@ func doWriteOutputTableFrom(
 	case err != nil:
 		return err
 	}
-	if st != DoneRunStatus && st != ExitRunStatus && st != ErrorRunStatus {
+	if !IsRunCompleted(st) {
 		return errors.New("model run not completed, id: " + srId)
 	}
 
@@ -120,7 +117,7 @@ func doWriteOutputTableFrom(
 		return errors.New("model run with id: " + srId + " already contain output table values " + meta.Name)
 	}
 
-	// insert into run_table with digest and current run id as base run id
+	// insert into run_table with current run id as base run id
 	err = TrxUpdate(trx,
 		"INSERT INTO run_table (run_id, table_hid, base_run_id, value_digest)"+
 			" VALUES ("+
@@ -217,6 +214,12 @@ func doWriteOutputTableFrom(
 		}
 	}
 
+	// completed OK, restore run_lst values
+	err = TrxUpdate(trx,
+		"UPDATE run_lst SET sub_restart = sub_restart + 1 WHERE run_id = "+srId)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -236,8 +239,8 @@ func digestAccumulatorsFrom(
 		return nil, nil, nil, err
 	}
 
-	// create accumulator(s) row digester append digest of parameter cells
-	cvtAcc := CellAccConverter{
+	// create accumulator(s) row digester append digest of accumulator(s) cells
+	cvtAcc := &CellAccConverter{
 		CellTableConverter: CellTableConverter{
 			ModelDef: modelDef,
 			Name:     meta.Name,
@@ -246,7 +249,7 @@ func digestAccumulatorsFrom(
 		DoubleFmt: doubleFmt,
 	}
 
-	digestRow, isOrderBy, err := digestCellsFrom(hMd5, modelDef, meta.Name, cvtAcc)
+	digestRow, isOrderBy, err := digestIntKeysCellsFrom(hMd5, modelDef, meta.Name, cvtAcc)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -259,9 +262,9 @@ func digestExpressionsFrom(
 	modelDef *ModelMeta, meta *TableMeta, doubleFmt string, hSum hash.Hash,
 ) (func(interface{}) error, *bool, error) {
 
-	// create expression(s) row digester append digest of parameter cells
+	// create expression(s) row digester append digest of expression(s) cells
 	// append digest of expression(s) cells
-	cvtExpr := CellExprConverter{
+	cvtExpr := &CellExprConverter{
 		CellTableConverter: CellTableConverter{
 			ModelDef: modelDef,
 			Name:     meta.Name,
@@ -270,7 +273,7 @@ func digestExpressionsFrom(
 		DoubleFmt: doubleFmt,
 	}
 
-	digestRow, isOrderBy, err := digestCellsFrom(hSum, modelDef, meta.Name, cvtExpr)
+	digestRow, isOrderBy, err := digestIntKeysCellsFrom(hSum, modelDef, meta.Name, cvtExpr)
 	if err != nil {
 		return nil, nil, err
 	}

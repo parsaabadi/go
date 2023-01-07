@@ -55,7 +55,7 @@ func dbToDbTask(modelName string, modelDigest string, runOpts *config.RunOptions
 	}
 
 	// open destination database and check is it valid
-	dstDb, _, err := db.Open(csOut, dnOut, true)
+	dstDb, dbFacet, err := db.Open(csOut, dnOut, true)
 	if err != nil {
 		return err
 	}
@@ -157,7 +157,7 @@ func dbToDbTask(modelName string, modelDigest string, runOpts *config.RunOptions
 			}
 
 			// copy source model run metadata, parameter values, output results into destination database
-			_, err = copyRunDbToDb(srcDb, dstDb, srcModel, dstModel, rm.Run.RunId, runPub, dstLang, dblFmt)
+			_, err = copyRunDbToDb(srcDb, dstDb, dbFacet, srcModel, dstModel, rm.Run.RunId, runPub, dstLang, dblFmt)
 			if err != nil {
 				return err
 			}

@@ -53,7 +53,7 @@ type CsvConverter interface {
 }
 
 // CellIntKeys provide method to get a copy of cell keys as []int for parameter or output table row,
-// for example parameter row sub id and dimension ids.
+// for example, return [parameter row sub id and dimension ids].
 type CellIntKeys interface {
 
 	// KeyIds return converter to copy row primary key into key []int.
@@ -62,7 +62,6 @@ type CellIntKeys interface {
 	//   accumulators: (acc_id, sub_id, dimension ids)
 	//   all accumulators: (sub_id, dimension ids)
 	//   expressions: (expr_id, dimension ids)
-	//   entity microdata: (entity_key)
 	KeyIds(name string) (func(interface{}, []int) error, error)
 }
 

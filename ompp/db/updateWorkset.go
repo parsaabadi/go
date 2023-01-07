@@ -320,7 +320,7 @@ func doInsertWorkset(trx *sql.Tx, modelDef *ModelMeta, meta *WorksetMeta, langDe
 	}
 
 	// set update time if not defined
-	if meta.Set.UpdateDateTime == "" {
+	if meta.Set.UpdateDateTime == "" || !helper.IsTimeStamp(meta.Set.UpdateDateTime) {
 		meta.Set.UpdateDateTime = helper.MakeDateTime(time.Now())
 	}
 

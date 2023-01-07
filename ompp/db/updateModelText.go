@@ -43,7 +43,7 @@ func UpdateModelText(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangMeta, mod
 
 // doUpdateModelText insert new or update existing model text (description and notes) in database.
 // It does update as part of transaction
-// Model id, type Hid, parameter Hid, table Hid, language id updated with actual database id's
+// Model id, type Hid, parameter Hid, entity Hid, table Hid, language id updated with actual database id's
 func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, modelTxt *ModelTxtMeta) error {
 
 	// update model_dic_txt and ids
@@ -344,6 +344,74 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 					strconv.Itoa(lId)+", "+
 					toQuotedMax(modelTxt.TableExprTxt[idx].Descr, descrDbMax)+", "+
 					toQuotedOrNullMax(modelTxt.TableExprTxt[idx].Note, noteDbMax)+")")
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// update entity_dic_txt and ids
+	for idx := range modelTxt.EntityTxt {
+
+		modelTxt.EntityTxt[idx].ModelId = modelDef.Model.ModelId // update model id
+
+		// find entity Hid
+		hId := modelDef.EntityHidById(modelTxt.EntityTxt[idx].EntityId)
+		if hId <= 0 {
+			return errors.New("invalid entity id " + strconv.Itoa(modelTxt.EntityTxt[idx].EntityId))
+		}
+
+		// if language code valid then delete and insert into entity_dic_txt
+		if lId, ok := langDef.IdByCode(modelTxt.EntityTxt[idx].LangCode); ok {
+
+			err := TrxUpdate(trx,
+				"DELETE FROM entity_dic_txt"+
+					" WHERE entity_hid = "+strconv.Itoa(hId)+
+					" AND lang_id = "+strconv.Itoa(lId))
+			if err != nil {
+				return err
+			}
+			err = TrxUpdate(trx,
+				"INSERT INTO entity_dic_txt (entity_hid, lang_id, descr, note) VALUES ("+
+					strconv.Itoa(hId)+", "+
+					strconv.Itoa(lId)+", "+
+					toQuotedMax(modelTxt.EntityTxt[idx].Descr, descrDbMax)+", "+
+					toQuotedOrNullMax(modelTxt.EntityTxt[idx].Note, noteDbMax)+")")
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// update entity_attr_txt and ids
+	for idx := range modelTxt.EntityAttrTxt {
+
+		modelTxt.EntityAttrTxt[idx].ModelId = modelDef.Model.ModelId // update model id
+
+		// find entity Hid
+		hId := modelDef.EntityHidById(modelTxt.EntityAttrTxt[idx].EntityId)
+		if hId <= 0 {
+			return errors.New("invalid entity id " + strconv.Itoa(modelTxt.EntityAttrTxt[idx].EntityId))
+		}
+
+		// if language code valid then delete and insert into entity_attr_txt
+		if lId, ok := langDef.IdByCode(modelTxt.EntityAttrTxt[idx].LangCode); ok {
+
+			err := TrxUpdate(trx,
+				"DELETE FROM entity_attr_txt"+
+					" WHERE entity_hid = "+strconv.Itoa(hId)+
+					" AND attr_id = "+strconv.Itoa(modelTxt.EntityAttrTxt[idx].AttrId)+
+					" AND lang_id = "+strconv.Itoa(lId))
+			if err != nil {
+				return err
+			}
+			err = TrxUpdate(trx,
+				"INSERT INTO entity_attr_txt (entity_hid, attr_id, lang_id, descr, note) VALUES ("+
+					strconv.Itoa(hId)+", "+
+					strconv.Itoa(modelTxt.EntityAttrTxt[idx].AttrId)+", "+
+					strconv.Itoa(lId)+", "+
+					toQuotedMax(modelTxt.EntityAttrTxt[idx].Descr, descrDbMax)+", "+
+					toQuotedOrNullMax(modelTxt.EntityAttrTxt[idx].Note, noteDbMax)+")")
 			if err != nil {
 				return err
 			}
