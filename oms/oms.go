@@ -317,7 +317,7 @@ func mainBody(args []string) error {
 
 	// check if it is single user run mode and use of home directory enabled
 	if theCfg.homeDir = runOpts.String(homeDirArgKey); theCfg.homeDir != "" {
-		if err := dirExist(theCfg.homeDir); err != nil {
+		if !dirExist(theCfg.homeDir) {
 			omppLog.Log("Warning: user home directory not found: ", theCfg.homeDir)
 			theCfg.homeDir = ""
 		}
@@ -338,7 +338,7 @@ func mainBody(args []string) error {
 
 			theCfg.inOutDir = filepath.Join(theCfg.homeDir, "io") // download and upload directory for web-server, to serve static content
 
-			if err = dirExist(theCfg.inOutDir); err == nil {
+			if dirExist(theCfg.inOutDir) {
 				theCfg.dbcopyPath = dbcopyPath(omsAbsPath)
 			}
 		}
@@ -353,7 +353,7 @@ func mainBody(args []string) error {
 
 			theCfg.downloadDir = filepath.Join(theCfg.inOutDir, "download") // download directory UI
 
-			if err = dirExist(theCfg.downloadDir); err != nil {
+			if !dirExist(theCfg.downloadDir) {
 				theCfg.downloadDir = ""
 			}
 		}
@@ -370,7 +370,7 @@ func mainBody(args []string) error {
 
 			theCfg.uploadDir = filepath.Join(theCfg.inOutDir, "upload") // upload directory UI
 
-			if err = dirExist(theCfg.uploadDir); err != nil {
+			if !dirExist(theCfg.uploadDir) {
 				theCfg.uploadDir = ""
 			}
 		}
@@ -386,7 +386,7 @@ func mainBody(args []string) error {
 	// if UI required then server root directory must have html subdir
 	if !isApiOnly {
 		theCfg.htmlDir = runOpts.String(htmlDirArgKey)
-		if err := dirExist(theCfg.htmlDir); err != nil {
+		if !dirExist(theCfg.htmlDir) {
 			isApiOnly = true
 			omppLog.Log("Warning: serving API only because UI directory not found: ", theCfg.htmlDir)
 		} else {
@@ -406,7 +406,7 @@ func mainBody(args []string) error {
 
 	// etc subdirectory required to run MPI models
 	theCfg.etcDir = runOpts.String(etcDirArgKey)
-	if err := dirExist(theCfg.etcDir); err != nil {
+	if !dirExist(theCfg.etcDir) {
 		omppLog.Log("Warning: configuration files directory not found, it is required to run models on MPI cluster: ", filepath.Join(theCfg.etcDir))
 	} else {
 		omppLog.Log("Etc directory:       ", theCfg.etcDir)

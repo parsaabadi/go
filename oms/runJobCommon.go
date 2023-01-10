@@ -25,19 +25,19 @@ func jobDirValid(jobDir string) error {
 		return nil // job control disabled
 	}
 
-	if err := dirExist(jobDir); err != nil {
+	if _, err := dirStat(jobDir); err != nil {
 		return err
 	}
-	if err := dirExist(filepath.Join(jobDir, "active")); err != nil {
+	if _, err := dirStat(filepath.Join(jobDir, "active")); err != nil {
 		return err
 	}
-	if err := dirExist(filepath.Join(jobDir, "queue")); err != nil {
+	if _, err := dirStat(filepath.Join(jobDir, "queue")); err != nil {
 		return err
 	}
-	if err := dirExist(filepath.Join(jobDir, "history")); err != nil {
+	if _, err := dirStat(filepath.Join(jobDir, "history")); err != nil {
 		return err
 	}
-	if err := dirExist(filepath.Join(jobDir, "state")); err != nil {
+	if _, err := dirStat(filepath.Join(jobDir, "state")); err != nil {
 		return err
 	}
 	return nil
@@ -482,7 +482,7 @@ func deleteCompStateFiles(name, state string) bool {
 
 // return true if jobs queue processing is paused
 func isPausedJobQueue() bool {
-	return fileExist(jobQueuePausedPath()) == nil
+	return fileExist(jobQueuePausedPath())
 }
 
 // read job control state from the file, return empty state on error or if state file not exist

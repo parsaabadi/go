@@ -317,9 +317,9 @@ func jsonRequestToFile(w http.ResponseWriter, r *http.Request, outPath string) b
 }
 
 // dirExist return error if directory does not exist or not accessible
-func dirExist(dirPath string) error {
+func dirExist(dirPath string) bool {
 	_, err := dirStat(dirPath)
-	return err
+	return err == nil
 }
 
 // return file Stat if this is a directory
@@ -338,9 +338,9 @@ func dirStat(dirPath string) (fs.FileInfo, error) {
 }
 
 // fileExist return error if file not exist, not accessible or it is not a regular file
-func fileExist(filePath string) error {
+func fileExist(filePath string) bool {
 	_, err := fileStat(filePath)
-	return err
+	return err == nil
 }
 
 // return file Stat if this is a regular file
@@ -418,12 +418,12 @@ func dbcopyPath(omsAbsPath string) string {
 
 	d := filepath.Dir(omsAbsPath)
 	p := filepath.Join(d, "dbcopy.exe")
-	if e := fileExist(p); e == nil {
+	if fileExist(p) {
 		return p
 	}
 	p = filepath.Join(d, "dbcopy")
-	if e := fileExist(p); e == nil {
+	if fileExist(p) {
 		return p
 	}
-	return "" // dbcopy not found or not accessible or not regular file
+	return "" // dbcopy not found or not accessible or it is not a regular file
 }

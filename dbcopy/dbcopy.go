@@ -217,15 +217,9 @@ which may not be suitable because you don't want to overwrite input database.
 
 To specify output database connection string and driver:
 
-	dbcopy -m modelOne -dbcopy.To db -dbcopy.ToDatabase "Database=modelOne.sqlite; Timeout=86400; OpenMode=ReadWrite;" -dbcopy.ToDatabaseDriver SQLite
-
-Or skip default database driver name "SQLite":
-
-	dbcopy -m modelOne -dbcopy.To db -dbcopy.ToDatabase "Database=modelOne.sqlite; Timeout=86400; OpenMode=ReadWrite;"
-
-Or specify only path/to/model.sqlite file:
-
 	dbcopy -m modelOne -dbcopy.To db -dbcopy.ToSqlite modelOne.sqlite
+	dbcopy -m modelOne -dbcopy.To db -dbcopy.ToDatabase "Database=modelOne.sqlite; Timeout=86400; OpenMode=ReadWrite;"
+	dbcopy -m modelOne -dbcopy.To db -dbcopy.ToDatabase "Database=modelOne.sqlite; Timeout=86400; OpenMode=ReadWrite;" -dbcopy.ToDatabaseDriver SQLite
 
 Other supported database drivers are "sqlite3" and "odbc":
 

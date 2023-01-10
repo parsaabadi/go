@@ -238,7 +238,7 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error
 	// get list of template files
 	rsc.runTemplates = []string{}
 	rsc.mpiTemplates = []string{}
-	if dirExist(etcDir) == nil {
+	if dirExist(etcDir) {
 		if fl, err := filepath.Glob(etcDir + "/" + "run.*.template.txt"); err == nil {
 			for k := range fl {
 				f := filepath.Base(fl[k])
@@ -261,7 +261,7 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error
 	// keep stem of preset file name: run-options.RiskPaths.1-small.json => RiskPaths.1-small
 	// and file content as string
 	rsc.presets = []RunOptionsPreset{}
-	if dirExist(etcDir) == nil {
+	if dirExist(etcDir) {
 		if fl, err := filepath.Glob(etcDir + "/" + "run-options.*.json"); err == nil {
 			for k := range fl {
 

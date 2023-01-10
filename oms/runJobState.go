@@ -561,7 +561,7 @@ func initJobComputeState(jobIniPath string, updateTs time.Time, computeState map
 	}
 
 	// read available resources limits and computational servers configuration from job.ini
-	if jobIniPath == "" || fileExist(jobIniPath) != nil {
+	if jobIniPath == "" || !fileExist(jobIniPath) {
 		return jsState
 	}
 
@@ -595,7 +595,7 @@ func initJobComputeState(jobIniPath string, updateTs time.Time, computeState map
 		(jsState.hostFile.rootLine != "" || jsState.hostFile.hostLine != "")
 
 	if jsState.hostFile.isUse {
-		jsState.hostFile.isUse = dirExist(jsState.hostFile.dir) == nil
+		jsState.hostFile.isUse = dirExist(jsState.hostFile.dir)
 	}
 
 	// default settings for compute servers or clusters

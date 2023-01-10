@@ -83,7 +83,7 @@ func runUploadPostHandler(w http.ResponseWriter, r *http.Request) {
 	omppLog.Log("Upload of: ", fName)
 
 	logPath := filepath.Join(theCfg.uploadDir, baseName+".progress.upload.log")
-	if fileExist(logPath) == nil {
+	if fileExist(logPath) {
 		omppLog.Log("Error: upload already in progress: ", logPath)
 		http.Error(w, "Model run upload already in progress: "+baseName, http.StatusBadRequest)
 		return
@@ -237,7 +237,7 @@ func worksetUploadPostHandler(w http.ResponseWriter, r *http.Request) {
 	omppLog.Log("Upload of: ", fName)
 
 	logPath := filepath.Join(theCfg.uploadDir, baseName+".progress.upload.log")
-	if fileExist(logPath) == nil {
+	if fileExist(logPath) {
 		omppLog.Log("Error: upload already in progress: ", logPath)
 		http.Error(w, "Model scenario upload already in progress: "+baseName, http.StatusBadRequest)
 		return

@@ -46,7 +46,7 @@ func fileLogUpDownGet(upDown string, upDownDir string, w http.ResponseWriter, r 
 	// read file content
 	filePath := filepath.Join(upDownDir, fileName)
 
-	if fileExist(filePath) != nil {
+	if !fileExist(filePath) {
 		http.Error(w, "Log file not found: "+fileName, http.StatusBadRequest)
 		return
 	}
@@ -160,7 +160,7 @@ func fileTreeUpDownGet(upDownDir string, w http.ResponseWriter, r *http.Request)
 	}
 
 	folderPath := filepath.Join(upDownDir, folder)
-	if dirExist(folderPath) != nil {
+	if !dirExist(folderPath) {
 		http.Error(w, "Folder not found: "+folder, http.StatusBadRequest)
 		return
 	}
