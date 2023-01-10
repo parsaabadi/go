@@ -43,7 +43,7 @@ func ReadMicrodataTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadMicroLayou
 	}
 
 	// find entity generation and generation attributes
-	egLst, err := getEntityGen(dbConn, layout.FromId)
+	egLst, err := GetEntityGenList(dbConn, layout.FromId)
 	if err != nil {
 		return nil, err
 	}

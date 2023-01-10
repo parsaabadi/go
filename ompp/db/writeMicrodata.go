@@ -300,7 +300,7 @@ func doWriteMicrodataFrom(
 	}
 
 	// create microdata digest calculator
-	hMd5, digestFrom, err := digestMicrodataFrom(modelDef, runMeta, entityName, entityGen.GenDigest, doubleFmt)
+	hMd5, digestFrom, err := digestMicrodataFrom(modelDef, entityName, entityGen, doubleFmt)
 	if err != nil {
 		return []runEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
 	}
@@ -479,7 +479,7 @@ func putInsertMicroFrom(
 }
 
 // digestMicrodataFrom start run microdata digest calculation and return closure to add microdata row to digest.
-func digestMicrodataFrom(modelDef *ModelMeta, runMeta *RunMeta, entityName, genDigest string, doubleFmt string) (hash.Hash, func(interface{}) error, error) {
+func digestMicrodataFrom(modelDef *ModelMeta, entityName string, entityGen *EntityGenMeta, doubleFmt string) (hash.Hash, func(interface{}) error, error) {
 
 	// start from entity name and generation digest
 	hMd5 := md5.New()
@@ -487,7 +487,7 @@ func digestMicrodataFrom(modelDef *ModelMeta, runMeta *RunMeta, entityName, genD
 	if err != nil {
 		return nil, nil, err
 	}
-	_, err = hMd5.Write([]byte(entityName + "," + genDigest + "\n"))
+	_, err = hMd5.Write([]byte(entityName + "," + entityGen.GenDigest + "\n"))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -496,8 +496,7 @@ func digestMicrodataFrom(modelDef *ModelMeta, runMeta *RunMeta, entityName, genD
 	cvtMicro := &CellMicroConverter{
 		ModelDef:  modelDef,
 		Name:      entityName,
-		RunDef:    runMeta,
-		GenDigest: genDigest,
+		EntityGen: entityGen,
 		IsIdCsv:   true,
 		DoubleFmt: doubleFmt,
 	}

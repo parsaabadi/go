@@ -128,3 +128,59 @@ func (mc *ModelCatalog) ReadOutTableTo(dn, src string, layout *db.ReadTableLayou
 
 	return lt, true
 }
+
+// ReadMicrodataTo select "page" of microdata values from model run and pass each row into cvtWr().
+// Microdata identified by model digest-or-name, run digest-or-stamp-or-name and entity name.
+// Page of values is a rows from microdata value table started at zero based offset row
+// and up to max page size rows, if page size <= 0 then all values returned.
+// Rows can be filtered and ordered (see db.ReadMicroLayout for details).
+func (mc *ModelCatalog) ReadMicrodataTo(dn string, layout *db.ReadMicroLayout, cvtWr func(src interface{}) (bool, error)) (*db.ReadPageLayout, bool) {
+
+	// validate parameters and return empty results on empty input
+	if dn == "" {
+		omppLog.Log("Warning: invalid (empty) model digest and name")
+		return nil, false
+	}
+	if layout.Name == "" {
+		omppLog.Log("Warning: invalid (empty) model entity name")
+		return nil, false
+	}
+	if layout.FromId <= 0 {
+		omppLog.Log("Warning: model run not found: ", layout.Name, ": ", dn)
+		return nil, false
+	}
+	if layout.GenDigest == "" {
+		omppLog.Log("Warning: invalid (empty) run entity generation digest of: ", layout.Name, ": ", dn)
+		return nil, false
+	}
+
+	// load model metadata and return index in model catalog
+	if _, ok := mc.loadModelMeta(dn); !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return nil, false // return empty result: model not found or error
+	}
+
+	// lock catalog and search model entity by name
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return nil, false // return empty result: model not found or error
+	}
+
+	if _, ok := mc.modelLst[idx].meta.EntityByName(layout.Name); !ok {
+		omppLog.Log("Warning: model entity not found: ", layout.Name)
+		return nil, false
+	}
+
+	// read microdata values page
+	lt, err := db.ReadMicrodataTo(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, layout, cvtWr)
+	if err != nil {
+		omppLog.Log("Error at read microdata: ", dn, ": ", layout.Name, ": ", layout.GenDigest, ": ", err.Error())
+		return nil, false // return empty result: values select error
+	}
+
+	return lt, true
+}

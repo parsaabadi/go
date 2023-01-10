@@ -886,6 +886,18 @@ func apiReadCsvRoutes(router *vestigo.Router) {
 	// GET /api/model/:model/run/:run/parameter/:name/csv-id-bom
 	router.Get("/api/model/:model/run/:run/parameter/:name/csv-id-bom", runParameterIdCsvBomGetHandler, logRequest)
 
+	// GET /api/model/:model/run/:run/microdata/:name/csv
+	router.Get("/api/model/:model/run/:run/microdata/:name/csv", runMicrodataCsvGetHandler, logRequest)
+
+	// GET /api/model/:model/run/:run/microdata/:name/csv-bom
+	router.Get("/api/model/:model/run/:run/microdata/:name/csv-bom", runMicrodataCsvBomGetHandler, logRequest)
+
+	// GET /api/model/:model/run/:run/microdata/:name/csv-id
+	router.Get("/api/model/:model/run/:run/microdata/:name/csv-id", runMicrodataIdCsvGetHandler, logRequest)
+
+	// GET /api/model/:model/run/:run/microdata/:name/csv-id-bom
+	router.Get("/api/model/:model/run/:run/microdata/:name/csv-id-bom", runMicrodataIdCsvBomGetHandler, logRequest)
+
 	// GET /api/model/:model/run/:run/table/:name/expr/csv
 	router.Get("/api/model/:model/run/:run/table/:name/expr/csv", runTableExprCsvGetHandler, logRequest)
 

@@ -276,3 +276,110 @@ func (mc *ModelCatalog) TableToCsvConverter(dn string, isCode bool, name string,
 
 	return hdr, cvt, true
 }
+
+// MicrodataToCsvConverter return model run id, entity generation digest, microdata cell to csv converter and csv header as starting array.
+func (mc *ModelCatalog) MicrodataToCsvConverter(dn string, isCode bool, rdsn, name string) (int, string, []string, func(interface{}, []string) error, bool) {
+
+	// validate parameters and return empty results on empty input
+	if dn == "" {
+		omppLog.Log("Warning: invalid (empty) model digest and name")
+		return 0, "", []string{}, nil, false
+	}
+	if rdsn == "" {
+		omppLog.Log("Warning: invalid (empty) model run digest, stamp and name")
+		return 0, "", []string{}, nil, false
+	}
+	if name == "" {
+		omppLog.Log("Warning: invalid (empty) model entity name")
+		return 0, "", []string{}, nil, false
+	}
+
+	// load model metadata and return index in model catalog
+	if _, ok := mc.loadModelMeta(dn); !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return 0, "", []string{}, nil, false // return empty result: model not found or error
+	}
+
+	// lock catalog and search model output table by name
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigestOrName(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return 0, "", []string{}, nil, false // return empty result: model not found or error
+	}
+
+	// find model entity by entity name
+	eIdx, ok := mc.modelLst[idx].meta.EntityByName(name)
+	if !ok {
+		omppLog.Log("Warning: model entity not found: ", name)
+		return 0, "", []string{}, nil, false
+	}
+	ent := &mc.modelLst[idx].meta.Entity[eIdx]
+
+	// get run_lst db row by digest, stamp or run name
+	r, err := db.GetRunByDigestOrStampOrName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, rdsn)
+	if err != nil {
+		omppLog.Log("Error at get run status: ", dn, ": ", rdsn, ": ", err.Error())
+		return 0, "", []string{}, nil, false // return empty result: run select error
+	}
+	if r == nil {
+		return 0, "", []string{}, nil, false // return empty result: run_lst row not found
+	}
+	if !db.IsRunCompleted(r.Status) {
+		omppLog.Log("Warning: run is not completed: ", rdsn, ": ", r.Status)
+		return r.RunId, "", []string{}, nil, false
+	}
+
+	// find entity generation by entity name
+	egLst, err := db.GetEntityGenList(mc.modelLst[idx].dbConn, r.RunId)
+	if err != nil {
+		omppLog.Log("Error at get run entities: ", dn, ": ", rdsn, ": ", err.Error())
+		return r.RunId, "", []string{}, nil, false
+	}
+
+	gIdx := -1
+	for k := range egLst {
+
+		if egLst[k].EntityId == ent.EntityId {
+			gIdx = k
+			break
+		}
+	}
+	if gIdx < 0 {
+		omppLog.Log("Error: model run entity generation not found: ", name, ": ", dn, ": ", rdsn)
+		return r.RunId, "", []string{}, nil, false
+	}
+	entGen := egLst[gIdx]
+
+	// make csv header
+	cvtMicro := &db.CellMicroConverter{
+		ModelDef:  mc.modelLst[idx].meta,
+		Name:      name,
+		EntityGen: &entGen,
+		IsIdCsv:   !isCode,
+		DoubleFmt: theCfg.doubleFmt,
+	}
+
+	hdr, err := cvtMicro.CsvHeader()
+	if err != nil {
+		omppLog.Log("Failed to make microdata csv header: ", dn, ": ", name, ": ", err.Error())
+		return r.RunId, "", []string{}, nil, false
+	}
+
+	// create converter from db cell into csv row []string
+	var cvt func(interface{}, []string) error
+
+	if isCode {
+		cvt, err = cvtMicro.ToCsvRow()
+	} else {
+		cvt, err = cvtMicro.ToCsvIdRow()
+	}
+	if err != nil {
+		omppLog.Log("Failed to create microdata converter to csv: ", dn, ": ", name, ": ", err.Error())
+		return r.RunId, "", []string{}, nil, false
+	}
+
+	return r.RunId, entGen.GenDigest, hdr, cvt, true
+}

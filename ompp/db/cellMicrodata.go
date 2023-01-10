@@ -36,8 +36,7 @@ type attrValue struct {
 type CellMicroConverter struct {
 	ModelDef  *ModelMeta      // model metadata
 	Name      string          // model entity name
-	RunDef    *RunMeta        // model run metadata
-	GenDigest string          // entity generation digest
+	EntityGen *EntityGenMeta  // model run entity generation
 	IsIdCsv   bool            // if true then use enum id's else use enum codes
 	DoubleFmt string          // if not empty then format string is used to sprintf if value type is float, double, long double
 	theEntity *EntityMeta     // if not nil then entity found
@@ -356,8 +355,8 @@ func (cellCvt *CellMicroConverter) entityAttrs() (*EntityMeta, []EntityAttrRow, 
 		return cellCvt.theEntity, cellCvt.theAttrs, nil // attributes already found
 	}
 	// validate parameters
-	if cellCvt.RunDef == nil {
-		return nil, []EntityAttrRow{}, errors.New("invalid (empty) run metadata, look like model run not found or there is no microdata: " + cellCvt.Name)
+	if cellCvt.EntityGen == nil {
+		return nil, []EntityAttrRow{}, errors.New("invalid (empty) entity generation metadata, look like model run not found or there is no microdata: " + cellCvt.Name)
 	}
 
 	// find entity by name and entity generation by Hid
@@ -366,17 +365,10 @@ func (cellCvt *CellMicroConverter) entityAttrs() (*EntityMeta, []EntityAttrRow, 
 		return nil, []EntityAttrRow{}, err
 	}
 
-	// find entity generation in model run by generation digest
-	idx, ok := cellCvt.RunDef.EntityGenByDigest(cellCvt.GenDigest)
-	if !ok {
-		return nil, []EntityAttrRow{}, errors.New("entity microdata generation not found by digest: " + cellCvt.GenDigest + " " + cellCvt.Name)
-	}
-	entGen := &cellCvt.RunDef.EntityGen[idx]
-
 	// collect generation attribues
-	attrs := make([]EntityAttrRow, len(entGen.GenAttr))
+	attrs := make([]EntityAttrRow, len(cellCvt.EntityGen.GenAttr))
 
-	for k, ga := range entGen.GenAttr {
+	for k, ga := range cellCvt.EntityGen.GenAttr {
 
 		aIdx, ok := ent.AttrByKey(ga.AttrId)
 		if !ok {

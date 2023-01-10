@@ -298,3 +298,99 @@ func doTableGetCsvHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllAc
 	}
 	csvWr.Flush() // flush csv to response
 }
+
+// runMicrodataCsvGetHandler read a microdata values from model run results and write it as csv response.
+// GET /api/model/:model/run/:run/microdata/:name/csv
+// Enum-based microdata attributes returned as enum codes.
+func runMicrodataCsvGetHandler(w http.ResponseWriter, r *http.Request) {
+	doMicrodataGetCsvHandler(w, r, true, false)
+}
+
+// runMicrodataCsvBomGetHandler read a microdata values from model run results and write it as csv response.
+// GET /api/model/:model/run/:run/microdata/:name/csv-bom
+// Enum-based microdata attributes returned as enum codes.
+// Response starts from utf-8 BOM bytes.
+func runMicrodataCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
+	doMicrodataGetCsvHandler(w, r, true, true)
+}
+
+// runMicrodataIdCsvGetHandler read a microdata values from model run results and write it as csv response.
+// GET /api/model/:model/run/:run/microdata/:name/csv-id
+// Enum-based microdata attributes returned as enum id's.
+func runMicrodataIdCsvGetHandler(w http.ResponseWriter, r *http.Request) {
+	doMicrodataGetCsvHandler(w, r, false, false)
+}
+
+// runMicrodataIdCsvBomGetHandler read a microdata values from model run results and write it as csv response.
+// GET /api/model/:model/run/:run/microdata/:name/csv-id-bom
+// Enum-based microdata attributes returned as enum id's.
+// Response starts from utf-8 BOM bytes.
+func runMicrodataIdCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
+	doMicrodataGetCsvHandler(w, r, false, true)
+}
+
+// doMicrodataGetCsvHandler read microdata values from model run and write it as csv response.
+// It does read all microdata values, not a "page" of values.
+// Enum-based microdata attributes returned as enum codes or enum id's.
+func doMicrodataGetCsvHandler(w http.ResponseWriter, r *http.Request, isCode, isBom bool) {
+
+	// url or query parameters
+	dn := getRequestParam(r, "model")  // model digest-or-name
+	rdsn := getRequestParam(r, "run")  // run digest-or-stamp-or-name
+	name := getRequestParam(r, "name") // entity name
+
+	// get converter from cell list to csv rows []string
+	runId, genDigest, hdr, cvtRow, ok := theCatalog.MicrodataToCsvConverter(dn, isCode, rdsn, name)
+	if !ok {
+		http.Error(w, "Failed to create microdata csv converter: "+rdsn+": "+name, http.StatusBadRequest)
+		return
+	}
+
+	// read microdata values, page size =0: read all values
+	layout := db.ReadMicroLayout{
+		ReadLayout: db.ReadLayout{
+			Name:   name,
+			FromId: runId,
+		},
+		GenDigest: genDigest,
+	}
+
+	// set response headers: Content-Disposition: attachment; filename=name.csv
+	csvSetHeaders(w, name)
+
+	// write csv body
+	if isBom {
+		if _, err := w.Write(helper.Utf8bom); err != nil {
+			http.Error(w, "Error at csv write: "+rdsn+": "+name, http.StatusBadRequest)
+			return
+		}
+	}
+
+	csvWr := csv.NewWriter(w)
+
+	if err := csvWr.Write(hdr); err != nil {
+		http.Error(w, "Error at csv write: "+rdsn+": "+name, http.StatusBadRequest)
+		return
+	}
+
+	// convert output table cell into []string and write line into csv file
+	cs := make([]string, len(hdr))
+
+	cvtWr := func(c interface{}) (bool, error) {
+
+		if err := cvtRow(c, cs); err != nil {
+			return false, err
+		}
+		if err := csvWr.Write(cs); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+
+	_, ok = theCatalog.ReadMicrodataTo(dn, &layout, cvtWr)
+	if !ok {
+		http.Error(w, "Error at microdata read: "+rdsn+": "+name, http.StatusBadRequest)
+		return
+	}
+	csvWr.Flush() // flush csv to response
+}

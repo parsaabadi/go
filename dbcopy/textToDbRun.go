@@ -398,8 +398,7 @@ func fromRunTextToDb(
 			cvtMicro := db.CellMicroConverter{
 				ModelDef:  modelDef,
 				Name:      pub.Entity[j].Name,
-				RunDef:    meta,
-				GenDigest: meta.EntityGen[j].GenDigest, // entity generation converted from "public" and has the same item order
+				EntityGen: &meta.EntityGen[j], // entity generation converted from "public" and has the same item order
 				IsIdCsv:   false,
 				DoubleFmt: doubleFmt,
 			}

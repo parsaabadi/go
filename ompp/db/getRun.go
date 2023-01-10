@@ -457,8 +457,8 @@ func getRunProgress(dbConn *sql.DB, query string) ([]runProgressRow, error) {
 	return rpLst, nil
 }
 
-// getEntityGen return entity generation rows by run id: entity_gen and entity_gen_attr table rows.
-func getEntityGen(dbConn *sql.DB, runId int) ([]EntityGenMeta, error) {
+// GetEntityGenList return entity generation rows by run id: entity_gen and entity_gen_attr table rows.
+func GetEntityGenList(dbConn *sql.DB, runId int) ([]EntityGenMeta, error) {
 
 	genLst := []EntityGenMeta{}
 
@@ -639,7 +639,7 @@ func GetRunFull(dbConn *sql.DB, runRow *RunRow) (*RunMeta, error) {
 	meta.Progress = rpRs
 
 	// get entity generation and run entity for that run id
-	egLst, err := getEntityGen(dbConn, runRow.RunId)
+	egLst, err := GetEntityGenList(dbConn, runRow.RunId)
 	if err != nil {
 		return nil, err
 	}
@@ -799,7 +799,7 @@ func GetRunFullText(dbConn *sql.DB, runRow *RunRow, isSuccess bool, langCode str
 	meta.Progress = rpRs
 
 	// get entity generation and run entity for that run id
-	egLst, err := getEntityGen(dbConn, runRow.RunId)
+	egLst, err := GetEntityGenList(dbConn, runRow.RunId)
 	if err != nil {
 		return nil, err
 	}

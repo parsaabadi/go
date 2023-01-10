@@ -334,8 +334,7 @@ func toRunText(
 			cvtMicro := &db.CellMicroConverter{
 				ModelDef:  modelDef,
 				Name:      modelDef.Entity[eIdx].Name,
-				RunDef:    meta,
-				GenDigest: meta.EntityGen[j].GenDigest,
+				EntityGen: &meta.EntityGen[j],
 				IsIdCsv:   isIdCsv,
 				DoubleFmt: doubleFmt,
 			}
