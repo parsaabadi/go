@@ -14,15 +14,15 @@ import (
 // CellMicro is a row of entity microdata: entity_key and attribute values,
 // if attribute type is enum based value is enum id
 type CellMicro struct {
-	Key  uint64      // microdata key, part of row primary key: entity_key
-	Attr []attrValue // attributes value: built-in type value or enum id
+	Key   uint64      // microdata key, part of row primary key: entity_key
+	Attrs []attrValue // attributes value: built-in type value or enum id
 }
 
 // CellCodeMicro is a row of entity microdata: entity_key and attribute values,
 // if attribute type is enum based value is enum code
 type CellCodeMicro struct {
 	Key   uint64      // microdata key, part of row primary key: entity_key
-	Attrs []attrValue // attributes value: built-in type value or enum id
+	Attrs []attrValue // attributes value: built-in type value or enum code
 }
 
 // Entity attribute value: value of built-in type or enum value,
@@ -115,14 +115,14 @@ func (cellCvt *CellMicroConverter) ToCsvIdRow() (func(interface{}, []string) err
 			return errors.New("invalid type, expected: CellMicro (internal error): " + cellCvt.Name)
 		}
 
-		n := len(cell.Attr)
+		n := len(cell.Attrs)
 		if n != nAttr || len(row) != n+1 {
 			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(nAttr+1) + ": " + cellCvt.Name)
 		}
 
 		row[0] = fmt.Sprint(cell.Key) // first column is entity microdata key
 
-		for k, a := range cell.Attr {
+		for k, a := range cell.Attrs {
 
 			// use "null" string for db NULL values
 			if a.IsNull || a.Value == nil {
@@ -195,14 +195,14 @@ func (cellCvt *CellMicroConverter) ToCsvRow() (func(interface{}, []string) error
 			return errors.New("invalid type, expected: CellMicro (internal error): " + cellCvt.Name)
 		}
 
-		n := len(cell.Attr)
+		n := len(cell.Attrs)
 		if n != nAttr || len(row) != n+1 {
 			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(nAttr+1) + ": " + cellCvt.Name)
 		}
 
 		row[0] = fmt.Sprint(cell.Key) // first column is entity microdata key
 
-		for k, a := range cell.Attr {
+		for k, a := range cell.Attrs {
 
 			// use "null" string for db NULL values
 			if a.IsNull || a.Value == nil {
@@ -235,8 +235,8 @@ func (cellCvt *CellMicroConverter) CsvToCell() (func(row []string) (interface{},
 	nAttr := len(attrs)
 
 	// convert attributes string to value:
-	// for built-in attribute type use Sprint() or Sprintf(double format)
-	// for enum attribute type return enum code by enum id
+	// for built-in attribute type use ParseFloat(), ParseBool() or Atoi()
+	// for enum attribute type return enum id by code
 	fd := make([]func(src string) (interface{}, error), nAttr)
 
 	for k, ea := range attrs {
@@ -286,9 +286,9 @@ func (cellCvt *CellMicroConverter) CsvToCell() (func(row []string) (interface{},
 	// return converter from csv strings into microdata key and attribute values
 	cvt := func(row []string) (interface{}, error) {
 
-		cell := CellMicro{Attr: make([]attrValue, nAttr)}
+		cell := CellMicro{Attrs: make([]attrValue, nAttr)}
 
-		n := len(cell.Attr)
+		n := len(cell.Attrs)
 		if n != nAttr || len(row) != n+1 {
 			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(nAttr+1) + ": " + cellCvt.Name)
 		}
@@ -307,19 +307,212 @@ func (cellCvt *CellMicroConverter) CsvToCell() (func(row []string) (interface{},
 		// convert attributes
 		for k := 0; k < nAttr; k++ {
 
-			cell.Attr[k].IsNull = row[k+1] == "" || row[k+1] == "null"
+			cell.Attrs[k].IsNull = row[k+1] == "" || row[k+1] == "null"
 
-			if !cell.Attr[k].IsNull {
+			if !cell.Attrs[k].IsNull {
 				v, e := fd[k](row[k+1])
 				if e != nil {
 					return nil, err
 				}
-				cell.Attr[k].Value = v
+				cell.Attrs[k].Value = v
 			}
 		}
 
 		return cell, nil
 	}
+	return cvt, nil
+}
+
+// IdToCodeCell return converter
+// from microdata cell of ids: (entity key, attributes as built-in values or enum id's)
+// into cell of codes: (entity key, attributes as built-in values or enum codes)
+//
+// If attribute type is enum based then attribute enum id converted to enum code.
+// If attribute type is built-in (bool, int, float) then attribute value converted to string.
+func (cellCvt *CellMicroConverter) IdToCodeCell(modelDef *ModelMeta, _ string) (func(interface{}) (interface{}, error), error) {
+
+	// find entity metadata by entity name and attributes by generation Hid
+	_, attrs, err := cellCvt.entityAttrs()
+	if err != nil {
+		return nil, err
+	}
+	nAttr := len(attrs)
+
+	// convert attributes value to string:
+	// for built-in attribute type use Sprint() or Sprintf(double format)
+	// for enum attribute type return enum code by enum id
+	fd := make([]func(v interface{}) (string, error), nAttr)
+
+	for k, ea := range attrs {
+
+		if ea.typeOf.IsBuiltIn() { // built-in attribute type: format value by Sprint()
+
+			// for float attributes use format if specified
+			if cellCvt.DoubleFmt != "" && ea.typeOf.IsFloat() {
+
+				fd[k] = func(v interface{}) (string, error) { return fmt.Sprintf(cellCvt.DoubleFmt, v), nil }
+			} else {
+				fd[k] = func(v interface{}) (string, error) { return fmt.Sprint(v), nil }
+			}
+		} else { // enum based attribute type: frind and return enum code by enum id
+
+			msgName := cellCvt.Name + "." + ea.Name // for error message, ex: Person.Income
+			f, err := ea.typeOf.itemIdToCode(msgName, false)
+			if err != nil {
+				return nil, err
+			}
+
+			fd[k] = func(v interface{}) (string, error) { // convereter retrun enum code by enum id
+
+				// depending on sql + driver it can be different type
+				if iv, ok := helper.ToIntValue(v); ok {
+					return f(iv)
+				} else {
+					return "", errors.New("invalid attribute value, must be integer enum id: " + msgName)
+				}
+			}
+		}
+	}
+
+	// create cell converter
+	cvt := func(src interface{}) (interface{}, error) {
+
+		srcCell, ok := src.(CellMicro)
+		if !ok {
+			return nil, errors.New("invalid type, expected: microdata cell (internal error): " + cellCvt.Name)
+		}
+		if len(srcCell.Attrs) != nAttr {
+			return nil, errors.New("invalid number of attributes, expected: " + strconv.Itoa(nAttr) + ": " + cellCvt.Name)
+		}
+
+		dstCell := CellCodeMicro{
+			Key:   srcCell.Key,
+			Attrs: make([]attrValue, nAttr),
+		}
+
+		// convert attributes enum id's to enum codes or built-in values to string
+		for k, a := range srcCell.Attrs {
+
+			if a.IsNull || a.Value == nil {
+				dstCell.Attrs[k] = attrValue{IsNull: true, Value: nil}
+			} else {
+				if s, e := fd[k](a.Value); e != nil { // use attribute value converter
+					return nil, err
+				} else {
+					dstCell.Attrs[k].Value = s
+				}
+			}
+		}
+
+		return dstCell, nil // converted OK
+	}
+
+	return cvt, nil
+}
+
+// CodeToIdCell return converter
+// from parameter cell of codes: (entity key, attributes as built-in values or enum codes)
+// to cell of ids: (entity key, attributes as built-in values or enum id's)
+//
+// If attribute type is enum based then attribute enum codes converted to enum ids.
+// If attribute type is built-in (bool, int, float) then attribute value converted from string to attribute type.
+func (cellCvt *CellMicroConverter) CodeToIdCell(modelDef *ModelMeta, _ string) (func(interface{}) (interface{}, error), error) {
+
+	// find entity metadata by entity name and attributes by generation Hid
+	_, attrs, err := cellCvt.entityAttrs()
+	if err != nil {
+		return nil, err
+	}
+	nAttr := len(attrs)
+
+	// convert attributes string to value:
+	// for built-in attribute type use ParseFloat(), ParseBool() or Atoi()
+	// for enum attribute type return enum id by code
+	fd := make([]func(src string) (interface{}, error), nAttr)
+
+	for k, ea := range attrs {
+
+		msgName := cellCvt.Name + "." + ea.Name // for error message, ex: Person.Income
+
+		// attribute type to create converter
+
+		switch {
+		case !ea.typeOf.IsBuiltIn(): // enum based attribute type: frind and return enum id by enum code
+
+			f, err := ea.typeOf.itemCodeToId(msgName, false)
+			if err != nil {
+				return nil, err
+			}
+
+			fd[k] = func(src string) (interface{}, error) { // convereter retrun enum id by code
+				return f(src)
+			}
+
+		case ea.typeOf.IsFloat(): // float types, only 64 or 32 bits supported
+
+			n := 64
+			if ea.typeOf.IsFloat32() {
+				n = 32
+			}
+
+			fd[k] = func(src string) (interface{}, error) { // convereter retrun enum id by code
+				vf, e := strconv.ParseFloat(src, n)
+				if e != nil {
+					return 0.0, e
+				}
+				return vf, nil
+			}
+
+		case ea.typeOf.IsBool():
+			fd[k] = func(src string) (interface{}, error) { return strconv.ParseBool(src) }
+		case ea.typeOf.IsString():
+			fd[k] = func(src string) (interface{}, error) { return src, nil }
+		case ea.typeOf.IsInt():
+			fd[k] = func(src string) (interface{}, error) { return strconv.Atoi(src) }
+		default:
+			return nil, errors.New("invalid (not supported) entity attribute type: " + msgName)
+		}
+	}
+
+	// create cell converter
+	cvt := func(src interface{}) (interface{}, error) {
+
+		srcCell, ok := src.(CellCodeMicro)
+		if !ok {
+			return nil, errors.New("invalid type, expected: parameter code cell (internal error): " + cellCvt.Name)
+		}
+		if len(srcCell.Attrs) != nAttr {
+			return nil, errors.New("invalid number of attributes, expected: " + strconv.Itoa(nAttr) + ": " + cellCvt.Name)
+		}
+
+		dstCell := CellCodeMicro{
+			Key:   srcCell.Key,
+			Attrs: make([]attrValue, nAttr),
+		}
+
+		// convert attributes enum codes to enum id's or built-in values from string
+		for k, a := range srcCell.Attrs {
+
+			if a.IsNull || a.Value == nil {
+				dstCell.Attrs[k] = attrValue{IsNull: true, Value: nil}
+			} else {
+
+				sv, ok := a.Value.(string)
+				if !ok {
+					return nil, errors.New("invalid microdata attribute value type, string expected: " + cellCvt.Name)
+				}
+
+				v, e := fd[k](sv) // use attribute value converter from string
+				if e != nil {
+					return nil, e
+				}
+				dstCell.Attrs[k].Value = v
+			}
+		}
+
+		return dstCell, nil // converted OK
+	}
+
 	return cvt, nil
 }
 

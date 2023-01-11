@@ -11,7 +11,7 @@ import (
 
 // CellExpr is value of output table expression.
 type CellExpr struct {
-	cellIdValue     // dimensions and value
+	cellIdValue     // dimensions as enum id's and value
 	ExprId      int // output table expression id
 }
 

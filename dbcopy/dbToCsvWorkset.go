@@ -21,6 +21,7 @@ func toWorksetListCsv(
 	dbConn *sql.DB,
 	modelDef *db.ModelMeta,
 	outDir string,
+	fileCreated map[string]bool,
 	doubleFmt string,
 	isIdCsv bool,
 	isWriteUtf8bom bool,
@@ -34,11 +35,10 @@ func toWorksetListCsv(
 	}
 
 	// read all workset parameters and dump it into csv files
-	fu := make([]bool, len(modelDef.Param))
 	for k := range wl {
 
 		err := toWorksetCsv(
-			dbConn, modelDef, &wl[k], outDir, doubleFmt, isIdCsv, isWriteUtf8bom, isUseIdNames, fu, isAllInOne)
+			dbConn, modelDef, &wl[k], outDir, fileCreated, doubleFmt, isIdCsv, isWriteUtf8bom, isUseIdNames, isAllInOne)
 		if err != nil {
 			return err
 		}
@@ -230,11 +230,11 @@ func toWorksetCsv(
 	modelDef *db.ModelMeta,
 	meta *db.WorksetMeta,
 	outDir string,
+	fileCreated map[string]bool,
 	doubleFmt string,
 	isIdCsv bool,
 	isWriteUtf8bom bool,
 	isUseIdNames bool,
-	firstUse []bool,
 	isAllInOne bool) error {
 
 	// create workset subdir under output dir
@@ -299,14 +299,13 @@ func toWorksetCsv(
 
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nP, ": ", paramLt.Name)
 
-		err = toCellCsvFile(dbConn, modelDef, paramLt, cvtParam, firstUse[idx] && isAllInOne, csvDir, isWriteUtf8bom, firstCol, firstVal)
+		err = toCellCsvFile(dbConn, modelDef, paramLt, cvtParam, fileCreated, csvDir, isWriteUtf8bom, firstCol, firstVal)
 		if err != nil {
 			return err
 		}
 		if err != nil {
 			return err
 		}
-		firstUse[idx] = true
 	}
 
 	// write each workset parameter value notes into parameterName.LANG.md file

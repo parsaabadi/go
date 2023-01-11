@@ -782,22 +782,24 @@ func apiGetRoutes(router *vestigo.Router) {
 func apiReadRoutes(router *vestigo.Router) {
 
 	// POST /api/model/:model/workset/:set/parameter/value
-	router.Post("/api/model/:model/workset/:set/parameter/value", worksetParameterPageReadHandler, logRequest)
-
 	// POST /api/model/:model/workset/:set/parameter/value-id
+	router.Post("/api/model/:model/workset/:set/parameter/value", worksetParameterPageReadHandler, logRequest)
 	router.Post("/api/model/:model/workset/:set/parameter/value-id", worksetParameterIdPageReadHandler, logRequest)
 
 	// POST /api/model/:model/run/:run/parameter/value
-	router.Post("/api/model/:model/run/:run/parameter/value", runParameterPageReadHandler, logRequest)
-
 	// POST /api/model/:model/run/:run/parameter/value-id
+	router.Post("/api/model/:model/run/:run/parameter/value", runParameterPageReadHandler, logRequest)
 	router.Post("/api/model/:model/run/:run/parameter/value-id", runParameterIdPageReadHandler, logRequest)
 
 	// POST /api/model/:model/run/:run/table/value
-	router.Post("/api/model/:model/run/:run/table/value", runTablePageReadHandler, logRequest)
-
 	// POST /api/model/:model/run/:run/table/value-id
+	router.Post("/api/model/:model/run/:run/table/value", runTablePageReadHandler, logRequest)
 	router.Post("/api/model/:model/run/:run/table/value-id", runTableIdPageReadHandler, logRequest)
+
+	// POST /api/model/:model/run/:run/microdata/value
+	// POST /api/model/:model/run/:run/microdata/value-id
+	router.Post("/api/model/:model/run/:run/microdata/value", runMicrodataPageReadHandler, logRequest)
+	router.Post("/api/model/:model/run/:run/microdata/value-id", runMicrodataIdPageReadHandler, logRequest)
 
 	// GET /api/model/:model/workset/:set/parameter/:name/value
 	// GET /api/model/:model/workset/:set/parameter/:name/value/start/:start

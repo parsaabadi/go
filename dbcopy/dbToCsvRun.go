@@ -26,8 +26,8 @@ func toRunCsv(
 	isIdCsv bool,
 	isWriteUtf8bom bool,
 	isUseIdNames bool,
-	isNextRun bool,
 	isAllInOne bool,
+	fileCreated map[string]bool,
 	isWriteAcc bool,
 	isWriteMicro bool) error {
 
@@ -99,7 +99,7 @@ func toRunCsv(
 
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nP, ": ", paramLt.Name)
 
-		err = toCellCsvFile(dbConn, modelDef, paramLt, cvtParam, isNextRun && isAllInOne, paramCsvDir, isWriteUtf8bom, firstCol, firstVal)
+		err = toCellCsvFile(dbConn, modelDef, paramLt, cvtParam, fileCreated, paramCsvDir, isWriteUtf8bom, firstCol, firstVal)
 		if err != nil {
 			return err
 		}
@@ -171,7 +171,7 @@ func toRunCsv(
 
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name)
 
-		err = toCellCsvFile(dbConn, modelDef, tblLt, cvtExpr, isNextRun && isAllInOne, tableCsvDir, isWriteUtf8bom, firstCol, firstVal)
+		err = toCellCsvFile(dbConn, modelDef, tblLt, cvtExpr, fileCreated, tableCsvDir, isWriteUtf8bom, firstCol, firstVal)
 		if err != nil {
 			return err
 		}
@@ -184,7 +184,7 @@ func toRunCsv(
 
 			logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name, " accumulators")
 
-			err = toCellCsvFile(dbConn, modelDef, tblLt, cvtAcc, isNextRun && isAllInOne, tableCsvDir, isWriteUtf8bom, firstCol, firstVal)
+			err = toCellCsvFile(dbConn, modelDef, tblLt, cvtAcc, fileCreated, tableCsvDir, isWriteUtf8bom, firstCol, firstVal)
 			if err != nil {
 				return err
 			}
@@ -195,7 +195,7 @@ func toRunCsv(
 
 			logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name, " all accumulators")
 
-			err = toCellCsvFile(dbConn, modelDef, tblLt, cvtAll, isNextRun && isAllInOne, tableCsvDir, isWriteUtf8bom, firstCol, firstVal)
+			err = toCellCsvFile(dbConn, modelDef, tblLt, cvtAll, fileCreated, tableCsvDir, isWriteUtf8bom, firstCol, firstVal)
 			if err != nil {
 				return err
 			}
@@ -232,7 +232,7 @@ func toRunCsv(
 
 			logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nMd, ": ", microLt.Name)
 
-			err = toCellCsvFile(dbConn, modelDef, microLt, cvtMicro, isNextRun && isAllInOne, microCsvDir, isWriteUtf8bom, firstCol, firstVal)
+			err = toCellCsvFile(dbConn, modelDef, microLt, cvtMicro, fileCreated, microCsvDir, isWriteUtf8bom, firstCol, firstVal)
 			if err != nil {
 				return err
 			}

@@ -387,7 +387,7 @@ func doMicrodataGetCsvHandler(w http.ResponseWriter, r *http.Request, isCode, is
 		return true, nil
 	}
 
-	_, ok = theCatalog.ReadMicrodataTo(dn, &layout, cvtWr)
+	_, ok = theCatalog.ReadMicrodataTo(dn, rdsn, &layout, cvtWr)
 	if !ok {
 		http.Error(w, "Error at microdata read: "+rdsn+": "+name, http.StatusBadRequest)
 		return

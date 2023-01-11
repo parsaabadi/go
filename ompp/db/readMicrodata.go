@@ -118,13 +118,13 @@ func ReadMicrodataTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadMicroLayou
 		// find attribute index by name
 		aIdx := -1
 		for j := range entityAttrs {
-			if entityAttrs[j].Name == layout.Filter[k].Name {
+			if entityAttrs[j].Name == layout.FilterById[k].Name {
 				aIdx = j
 				break
 			}
 		}
 		if aIdx < 0 {
-			return nil, errors.New("entity " + entity.Name + " does not have attribute " + layout.Filter[k].Name)
+			return nil, errors.New("entity " + entity.Name + " does not have attribute " + layout.FilterById[k].Name)
 		}
 
 		f, err := makeWhereIdFilter(
@@ -180,7 +180,7 @@ func ReadMicrodataTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadMicroLayou
 			lt.Size++
 
 			// make new cell from conversion buffer
-			c := CellMicro{Attr: make([]attrValue, len(entityAttrs))}
+			c := CellMicro{Attrs: make([]attrValue, len(entityAttrs))}
 
 			if e := fc(&c); e != nil {
 				return false, e
@@ -216,7 +216,7 @@ func trxReadMicrodataTo(trx *sql.Tx, entity *EntityMeta, entityAttrs []EntityAtt
 			}
 
 			// make new cell from conversion buffer
-			c := CellMicro{Attr: make([]attrValue, len(entityAttrs))}
+			c := CellMicro{Attrs: make([]attrValue, len(entityAttrs))}
 
 			if e := fc(&c); e != nil {
 				return e
@@ -340,7 +340,7 @@ func scanSqlRowToCellMicro(entity *EntityMeta, entityAttrs []EntityAttrRow) ([]i
 			if e != nil {
 				return e
 			}
-			c.Attr[k] = v
+			c.Attrs[k] = v
 		}
 		return nil
 	}

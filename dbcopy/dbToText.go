@@ -45,6 +45,7 @@ func dbToText(modelName string, modelDigest string, runOpts *config.RunOptions) 
 	if err != nil {
 		return err
 	}
+	fileCreated := make(map[string]bool)
 
 	// write model definition to json file
 	if err = toModelJson(srcDb, modelDef, outDir); err != nil {
@@ -71,12 +72,12 @@ func dbToText(modelName string, modelDigest string, runOpts *config.RunOptions) 
 	isWriteAcc := !runOpts.Bool(noAccCsv)
 	isWriteMicro := !runOpts.Bool(noMicroCsv)
 
-	if isIdNames, err = toRunListText(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom, doUseIdNames, isWriteAcc, isWriteMicro); err != nil {
+	if isIdNames, err = toRunListText(srcDb, modelDef, outDir, fileCreated, dblFmt, isIdCsv, isWriteUtf8bom, doUseIdNames, isWriteAcc, isWriteMicro); err != nil {
 		return err
 	}
 
 	// write all readonly workset data into csv files: input parameters
-	if err = toWorksetListText(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom, isIdNames); err != nil {
+	if err = toWorksetListText(srcDb, modelDef, outDir, fileCreated, dblFmt, isIdCsv, isWriteUtf8bom, isIdNames); err != nil {
 		return err
 	}
 
@@ -151,7 +152,7 @@ func toCellCsvFile(
 	modelDef *db.ModelMeta,
 	readLayout interface{},
 	csvCvt db.CsvConverter,
-	isAppend bool,
+	fileCreated map[string]bool,
 	csvDir string,
 	isWriteUtf8bom bool,
 	extraFirstName string,
@@ -174,16 +175,19 @@ func toCellCsvFile(
 	if err != nil {
 		return err
 	}
+	p := filepath.Join(csvDir, fn)
+	_, isAppend := fileCreated[p]
 
 	flag := os.O_CREATE | os.O_TRUNC | os.O_WRONLY
 	if isAppend {
 		flag = os.O_APPEND | os.O_WRONLY
 	}
 
-	f, err := os.OpenFile(filepath.Join(csvDir, fn), flag, 0644)
+	f, err := os.OpenFile(p, flag, 0644)
 	if err != nil {
 		return err
 	}
+	fileCreated[p] = true
 	defer f.Close()
 
 	if isWriteUtf8bom { // if required then write utf-8 bom

@@ -101,6 +101,7 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 	if err != nil {
 		return err
 	}
+	fileCreated := make(map[string]bool)
 
 	// write model run metadata into json, parameters and output result values into csv files
 	dblFmt := runOpts.String(doubleFormatArgKey)
@@ -109,7 +110,7 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 	isWriteAcc := !runOpts.Bool(noAccCsv)
 	isWriteMicro := !runOpts.Bool(noMicroCsv)
 
-	if err = toRunText(srcDb, modelDef, meta, outDir, csvName, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames, isWriteAcc, isWriteMicro); err != nil {
+	if err = toRunText(srcDb, modelDef, meta, outDir, csvName, fileCreated, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames, isWriteAcc, isWriteMicro); err != nil {
 		return err
 	}
 
@@ -130,6 +131,7 @@ func toRunListText(
 	dbConn *sql.DB,
 	modelDef *db.ModelMeta,
 	outDir string,
+	fileCreated map[string]bool,
 	doubleFmt string,
 	isIdCsv bool,
 	isWriteUtf8bom bool,
@@ -165,7 +167,7 @@ func toRunListText(
 
 	// read all run parameters, output accumulators and expressions and dump it into csv files
 	for k := range rl {
-		err = toRunText(dbConn, modelDef, &rl[k], outDir, "", doubleFmt, isIdCsv, isWriteUtf8bom, isUseIdNames, isWriteAcc, isWriteMicro)
+		err = toRunText(dbConn, modelDef, &rl[k], outDir, "", fileCreated, doubleFmt, isIdCsv, isWriteUtf8bom, isUseIdNames, isWriteAcc, isWriteMicro)
 		if err != nil {
 			return isUseIdNames, err
 		}
@@ -182,6 +184,7 @@ func toRunText(
 	meta *db.RunMeta,
 	outDir string,
 	csvName string,
+	fileCreated map[string]bool,
 	doubleFmt string,
 	isIdCsv bool,
 	isWriteUtf8bom bool,
@@ -245,7 +248,7 @@ func toRunText(
 
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nP, ": ", paramLt.Name)
 
-		err = toCellCsvFile(dbConn, modelDef, paramLt, cvtParam, false, paramCsvDir, isWriteUtf8bom, "", "")
+		err = toCellCsvFile(dbConn, modelDef, paramLt, cvtParam, fileCreated, paramCsvDir, isWriteUtf8bom, "", "")
 		if err != nil {
 			return err
 		}
@@ -287,7 +290,7 @@ func toRunText(
 
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name)
 
-		err = toCellCsvFile(dbConn, modelDef, tblLt, cvtExpr, false, tableCsvDir, isWriteUtf8bom, "", "")
+		err = toCellCsvFile(dbConn, modelDef, tblLt, cvtExpr, fileCreated, tableCsvDir, isWriteUtf8bom, "", "")
 		if err != nil {
 			return err
 		}
@@ -300,7 +303,7 @@ func toRunText(
 
 			logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name, " accumulators")
 
-			err = toCellCsvFile(dbConn, modelDef, tblLt, cvtAcc, false, tableCsvDir, isWriteUtf8bom, "", "")
+			err = toCellCsvFile(dbConn, modelDef, tblLt, cvtAcc, fileCreated, tableCsvDir, isWriteUtf8bom, "", "")
 			if err != nil {
 				return err
 			}
@@ -311,7 +314,7 @@ func toRunText(
 
 			logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name, " all accumulators")
 
-			err = toCellCsvFile(dbConn, modelDef, tblLt, cvtAll, false, tableCsvDir, isWriteUtf8bom, "", "")
+			err = toCellCsvFile(dbConn, modelDef, tblLt, cvtAll, fileCreated, tableCsvDir, isWriteUtf8bom, "", "")
 			if err != nil {
 				return err
 			}
@@ -348,7 +351,7 @@ func toRunText(
 
 			logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nMd, ": ", microLt.Name)
 
-			err = toCellCsvFile(dbConn, modelDef, microLt, cvtMicro, false, microCsvDir, isWriteUtf8bom, "", "")
+			err = toCellCsvFile(dbConn, modelDef, microLt, cvtMicro, fileCreated, microCsvDir, isWriteUtf8bom, "", "")
 			if err != nil {
 				return err
 			}

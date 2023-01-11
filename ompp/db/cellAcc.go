@@ -11,7 +11,7 @@ import (
 
 // CellAcc is value of output table accumulator.
 type CellAcc struct {
-	cellIdValue     // dimensions and value
+	cellIdValue     // dimensions as enum id's and value
 	AccId       int // output table accumulator id
 	SubId       int // output table subvalue id
 }

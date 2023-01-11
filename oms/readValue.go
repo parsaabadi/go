@@ -83,7 +83,7 @@ func (mc *ModelCatalog) ReadParameterTo(dn, src string, layout *db.ReadParamLayo
 // Page started at zero based offset row and up to max page size rows, if page size <= 0 then all values returned.
 // Values can be from expression table, accumulator table or "all accumulators" view.
 // Rows can be filtered and ordered (see db.ReadTableLayout for details).
-func (mc *ModelCatalog) ReadOutTableTo(dn, src string, layout *db.ReadTableLayout, cvtWr func(src interface{}) (bool, error)) (*db.ReadPageLayout, bool) {
+func (mc *ModelCatalog) ReadOutTableTo(dn, rdsn string, layout *db.ReadTableLayout, cvtWr func(src interface{}) (bool, error)) (*db.ReadPageLayout, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
@@ -113,7 +113,7 @@ func (mc *ModelCatalog) ReadOutTableTo(dn, src string, layout *db.ReadTableLayou
 	}
 
 	// find model run id by digest-or-stamp-or-name
-	rst, ok := mc.loadCompletedRunByDigestOrStampOrName(idx, src)
+	rst, ok := mc.loadCompletedRunByDigestOrStampOrName(idx, rdsn)
 	if !ok {
 		return nil, false // return empty result: run select error
 	}
@@ -134,7 +134,7 @@ func (mc *ModelCatalog) ReadOutTableTo(dn, src string, layout *db.ReadTableLayou
 // Page of values is a rows from microdata value table started at zero based offset row
 // and up to max page size rows, if page size <= 0 then all values returned.
 // Rows can be filtered and ordered (see db.ReadMicroLayout for details).
-func (mc *ModelCatalog) ReadMicrodataTo(dn string, layout *db.ReadMicroLayout, cvtWr func(src interface{}) (bool, error)) (*db.ReadPageLayout, bool) {
+func (mc *ModelCatalog) ReadMicrodataTo(dn, rdsn string, layout *db.ReadMicroLayout, cvtWr func(src interface{}) (bool, error)) (*db.ReadPageLayout, bool) {
 
 	// validate parameters and return empty results on empty input
 	if dn == "" {
@@ -143,14 +143,6 @@ func (mc *ModelCatalog) ReadMicrodataTo(dn string, layout *db.ReadMicroLayout, c
 	}
 	if layout.Name == "" {
 		omppLog.Log("Warning: invalid (empty) model entity name")
-		return nil, false
-	}
-	if layout.FromId <= 0 {
-		omppLog.Log("Warning: model run not found: ", layout.Name, ": ", dn)
-		return nil, false
-	}
-	if layout.GenDigest == "" {
-		omppLog.Log("Warning: invalid (empty) run entity generation digest of: ", layout.Name, ": ", dn)
 		return nil, false
 	}
 
@@ -173,6 +165,26 @@ func (mc *ModelCatalog) ReadMicrodataTo(dn string, layout *db.ReadMicroLayout, c
 	if _, ok := mc.modelLst[idx].meta.EntityByName(layout.Name); !ok {
 		omppLog.Log("Warning: model entity not found: ", layout.Name)
 		return nil, false
+	}
+
+	// if run id not defiened then find model run id by digest-or-stamp-or-name
+	if layout.FromId <= 0 {
+
+		rst, ok := mc.loadCompletedRunByDigestOrStampOrName(idx, rdsn)
+		if !ok {
+			return nil, false // return empty result: run select error
+		}
+		layout.FromId = rst.RunId // source run id
+	}
+
+	// if generation digest undefined then find entity generation by entity name and run id
+	if layout.GenDigest == "" {
+
+		entGen, ok := mc.loadEntityGenByName(idx, layout.FromId, layout.Name)
+		if !ok {
+			return nil, false // entity generation not found
+		}
+		layout.GenDigest = entGen.GenDigest
 	}
 
 	// read microdata values page

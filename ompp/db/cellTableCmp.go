@@ -11,7 +11,7 @@ import (
 
 // CellTableCmp is value of output table comparison expression.
 type CellTableCmp struct {
-	cellIdValue     // dimensions and value
+	cellIdValue     // dimensions as enum id's and value
 	RunId       int // model run id
 }
 

@@ -329,3 +329,79 @@ func doTableGetPageHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllA
 	}
 	w.Write([]byte{']'}) // end of json output array
 }
+
+// runMicrodataPageReadHandler read a "page" of microdata values from model run.
+// POST /api/model/:model/run/:run/microdata/value
+// Enum-based microdata attributes returned as enum codes.
+func runMicrodataPageReadHandler(w http.ResponseWriter, r *http.Request) {
+	doReadMicrodataPageHandler(w, r, true)
+}
+
+// runMicrodataIdPageReadHandler read a "page" of microdata values from model run.
+// POST /api/model/:model/run/:run/microdata/value-id
+// Enum-based microdata attributes returned as enum id, not enum codes.
+func runMicrodataIdPageReadHandler(w http.ResponseWriter, r *http.Request) {
+	doReadMicrodataPageHandler(w, r, false)
+}
+
+// doReadMicrodataPageHandler read a "page" of microdata values from model run.
+// Json is posted to specify entity name, "page" size and other read arguments,
+// see db.ReadMicroLayout for more details.
+// If generation digest not specified in ReadMicroLayout then it found by entity name and run digest.
+// Page of values is a rows from microdata value table started at zero based offset row
+// and up to max page size rows, if page size <= 0 then all values returned.
+// Enum-based microdata attributes returned as enum codes or enum id's.
+func doReadMicrodataPageHandler(w http.ResponseWriter, r *http.Request, isCode bool) {
+
+	// url parameters
+	dn := getRequestParam(r, "model") // model digest-or-name
+	rdsn := getRequestParam(r, "run") // run digest-or-stamp-or-name
+
+	// decode json request body
+	var layout db.ReadMicroLayout
+	if !jsonRequestDecode(w, r, true, &layout) {
+		return // error at json decode, response done with http error
+	}
+
+	// get converter from id's cell into code cell
+	var cvtCell func(interface{}) (interface{}, error)
+	if isCode {
+
+		ok := false
+		genDigest := ""
+		_, genDigest, cvtCell, ok = theCatalog.MicrodataCellConverter(false, dn, rdsn, layout.Name)
+		if !ok {
+			http.Error(w, "Error at run microdata read "+rdsn+": "+layout.Name, http.StatusBadRequest)
+			return
+		}
+		if layout.GenDigest != "" && layout.GenDigest != genDigest {
+			http.Error(w, "Error at run microdata read, generation digest not found: "+layout.GenDigest+" expected: "+genDigest+": "+layout.Name, http.StatusBadRequest)
+			return
+		}
+	}
+
+	// write to response: page layout and page data
+	jsonSetHeaders(w, r) // start response with set json headers, i.e. content type
+
+	w.Write([]byte("{\"Page\":[")) // start of data page and start of json output array
+
+	enc := json.NewEncoder(w)
+	cvtWr := jsonCellWriter(w, enc, cvtCell)
+
+	// read microdata page into json array response, convert enum id's to code if requested
+	lt, ok := theCatalog.ReadMicrodataTo(dn, rdsn, &layout, cvtWr)
+	if !ok {
+		http.Error(w, "Error at run microdata read "+rdsn+": "+layout.Name, http.StatusBadRequest)
+		return
+	}
+	w.Write([]byte{']'}) // end of data page array
+
+	// continue response with output page layout: offset, size, last page flag
+	w.Write([]byte(",\"Layout\":"))
+
+	err := json.NewEncoder(w).Encode(lt)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	w.Write([]byte("}")) // end of data page and end of json
+}

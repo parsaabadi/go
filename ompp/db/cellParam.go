@@ -13,7 +13,7 @@ import (
 
 // CellParam is value of input parameter.
 type CellParam struct {
-	cellIdValue     // dimensions and value
+	cellIdValue     // dimensions as enum id's and value
 	SubId       int // parameter subvalue id
 }
 

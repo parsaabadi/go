@@ -270,3 +270,44 @@ func (mc *ModelCatalog) loadCompletedRunByDigestOrStampOrName(modelIdx int, rdsn
 
 	return rst, true
 }
+
+// loadEntityGenByName select entity_get and entity_gen_attr db row by entity name, run id and model index in model catalog.
+// It can be used only inside of lock.
+func (mc *ModelCatalog) loadEntityGenByName(modelIdx int, runId int, entityName string) (*db.EntityGenMeta, bool) {
+
+	if entityName == "" {
+		omppLog.Log("Warning: invalid (empty) entity name")
+		return nil, false
+	}
+
+	// find model entity by entity name
+	eIdx, ok := mc.modelLst[modelIdx].meta.EntityByName(entityName)
+	if !ok {
+		omppLog.Log("Warning: model entity not found: ", entityName)
+		return nil, false
+	}
+	ent := &mc.modelLst[modelIdx].meta.Entity[eIdx]
+
+	// get list of entity generations for that model run
+	egLst, err := db.GetEntityGenList(mc.modelLst[modelIdx].dbConn, runId)
+	if err != nil {
+		omppLog.Log("Error at get run entities: ", entityName, ": ", runId, ": ", err.Error())
+		return nil, false
+	}
+
+	// find entity generation by entity name
+	gIdx := -1
+	for k := range egLst {
+
+		if egLst[k].EntityId == ent.EntityId {
+			gIdx = k
+			break
+		}
+	}
+	if gIdx < 0 {
+		omppLog.Log("Error: model run entity generation not found: ", entityName, ": ", runId)
+		return nil, false
+	}
+
+	return &egLst[gIdx], true
+}

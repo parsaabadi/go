@@ -49,6 +49,7 @@ func dbToCsv(modelName string, modelDigest string, isAllInOne bool, runOpts *con
 	if err != nil {
 		return err
 	}
+	fileCreated := make(map[string]bool)
 
 	// write model definition into csv files
 	isWriteUtf8bom := runOpts.Bool(useUtf8CsvArgKey)
@@ -96,12 +97,12 @@ func dbToCsv(modelName string, modelDigest string, isAllInOne bool, runOpts *con
 	}
 	isIdNames := false
 
-	if isIdNames, err = toRunListCsv(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom, doUseIdNames, isAllInOne, isWriteAcc, isWriteMicro); err != nil {
+	if isIdNames, err = toRunListCsv(srcDb, modelDef, outDir, fileCreated, dblFmt, isIdCsv, isWriteUtf8bom, doUseIdNames, isAllInOne, isWriteAcc, isWriteMicro); err != nil {
 		return err
 	}
 
 	// write all readonly workset data into csv files: input parameters
-	if err = toWorksetListCsv(srcDb, modelDef, outDir, dblFmt, isIdCsv, isWriteUtf8bom, isIdNames, isAllInOne); err != nil {
+	if err = toWorksetListCsv(srcDb, modelDef, outDir, fileCreated, dblFmt, isIdCsv, isWriteUtf8bom, isIdNames, isAllInOne); err != nil {
 		return err
 	}
 

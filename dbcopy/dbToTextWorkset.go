@@ -71,6 +71,7 @@ func dbToTextWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 			outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".set."+setName)
 		}
 	}
+	fileCreated := make(map[string]bool)
 
 	// get workset metadata by id or name
 	var wsRow *db.WorksetRow
@@ -117,7 +118,7 @@ func dbToTextWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
 	isWriteUtf8bom := runOpts.Bool(useUtf8CsvArgKey)
 
-	if err = toWorksetText(srcDb, modelDef, wm, outDir, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames); err != nil {
+	if err = toWorksetText(srcDb, modelDef, wm, outDir, fileCreated, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames); err != nil {
 		return err
 	}
 
@@ -135,7 +136,14 @@ func dbToTextWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 
 // toWorksetListText write all readonly worksets into csv files, each set in separate subdirectory
 func toWorksetListText(
-	dbConn *sql.DB, modelDef *db.ModelMeta, outDir string, doubleFmt string, isIdCsv bool, isWriteUtf8bom bool, isUseIdNames bool) error {
+	dbConn *sql.DB,
+	modelDef *db.ModelMeta,
+	outDir string,
+	fileCreated map[string]bool,
+	doubleFmt string,
+	isIdCsv bool,
+	isWriteUtf8bom bool,
+	isUseIdNames bool) error {
 
 	// get all readonly worksets
 	wl, err := db.GetWorksetFullList(dbConn, modelDef.Model.ModelId, true, "")
@@ -145,7 +153,7 @@ func toWorksetListText(
 
 	// read all workset parameters and dump it into csv files
 	for k := range wl {
-		err = toWorksetText(dbConn, modelDef, &wl[k], outDir, doubleFmt, isIdCsv, isWriteUtf8bom, isUseIdNames)
+		err = toWorksetText(dbConn, modelDef, &wl[k], outDir, fileCreated, doubleFmt, isIdCsv, isWriteUtf8bom, isUseIdNames)
 		if err != nil {
 			return err
 		}
@@ -162,6 +170,7 @@ func toWorksetText(
 	modelDef *db.ModelMeta,
 	meta *db.WorksetMeta,
 	outDir string,
+	fileCreated map[string]bool,
 	doubleFmt string,
 	isIdCsv bool,
 	isWriteUtf8bom bool,
@@ -213,7 +222,7 @@ func toWorksetText(
 
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nP, ": ", paramLt.Name)
 
-		err = toCellCsvFile(dbConn, modelDef, paramLt, cvtParam, false, csvDir, isWriteUtf8bom, "", "")
+		err = toCellCsvFile(dbConn, modelDef, paramLt, cvtParam, fileCreated, csvDir, isWriteUtf8bom, "", "")
 		if err != nil {
 			return err
 		}

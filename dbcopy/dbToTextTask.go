@@ -141,6 +141,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 	if err != nil {
 		return err
 	}
+	fileCreated := make(map[string]bool)
 
 	// write task metadata into json file
 	if err = toTaskJson(srcDb, modelDef, meta, outDir, isUseIdNames); err != nil {
@@ -191,7 +192,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 			}
 
 			// write model run metadata into json, parameters and output result values into csv files
-			if err = toRunText(srcDb, modelDef, rm, outDir, "", dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames, isWriteAcc, isWriteMicro); err != nil {
+			if err = toRunText(srcDb, modelDef, rm, outDir, "", fileCreated, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames, isWriteAcc, isWriteMicro); err != nil {
 				return err
 			}
 		}
@@ -201,7 +202,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 	var wsIdLst []int
 	var isSetNotFound, isSetNotReadOnly bool
 
-	var fws = func(dbConn *sql.DB, setId int) error {
+	var fws = func(dbConn *sql.DB, setId int, fileCreated map[string]bool) error {
 
 		// check is workset already processed
 		for i := range wsIdLst {
@@ -231,7 +232,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 		}
 
 		// write workset metadata into json and parameter values into csv files
-		if err = toWorksetText(dbConn, modelDef, wm, outDir, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames); err != nil {
+		if err = toWorksetText(dbConn, modelDef, wm, outDir, fileCreated, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames); err != nil {
 			return err
 		}
 		return nil
@@ -239,7 +240,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 
 	// save task body worksets
 	for k := range meta.Set {
-		if err = fws(srcDb, meta.Set[k]); err != nil {
+		if err = fws(srcDb, meta.Set[k], fileCreated); err != nil {
 			return err
 		}
 	}
@@ -247,7 +248,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 	// save worksets from model run history
 	for j := range meta.TaskRun {
 		for k := range meta.TaskRun[j].TaskRunSet {
-			if err = fws(srcDb, meta.TaskRun[j].TaskRunSet[k].SetId); err != nil {
+			if err = fws(srcDb, meta.TaskRun[j].TaskRunSet[k].SetId, fileCreated); err != nil {
 				return err
 			}
 		}
