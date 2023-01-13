@@ -63,7 +63,7 @@ func doReadParameterPageHandler(w http.ResponseWriter, r *http.Request, srcArg s
 		ok := false
 		cvtCell, ok = theCatalog.ParameterCellConverter(false, dn, layout.Name)
 		if !ok {
-			http.Error(w, "Error at parameter read "+src+": "+layout.Name, http.StatusBadRequest)
+			http.Error(w, "Error at parameter read: "+layout.Name, http.StatusBadRequest)
 			return
 		}
 	}
@@ -135,7 +135,7 @@ func doReadTablePageHandler(w http.ResponseWriter, r *http.Request, isCode bool)
 		ok := false
 		cvtCell, ok = theCatalog.TableToCodeCellConverter(dn, layout.Name, layout.IsAccum, layout.IsAllAccum)
 		if !ok {
-			http.Error(w, "Failed to create output table cell id's to code converter: "+layout.Name, http.StatusBadRequest)
+			http.Error(w, "Error at output table read: "+layout.Name, http.StatusBadRequest)
 			return
 		}
 	}
@@ -221,7 +221,7 @@ func doParameterGetPageHandler(w http.ResponseWriter, r *http.Request, srcArg st
 	if isCode {
 		cvtCell, ok = theCatalog.ParameterCellConverter(false, dn, name)
 		if !ok {
-			http.Error(w, "Failed to create parameter cell id's to code converter: "+name, http.StatusBadRequest)
+			http.Error(w, "Error at parameter read: "+name, http.StatusBadRequest)
 			return
 		}
 	}
@@ -308,7 +308,7 @@ func doTableGetPageHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllA
 	if isCode {
 		cvtCell, ok = theCatalog.TableToCodeCellConverter(dn, layout.Name, layout.IsAccum, layout.IsAllAccum)
 		if !ok {
-			http.Error(w, "Failed to create output table cell id's to code converter: "+layout.Name, http.StatusBadRequest)
+			http.Error(w, "Error at run output table read: "+name, http.StatusBadRequest)
 			return
 		}
 	}
@@ -371,7 +371,7 @@ func doReadMicrodataPageHandler(w http.ResponseWriter, r *http.Request, isCode b
 		genDigest := ""
 		_, genDigest, cvtCell, ok = theCatalog.MicrodataCellConverter(false, dn, rdsn, layout.Name)
 		if !ok {
-			http.Error(w, "Error at run microdata read "+rdsn+": "+layout.Name, http.StatusBadRequest)
+			http.Error(w, "Error at run microdata read: "+layout.Name, http.StatusBadRequest)
 			return
 		}
 		if layout.GenDigest != "" && layout.GenDigest != genDigest {
@@ -404,4 +404,75 @@ func doReadMicrodataPageHandler(w http.ResponseWriter, r *http.Request, isCode b
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 	w.Write([]byte("}")) // end of data page and end of json
+}
+
+// runMicrodatarPageGetHandler read a "page" of microdata values from model run results.
+// GET /api/model/:model/run/:run/microdata/:name/value
+// GET /api/model/:model/run/:run/microdata/:name/value/start/:start
+// GET /api/model/:model/run/:run/microdata/:name/value/start/:start/count/:count
+// Enum-based microdata attributes returned as enum codes.
+func runMicrodatarPageGetHandler(w http.ResponseWriter, r *http.Request) {
+	doMicrodataGetPageHandler(w, r, true)
+}
+
+// doMicrodataGetPageHandler read a "page" of microdata values from model run.
+// Page of values is a rows from microdata value table started at zero based offset row
+// and up to max page size rows, if page size <= 0 then all values returned.
+// Enum-based microdata attributes returned as enum codes or enum id's.
+func doMicrodataGetPageHandler(w http.ResponseWriter, r *http.Request, isCode bool) {
+
+	// url or query parameters
+	dn := getRequestParam(r, "model")  // model digest-or-name
+	rdsn := getRequestParam(r, "run")  // run digest-or-stamp-or-name
+	name := getRequestParam(r, "name") // entity name
+
+	// url or query parameters: page offset and page size
+	start, ok := getInt64RequestParam(r, "start", 0)
+	if !ok {
+		http.Error(w, "Invalid value of start row number to read "+name, http.StatusBadRequest)
+		return
+	}
+	count, ok := getInt64RequestParam(r, "count", theCfg.pageMaxSize)
+	if !ok {
+		http.Error(w, "Invalid value of max row count to read "+name, http.StatusBadRequest)
+		return
+	}
+
+	// setup read layout
+	layout := db.ReadMicroLayout{
+		ReadLayout: db.ReadLayout{
+			Name:           name,
+			ReadPageLayout: db.ReadPageLayout{Offset: start, Size: count},
+		},
+	}
+
+	// get converter from id's cell into code cell
+	var cvtCell func(interface{}) (interface{}, error)
+	if isCode {
+
+		ok := false
+		genDigest := ""
+		_, genDigest, cvtCell, ok = theCatalog.MicrodataCellConverter(false, dn, rdsn, layout.Name)
+		if !ok {
+			http.Error(w, "Error at run microdata read: "+name, http.StatusBadRequest)
+			return
+		}
+		layout.GenDigest = genDigest
+	}
+
+	// write to response
+	jsonSetHeaders(w, r) // start response with set json headers, i.e. content type
+
+	w.Write([]byte{'['}) // start of json output array
+
+	enc := json.NewEncoder(w)
+	cvtWr := jsonCellWriter(w, enc, cvtCell)
+
+	// read microdata page into json array response, convert enum id's to code if requested
+	_, ok = theCatalog.ReadMicrodataTo(dn, rdsn, &layout, cvtWr)
+	if !ok {
+		http.Error(w, "Error at run microdata read "+rdsn+": "+layout.Name, http.StatusBadRequest)
+		return
+	}
+	w.Write([]byte{']'}) // end of json output array
 }

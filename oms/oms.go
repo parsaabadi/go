@@ -859,6 +859,18 @@ func apiReadRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/table/:name/all-acc/", http.NotFound)
 	router.Get("/api/model/:model/run/:run/table/:name/all-acc/start/", http.NotFound)
 	router.Get("/api/model/:model/run/:run/table/:name/all-acc/start/:start/count/", http.NotFound)
+
+	// GET /api/model/:model/run/:run/microdata/:name/value
+	// GET /api/model/:model/run/:run/microdata/:name/value/start/:start
+	// GET /api/model/:model/run/:run/microdata/:name/value/start/:start/count/:count
+	router.Get("/api/model/:model/run/:run/microdata/:name/value", runMicrodatarPageGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/microdata/:name/value/start/:start", runMicrodatarPageGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/microdata/:name/value/start/:start/count/:count", runMicrodatarPageGetHandler, logRequest)
+	// reject if request ill-formed
+	router.Get("/api/model/:model/run/:run/microdata/:name/", http.NotFound)
+	router.Get("/api/model/:model/run/:run/microdata/:name/value/", http.NotFound)
+	router.Get("/api/model/:model/run/:run/microdata/:name/value/start/", http.NotFound)
+	router.Get("/api/model/:model/run/:run/microdata/:name/value/start/:start/count/", http.NotFound)
 }
 
 // add http GET web-service /api routes to read parameters or output tables as csv stream
