@@ -5,7 +5,9 @@ package db
 
 import (
 	"errors"
+	"sort"
 	"strconv"
+	"strings"
 )
 
 // WriteLayout describes parameters or output tables values for insert or update.
@@ -69,6 +71,10 @@ type WriteMicroLayout struct {
 // all-accumulators view:
 //
 //	SELECT sub_id, dim0, dim1, acc0_value, acc1_value... FROM outputTable ORDER BY...
+//
+// entity microdata table:
+//
+//	SELECT entity_key, attr0, attr1,... FROM microdataTable ORDER BY...
 type ReadLayout struct {
 	Name           string           // parameter name, output table name or entity microdata name
 	FromId         int              // run id or set id to select input parameter, output table values or microdata from
@@ -129,19 +135,24 @@ type CompareTableLayout struct {
 // FilterOp is enum type for filter operators in select where conditions
 type FilterOp string
 
-// Select filter operators for dimension or attribute enum ids.
+// Select filter operators for dimension enum values or attribute values.
 const (
 	InAutoOpFilter  FilterOp = "IN_AUTO" // auto convert IN list filter into equal or BETWEEN if possible
 	InOpFilter      FilterOp = "IN"      // dimension enum ids in: dim2 IN (11, 22, 33)
 	EqOpFilter      FilterOp = "="       // dimension equal: dim1 = 12
+	NeOpFilter      FilterOp = "!="      // dimension equal: dim1 <> 12
+	GtOpFilter      FilterOp = ">"       // value greater than: attr1 > 12
+	GeOpFilter      FilterOp = ">="      // value greater or equal: attr1 >= 12
+	LtOpFilter      FilterOp = "<"       // value less than: attr1 < 12
+	LeOpFilter      FilterOp = "<="      // value less or equal: attr1 <= 12
 	BetweenOpFilter FilterOp = "BETWEEN" // dimension enum ids between: dim3 BETWEEN 44 AND 88
 )
 
 // FilterColumn define dimension or attribute column and condition to filter enum codes to build select where
 type FilterColumn struct {
-	Name  string   // dimension or attribute name
-	Op    FilterOp // filter operator: equal, IN, BETWEEN
-	Enums []string // enum code(s): one, two or many ids depending on filter condition
+	Name   string   // dimension or attribute name
+	Op     FilterOp // filter operator: equal, IN, BETWEEN
+	Values []string // enum code(s): one, two or many ids depending on filter condition
 }
 
 // FilterIdColumn define dimension or attribute column and condition to filter enum ids to build select where
@@ -204,26 +215,77 @@ func makeWhereFilter(
 	flt *FilterColumn, alias string, colName string, typeOf *TypeMeta, isTotalEnabled bool, msgName string, msgParent string,
 ) (string, error) {
 
-	// convert enum codes to ids
-	cvt, err := typeOf.itemCodeToId(msgName, isTotalEnabled)
-	if err != nil {
-		return "", err
+	// validate number of enum ids in enum list
+	nFlt := len(flt.Values)
+	if nFlt <= 0 ||
+		nFlt != 1 && (flt.Op == EqOpFilter || flt.Op == NeOpFilter || flt.Op == GtOpFilter || flt.Op == GeOpFilter || flt.Op == LtOpFilter || flt.Op == LeOpFilter) ||
+		nFlt != 2 && flt.Op == BetweenOpFilter {
+		return "", errors.New("invalid number of arguments to filter " + msgParent + " " + msgName + ": " + strconv.Itoa(nFlt))
 	}
-	fltId := FilterIdColumn{
-		Name:    flt.Name,
-		Op:      flt.Op,
-		EnumIds: make([]int, len(flt.Enums)),
-	}
-	for k := range flt.Enums {
-		id, err := cvt(flt.Enums[k])
+
+	// for boolean or enum-based dimensions or attributes make filter by id
+	if typeOf.IsBool() || !typeOf.IsBuiltIn() {
+
+		// convert enum codes to ids
+		cvt, err := typeOf.itemCodeToId(msgName, isTotalEnabled)
 		if err != nil {
 			return "", err
 		}
-		fltId.EnumIds[k] = id
+		fltId := FilterIdColumn{
+			Name:    flt.Name,
+			Op:      flt.Op,
+			EnumIds: make([]int, nFlt),
+		}
+		for k := range flt.Values {
+			id, err := cvt(flt.Values[k])
+			if err != nil {
+				return "", err
+			}
+			fltId.EnumIds[k] = id
+		}
+
+		return makeWhereIdFilter(&fltId, alias, colName, typeOf, msgName, msgParent)
+	}
+	// else make filter for other types: int, float, strings
+
+	// use sql-quotes for string type
+	vals := make([]string, nFlt)
+
+	if !typeOf.IsString() {
+		copy(vals, flt.Values)
+	} else {
+		for k := range flt.Values {
+			vals[k] = ToQuoted(flt.Values[k])
+		}
 	}
 
-	// return filter condition
-	return makeWhereIdFilter(&fltId, alias, colName, typeOf, msgName, msgParent)
+	// make dimension or attribute filter
+	q := ""
+	if alias != "" {
+		q += alias + "."
+	}
+	q += colName
+	switch flt.Op {
+	case EqOpFilter: // AND dim1 = 2
+		q += " = " + vals[0]
+	case NeOpFilter: // AND dim1 <> 2
+		q += " <> " + vals[0]
+	case GtOpFilter: // AND attr1 > 2
+		q += " > " + vals[0]
+	case GeOpFilter: // AND attr1 > 2
+		q += " >= " + vals[0]
+	case LtOpFilter: // AND attr1 > 2
+		q += " < " + vals[0]
+	case LeOpFilter: // AND attr1 > 2
+		q += " <= " + vals[0]
+	case InOpFilter, InAutoOpFilter: // AND dim1 IN (10, 20, 30)
+		q += " IN (" + strings.Join(vals, ",") + ")"
+	case BetweenOpFilter: // AND dim1 BETWEEN 100 AND 200
+		q += " BETWEEN " + vals[0] + " AND " + vals[1]
+	default:
+		return "", errors.New("invalid filter operation to read " + msgParent + " " + msgName)
+	}
+	return q, nil
 }
 
 // makeWhereIdFilter return dimension or attribute filter condition for enum ids, eg: dim1 IN (1, 2, 3, 4)
@@ -232,16 +294,22 @@ func makeWhereIdFilter(
 	flt *FilterIdColumn, alias string, colName string, typeOf *TypeMeta, msgName string, msgParent string) (string, error) {
 
 	// validate number of enum ids in enum list
-	if len(flt.EnumIds) <= 0 || flt.Op == EqOpFilter && len(flt.EnumIds) != 1 || flt.Op == BetweenOpFilter && len(flt.EnumIds) != 2 {
-		return "", errors.New("invalid number of arguments to filter " + msgParent + " " + msgName)
+	nFlt := len(flt.EnumIds)
+	if nFlt <= 0 ||
+		nFlt != 1 && (flt.Op == EqOpFilter || flt.Op == NeOpFilter || flt.Op == GtOpFilter || flt.Op == GeOpFilter || flt.Op == LtOpFilter || flt.Op == LeOpFilter) ||
+		nFlt != 2 && flt.Op == BetweenOpFilter {
+		return "", errors.New("invalid number of arguments to filter " + msgParent + " " + msgName + ": " + strconv.Itoa(nFlt))
 	}
 
+	sort.Ints(flt.EnumIds) // sort enum id's for fast search
+
 	emin := flt.EnumIds[0]
-	emax := flt.EnumIds[len(flt.EnumIds)-1]
+	emax := flt.EnumIds[nFlt-1]
 	if emin > emax {
 		emin, emax = emax, emin
 	}
 	op := flt.Op
+	neVal := flt.EnumIds[0]
 
 	// if filter condition is "auto" and only single enum supplied then use = equal filter
 	// else use BETWEEN if all enum values between supplied min and max (no holes)
@@ -252,9 +320,31 @@ func makeWhereIdFilter(
 			return "", errors.New("auto filter cannot be applied to " + msgParent + " " + msgName)
 		}
 
-		if len(flt.EnumIds) == 1 {
+		switch {
+		case nFlt == 1:
 			op = EqOpFilter // single value: use equal
-		} else { // multiple values: check if BETWEEN possible else use IN
+
+		case nFlt == len(typeOf.Enum)-1: // single value excluded: use NE
+
+			n := 0
+			for k := 0; k < len(typeOf.Enum); k++ {
+
+				j := sort.Search(nFlt, func(i int) bool {
+					return flt.EnumIds[i] >= typeOf.Enum[k].EnumId
+				})
+				if j < 0 || j >= nFlt || flt.EnumIds[j] != typeOf.Enum[k].EnumId {
+					n++
+					if n > 1 {
+						break // this is not NE filter, more than one value not included
+					}
+					neVal = typeOf.Enum[k].EnumId // found a value for not equal condition
+				}
+			}
+			if n <= 1 {
+				op = NeOpFilter
+			}
+
+		default: // multiple values: check if BETWEEN possible else use IN
 
 			op = InOpFilter // use IN by default
 
@@ -296,7 +386,6 @@ func makeWhereIdFilter(
 					op = BetweenOpFilter // all type enum ids is between filter min and max enum ids
 				}
 			}
-
 		}
 	}
 
@@ -309,6 +398,16 @@ func makeWhereIdFilter(
 	switch op {
 	case EqOpFilter: // AND dim1 = 2
 		q += " = " + strconv.Itoa(flt.EnumIds[0])
+	case NeOpFilter: // AND dim1 <> 2
+		q += " <> " + strconv.Itoa(neVal)
+	case GtOpFilter: // AND attr1 > 2
+		q += " > " + strconv.Itoa(flt.EnumIds[0])
+	case GeOpFilter: // AND attr1 > 2
+		q += " >= " + strconv.Itoa(flt.EnumIds[0])
+	case LtOpFilter: // AND attr1 > 2
+		q += " < " + strconv.Itoa(flt.EnumIds[0])
+	case LeOpFilter: // AND attr1 > 2
+		q += " <= " + strconv.Itoa(flt.EnumIds[0])
 	case InOpFilter: // AND dim1 IN (10, 20, 30)
 		q += " IN ("
 		for k, e := range flt.EnumIds {
