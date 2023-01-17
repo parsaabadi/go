@@ -23,7 +23,7 @@ func writeParamFromCsvFile(
 	layout db.WriteParamLayout,
 	csvDir string,
 	csvCvt db.CellParamConverter,
-	encodingName string) error {
+) error {
 
 	// converter from csv row []string to db cell
 	cvt, err := csvCvt.CsvToCell()
@@ -49,7 +49,7 @@ func writeParamFromCsvFile(
 	}
 	defer f.Close()
 
-	from, err := makeFromCsvReader(fn, f, encodingName, ch, cvt)
+	from, err := makeFromCsvReader(fn, f, ch, cvt)
 	if err != nil {
 		return errors.New("fail to create parameter csv reader: " + err.Error())
 	}
@@ -70,8 +70,7 @@ func writeTableFromCsvFiles(
 	layout db.WriteTableLayout,
 	csvDir string,
 	cvtExpr db.CellExprConverter,
-	cvtAcc db.CellAccConverter,
-	encodingName string) error {
+	cvtAcc db.CellAccConverter) error {
 
 	// accumulator converter from csv row []string to db cell
 	aToCell, err := cvtAcc.CsvToCell()
@@ -96,7 +95,7 @@ func writeTableFromCsvFiles(
 	}
 	defer accFile.Close()
 
-	accFrom, err := makeFromCsvReader(aFn, accFile, encodingName, ah, aToCell)
+	accFrom, err := makeFromCsvReader(aFn, accFile, ah, aToCell)
 	if err != nil {
 		return errors.New("fail to create accumulators csv reader: " + err.Error())
 	}
@@ -124,7 +123,7 @@ func writeTableFromCsvFiles(
 	}
 	defer exprFile.Close()
 
-	exprFrom, err := makeFromCsvReader(eFn, exprFile, encodingName, eh, eToCell)
+	exprFrom, err := makeFromCsvReader(eFn, exprFile, eh, eToCell)
 	if err != nil {
 		return errors.New("fail to create expressions csv reader: " + err.Error())
 	}
@@ -148,7 +147,6 @@ func writeMicroFromCsvFile(
 	layout db.WriteMicroLayout,
 	csvDir string,
 	csvCvt db.CellMicroConverter,
-	encodingName string,
 ) error {
 
 	// converter from csv row []string to db cell
@@ -175,7 +173,7 @@ func writeMicroFromCsvFile(
 	}
 	defer f.Close()
 
-	from, err := makeFromCsvReader(fn, f, encodingName, ch, cvt)
+	from, err := makeFromCsvReader(fn, f, ch, cvt)
 	if err != nil {
 		return errors.New("fail to create microdata csv reader: " + err.Error())
 	}
@@ -191,11 +189,11 @@ func writeMicroFromCsvFile(
 
 // return closure to iterate over csv file rows
 func makeFromCsvReader(
-	fileName string, csvFile *os.File, encodingName string, csvHeader string, csvToCell func(row []string) (interface{}, error),
+	fileName string, csvFile *os.File, csvHeader string, csvToCell func(row []string) (interface{}, error),
 ) (func() (interface{}, error), error) {
 
 	// create csv reader from utf-8 line
-	uRd, err := helper.Utf8Reader(csvFile, encodingName)
+	uRd, err := helper.Utf8Reader(csvFile, theCfg.encodingName)
 	if err != nil {
 		return nil, errors.New("fail to create utf-8 converter: " + err.Error())
 	}

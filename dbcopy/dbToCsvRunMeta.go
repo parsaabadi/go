@@ -18,13 +18,10 @@ func toRunListCsv(
 	modelDef *db.ModelMeta,
 	outDir string,
 	fileCreated map[string]bool,
-	doubleFmt string,
 	isIdCsv bool,
-	isWriteUtf8bom bool,
 	doUseIdNames useIdNames,
 	isAllInOne bool,
-	isWriteAcc bool,
-	isWriteMicro bool) (bool, error) {
+) (bool, error) {
 
 	// get all successfully completed model runs
 	rl, err := db.GetRunFullTextList(dbConn, modelDef.Model.ModelId, true, "")
@@ -55,7 +52,7 @@ func toRunListCsv(
 	// read all run parameters, output accumulators and expressions, microdata and dump it into csv files
 	for k := range rl {
 		err = toRunCsv(
-			dbConn, modelDef, &rl[k], outDir, doubleFmt, isIdCsv, isWriteUtf8bom, isUseIdNames, isAllInOne, fileCreated, isWriteAcc, isWriteMicro)
+			dbConn, modelDef, &rl[k], outDir, isIdCsv, isUseIdNames, isAllInOne, fileCreated)
 		if err != nil {
 			return isUseIdNames, err
 		}
@@ -68,7 +65,6 @@ func toRunListCsv(
 	err = toCsvFile(
 		outDir,
 		"run_lst.csv",
-		isWriteUtf8bom,
 		[]string{
 			"run_id", "model_id", "run_name", "sub_count",
 			"sub_started", "sub_completed", "create_dt", "status",
@@ -104,7 +100,6 @@ func toRunListCsv(
 	err = toCsvFile(
 		outDir,
 		"run_txt.csv",
-		isWriteUtf8bom,
 		[]string{"run_id", "lang_code", "descr", "note"},
 		func() (bool, []string, error) {
 
@@ -163,7 +158,6 @@ func toRunListCsv(
 	err = toCsvFile(
 		outDir,
 		"run_option.csv",
-		isWriteUtf8bom,
 		[]string{"run_id", "option_key", "option_value"},
 		func() (bool, []string, error) {
 			if 0 <= idx && idx < len(kvArr) {
@@ -185,7 +179,6 @@ func toRunListCsv(
 	err = toCsvFile(
 		outDir,
 		"run_parameter.csv",
-		isWriteUtf8bom,
 		[]string{"run_id", "parameter_hid", "sub_count"},
 		func() (bool, []string, error) {
 
@@ -227,7 +220,6 @@ func toRunListCsv(
 	err = toCsvFile(
 		outDir,
 		"run_parameter_txt.csv",
-		isWriteUtf8bom,
 		[]string{"run_id", "parameter_hid", "lang_code", "note"},
 		func() (bool, []string, error) {
 
@@ -284,7 +276,6 @@ func toRunListCsv(
 	err = toCsvFile(
 		outDir,
 		"run_table.csv",
-		isWriteUtf8bom,
 		[]string{"run_id", "table_hid"},
 		func() (bool, []string, error) {
 
@@ -324,7 +315,6 @@ func toRunListCsv(
 	err = toCsvFile(
 		outDir,
 		"entity_gen.csv",
-		isWriteUtf8bom,
 		[]string{"run_id", "entity_gen_hid", "model_id", "model_entity_id", "entity_hid", "db_entity_table", "gen_digest"},
 		func() (bool, []string, error) {
 
@@ -370,7 +360,6 @@ func toRunListCsv(
 	err = toCsvFile(
 		outDir,
 		"entity_gen_attr.csv",
-		isWriteUtf8bom,
 		[]string{"run_id", "entity_gen_hid", "attr_id", "entity_hid"},
 		func() (bool, []string, error) {
 
@@ -422,7 +411,6 @@ func toRunListCsv(
 	err = toCsvFile(
 		outDir,
 		"run_entity.csv",
-		isWriteUtf8bom,
 		[]string{"run_id", "entity_gen_hid", "value_digest"},
 		func() (bool, []string, error) {
 
@@ -463,7 +451,6 @@ func toRunListCsv(
 	err = toCsvFile(
 		outDir,
 		"run_progress.csv",
-		isWriteUtf8bom,
 		[]string{"run_id", "sub_id", "create_dt", "status", "update_dt", "progress_count", "progress_value"},
 		func() (bool, []string, error) {
 
@@ -492,8 +479,8 @@ func toRunListCsv(
 			row[3] = rl[idx].Progress[j].Status
 			row[4] = rl[idx].Progress[j].UpdateDateTime
 			row[5] = strconv.Itoa(rl[idx].Progress[j].Count)
-			if doubleFmt != "" {
-				row[6] = fmt.Sprintf(doubleFmt, rl[idx].Progress[j].Value)
+			if theCfg.doubleFmt != "" {
+				row[6] = fmt.Sprintf(theCfg.doubleFmt, rl[idx].Progress[j].Value)
 			} else {
 				row[6] = fmt.Sprint(rl[idx].Progress[j].Value)
 			}

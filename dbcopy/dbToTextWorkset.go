@@ -102,8 +102,12 @@ func dbToTextWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 	}
 
 	// create new output directory for workset metadata
-	err = os.MkdirAll(outDir, 0750)
-	if err != nil {
+	if !theCfg.isKeepOutputDir {
+		if ok := dirDeleteAndLog(outDir); !ok {
+			return errors.New("Error: unable to delete: " + outDir)
+		}
+	}
+	if err = os.MkdirAll(outDir, 0750); err != nil {
 		return err
 	}
 
@@ -114,17 +118,15 @@ func dbToTextWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 	isUseIdNames := runOpts.Bool(useIdNamesArgKey)
 
 	// write workset metadata into json and parameter values into csv files
-	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
-	isWriteUtf8bom := runOpts.Bool(useUtf8CsvArgKey)
 
-	if err = toWorksetText(srcDb, modelDef, wm, outDir, fileCreated, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames); err != nil {
+	if err = toWorksetText(srcDb, modelDef, wm, outDir, fileCreated, isIdCsv, isUseIdNames); err != nil {
 		return err
 	}
 
 	// pack worksets metadata json and csv files into zip
 	if runOpts.Bool(zipArgKey) {
-		zipPath, err := helper.PackZip(outDir, "")
+		zipPath, err := helper.PackZip(outDir, !theCfg.isKeepOutputDir, "")
 		if err != nil {
 			return err
 		}
@@ -140,9 +142,7 @@ func toWorksetListText(
 	modelDef *db.ModelMeta,
 	outDir string,
 	fileCreated map[string]bool,
-	doubleFmt string,
 	isIdCsv bool,
-	isWriteUtf8bom bool,
 	isUseIdNames bool) error {
 
 	// get all readonly worksets
@@ -153,7 +153,7 @@ func toWorksetListText(
 
 	// read all workset parameters and dump it into csv files
 	for k := range wl {
-		err = toWorksetText(dbConn, modelDef, &wl[k], outDir, fileCreated, doubleFmt, isIdCsv, isWriteUtf8bom, isUseIdNames)
+		err = toWorksetText(dbConn, modelDef, &wl[k], outDir, fileCreated, isIdCsv, isUseIdNames)
 		if err != nil {
 			return err
 		}
@@ -171,9 +171,7 @@ func toWorksetText(
 	meta *db.WorksetMeta,
 	outDir string,
 	fileCreated map[string]bool,
-	doubleFmt string,
 	isIdCsv bool,
-	isWriteUtf8bom bool,
 	isUseIdNames bool) error {
 
 	// convert db rows into "public" format
@@ -194,8 +192,12 @@ func toWorksetText(
 	}
 	csvDir := filepath.Join(outDir, csvName)
 
-	err = os.MkdirAll(csvDir, 0750)
-	if err != nil {
+	if !theCfg.isKeepOutputDir {
+		if ok := dirDeleteAndLog(csvDir); !ok {
+			return errors.New("Error: unable to delete: " + csvDir)
+		}
+	}
+	if err = os.MkdirAll(csvDir, 0750); err != nil {
 		return err
 	}
 
@@ -210,7 +212,7 @@ func toWorksetText(
 			ModelDef:  modelDef,
 			Name:      modelDef.Param[j].Name,
 			IsIdCsv:   isIdCsv,
-			DoubleFmt: doubleFmt,
+			DoubleFmt: theCfg.doubleFmt,
 		}
 		paramLt := db.ReadParamLayout{
 			ReadLayout: db.ReadLayout{
@@ -222,7 +224,7 @@ func toWorksetText(
 
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nP, ": ", paramLt.Name)
 
-		err = toCellCsvFile(dbConn, modelDef, paramLt, cvtParam, fileCreated, csvDir, isWriteUtf8bom, "", "")
+		err = toCellCsvFile(dbConn, modelDef, paramLt, cvtParam, fileCreated, csvDir, "", "")
 		if err != nil {
 			return err
 		}

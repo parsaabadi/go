@@ -12,7 +12,7 @@ import (
 )
 
 // toTaskListCsv writes all successfully completed tasks and tasks run history into csv files.
-func toTaskListCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom bool) error {
+func toTaskListCsv(dbConn *sql.DB, modelId int, outDir string) error {
 
 	// get all modeling tasks and successfully completed tasks run history
 	tl, err := db.GetTaskFullList(dbConn, modelId, true, "")
@@ -27,7 +27,6 @@ func toTaskListCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom bo
 	err = toCsvFile(
 		outDir,
 		"task_lst.csv",
-		isWriteUtf8bom,
 		[]string{"task_id", "model_id", "task_name"},
 		func() (bool, []string, error) {
 			if 0 <= idx && idx < len(tl) {
@@ -51,7 +50,6 @@ func toTaskListCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom bo
 	err = toCsvFile(
 		outDir,
 		"task_txt.csv",
-		isWriteUtf8bom,
 		[]string{"task_id", "lang_code", "descr", "note"},
 		func() (bool, []string, error) {
 
@@ -98,7 +96,6 @@ func toTaskListCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom bo
 	err = toCsvFile(
 		outDir,
 		"task_set.csv",
-		isWriteUtf8bom,
 		[]string{"task_id", "set_id"},
 		func() (bool, []string, error) {
 
@@ -138,7 +135,6 @@ func toTaskListCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom bo
 	err = toCsvFile(
 		outDir,
 		"task_run_lst.csv",
-		isWriteUtf8bom,
 		[]string{"task_run_id", "task_id", "run_name", "sub_count", "create_dt", "status", "update_dt", "run_stamp"},
 		func() (bool, []string, error) {
 
@@ -185,7 +181,6 @@ func toTaskListCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom bo
 	err = toCsvFile(
 		outDir,
 		"task_run_set.csv",
-		isWriteUtf8bom,
 		[]string{"task_run_id", "run_id", "set_id", "task_id"},
 		func() (bool, []string, error) {
 

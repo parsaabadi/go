@@ -22,9 +22,7 @@ func toWorksetListCsv(
 	modelDef *db.ModelMeta,
 	outDir string,
 	fileCreated map[string]bool,
-	doubleFmt string,
 	isIdCsv bool,
-	isWriteUtf8bom bool,
 	isUseIdNames bool,
 	isAllInOne bool) error {
 
@@ -38,7 +36,7 @@ func toWorksetListCsv(
 	for k := range wl {
 
 		err := toWorksetCsv(
-			dbConn, modelDef, &wl[k], outDir, fileCreated, doubleFmt, isIdCsv, isWriteUtf8bom, isUseIdNames, isAllInOne)
+			dbConn, modelDef, &wl[k], outDir, fileCreated, isIdCsv, isUseIdNames, isAllInOne)
 		if err != nil {
 			return err
 		}
@@ -51,7 +49,6 @@ func toWorksetListCsv(
 	err = toCsvFile(
 		outDir,
 		"workset_lst.csv",
-		isWriteUtf8bom,
 		[]string{"set_id", "base_run_id", "model_id", "set_name", "is_readonly", "update_dt"},
 		func() (bool, []string, error) {
 			if 0 <= idx && idx < len(wl) {
@@ -82,7 +79,6 @@ func toWorksetListCsv(
 	err = toCsvFile(
 		outDir,
 		"workset_txt.csv",
-		isWriteUtf8bom,
 		[]string{"set_id", "lang_code", "descr", "note"},
 		func() (bool, []string, error) {
 
@@ -129,7 +125,6 @@ func toWorksetListCsv(
 	err = toCsvFile(
 		outDir,
 		"workset_parameter.csv",
-		isWriteUtf8bom,
 		[]string{"set_id", "parameter_hid", "sub_count", "default_sub_id"},
 		func() (bool, []string, error) {
 
@@ -172,7 +167,6 @@ func toWorksetListCsv(
 	err = toCsvFile(
 		outDir,
 		"workset_parameter_txt.csv",
-		isWriteUtf8bom,
 		[]string{"set_id", "parameter_hid", "lang_code", "note"},
 		func() (bool, []string, error) {
 
@@ -231,9 +225,7 @@ func toWorksetCsv(
 	meta *db.WorksetMeta,
 	outDir string,
 	fileCreated map[string]bool,
-	doubleFmt string,
 	isIdCsv bool,
-	isWriteUtf8bom bool,
 	isUseIdNames bool,
 	isAllInOne bool) error {
 
@@ -254,8 +246,12 @@ func toWorksetCsv(
 		}
 	}
 
-	err := os.MkdirAll(csvDir, 0750)
-	if err != nil {
+	if !theCfg.isKeepOutputDir {
+		if ok := dirDeleteAndLog(csvDir); !ok {
+			return errors.New("Error: unable to delete: " + csvDir)
+		}
+	}
+	if err := os.MkdirAll(csvDir, 0750); err != nil {
 		return err
 	}
 
@@ -287,7 +283,7 @@ func toWorksetCsv(
 			ModelDef:  modelDef,
 			Name:      modelDef.Param[idx].Name,
 			IsIdCsv:   isIdCsv,
-			DoubleFmt: doubleFmt,
+			DoubleFmt: theCfg.doubleFmt,
 		}
 		paramLt := db.ReadParamLayout{
 			ReadLayout: db.ReadLayout{
@@ -299,10 +295,7 @@ func toWorksetCsv(
 
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nP, ": ", paramLt.Name)
 
-		err = toCellCsvFile(dbConn, modelDef, paramLt, cvtParam, fileCreated, csvDir, isWriteUtf8bom, firstCol, firstVal)
-		if err != nil {
-			return err
-		}
+		err := toCellCsvFile(dbConn, modelDef, paramLt, cvtParam, fileCreated, csvDir, firstCol, firstVal)
 		if err != nil {
 			return err
 		}
@@ -327,10 +320,10 @@ func toWorksetCsv(
 					}
 
 					// write notes into parameterName.LANG.md file
-					err = toDotMdFile(
+					err := toDotMdFile(
 						csvDir,
 						paramName+"."+meta.Param[j].Txt[i].LangCode,
-						isWriteUtf8bom, meta.Param[j].Txt[i].Note)
+						meta.Param[j].Txt[i].Note)
 					if err != nil {
 						return err
 					}

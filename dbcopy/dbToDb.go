@@ -46,7 +46,7 @@ func dbToDb(modelName string, modelDigest string, runOpts *config.RunOptions) er
 	}
 
 	// get source model metadata and languages, make a deep copy to use for destination database writing
-	err = copyDbToDb(srcDb, dstDb, dbFacet, modelName, modelDigest, runOpts.String(doubleFormatArgKey))
+	err = copyDbToDb(srcDb, dstDb, dbFacet, modelName, modelDigest)
 	if err != nil {
 		return err
 	}
@@ -60,7 +60,7 @@ func dbToDb(modelName string, modelDigest string, runOpts *config.RunOptions) er
 // For example, in source db model id can be 11 and in destination it will be 200,
 // same for all other id's: type Hid, parameter Hid, table Hid, run id, set id, task id, etc.
 func copyDbToDb(
-	srcDb *sql.DB, dstDb *sql.DB, dbFacet db.Facet, modelName string, modelDigest string, doubleFmt string) error {
+	srcDb *sql.DB, dstDb *sql.DB, dbFacet db.Facet, modelName string, modelDigest string) error {
 
 	// source: get model metadata
 	srcModel, err := db.GetModel(srcDb, modelName, modelDigest)
@@ -138,7 +138,7 @@ func copyDbToDb(
 	}
 
 	// source to destination: copy model runs: parameters, output expressions and accumulators
-	err = copyRunListDbToDb(srcDb, dstDb, dbFacet, srcModel, dstModel, dstLang, doubleFmt)
+	err = copyRunListDbToDb(srcDb, dstDb, dbFacet, srcModel, dstModel, dstLang)
 	if err != nil {
 		return err
 	}

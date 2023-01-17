@@ -41,8 +41,13 @@ func dbToText(modelName string, modelDigest string, runOpts *config.RunOptions) 
 
 	// create new output directory, use modelName subdirectory
 	outDir := filepath.Join(runOpts.String(outputDirArgKey), modelName)
-	err = os.MkdirAll(outDir, 0750)
-	if err != nil {
+
+	if !theCfg.isKeepOutputDir {
+		if ok := dirDeleteAndLog(outDir); !ok {
+			return errors.New("Error: unable to delete: " + outDir)
+		}
+	}
+	if err = os.MkdirAll(outDir, 0750); err != nil {
 		return err
 	}
 	fileCreated := make(map[string]bool)
@@ -66,18 +71,14 @@ func dbToText(modelName string, modelDigest string, runOpts *config.RunOptions) 
 	isIdNames := false
 
 	// write all model run data into csv files: parameters, output expressions and accumulators
-	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
-	isWriteUtf8bom := runOpts.Bool(useUtf8CsvArgKey)
-	isWriteAcc := !runOpts.Bool(noAccCsv)
-	isWriteMicro := !runOpts.Bool(noMicroCsv)
 
-	if isIdNames, err = toRunListText(srcDb, modelDef, outDir, fileCreated, dblFmt, isIdCsv, isWriteUtf8bom, doUseIdNames, isWriteAcc, isWriteMicro); err != nil {
+	if isIdNames, err = toRunListText(srcDb, modelDef, outDir, fileCreated, isIdCsv, doUseIdNames); err != nil {
 		return err
 	}
 
 	// write all readonly workset data into csv files: input parameters
-	if err = toWorksetListText(srcDb, modelDef, outDir, fileCreated, dblFmt, isIdCsv, isWriteUtf8bom, isIdNames); err != nil {
+	if err = toWorksetListText(srcDb, modelDef, outDir, fileCreated, isIdCsv, isIdNames); err != nil {
 		return err
 	}
 
@@ -88,7 +89,7 @@ func dbToText(modelName string, modelDigest string, runOpts *config.RunOptions) 
 
 	// pack model metadata, run results and worksets into zip
 	if runOpts.Bool(zipArgKey) {
-		zipPath, err := helper.PackZip(outDir, "")
+		zipPath, err := helper.PackZip(outDir, !theCfg.isKeepOutputDir, "")
 		if err != nil {
 			return err
 		}
@@ -154,7 +155,6 @@ func toCellCsvFile(
 	csvCvt db.CsvConverter,
 	fileCreated map[string]bool,
 	csvDir string,
-	isWriteUtf8bom bool,
 	extraFirstName string,
 	extraFirstValue string) error {
 
@@ -190,7 +190,7 @@ func toCellCsvFile(
 	fileCreated[p] = true
 	defer f.Close()
 
-	if isWriteUtf8bom { // if required then write utf-8 bom
+	if theCfg.isWriteUtf8Bom { // if required then write utf-8 bom
 		if _, err = f.Write(helper.Utf8bom); err != nil {
 			return err
 		}
@@ -259,7 +259,6 @@ func toCellCsvFile(
 func toDotMdFile(
 	csvDir string,
 	name string,
-	isWriteUtf8bom bool,
 	text string) error {
 
 	f, err := os.OpenFile(filepath.Join(csvDir, name+".md"), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
@@ -269,7 +268,7 @@ func toDotMdFile(
 	defer f.Close()
 
 	// if required then write utf-8 bom
-	if isWriteUtf8bom {
+	if theCfg.isWriteUtf8Bom {
 		if _, err = f.Write(helper.Utf8bom); err != nil {
 			return err
 		}

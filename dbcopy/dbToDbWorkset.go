@@ -121,7 +121,7 @@ func dbToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOpti
 	}
 
 	// if model digest validation disabled
-	if runOpts.Bool(noDigestCheck) {
+	if theCfg.isNoDigestCheck {
 		pub.ModelDigest = ""
 	}
 

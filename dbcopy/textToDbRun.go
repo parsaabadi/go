@@ -59,7 +59,7 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 		if outDir == "" {
 			outDir = filepath.Dir(inpDir)
 		}
-		if err := helper.UnpackZip(inpDir+".zip", outDir); err != nil {
+		if err := helper.UnpackZip(inpDir+".zip", !theCfg.isKeepOutputDir, outDir); err != nil {
 			return err
 		}
 		inpDir = filepath.Join(outDir, base)
@@ -139,11 +139,7 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 	}
 
 	// read from metadata json and csv files and update target database
-	dblFmt := runOpts.String(doubleFormatArgKey)
-	encName := runOpts.String(encodingArgKey)
-	isNoModelDigestCheck := runOpts.Bool(noDigestCheck)
-
-	dstId, err := fromRunTextToDb(dstDb, dbFacet, modelDef, langDef, runName, metaPath, isNoModelDigestCheck, dblFmt, encName)
+	dstId, err := fromRunTextToDb(dstDb, dbFacet, modelDef, langDef, runName, metaPath)
 	if err != nil {
 		return err
 	}
@@ -163,9 +159,7 @@ func fromRunTextListToDb(
 	modelDef *db.ModelMeta,
 	langDef *db.LangMeta,
 	inpDir string,
-	isNoModelDigestCheck bool,
-	doubleFmt string,
-	encodingName string,
+
 ) error {
 
 	// get list of model run json files
@@ -183,7 +177,7 @@ func fromRunTextListToDb(
 	// update model run digest
 	for k := range fl {
 
-		_, err := fromRunTextToDb(dbConn, dbFacet, modelDef, langDef, "", fl[k], isNoModelDigestCheck, doubleFmt, encodingName)
+		_, err := fromRunTextToDb(dbConn, dbFacet, modelDef, langDef, "", fl[k])
 		if err != nil {
 			return err
 		}
@@ -205,9 +199,6 @@ func fromRunTextToDb(
 	langDef *db.LangMeta,
 	srcName string,
 	metaPath string,
-	isNoModelDigestCheck bool,
-	doubleFmt string,
-	encodingName string,
 ) (int, error) {
 
 	// if no metadata file then exit: nothing to do
@@ -254,7 +245,7 @@ func fromRunTextToDb(
 		srcName = pub.Name
 	}
 
-	if isNoModelDigestCheck {
+	if theCfg.isNoDigestCheck {
 		pub.ModelDigest = "" // model digest validation disabled
 	}
 
@@ -265,7 +256,7 @@ func fromRunTextToDb(
 	}
 
 	// save model run
-	isExist, err = meta.UpdateRun(dbConn, modelDef, langDef, doubleFmt)
+	isExist, err = meta.UpdateRun(dbConn, modelDef, langDef, theCfg.doubleFmt)
 	if err != nil {
 		return 0, err
 	}
@@ -294,17 +285,17 @@ func fromRunTextToDb(
 				ToId: dstId,
 			},
 			SubCount:  meta.Param[j].SubCount,
-			DoubleFmt: doubleFmt,
+			DoubleFmt: theCfg.doubleFmt,
 			IsToRun:   true,
 		}
 		cvtParam := db.CellParamConverter{
 			ModelDef:  modelDef,
 			Name:      modelDef.Param[j].Name,
 			IsIdCsv:   false,
-			DoubleFmt: doubleFmt,
+			DoubleFmt: theCfg.doubleFmt,
 		}
 
-		err = writeParamFromCsvFile(dbConn, modelDef, paramLt, paramCsvDir, cvtParam, encodingName)
+		err = writeParamFromCsvFile(dbConn, modelDef, paramLt, paramCsvDir, cvtParam)
 		if err != nil {
 			omppLog.Log("Error at: ", paramLt.Name, ": ", err.Error())
 			omppLog.Log("Cleanup on error: delete model run ", srcName, " ", dstId)
@@ -343,18 +334,18 @@ func fromRunTextToDb(
 				ToId: dstId,
 			},
 			SubCount:  meta.Run.SubCount,
-			DoubleFmt: doubleFmt,
+			DoubleFmt: theCfg.doubleFmt,
 		}
 		ctc := db.CellTableConverter{
 			ModelDef: modelDef,
 			Name:     modelDef.Table[j].Name,
 		}
-		cvtExpr := db.CellExprConverter{CellTableConverter: ctc, IsIdCsv: false, DoubleFmt: doubleFmt}
-		cvtAcc := db.CellAccConverter{CellTableConverter: ctc, IsIdCsv: false, DoubleFmt: doubleFmt}
+		cvtExpr := db.CellExprConverter{CellTableConverter: ctc, IsIdCsv: false, DoubleFmt: theCfg.doubleFmt}
+		cvtAcc := db.CellAccConverter{CellTableConverter: ctc, IsIdCsv: false, DoubleFmt: theCfg.doubleFmt}
 
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name)
 
-		err := writeTableFromCsvFiles(dbConn, modelDef, tblLt, tableCsvDir, cvtExpr, cvtAcc, encodingName)
+		err := writeTableFromCsvFiles(dbConn, modelDef, tblLt, tableCsvDir, cvtExpr, cvtAcc)
 		if err != nil {
 			if err != nil {
 				omppLog.Log("Error at: ", tblLt.Name, ": ", err.Error())
@@ -393,19 +384,19 @@ func fromRunTextToDb(
 					Name: pub.Entity[j].Name,
 					ToId: dstId,
 				},
-				DoubleFmt: doubleFmt,
+				DoubleFmt: theCfg.doubleFmt,
 			}
 			cvtMicro := db.CellMicroConverter{
 				ModelDef:  modelDef,
 				Name:      pub.Entity[j].Name,
 				EntityGen: &meta.EntityGen[j], // entity generation converted from "public" and has the same item order
 				IsIdCsv:   false,
-				DoubleFmt: doubleFmt,
+				DoubleFmt: theCfg.doubleFmt,
 			}
 
 			logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nMd, ": ", microLt.Name)
 
-			err := writeMicroFromCsvFile(dbConn, dbFacet, modelDef, meta, microLt, microCsvDir, cvtMicro, encodingName)
+			err := writeMicroFromCsvFile(dbConn, dbFacet, modelDef, meta, microLt, microCsvDir, cvtMicro)
 			if err != nil {
 				omppLog.Log("Error at: ", pub.Entity[j].Name, ": ", err.Error())
 				omppLog.Log("Cleanup on error: delete model run ", srcName, " ", dstId)

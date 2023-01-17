@@ -13,7 +13,7 @@ import (
 
 // PackZip create new (overwrite) zip archive from specified file or directory and all subdirs.
 // If dstDir is "" empty then result located in source base directory.
-func PackZip(srcPath string, dstDir string) (string, error) {
+func PackZip(srcPath string, isCleanDstDir bool, dstDir string) (string, error) {
 
 	// create output directory if not exist and make archive name as base.zip
 	cleanPath := filepath.Clean(srcPath)
@@ -23,7 +23,14 @@ func PackZip(srcPath string, dstDir string) (string, error) {
 	if dstDir == "" {
 		zipPath = filepath.Join(baseDir, base+".zip")
 	} else {
+
 		zipPath = filepath.Join(dstDir, base+".zip")
+
+		if isCleanDstDir {
+			if e := os.RemoveAll(dstDir); e != nil && !os.IsNotExist(e) {
+				return "", errors.New("Error: unable to delete: " + dstDir + " : " + e.Error())
+			}
+		}
 		if err := os.MkdirAll(dstDir, 0750); err != nil {
 			return "", errors.New("make directory failed at pack to zip: " + err.Error())
 		}
@@ -80,14 +87,21 @@ func PackZip(srcPath string, dstDir string) (string, error) {
 
 // UnpackZip unpack zip archive into specified directory, creating it if not exist.
 // If dstDir is "" empty then result located in source base directory.
-func UnpackZip(zipPath string, dstDir string) error {
+func UnpackZip(zipPath string, isCleanDstDir bool, dstDir string) error {
 
 	// create output directory if not exist
 	var baseDir string
 	if dstDir == "" {
 		baseDir = filepath.Dir(zipPath)
 	} else {
+
 		baseDir = filepath.Clean(dstDir)
+
+		if isCleanDstDir {
+			if e := os.RemoveAll(baseDir); e != nil && !os.IsNotExist(e) {
+				return errors.New("Error: unable to delete: " + baseDir + " : " + e.Error())
+			}
+		}
 		if err := os.MkdirAll(baseDir, 0750); err != nil {
 			return errors.New("make directory failed at unpack from zip: " + err.Error())
 		}

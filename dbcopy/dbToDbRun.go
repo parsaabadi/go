@@ -103,14 +103,12 @@ func dbToDbRun(modelName string, modelDigest string, runOpts *config.RunOptions)
 	}
 
 	// if model digest validation disabled
-	if runOpts.Bool(noDigestCheck) {
+	if theCfg.isNoDigestCheck {
 		pub.ModelDigest = ""
 	}
 
 	// copy source model run metadata, parameter values, output results into destination database
-	dblFmt := runOpts.String(doubleFormatArgKey)
-
-	_, err = copyRunDbToDb(srcDb, dstDb, dbFacet, srcModel, dstModel, meta.Run.RunId, pub, dstLang, dblFmt)
+	_, err = copyRunDbToDb(srcDb, dstDb, dbFacet, srcModel, dstModel, meta.Run.RunId, pub, dstLang)
 	if err != nil {
 		return err
 	}
@@ -121,7 +119,7 @@ func dbToDbRun(modelName string, modelDigest string, runOpts *config.RunOptions)
 // copyRunListDbToDb do copy all model runs parameters and output tables from source to destination database
 // Double format is used for float model types digest calculation, if non-empty format supplied
 func copyRunListDbToDb(
-	srcDb *sql.DB, dstDb *sql.DB, dbFacet db.Facet, srcModel *db.ModelMeta, dstModel *db.ModelMeta, dstLang *db.LangMeta, doubleFmt string) error {
+	srcDb *sql.DB, dstDb *sql.DB, dbFacet db.Facet, srcModel *db.ModelMeta, dstModel *db.ModelMeta, dstLang *db.LangMeta) error {
 
 	// source: get all successfully completed model runs in all languages
 	srcRl, err := db.GetRunFullTextList(srcDb, srcModel.Model.ModelId, true, "")
@@ -143,7 +141,7 @@ func copyRunListDbToDb(
 		}
 
 		// save into destination database
-		_, err = copyRunDbToDb(srcDb, dstDb, dbFacet, srcModel, dstModel, srcRl[k].Run.RunId, pub, dstLang, doubleFmt)
+		_, err = copyRunDbToDb(srcDb, dstDb, dbFacet, srcModel, dstModel, srcRl[k].Run.RunId, pub, dstLang)
 		if err != nil {
 			return err
 		}
@@ -154,7 +152,7 @@ func copyRunListDbToDb(
 // copyRunDbToDb do copy model run metadata, run parameters and output tables from source to destination database
 // it return destination run id (run id in destination database)
 func copyRunDbToDb(
-	srcDb *sql.DB, dstDb *sql.DB, dbFacet db.Facet, srcModel *db.ModelMeta, dstModel *db.ModelMeta, srcId int, pub *db.RunPub, dstLang *db.LangMeta, doubleFmt string) (int, error) {
+	srcDb *sql.DB, dstDb *sql.DB, dbFacet db.Facet, srcModel *db.ModelMeta, dstModel *db.ModelMeta, srcId int, pub *db.RunPub, dstLang *db.LangMeta) (int, error) {
 
 	// validate parameters
 	if pub == nil {
@@ -168,7 +166,7 @@ func copyRunDbToDb(
 	}
 
 	// destination: save model run metadata
-	isExist, err := dstRun.UpdateRun(dstDb, dstModel, dstLang, doubleFmt)
+	isExist, err := dstRun.UpdateRun(dstDb, dstModel, dstLang, theCfg.doubleFmt)
 	if err != nil {
 		return 0, err
 	}
@@ -217,7 +215,7 @@ func copyRunDbToDb(
 			},
 			SubCount:  dstRun.Param[j].SubCount,
 			IsToRun:   true,
-			DoubleFmt: doubleFmt,
+			DoubleFmt: theCfg.doubleFmt,
 		}
 
 		if err = db.WriteParameterFrom(dstDb, dstModel, &dstParamLt, makeFromList(cLst)); err != nil {
@@ -282,7 +280,7 @@ func copyRunDbToDb(
 				ToId: dstId,
 			},
 			SubCount:  dstRun.Run.SubCount,
-			DoubleFmt: doubleFmt,
+			DoubleFmt: theCfg.doubleFmt,
 		}
 
 		err = db.WriteOutputTableFrom(dstDb, dstModel, &dstTblLt, makeFromList(acLst), makeFromList(ecLst))
@@ -328,7 +326,7 @@ func copyRunDbToDb(
 					Name: pub.Entity[j].Name,
 					ToId: dstId,
 				},
-				DoubleFmt: doubleFmt,
+				DoubleFmt: theCfg.doubleFmt,
 			}
 
 			if err = db.WriteMicrodataFrom(dstDb, dbFacet, dstModel, dstRun, &dstMicroLt, makeFromList(cLst)); err != nil {

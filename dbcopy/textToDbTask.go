@@ -129,9 +129,6 @@ func textToDbTask(modelName string, modelDigest string, runOpts *config.RunOptio
 	// restore model runs from json and/or csv files and insert it into database
 	var runLst []string
 	var isRunNotFound, isRunNotCompleted bool
-	dblFmt := runOpts.String(doubleFormatArgKey)
-	encName := runOpts.String(encodingArgKey)
-	isNoModelDigestCheck := runOpts.Bool(noDigestCheck)
 
 	for j := range pub.TaskRun {
 	nextRun:
@@ -206,7 +203,7 @@ func textToDbTask(modelName string, modelDigest string, runOpts *config.RunOptio
 			}
 
 			// read from metadata json and csv files and update target database
-			dstId, err := fromRunTextToDb(dstDb, dbFacet, modelDef, langDef, runName, jsonPath, isNoModelDigestCheck, dblFmt, encName)
+			dstId, err := fromRunTextToDb(dstDb, dbFacet, modelDef, langDef, runName, jsonPath)
 			if err != nil {
 				return err
 			}
@@ -284,7 +281,7 @@ func textToDbTask(modelName string, modelDigest string, runOpts *config.RunOptio
 		}
 
 		// write workset metadata into json and parameter values into csv files
-		dstId, err := fromWorksetTextToDb(dbConn, modelDef, langDef, setName, "", jsonPath, csvDir, isNoModelDigestCheck, dblFmt, encName)
+		dstId, err := fromWorksetTextToDb(dbConn, modelDef, langDef, setName, "", jsonPath, csvDir)
 		if err != nil {
 			return err
 		}

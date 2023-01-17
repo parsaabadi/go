@@ -12,7 +12,7 @@ import (
 )
 
 // toLanguageCsv writes list of languages into csv files.
-func toLanguageCsv(dbConn *sql.DB, outDir string, isWriteUtf8bom bool) error {
+func toLanguageCsv(dbConn *sql.DB, outDir string) error {
 
 	// get list of languages
 	langDef, err := db.GetLanguages(dbConn)
@@ -27,7 +27,6 @@ func toLanguageCsv(dbConn *sql.DB, outDir string, isWriteUtf8bom bool) error {
 	err = toCsvFile(
 		outDir,
 		"lang_lst.csv",
-		isWriteUtf8bom,
 		[]string{"lang_id", "lang_code", "lang_name"},
 		func() (bool, []string, error) {
 			if 0 <= idx && idx < len(langDef.Lang) {
@@ -65,7 +64,6 @@ func toLanguageCsv(dbConn *sql.DB, outDir string, isWriteUtf8bom bool) error {
 	err = toCsvFile(
 		outDir,
 		"lang_word.csv",
-		isWriteUtf8bom,
 		[]string{"lang_id", "word_code", "word_value"},
 		func() (bool, []string, error) {
 			if 0 <= idx && idx < len(kvArr) {
@@ -83,7 +81,7 @@ func toLanguageCsv(dbConn *sql.DB, outDir string, isWriteUtf8bom bool) error {
 }
 
 // toModelWordCsv writes list of model language-specific strings into csv file.
-func toModelWordCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom bool) error {
+func toModelWordCsv(dbConn *sql.DB, modelId int, outDir string) error {
 
 	// get list of model words
 	mwDef, err := db.GetModelWord(dbConn, modelId, "")
@@ -119,7 +117,6 @@ func toModelWordCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom b
 	err = toCsvFile(
 		outDir,
 		"model_word.csv",
-		isWriteUtf8bom,
 		[]string{"model_id", "lang_code", "word_code", "word_value"},
 		func() (bool, []string, error) {
 			if 0 <= idx && idx < len(mwArr) {
@@ -137,7 +134,7 @@ func toModelWordCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom b
 }
 
 // toModelProfileCsv writes model profile into csv files.
-func toModelProfileCsv(dbConn *sql.DB, modelName string, outDir string, isWriteUtf8bom bool) error {
+func toModelProfileCsv(dbConn *sql.DB, modelName string, outDir string) error {
 
 	// get model profile: default model profile is profile where name = model name
 	modelProfile, err := db.GetProfile(dbConn, modelName)
@@ -162,7 +159,6 @@ func toModelProfileCsv(dbConn *sql.DB, modelName string, outDir string, isWriteU
 	err = toCsvFile(
 		outDir,
 		"profile_option.csv",
-		isWriteUtf8bom,
 		[]string{"profile_name", "option_key", "option_value"},
 		func() (bool, []string, error) {
 			if 0 <= idx && idx < len(kvArr) {

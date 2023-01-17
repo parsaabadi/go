@@ -97,26 +97,26 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".run."+helper.CleanPath(runRow.Name))
 	}
 
-	err = os.MkdirAll(outDir, 0750)
-	if err != nil {
+	if !theCfg.isKeepOutputDir {
+		if ok := dirDeleteAndLog(outDir); !ok {
+			return errors.New("Error: unable to delete: " + outDir)
+		}
+	}
+	if err = os.MkdirAll(outDir, 0750); err != nil {
 		return err
 	}
 	fileCreated := make(map[string]bool)
 
 	// write model run metadata into json, parameters and output result values into csv files
-	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
-	isWriteUtf8bom := runOpts.Bool(useUtf8CsvArgKey)
-	isWriteAcc := !runOpts.Bool(noAccCsv)
-	isWriteMicro := !runOpts.Bool(noMicroCsv)
 
-	if err = toRunText(srcDb, modelDef, meta, outDir, csvName, fileCreated, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames, isWriteAcc, isWriteMicro); err != nil {
+	if err = toRunText(srcDb, modelDef, meta, outDir, csvName, fileCreated, isIdCsv, isUseIdNames); err != nil {
 		return err
 	}
 
 	// pack model run metadata and results into zip
 	if runOpts.Bool(zipArgKey) {
-		zipPath, err := helper.PackZip(outDir, "")
+		zipPath, err := helper.PackZip(outDir, !theCfg.isKeepOutputDir, "")
 		if err != nil {
 			return err
 		}
@@ -132,12 +132,9 @@ func toRunListText(
 	modelDef *db.ModelMeta,
 	outDir string,
 	fileCreated map[string]bool,
-	doubleFmt string,
 	isIdCsv bool,
-	isWriteUtf8bom bool,
 	doUseIdNames useIdNames,
-	isWriteAcc bool,
-	isWriteMicro bool) (bool, error) {
+) (bool, error) {
 
 	// get all successfully completed model runs
 	rl, err := db.GetRunFullTextList(dbConn, modelDef.Model.ModelId, true, "")
@@ -167,7 +164,7 @@ func toRunListText(
 
 	// read all run parameters, output accumulators and expressions and dump it into csv files
 	for k := range rl {
-		err = toRunText(dbConn, modelDef, &rl[k], outDir, "", fileCreated, doubleFmt, isIdCsv, isWriteUtf8bom, isUseIdNames, isWriteAcc, isWriteMicro)
+		err = toRunText(dbConn, modelDef, &rl[k], outDir, "", fileCreated, isIdCsv, isUseIdNames)
 		if err != nil {
 			return isUseIdNames, err
 		}
@@ -185,12 +182,9 @@ func toRunText(
 	outDir string,
 	csvName string,
 	fileCreated map[string]bool,
-	doubleFmt string,
 	isIdCsv bool,
-	isWriteUtf8bom bool,
 	isUseIdNames bool,
-	isWriteAcc bool,
-	isWriteMicro bool) error {
+) error {
 
 	// convert db rows into "public" format
 	runId := meta.Run.RunId
@@ -213,17 +207,32 @@ func toRunText(
 	microCsvDir := filepath.Join(outDir, csvName, "microdata")
 	nMd := len(meta.EntityGen)
 
-	err = os.MkdirAll(paramCsvDir, 0750)
-	if err != nil {
+	if !theCfg.isKeepOutputDir {
+		if ok := dirDeleteAndLog(paramCsvDir); !ok {
+			return errors.New("Error: unable to delete: " + paramCsvDir)
+		}
+	}
+	if err = os.MkdirAll(paramCsvDir, 0750); err != nil {
 		return err
 	}
-	err = os.MkdirAll(tableCsvDir, 0750)
-	if err != nil {
+
+	if !theCfg.isKeepOutputDir {
+		if ok := dirDeleteAndLog(tableCsvDir); !ok {
+			return errors.New("Error: unable to delete: " + tableCsvDir)
+		}
+	}
+	if err = os.MkdirAll(tableCsvDir, 0750); err != nil {
 		return err
 	}
-	if isWriteMicro && nMd > 0 {
-		err = os.MkdirAll(microCsvDir, 0750)
-		if err != nil {
+
+	if !theCfg.isNoMicroCsv && nMd > 0 {
+
+		if !theCfg.isKeepOutputDir {
+			if ok := dirDeleteAndLog(microCsvDir); !ok {
+				return errors.New("Error: unable to delete: " + microCsvDir)
+			}
+		}
+		if err = os.MkdirAll(microCsvDir, 0750); err != nil {
 			return err
 		}
 	}
@@ -239,7 +248,7 @@ func toRunText(
 			ModelDef:  modelDef,
 			Name:      modelDef.Param[j].Name,
 			IsIdCsv:   isIdCsv,
-			DoubleFmt: doubleFmt,
+			DoubleFmt: theCfg.doubleFmt,
 		}
 		paramLt := db.ReadParamLayout{ReadLayout: db.ReadLayout{
 			Name:   modelDef.Param[j].Name,
@@ -248,7 +257,7 @@ func toRunText(
 
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nP, ": ", paramLt.Name)
 
-		err = toCellCsvFile(dbConn, modelDef, paramLt, cvtParam, fileCreated, paramCsvDir, isWriteUtf8bom, "", "")
+		err = toCellCsvFile(dbConn, modelDef, paramLt, cvtParam, fileCreated, paramCsvDir, "", "")
 		if err != nil {
 			return err
 		}
@@ -284,26 +293,26 @@ func toRunText(
 			ModelDef: modelDef,
 			Name:     modelDef.Table[j].Name,
 		}
-		cvtExpr := &db.CellExprConverter{CellTableConverter: ctc, IsIdCsv: isIdCsv, DoubleFmt: doubleFmt}
-		cvtAcc := &db.CellAccConverter{CellTableConverter: ctc, IsIdCsv: isIdCsv, DoubleFmt: doubleFmt}
-		cvtAll := &db.CellAllAccConverter{CellTableConverter: ctc, IsIdCsv: isIdCsv, DoubleFmt: doubleFmt, ValueName: ""}
+		cvtExpr := &db.CellExprConverter{CellTableConverter: ctc, IsIdCsv: isIdCsv, DoubleFmt: theCfg.doubleFmt}
+		cvtAcc := &db.CellAccConverter{CellTableConverter: ctc, IsIdCsv: isIdCsv, DoubleFmt: theCfg.doubleFmt}
+		cvtAll := &db.CellAllAccConverter{CellTableConverter: ctc, IsIdCsv: isIdCsv, DoubleFmt: theCfg.doubleFmt, ValueName: ""}
 
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name)
 
-		err = toCellCsvFile(dbConn, modelDef, tblLt, cvtExpr, fileCreated, tableCsvDir, isWriteUtf8bom, "", "")
+		err = toCellCsvFile(dbConn, modelDef, tblLt, cvtExpr, fileCreated, tableCsvDir, "", "")
 		if err != nil {
 			return err
 		}
 
 		// write output table accumulators into csv file
-		if isWriteAcc {
+		if !theCfg.isNoAccCsv {
 
 			tblLt.IsAccum = true
 			tblLt.IsAllAccum = false
 
 			logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name, " accumulators")
 
-			err = toCellCsvFile(dbConn, modelDef, tblLt, cvtAcc, fileCreated, tableCsvDir, isWriteUtf8bom, "", "")
+			err = toCellCsvFile(dbConn, modelDef, tblLt, cvtAcc, fileCreated, tableCsvDir, "", "")
 			if err != nil {
 				return err
 			}
@@ -314,7 +323,7 @@ func toRunText(
 
 			logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name, " all accumulators")
 
-			err = toCellCsvFile(dbConn, modelDef, tblLt, cvtAll, fileCreated, tableCsvDir, isWriteUtf8bom, "", "")
+			err = toCellCsvFile(dbConn, modelDef, tblLt, cvtAll, fileCreated, tableCsvDir, "", "")
 			if err != nil {
 				return err
 			}
@@ -322,7 +331,7 @@ func toRunText(
 	}
 
 	// write microdata into csv file, if there is any microdata for that model run and microadata write enabled
-	if isWriteMicro && nMd > 0 {
+	if !theCfg.isNoMicroCsv && nMd > 0 {
 
 		omppLog.Log("  Microdata: ", nMd)
 
@@ -339,7 +348,7 @@ func toRunText(
 				Name:      modelDef.Entity[eIdx].Name,
 				EntityGen: &meta.EntityGen[j],
 				IsIdCsv:   isIdCsv,
-				DoubleFmt: doubleFmt,
+				DoubleFmt: theCfg.doubleFmt,
 			}
 			microLt := db.ReadMicroLayout{
 				ReadLayout: db.ReadLayout{
@@ -351,7 +360,7 @@ func toRunText(
 
 			logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nMd, ": ", microLt.Name)
 
-			err = toCellCsvFile(dbConn, modelDef, microLt, cvtMicro, fileCreated, microCsvDir, isWriteUtf8bom, "", "")
+			err = toCellCsvFile(dbConn, modelDef, microLt, cvtMicro, fileCreated, microCsvDir, "", "")
 			if err != nil {
 				return err
 			}

@@ -12,7 +12,7 @@ import (
 )
 
 // toModelTextCsv writes model text metadata (description and notes) into csv files.
-func toModelTextCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom bool) error {
+func toModelTextCsv(dbConn *sql.DB, modelId int, outDir string) error {
 
 	// get model text metadata in all languages
 	modelTxt, err := db.GetModelText(dbConn, modelId, "")
@@ -28,7 +28,6 @@ func toModelTextCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom b
 	err = toCsvFile(
 		outDir,
 		"model_dic_txt.csv",
-		isWriteUtf8bom,
 		[]string{"model_id", "lang_code", "descr", "note"},
 		func() (bool, []string, error) {
 
@@ -58,7 +57,6 @@ func toModelTextCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom b
 	err = toCsvFile(
 		outDir,
 		"type_dic_txt.csv",
-		isWriteUtf8bom,
 		[]string{"model_id", "model_type_id", "lang_code", "descr", "note"},
 		func() (bool, []string, error) {
 
@@ -89,7 +87,6 @@ func toModelTextCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom b
 	err = toCsvFile(
 		outDir,
 		"type_enum_txt.csv",
-		isWriteUtf8bom,
 		[]string{"model_id", "model_type_id", "enum_id", "lang_code", "descr", "note"},
 		func() (bool, []string, error) {
 
@@ -121,7 +118,6 @@ func toModelTextCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom b
 	err = toCsvFile(
 		outDir,
 		"parameter_dic_txt.csv",
-		isWriteUtf8bom,
 		[]string{"model_id", "model_parameter_id", "lang_code", "descr", "note"},
 		func() (bool, []string, error) {
 
@@ -152,7 +148,6 @@ func toModelTextCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom b
 	err = toCsvFile(
 		outDir,
 		"parameter_dims_txt.csv",
-		isWriteUtf8bom,
 		[]string{"model_id", "model_parameter_id", "dim_id", "lang_code", "descr", "note"},
 		func() (bool, []string, error) {
 
@@ -184,7 +179,6 @@ func toModelTextCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom b
 	err = toCsvFile(
 		outDir,
 		"table_dic_txt.csv",
-		isWriteUtf8bom,
 		[]string{"model_id", "model_table_id", "lang_code", "descr", "note", "expr_descr", "expr_note"},
 		func() (bool, []string, error) {
 
@@ -223,7 +217,6 @@ func toModelTextCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom b
 	err = toCsvFile(
 		outDir,
 		"table_dims_txt.csv",
-		isWriteUtf8bom,
 		[]string{"model_id", "model_table_id", "dim_id", "lang_code", "descr", "note"},
 		func() (bool, []string, error) {
 
@@ -255,7 +248,6 @@ func toModelTextCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom b
 	err = toCsvFile(
 		outDir,
 		"table_acc_txt.csv",
-		isWriteUtf8bom,
 		[]string{"model_id", "model_table_id", "acc_id", "lang_code", "descr", "note"},
 		func() (bool, []string, error) {
 
@@ -287,7 +279,6 @@ func toModelTextCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom b
 	err = toCsvFile(
 		outDir,
 		"table_expr_txt.csv",
-		isWriteUtf8bom,
 		[]string{"model_id", "model_table_id", "expr_id", "lang_code", "descr", "note"},
 		func() (bool, []string, error) {
 
@@ -319,7 +310,6 @@ func toModelTextCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom b
 	err = toCsvFile(
 		outDir,
 		"entity_dic_txt.csv",
-		isWriteUtf8bom,
 		[]string{"model_id", "model_entity_id", "lang_code", "descr", "note"},
 		func() (bool, []string, error) {
 
@@ -350,7 +340,6 @@ func toModelTextCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom b
 	err = toCsvFile(
 		outDir,
 		"entity_attr_txt.csv",
-		isWriteUtf8bom,
 		[]string{"model_id", "model_entity_id", "attr_id", "lang_code", "descr", "note"},
 		func() (bool, []string, error) {
 
@@ -382,7 +371,6 @@ func toModelTextCsv(dbConn *sql.DB, modelId int, outDir string, isWriteUtf8bom b
 	err = toCsvFile(
 		outDir,
 		"group_txt.csv",
-		isWriteUtf8bom,
 		[]string{"model_id", "group_id", "lang_code", "descr", "note"},
 		func() (bool, []string, error) {
 

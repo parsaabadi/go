@@ -55,6 +55,11 @@ Copy to "csv-all": read entire model from database and save .csv files:
 It dumps all input parameters sets into all_input_sets/parameterName.csv files.
 And for all model runs input parameters and output tables saved into all_model_runs/tableName.csv files.
 
+By default if output directory already exist then dbdopy delete it first to create a clean output results.
+If you want to keep existing output directory then use  -dbcopy.KeepOutputDir true:
+
+	dbcopy -m modelOne -dbcopy.KeepOutputDir true
+
 By default entire model data is copied.
 It is also possible to copy only:
 model run results and input parameters, set of input parameters (workset), modeling task metadata and task run history.
@@ -255,44 +260,45 @@ import (
 
 // dbcopy config keys to get values from ini-file or command line arguments.
 const (
-	copyToArgKey       = "dbcopy.To"                // copy to: text=db-to-text, db=text-to-db, db2db=db-to-db, csv=db-to-csv, csv-all=db-to-csv-all-in-one
-	deleteArgKey       = "dbcopy.Delete"            // delete model or workset or model run or modeling task from database
-	renameArgKey       = "dbcopy.Rename"            // rename workset or model run or modeling task
-	modelNameArgKey    = "dbcopy.ModelName"         // model name
-	modelNameShortKey  = "m"                        // model name (short form)
-	modelDigestArgKey  = "dbcopy.ModelDigest"       // model hash digest
-	setNameArgKey      = "dbcopy.SetName"           // workset name
-	setNameShortKey    = "s"                        // workset name (short form)
-	setNewNameArgKey   = "dbcopy.ToSetName"         // new workset name, to rename workset
-	setIdArgKey        = "dbcopy.SetId"             // workset id, workset is a set of model input parameters
-	runNameArgKey      = "dbcopy.RunName"           // model run name
-	runNewNameArgKey   = "dbcopy.ToRunName"         // new run name, to rename run
-	runIdArgKey        = "dbcopy.RunId"             // model run id
-	runDigestArgKey    = "dbcopy.RunDigest"         // model run hash digest
-	runFirstArgKey     = "dbcopy.FirstRun"          // use first model run
-	runLastArgKey      = "dbcopy.LastRun"           // use last model run
-	taskNameArgKey     = "dbcopy.TaskName"          // modeling task name
-	taskNewNameArgKey  = "dbcopy.ToTaskName"        // new task name, to rename task
-	taskIdArgKey       = "dbcopy.TaskId"            // modeling task id
-	fromSqliteArgKey   = "dbcopy.FromSqlite"        // input db is SQLite file
-	dbConnStrArgKey    = "dbcopy.Database"          // db connection string
-	dbDriverArgKey     = "dbcopy.DatabaseDriver"    // db driver name, ie: SQLite, odbc, sqlite3
-	toSqliteArgKey     = "dbcopy.ToSqlite"          // output db is SQLite file
-	toDbConnStrArgKey  = "dbcopy.ToDatabase"        // output db connection string
-	toDbDriverArgKey   = "dbcopy.ToDatabaseDriver"  // output db driver name, ie: SQLite, odbc, sqlite3
-	inputDirArgKey     = "dbcopy.InputDir"          // input dir to read model .json and .csv files
-	outputDirArgKey    = "dbcopy.OutputDir"         // output dir to write model .json and .csv files
-	paramDirArgKey     = "dbcopy.ParamDir"          // path to workset parameters directory
-	paramDirShortKey   = "p"                        // path to workset parameters directory (short form)
-	zipArgKey          = "dbcopy.Zip"               // create output or use as input model.zip
-	doubleFormatArgKey = "dbcopy.DoubleFormat"      // convert to string format for float and double
-	useIdCsvArgKey     = "dbcopy.IdCsv"             // if true then create csv files with enum id's default: enum code
-	noAccCsv           = "dbcopy.NoAccumulatorsCsv" // if true then do not create accumulators .csv files
-	noMicroCsv         = "dbcopy.NoMicrodataCsv"    // if true then do not create microdata .csv files
-	noDigestCheck      = "dbcopy.NoDigestCheck"     // if true then ignore input model digest, use model name only
-	useIdNamesArgKey   = "dbcopy.IdOutputNames"     // if true then always use id's in output directory and file names, false never use it
-	encodingArgKey     = "dbcopy.CodePage"          // code page for converting source files, e.g. windows-1252
-	useUtf8CsvArgKey   = "dbcopy.Utf8BomIntoCsv"    // if true then write utf-8 BOM into csv file
+	copyToArgKey        = "dbcopy.To"                // copy to: text=db-to-text, db=text-to-db, db2db=db-to-db, csv=db-to-csv, csv-all=db-to-csv-all-in-one
+	deleteArgKey        = "dbcopy.Delete"            // delete model or workset or model run or modeling task from database
+	renameArgKey        = "dbcopy.Rename"            // rename workset or model run or modeling task
+	modelNameArgKey     = "dbcopy.ModelName"         // model name
+	modelNameShortKey   = "m"                        // model name (short form)
+	modelDigestArgKey   = "dbcopy.ModelDigest"       // model hash digest
+	setNameArgKey       = "dbcopy.SetName"           // workset name
+	setNameShortKey     = "s"                        // workset name (short form)
+	setNewNameArgKey    = "dbcopy.ToSetName"         // new workset name, to rename workset
+	setIdArgKey         = "dbcopy.SetId"             // workset id, workset is a set of model input parameters
+	runNameArgKey       = "dbcopy.RunName"           // model run name
+	runNewNameArgKey    = "dbcopy.ToRunName"         // new run name, to rename run
+	runIdArgKey         = "dbcopy.RunId"             // model run id
+	runDigestArgKey     = "dbcopy.RunDigest"         // model run hash digest
+	runFirstArgKey      = "dbcopy.FirstRun"          // use first model run
+	runLastArgKey       = "dbcopy.LastRun"           // use last model run
+	taskNameArgKey      = "dbcopy.TaskName"          // modeling task name
+	taskNewNameArgKey   = "dbcopy.ToTaskName"        // new task name, to rename task
+	taskIdArgKey        = "dbcopy.TaskId"            // modeling task id
+	fromSqliteArgKey    = "dbcopy.FromSqlite"        // input db is SQLite file
+	dbConnStrArgKey     = "dbcopy.Database"          // db connection string
+	dbDriverArgKey      = "dbcopy.DatabaseDriver"    // db driver name, ie: SQLite, odbc, sqlite3
+	toSqliteArgKey      = "dbcopy.ToSqlite"          // output db is SQLite file
+	toDbConnStrArgKey   = "dbcopy.ToDatabase"        // output db connection string
+	toDbDriverArgKey    = "dbcopy.ToDatabaseDriver"  // output db driver name, ie: SQLite, odbc, sqlite3
+	inputDirArgKey      = "dbcopy.InputDir"          // input dir to read model .json and .csv files
+	outputDirArgKey     = "dbcopy.OutputDir"         // output dir to write model .json and .csv files
+	keepOutputDirArgKey = "dbcopy.KeepOutputDir"     // keep output directory if it is already exist
+	paramDirArgKey      = "dbcopy.ParamDir"          // path to workset parameters directory
+	paramDirShortKey    = "p"                        // path to workset parameters directory (short form)
+	zipArgKey           = "dbcopy.Zip"               // create output or use as input model.zip
+	doubleFormatArgKey  = "dbcopy.DoubleFormat"      // convert to string format for float and double
+	useIdCsvArgKey      = "dbcopy.IdCsv"             // if true then create csv files with enum id's default: enum code
+	noAccCsvArgKey      = "dbcopy.NoAccumulatorsCsv" // if true then do not create accumulators .csv files
+	noMicroCsvArgKey    = "dbcopy.NoMicrodataCsv"    // if true then do not create microdata .csv files
+	noDigestCheckArgKey = "dbcopy.NoDigestCheck"     // if true then ignore input model digest, use model name only
+	useIdNamesArgKey    = "dbcopy.IdOutputNames"     // if true then always use id's in output directory and file names, false never use it
+	encodingArgKey      = "dbcopy.CodePage"          // code page for converting source files, e.g. windows-1252
+	useUtf8CsvArgKey    = "dbcopy.Utf8BomIntoCsv"    // if true then write utf-8 BOM into csv file
 )
 
 // useIdNames is type to define how to make run and set directory and file names
@@ -303,6 +309,25 @@ const (
 	yesUseIdNames                       // always use run and set id in directory and file names
 	noUseIdNames                        // never use run and set id in directory and file names
 )
+
+// run options
+var theCfg = struct {
+	doubleFmt       string // format to convert float or double value to string
+	isKeepOutputDir bool   // if true then keep existing output directory
+	isNoAccCsv      bool   // if true then do not create accumulators .csv files
+	isNoMicroCsv    bool   // if true then do not create microdata .csv files
+	isNoDigestCheck bool   // if true then ignore input model digest, use model name only to load values from csv
+	encodingName    string // code page for converting source files, e.g. windows-1252
+	isWriteUtf8Bom  bool   // if true then write utf-8 BOM into csv file
+}{
+	doubleFmt:       "%.15g",
+	isKeepOutputDir: false, // remove existing out directoris by default
+	isNoAccCsv:      false, // by default do full model dump: create accumulators .csv files
+	isNoMicroCsv:    false, // by default do full model dump: create microdata .csv files
+	isNoDigestCheck: false, // by default check model digest
+	encodingName:    "",    // by default detect utf-8 encoding or use OS-specific deafult: windows-1252 on Windowds and utf-8 outside
+	isWriteUtf8Bom:  false, // do not write BOM by default
+}
 
 func main() {
 	defer exitOnPanic() // fatal error handler: log and exit
@@ -345,17 +370,18 @@ func mainBody(args []string) error {
 	_ = flag.String(toDbDriverArgKey, db.SQLiteDbDriver, "output database driver name: SQLite, odbc, sqlite3")
 	_ = flag.String(inputDirArgKey, "", "input directory to read model .json and .csv files")
 	_ = flag.String(outputDirArgKey, "", "output directory for model .json and .csv files")
+	_ = flag.Bool(keepOutputDirArgKey, theCfg.isKeepOutputDir, "keep (do not delete) existing output directory")
 	_ = flag.String(paramDirArgKey, "", "path to parameters directory (input parameters set directory)")
 	_ = flag.String(paramDirShortKey, "", "path to parameters directory (short of "+paramDirArgKey+")")
 	_ = flag.Bool(zipArgKey, false, "create output model.zip or use model.zip as input")
-	_ = flag.String(doubleFormatArgKey, "%.15g", "convert to string format for float and double")
+	_ = flag.String(doubleFormatArgKey, theCfg.doubleFmt, "convert to string format for float and double")
 	_ = flag.Bool(useIdCsvArgKey, false, "if true then create csv files with enum id's default: enum code")
-	_ = flag.Bool(noAccCsv, false, "if true then do not create accumulators .csv files")
-	_ = flag.Bool(noMicroCsv, false, "if true then do not create microdata .csv files")
-	_ = flag.Bool(noDigestCheck, false, "if true then ignore input model digest, use model name only")
+	_ = flag.Bool(noAccCsvArgKey, theCfg.isNoAccCsv, "if true then do not create accumulators .csv files")
+	_ = flag.Bool(noMicroCsvArgKey, theCfg.isNoMicroCsv, "if true then do not create microdata .csv files")
+	_ = flag.Bool(noDigestCheckArgKey, theCfg.isNoDigestCheck, "if true then ignore input model digest, use model name only")
 	_ = flag.Bool(useIdNamesArgKey, false, "if true then always use id's in output directory names, false never use. Default for csv: only if name conflict")
-	_ = flag.String(encodingArgKey, "", "code page to convert source file into utf-8, e.g.: windows-1252")
-	_ = flag.Bool(useUtf8CsvArgKey, false, "if true then write utf-8 BOM into csv file")
+	_ = flag.String(encodingArgKey, theCfg.encodingName, "code page to convert source file into utf-8, e.g.: windows-1252")
+	_ = flag.Bool(useUtf8CsvArgKey, theCfg.isWriteUtf8Bom, "if true then write utf-8 BOM into csv file")
 
 	// pairs of full and short argument names to map short name to full name
 	var optFs = []config.FullShort{
@@ -383,6 +409,15 @@ func mainBody(args []string) error {
 		return errors.New("invalid (empty) model name and model digest")
 	}
 	omppLog.Log("Model ", modelName, " ", modelDigest)
+
+	// set run options
+	theCfg.doubleFmt = runOpts.String(doubleFormatArgKey)
+	theCfg.isKeepOutputDir = runOpts.Bool(keepOutputDirArgKey)
+	theCfg.isNoAccCsv = runOpts.Bool(noAccCsvArgKey)
+	theCfg.isNoMicroCsv = runOpts.Bool(noMicroCsvArgKey)
+	theCfg.isNoDigestCheck = runOpts.Bool(noDigestCheckArgKey)
+	theCfg.encodingName = runOpts.String(encodingArgKey)
+	theCfg.isWriteUtf8Bom = runOpts.Bool(useUtf8CsvArgKey)
 
 	// minimal validation of run options
 	//

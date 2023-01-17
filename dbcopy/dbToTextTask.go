@@ -137,8 +137,12 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 	}
 
 	// create new output directory for task metadata
-	err = os.MkdirAll(outDir, 0750)
-	if err != nil {
+	if !theCfg.isKeepOutputDir {
+		if ok := dirDeleteAndLog(outDir); !ok {
+			return errors.New("Error: unable to delete: " + outDir)
+		}
+	}
+	if err = os.MkdirAll(outDir, 0750); err != nil {
 		return err
 	}
 	fileCreated := make(map[string]bool)
@@ -151,11 +155,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 	// save runs from model run history
 	var runIdLst []int
 	var isRunNotFound, isRunNotCompleted bool
-	dblFmt := runOpts.String(doubleFormatArgKey)
 	isIdCsv := runOpts.Bool(useIdCsvArgKey)
-	isWriteUtf8bom := runOpts.Bool(useUtf8CsvArgKey)
-	isWriteAcc := !runOpts.Bool(noAccCsv)
-	isWriteMicro := !runOpts.Bool(noMicroCsv)
 
 	for j := range meta.TaskRun {
 	nextRun:
@@ -192,7 +192,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 			}
 
 			// write model run metadata into json, parameters and output result values into csv files
-			if err = toRunText(srcDb, modelDef, rm, outDir, "", fileCreated, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames, isWriteAcc, isWriteMicro); err != nil {
+			if err = toRunText(srcDb, modelDef, rm, outDir, "", fileCreated, isIdCsv, isUseIdNames); err != nil {
 				return err
 			}
 		}
@@ -232,7 +232,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 		}
 
 		// write workset metadata into json and parameter values into csv files
-		if err = toWorksetText(dbConn, modelDef, wm, outDir, fileCreated, dblFmt, isIdCsv, isWriteUtf8bom, isUseIdNames); err != nil {
+		if err = toWorksetText(dbConn, modelDef, wm, outDir, fileCreated, isIdCsv, isUseIdNames); err != nil {
 			return err
 		}
 		return nil
@@ -271,7 +271,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 
 	// pack worksets metadata json and csv files into zip
 	if runOpts.Bool(zipArgKey) {
-		zipPath, err := helper.PackZip(outDir, "")
+		zipPath, err := helper.PackZip(outDir, !theCfg.isKeepOutputDir, "")
 		if err != nil {
 			return err
 		}

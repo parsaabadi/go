@@ -51,7 +51,7 @@ func textToDb(modelName string, runOpts *config.RunOptions) error {
 		if outDir == "" {
 			outDir = filepath.Dir(inpDir)
 		}
-		if err = helper.UnpackZip(filepath.Join(inpDir, modelName+".zip"), outDir); err != nil {
+		if err = helper.UnpackZip(filepath.Join(inpDir, modelName+".zip"), !theCfg.isKeepOutputDir, outDir); err != nil {
 			return err
 		}
 		inpDir = filepath.Join(outDir, modelName)
@@ -71,16 +71,12 @@ func textToDb(modelName string, runOpts *config.RunOptions) error {
 
 	// insert model runs data from csv into database:
 	// parameters, output expressions and accumulators
-	dblFmt := runOpts.String(doubleFormatArgKey)
-	encName := runOpts.String(encodingArgKey)
-	isNoModelDigestCheck := runOpts.Bool(noDigestCheck)
-
-	if err = fromRunTextListToDb(dstDb, dbFacet, modelDef, langDef, inpDir, isNoModelDigestCheck, dblFmt, encName); err != nil {
+	if err = fromRunTextListToDb(dstDb, dbFacet, modelDef, langDef, inpDir); err != nil {
 		return err
 	}
 
 	// insert model workset data from csv into database: input parameters
-	if err = fromWorksetTextListToDb(dstDb, modelDef, langDef, inpDir, isNoModelDigestCheck, dblFmt, encName); err != nil {
+	if err = fromWorksetTextListToDb(dstDb, modelDef, langDef, inpDir); err != nil {
 		return err
 	}
 

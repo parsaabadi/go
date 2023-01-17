@@ -110,8 +110,6 @@ func dbToDbTask(modelName string, modelDigest string, runOpts *config.RunOptions
 	// copy to destiantion model runs from task run history
 	var runIdLst []int
 	var isRunNotFound, isRunNotCompleted bool
-	dblFmt := runOpts.String(doubleFormatArgKey)
-	isNoModelDigestCheck := runOpts.Bool(noDigestCheck)
 
 	for j := range meta.TaskRun {
 	nextRun:
@@ -152,12 +150,12 @@ func dbToDbTask(modelName string, modelDigest string, runOpts *config.RunOptions
 			if err != nil {
 				return err
 			}
-			if isNoModelDigestCheck {
+			if theCfg.isNoDigestCheck {
 				runPub.ModelDigest = "" // model digest validation disabled
 			}
 
 			// copy source model run metadata, parameter values, output results into destination database
-			_, err = copyRunDbToDb(srcDb, dstDb, dbFacet, srcModel, dstModel, rm.Run.RunId, runPub, dstLang, dblFmt)
+			_, err = copyRunDbToDb(srcDb, dstDb, dbFacet, srcModel, dstModel, rm.Run.RunId, runPub, dstLang)
 			if err != nil {
 				return err
 			}
@@ -202,7 +200,7 @@ func dbToDbTask(modelName string, modelDigest string, runOpts *config.RunOptions
 		if err != nil {
 			return err
 		}
-		if isNoModelDigestCheck {
+		if theCfg.isNoDigestCheck {
 			setPub.ModelDigest = "" // model digest validation disabled
 		}
 
