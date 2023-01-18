@@ -49,31 +49,13 @@ func toRunCsv(
 	microCsvDir := filepath.Join(csvTop, "microdata")
 	nMd := len(meta.EntityGen)
 
-	if !theCfg.isKeepOutputDir {
-		if ok := dirDeleteAndLog(paramCsvDir); !ok {
-			return errors.New("Error: unable to delete: " + paramCsvDir)
-		}
-	}
 	if e := os.MkdirAll(paramCsvDir, 0750); e != nil {
 		return e
-	}
-
-	if !theCfg.isKeepOutputDir {
-		if ok := dirDeleteAndLog(tableCsvDir); !ok {
-			return errors.New("Error: unable to delete: " + tableCsvDir)
-		}
 	}
 	if e := os.MkdirAll(tableCsvDir, 0750); e != nil {
 		return e
 	}
-
 	if !theCfg.isNoMicroCsv && nMd > 0 {
-
-		if !theCfg.isKeepOutputDir {
-			if ok := dirDeleteAndLog(microCsvDir); !ok {
-				return errors.New("Error: unable to delete: " + microCsvDir)
-			}
-		}
 		if e := os.MkdirAll(microCsvDir, 0750); e != nil {
 			return e
 		}

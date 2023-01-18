@@ -246,7 +246,7 @@ func toWorksetCsv(
 		}
 	}
 
-	if !theCfg.isKeepOutputDir {
+	if !isAllInOne && !theCfg.isKeepOutputDir {
 		if ok := dirDeleteAndLog(csvDir); !ok {
 			return errors.New("Error: unable to delete: " + csvDir)
 		}

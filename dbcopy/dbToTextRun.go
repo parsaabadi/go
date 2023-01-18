@@ -207,31 +207,13 @@ func toRunText(
 	microCsvDir := filepath.Join(outDir, csvName, "microdata")
 	nMd := len(meta.EntityGen)
 
-	if !theCfg.isKeepOutputDir {
-		if ok := dirDeleteAndLog(paramCsvDir); !ok {
-			return errors.New("Error: unable to delete: " + paramCsvDir)
-		}
-	}
 	if err = os.MkdirAll(paramCsvDir, 0750); err != nil {
 		return err
-	}
-
-	if !theCfg.isKeepOutputDir {
-		if ok := dirDeleteAndLog(tableCsvDir); !ok {
-			return errors.New("Error: unable to delete: " + tableCsvDir)
-		}
 	}
 	if err = os.MkdirAll(tableCsvDir, 0750); err != nil {
 		return err
 	}
-
 	if !theCfg.isNoMicroCsv && nMd > 0 {
-
-		if !theCfg.isKeepOutputDir {
-			if ok := dirDeleteAndLog(microCsvDir); !ok {
-				return errors.New("Error: unable to delete: " + microCsvDir)
-			}
-		}
 		if err = os.MkdirAll(microCsvDir, 0750); err != nil {
 			return err
 		}
