@@ -21,7 +21,7 @@ import (
 // If NoAccumulatorsCsv is true then accumulators CSV files are not included in result.
 // It is significantly faster to porduce the result archive, we but cannot import it back into the model database,
 // it is only to analyze model output values CSV data using some other tools
-// If NoMicrodataCsv is true then microdata CSV files are not included in result.
+// If NoMicrodata is true then microdata not included in result.
 // If Utf8BomIntoCsv is true then add utf-8 byte order mark into csv files
 func modelDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -31,7 +31,7 @@ func modelDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 	// decode json download options
 	opts := struct {
 		NoAccumulatorsCsv bool
-		NoMicrodataCsv    bool
+		NoMicrodata       bool
 		Utf8BomIntoCsv    bool
 	}{}
 	if !jsonRequestDecode(w, r, false, &opts) {
@@ -91,7 +91,7 @@ func modelDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// create model download files on separate thread
-	cmd, cmdMsg := makeModelDownloadCommand(mb, logPath, opts.NoAccumulatorsCsv, opts.NoMicrodataCsv, opts.Utf8BomIntoCsv)
+	cmd, cmdMsg := makeModelDownloadCommand(mb, logPath, opts.NoAccumulatorsCsv, opts.NoMicrodata, opts.Utf8BomIntoCsv)
 
 	go makeDownload(baseName, cmd, cmdMsg, logPath)
 
@@ -107,7 +107,7 @@ func modelDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 // If NoAccumulatorsCsv is true then accumulators CSV files are not included in result.
 // It is significantly faster to porduce the result archive, we but cannot import it back into the model database,
 // it is only to analyze model output values CSV data using some other tools
-// If NoMicrodataCsv is true then microdata CSV files are not included in result.
+// If NoMicrodata is true then microdata not included in result.
 // If Utf8BomIntoCsv is true then add utf-8 byte order mark into csv files
 func runDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -118,7 +118,7 @@ func runDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 	// decode json download options
 	opts := struct {
 		NoAccumulatorsCsv bool
-		NoMicrodataCsv    bool
+		NoMicrodata       bool
 		Utf8BomIntoCsv    bool
 	}{}
 	if !jsonRequestDecode(w, r, false, &opts) {
@@ -197,7 +197,7 @@ func runDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// create model run download files on separate thread
-	cmd, cmdMsg := makeRunDownloadCommand(mb, r0.RunId, logPath, opts.NoAccumulatorsCsv, opts.NoMicrodataCsv, opts.Utf8BomIntoCsv)
+	cmd, cmdMsg := makeRunDownloadCommand(mb, r0.RunId, logPath, opts.NoAccumulatorsCsv, opts.NoMicrodata, opts.Utf8BomIntoCsv)
 
 	go makeDownload(baseName, cmd, cmdMsg, logPath)
 

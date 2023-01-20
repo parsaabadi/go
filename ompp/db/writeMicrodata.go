@@ -70,30 +70,30 @@ func WriteMicrodataFrom(
 // Return run entity metadata rows.
 func doWriteMicrodataFrom(
 	trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta, runMeta *RunMeta, entityName string, runId int, from func() (interface{}, error), doubleFmt string,
-) ([]runEntityRow, error) {
+) ([]RunEntityRow, error) {
 
 	// find entity by name
 	eIdx, ok := modelDef.EntityByName(entityName)
 	if !ok {
-		return []runEntityRow{}, errors.New("entity not found: " + entityName)
+		return []RunEntityRow{}, errors.New("entity not found: " + entityName)
 	}
 	entity := &modelDef.Entity[eIdx]
 
 	// find entity generation by name and check: generation digest and db table name are not empty
 	gIdx, ok := runMeta.EntityGenByEntityId(modelDef.Entity[eIdx].EntityId)
 	if !ok {
-		return []runEntityRow{}, errors.New("model entity generation not found by entity id: " + strconv.Itoa(modelDef.Entity[eIdx].EntityId) + " " + entityName)
+		return []RunEntityRow{}, errors.New("model entity generation not found by entity id: " + strconv.Itoa(modelDef.Entity[eIdx].EntityId) + " " + entityName)
 	}
 	entityGen := &runMeta.EntityGen[gIdx]
 
 	if entityGen == nil {
-		return []runEntityRow{}, errors.New("invalid (empty) entity generation metadata")
+		return []RunEntityRow{}, errors.New("invalid (empty) entity generation metadata")
 	}
 	if entityGen.GenDigest == "" {
-		return []runEntityRow{}, errors.New("invalid (empty) microdata entity generation digest, entity: " + entityName)
+		return []RunEntityRow{}, errors.New("invalid (empty) microdata entity generation digest, entity: " + entityName)
 	}
 	if entityGen.DbEntityTable == "" {
-		return []runEntityRow{}, errors.New("invalid (empty) microdata entity database table name, entity: " + entityName)
+		return []RunEntityRow{}, errors.New("invalid (empty) microdata entity database table name, entity: " + entityName)
 	}
 
 	// find entity generation attributes
@@ -103,7 +103,7 @@ func doWriteMicrodataFrom(
 
 		aIdx, isOk := entity.AttrByKey(ga.AttrId)
 		if !isOk {
-			return []runEntityRow{}, errors.New("entity attribute not found, id: " + strconv.Itoa(ga.AttrId) + " " + entityName)
+			return []RunEntityRow{}, errors.New("entity attribute not found, id: " + strconv.Itoa(ga.AttrId) + " " + entityName)
 		}
 		entAttr[k] = entity.Attr[aIdx]
 	}
@@ -115,7 +115,7 @@ func doWriteMicrodataFrom(
 	err := TrxUpdate(trx,
 		"UPDATE run_lst SET sub_restart = sub_restart - 1 WHERE run_id = "+sRunId)
 	if err != nil {
-		return []runEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
+		return []RunEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
 	}
 
 	// check if model run exist and status is completed
@@ -130,12 +130,12 @@ func doWriteMicrodataFrom(
 		})
 	switch {
 	case err == sql.ErrNoRows:
-		return []runEntityRow{}, errors.New("model run not found, id: " + sRunId)
+		return []RunEntityRow{}, errors.New("model run not found, id: " + sRunId)
 	case err != nil:
-		return []runEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
+		return []RunEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
 	}
 	if !IsRunCompleted(st) {
-		return []runEntityRow{}, errors.New("model run not completed, id: " + sRunId)
+		return []RunEntityRow{}, errors.New("model run not completed, id: " + sRunId)
 	}
 
 	// check if microdata values not already exist for that run
@@ -155,10 +155,10 @@ func doWriteMicrodataFrom(
 		})
 	switch {
 	case err != nil && err != sql.ErrNoRows:
-		return []runEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
+		return []RunEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
 	}
 	if n > 0 {
-		return []runEntityRow{}, errors.New("model run with id: " + sRunId + " already contain microdata values " + entityName)
+		return []RunEntityRow{}, errors.New("model run with id: " + sRunId + " already contain microdata values " + entityName)
 	}
 
 	// UPDATE id_lst SET id_value =
@@ -177,7 +177,7 @@ func doWriteMicrodataFrom(
 			" END"+
 			" WHERE id_key = 'entity_hid'")
 	if err != nil {
-		return []runEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
+		return []RunEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
 	}
 
 	// check if entity generation exist by generation digest
@@ -192,7 +192,7 @@ func doWriteMicrodataFrom(
 		})
 	switch {
 	case err != nil && err != sql.ErrNoRows:
-		return []runEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
+		return []RunEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
 	}
 	sGenHid := strconv.Itoa(genHid)
 
@@ -209,9 +209,9 @@ func doWriteMicrodataFrom(
 			})
 		switch {
 		case err == sql.ErrNoRows:
-			return []runEntityRow{}, errors.New("invalid destination database, likely not an openM++ database")
+			return []RunEntityRow{}, errors.New("invalid destination database, likely not an openM++ database")
 		case err != nil:
-			return []runEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
+			return []RunEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
 		}
 
 		// insert entity generation metadata and generation attributes metadata
@@ -226,7 +226,7 @@ func doWriteMicrodataFrom(
 				toQuotedMax(entityGen.GenDigest, codeDbMax)+")",
 		)
 		if err != nil {
-			return []runEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
+			return []RunEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
 		}
 
 		for _, a := range entAttr {
@@ -239,7 +239,7 @@ func doWriteMicrodataFrom(
 					sEntHid+")",
 			)
 			if err != nil {
-				return []runEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
+				return []RunEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
 			}
 		}
 
@@ -258,7 +258,7 @@ func doWriteMicrodataFrom(
 
 			sqlType, err := a.typeOf.sqlColumnType(dbFacet)
 			if err != nil {
-				return []runEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
+				return []RunEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
 			}
 			if a.typeOf.IsFloat() {
 				attrSql += a.colName + " " + sqlType + " NULL, "
@@ -278,7 +278,7 @@ func doWriteMicrodataFrom(
 		)
 		err = TrxUpdate(trx, tSql)
 		if err != nil {
-			return []runEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
+			return []RunEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
 		}
 	}
 
@@ -296,13 +296,13 @@ func doWriteMicrodataFrom(
 			sRunId+", "+sGenHid+", "+sRunId+", NULL)",
 	)
 	if err != nil {
-		return []runEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
+		return []RunEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
 	}
 
 	// create microdata digest calculator
 	hMd5, digestFrom, err := digestMicrodataFrom(modelDef, entityName, entityGen, doubleFmt)
 	if err != nil {
-		return []runEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
+		return []RunEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
 	}
 
 	// make sql to insert microdata values into model run
@@ -312,7 +312,7 @@ func doWriteMicrodataFrom(
 
 	// execute sql insert using put() above for each row
 	if err = TrxUpdateStatement(trx, q, put); err != nil {
-		return []runEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
+		return []RunEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
 	}
 
 	// update microdata digest with actual value
@@ -323,7 +323,7 @@ func doWriteMicrodataFrom(
 			" WHERE run_id = "+sRunId+
 			" AND entity_gen_hid ="+sGenHid)
 	if err != nil {
-		return []runEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
+		return []RunEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
 	}
 
 	// find base run by digest, it must exist
@@ -341,7 +341,7 @@ func doWriteMicrodataFrom(
 	switch {
 	// case err == sql.ErrNoRows: it must exist, at least as newly inserted row above
 	case err != nil:
-		return []runEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
+		return []RunEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
 	}
 
 	// if microdata values already exist then update base run id
@@ -353,16 +353,16 @@ func doWriteMicrodataFrom(
 				" WHERE run_id = "+sRunId+
 				" AND entity_gen_hid ="+sGenHid)
 		if err != nil {
-			return []runEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
+			return []RunEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
 		}
 		err = TrxUpdate(trx, "DELETE FROM "+entityGen.DbEntityTable+" WHERE run_id = "+sRunId)
 		if err != nil {
-			return []runEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
+			return []RunEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
 		}
 	}
 
 	// select actual list of microdata run value digests ordered by entity generation Hid
-	reRows := []runEntityRow{}
+	reRows := []RunEntityRow{}
 
 	err = TrxSelectRows(trx,
 		"SELECT run_id, entity_gen_hid, value_digest"+
@@ -370,7 +370,7 @@ func doWriteMicrodataFrom(
 			" WHERE run_id = "+strconv.Itoa(runId)+
 			" ORDER BY 1, 2",
 		func(rows *sql.Rows) error {
-			var r runEntityRow
+			var r RunEntityRow
 			var nId int
 			var svd sql.NullString
 			if err := rows.Scan(&nId, &r.GenHid, &svd); err != nil {
@@ -383,14 +383,14 @@ func doWriteMicrodataFrom(
 			return nil
 		})
 	if err != nil {
-		return []runEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
+		return []RunEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
 	}
 
 	// completed OK, restore run_lst values
 	err = TrxUpdate(trx,
 		"UPDATE run_lst SET sub_restart = sub_restart + 1 WHERE run_id = "+sRunId)
 	if err != nil {
-		return []runEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
+		return []RunEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
 	}
 
 	return reRows, nil

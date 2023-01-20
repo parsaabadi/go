@@ -179,7 +179,7 @@ func (pub *RunPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunMeta, er
 		Param:     make([]runParam, len(pub.Param)),
 		Table:     make([]runTable, len(pub.Table)),
 		EntityGen: make([]EntityGenMeta, len(pub.Entity)),
-		RunEntity: []runEntityRow{},
+		RunEntity: []RunEntityRow{},
 		Progress:  make([]RunProgress, len(pub.Progress)),
 	}
 

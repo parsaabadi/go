@@ -55,7 +55,7 @@ func makeModelDownloadCommand(mb modelBasic, logPath string, isNoAcc bool, isNoM
 		cmdMsg += " -dbcopy.NoAccumulatorsCsv"
 	}
 	if isNoMd {
-		cmdMsg += " -dbcopy.NoMicrodataCsv"
+		cmdMsg += " -dbcopy.NoMicrodata"
 	}
 	if isCsvBom {
 		cmdMsg += " -dbcopy.Utf8BomIntoCsv"
@@ -74,7 +74,7 @@ func makeModelDownloadCommand(mb modelBasic, logPath string, isNoAcc bool, isNoM
 		cArgs = append(cArgs, "-dbcopy.NoAccumulatorsCsv")
 	}
 	if isNoMd {
-		cArgs = append(cArgs, "-dbcopy.NoMicrodataCsv")
+		cArgs = append(cArgs, "-dbcopy.NoMicrodata")
 	}
 	if isCsvBom {
 		cArgs = append(cArgs, "-dbcopy.Utf8BomIntoCsv")
@@ -99,7 +99,7 @@ func makeRunDownloadCommand(mb modelBasic, runId int, logPath string, isNoAcc bo
 		cmdMsg += " -dbcopy.NoAccumulatorsCsv"
 	}
 	if isNoMd {
-		cmdMsg += " -dbcopy.NoMicrodataCsv"
+		cmdMsg += " -dbcopy.NoMicrodata"
 	}
 	if isCsvBom {
 		cmdMsg += " -dbcopy.Utf8BomIntoCsv"
@@ -125,7 +125,7 @@ func makeRunDownloadCommand(mb modelBasic, runId int, logPath string, isNoAcc bo
 		cArgs = append(cArgs, "-dbcopy.NoAccumulatorsCsv")
 	}
 	if isNoMd {
-		cArgs = append(cArgs, "-dbcopy.NoMicrodataCsv")
+		cArgs = append(cArgs, "-dbcopy.NoMicrodata")
 	}
 	if isCsvBom {
 		cArgs = append(cArgs, "-dbcopy.Utf8BomIntoCsv")

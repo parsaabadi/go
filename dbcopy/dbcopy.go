@@ -133,16 +133,16 @@ To explicitly control usage of id's in directory and file names use IdOutputName
 	dbcopy -m modelOne -dbcopy.To csv -dbcopy.IdOutputNames=false
 
 Dbcopy create csv files for model parameters, microdata output tables value(s) and accumulators.
-It is often accumulators or microdata not required and you can suppress by using NoAccumulatorsCsv=true or NoMicrodataCsv=true:
+It is often accumulators or microdata not required and you can suppress by using NoAccumulatorsCsv=true or NoMicrodata=true:
 
 	dbcopy -m modelOne -dbcopy.NoAccumulatorsCsv
 	dbcopy -m modelOne -dbcopy.NoAccumulatorsCsv=true
 	dbcopy -m modelOne -dbcopy.NoAccumulatorsCsv -dbcopy.To csv
 	dbcopy -m modelOne -dbcopy.NoAccumulatorsCsv -dbcopy.LastRun
 	dbcopy -m modelOne -dbcopy.NoAccumulatorsCsv -dbcopy.TaskName taskOne
-	dbcopy -m modelOne -dbcopy.NoMicrodataCsv
-	dbcopy -m modelOne -dbcopy.NoMicrodataCsv=true
-	dbcopy -m modelOne -dbcopy.NoAccumulatorsCsv -dbcopy.NoMicrodataCsv
+	dbcopy -m modelOne -dbcopy.NoMicrodata
+	dbcopy -m modelOne -dbcopy.NoMicrodata=true
+	dbcopy -m modelOne -dbcopy.NoAccumulatorsCsv -dbcopy.NoMicrodata
 
 By default parameters and output results .csv files contain codes in dimension column(s), e.g.: Sex=[Male,Female].
 If you want to create csv files with numeric id's Sex=[0,1] instead then use IdCsv=true option:
@@ -294,7 +294,7 @@ const (
 	doubleFormatArgKey  = "dbcopy.DoubleFormat"      // convert to string format for float and double
 	useIdCsvArgKey      = "dbcopy.IdCsv"             // if true then create csv files with enum id's default: enum code
 	noAccCsvArgKey      = "dbcopy.NoAccumulatorsCsv" // if true then do not create accumulators .csv files
-	noMicroCsvArgKey    = "dbcopy.NoMicrodataCsv"    // if true then do not create microdata .csv files
+	noMicrodataArgKey   = "dbcopy.NoMicrodata"       // if true then suppress microdata output
 	noDigestCheckArgKey = "dbcopy.NoDigestCheck"     // if true then ignore input model digest, use model name only
 	useIdNamesArgKey    = "dbcopy.IdOutputNames"     // if true then always use id's in output directory and file names, false never use it
 	encodingArgKey      = "dbcopy.CodePage"          // code page for converting source files, e.g. windows-1252
@@ -315,7 +315,7 @@ var theCfg = struct {
 	doubleFmt       string // format to convert float or double value to string
 	isKeepOutputDir bool   // if true then keep existing output directory
 	isNoAccCsv      bool   // if true then do not create accumulators .csv files
-	isNoMicroCsv    bool   // if true then do not create microdata .csv files
+	isNoMicrodata   bool   // if true then suppress microdata output
 	isNoDigestCheck bool   // if true then ignore input model digest, use model name only to load values from csv
 	encodingName    string // code page for converting source files, e.g. windows-1252
 	isWriteUtf8Bom  bool   // if true then write utf-8 BOM into csv file
@@ -323,7 +323,7 @@ var theCfg = struct {
 	doubleFmt:       "%.15g",
 	isKeepOutputDir: false, // remove existing out directoris by default
 	isNoAccCsv:      false, // by default do full model dump: create accumulators .csv files
-	isNoMicroCsv:    false, // by default do full model dump: create microdata .csv files
+	isNoMicrodata:   false, // by default do full model dump, including microdata
 	isNoDigestCheck: false, // by default check model digest
 	encodingName:    "",    // by default detect utf-8 encoding or use OS-specific deafult: windows-1252 on Windowds and utf-8 outside
 	isWriteUtf8Bom:  false, // do not write BOM by default
@@ -377,7 +377,7 @@ func mainBody(args []string) error {
 	_ = flag.String(doubleFormatArgKey, theCfg.doubleFmt, "convert to string format for float and double")
 	_ = flag.Bool(useIdCsvArgKey, false, "if true then create csv files with enum id's default: enum code")
 	_ = flag.Bool(noAccCsvArgKey, theCfg.isNoAccCsv, "if true then do not create accumulators .csv files")
-	_ = flag.Bool(noMicroCsvArgKey, theCfg.isNoMicroCsv, "if true then do not create microdata .csv files")
+	_ = flag.Bool(noMicrodataArgKey, theCfg.isNoMicrodata, "if true then suppress microdata output")
 	_ = flag.Bool(noDigestCheckArgKey, theCfg.isNoDigestCheck, "if true then ignore input model digest, use model name only")
 	_ = flag.Bool(useIdNamesArgKey, false, "if true then always use id's in output directory names, false never use. Default for csv: only if name conflict")
 	_ = flag.String(encodingArgKey, theCfg.encodingName, "code page to convert source file into utf-8, e.g.: windows-1252")
@@ -414,7 +414,7 @@ func mainBody(args []string) error {
 	theCfg.doubleFmt = runOpts.String(doubleFormatArgKey)
 	theCfg.isKeepOutputDir = runOpts.Bool(keepOutputDirArgKey)
 	theCfg.isNoAccCsv = runOpts.Bool(noAccCsvArgKey)
-	theCfg.isNoMicroCsv = runOpts.Bool(noMicroCsvArgKey)
+	theCfg.isNoMicrodata = runOpts.Bool(noMicrodataArgKey)
 	theCfg.isNoDigestCheck = runOpts.Bool(noDigestCheckArgKey)
 	theCfg.encodingName = runOpts.String(encodingArgKey)
 	theCfg.isWriteUtf8Bom = runOpts.Bool(useUtf8CsvArgKey)

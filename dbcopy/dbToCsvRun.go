@@ -55,7 +55,7 @@ func toRunCsv(
 	if e := os.MkdirAll(tableCsvDir, 0750); e != nil {
 		return e
 	}
-	if !theCfg.isNoMicroCsv && nMd > 0 {
+	if !theCfg.isNoMicrodata && nMd > 0 {
 		if e := os.MkdirAll(microCsvDir, 0750); e != nil {
 			return e
 		}
@@ -197,7 +197,7 @@ func toRunCsv(
 	}
 
 	// write microdata into csv file, if there is any microdata for that model run and microadata write enabled
-	if !theCfg.isNoMicroCsv && nMd > 0 {
+	if !theCfg.isNoMicrodata && nMd > 0 {
 
 		omppLog.Log("  Microdata: ", nMd)
 

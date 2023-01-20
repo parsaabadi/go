@@ -28,6 +28,12 @@ func toRunListCsv(
 	if err != nil {
 		return false, err
 	}
+	if theCfg.isNoMicrodata { // microdata output disabled
+		for k := range rl {
+			rl[k].EntityGen = []db.EntityGenMeta{}
+			rl[k].RunEntity = []db.RunEntityRow{}
+		}
+	}
 
 	// use of run and set id's in directory names:
 	// if explicitly required then always use id's in the names

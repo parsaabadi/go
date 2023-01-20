@@ -194,6 +194,9 @@ func toRunText(
 	if err != nil {
 		return err
 	}
+	if theCfg.isNoMicrodata {
+		pub.Entity = []db.EntityRunPub{} // microdata output disabled
+	}
 
 	// create run subdir under model dir
 	switch {
@@ -213,7 +216,7 @@ func toRunText(
 	if err = os.MkdirAll(tableCsvDir, 0750); err != nil {
 		return err
 	}
-	if !theCfg.isNoMicroCsv && nMd > 0 {
+	if !theCfg.isNoMicrodata && nMd > 0 {
 		if err = os.MkdirAll(microCsvDir, 0750); err != nil {
 			return err
 		}
@@ -313,7 +316,7 @@ func toRunText(
 	}
 
 	// write microdata into csv file, if there is any microdata for that model run and microadata write enabled
-	if !theCfg.isNoMicroCsv && nMd > 0 {
+	if !theCfg.isNoMicrodata && nMd > 0 {
 
 		omppLog.Log("  Microdata: ", nMd)
 

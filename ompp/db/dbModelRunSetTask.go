@@ -28,7 +28,7 @@ type RunMeta struct {
 	Param     []runParam        // run parameters: parameter_hid, sub-value count, run_parameter_txt table rows
 	Table     []runTable        // run tables: table_hid fom run_table rows
 	EntityGen []EntityGenMeta   // run entity generation: entity_gen, entity_gen_attr table rows
-	RunEntity []runEntityRow    // run microdata entities: run_entity table rows
+	RunEntity []RunEntityRow    // run microdata entities: run_entity table rows
 	Progress  []RunProgress     // run progress by sub-values: run_progress table rows
 }
 
@@ -183,8 +183,8 @@ type entityGenAttrRow struct {
 	AttrId int // attr_id         INT NOT NULL
 }
 
-// runEntityRow is db row of run_entity join to entity_gen table
-type runEntityRow struct {
+// RunEntityRow is db row of run_entity join to entity_gen table
+type RunEntityRow struct {
 	GenHid      int    // entity_gen_hid INT NOT NULL
 	ValueDigest string // value_digest  VARCHAR(32), -- if not NULL then digest of table value for the run
 }

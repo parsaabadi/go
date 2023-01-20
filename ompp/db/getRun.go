@@ -523,9 +523,9 @@ func GetEntityGenList(dbConn *sql.DB, runId int) ([]EntityGenMeta, error) {
 }
 
 // getRunEntity return run entity rows: run_entity table rows.
-func getRunEntity(dbConn *sql.DB, runId int) ([]runEntityRow, error) {
+func getRunEntity(dbConn *sql.DB, runId int) ([]RunEntityRow, error) {
 
-	reLst := []runEntityRow{}
+	reLst := []RunEntityRow{}
 
 	// append run_entity rows: generation Hid and value digest
 	q := "SELECT run_id, entity_gen_hid, value_digest" +
@@ -535,7 +535,7 @@ func getRunEntity(dbConn *sql.DB, runId int) ([]runEntityRow, error) {
 
 	err := SelectRows(dbConn, q,
 		func(rows *sql.Rows) error {
-			var r runEntityRow
+			var r RunEntityRow
 			var nId int
 			var svd sql.NullString
 			if err := rows.Scan(&nId, &r.GenHid, &svd); err != nil {
@@ -564,7 +564,7 @@ func GetRunFull(dbConn *sql.DB, runRow *RunRow) (*RunMeta, error) {
 	sRunId := strconv.Itoa(runRow.RunId)
 
 	// run meta header: run_lst row, model name and digest
-	meta := &RunMeta{Run: *runRow, Txt: []RunTxtRow{}, EntityGen: []EntityGenMeta{}, RunEntity: []runEntityRow{}}
+	meta := &RunMeta{Run: *runRow, Txt: []RunTxtRow{}, EntityGen: []EntityGenMeta{}, RunEntity: []RunEntityRow{}}
 
 	// get run options by run id
 	q := "SELECT" +
@@ -683,7 +683,7 @@ func GetRunFullText(dbConn *sql.DB, runRow *RunRow, isSuccess bool, langCode str
 	}
 
 	// run meta header: run_lst row, model name and digest
-	meta := &RunMeta{Run: *runRow, Txt: []RunTxtRow{}, EntityGen: []EntityGenMeta{}, RunEntity: []runEntityRow{}}
+	meta := &RunMeta{Run: *runRow, Txt: []RunTxtRow{}, EntityGen: []EntityGenMeta{}, RunEntity: []RunEntityRow{}}
 
 	// get run description and notes by run id and language
 	q := "SELECT M.run_id, M.lang_id, L.lang_code, M.descr, M.note" +
@@ -920,7 +920,7 @@ func GetRunFullTextList(dbConn *sql.DB, modelId int, isSuccess bool, langCode st
 		rl[k].Run = runRs[k]
 		rl[k].Opts = optRs[runId]
 		rl[k].EntityGen = []EntityGenMeta{}
-		rl[k].RunEntity = []runEntityRow{}
+		rl[k].RunEntity = []RunEntityRow{}
 		rl[k].Progress = []RunProgress{}
 		m[runId] = k
 	}
@@ -1109,7 +1109,7 @@ func GetRunFullTextList(dbConn *sql.DB, modelId int, isSuccess bool, langCode st
 
 	err = SelectRows(dbConn, q,
 		func(rows *sql.Rows) error {
-			var r runEntityRow
+			var r RunEntityRow
 			var nId int
 			var svd sql.NullString
 			if err := rows.Scan(&nId, &r.GenHid, &svd); err != nil {
