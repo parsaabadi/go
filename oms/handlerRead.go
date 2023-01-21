@@ -357,6 +357,12 @@ func doReadMicrodataPageHandler(w http.ResponseWriter, r *http.Request, isCode b
 	dn := getRequestParam(r, "model") // model digest-or-name
 	rdsn := getRequestParam(r, "run") // run digest-or-stamp-or-name
 
+	// return error if microdata disabled
+	if !theCfg.isMicrodata {
+		http.Error(w, "Error: microdata not allowed: "+dn+" "+rdsn, http.StatusBadRequest)
+		return
+	}
+
 	// decode json request body
 	var layout db.ReadMicroLayout
 	if !jsonRequestDecode(w, r, true, &layout) {
@@ -425,6 +431,12 @@ func doMicrodataGetPageHandler(w http.ResponseWriter, r *http.Request, isCode bo
 	dn := getRequestParam(r, "model")  // model digest-or-name
 	rdsn := getRequestParam(r, "run")  // run digest-or-stamp-or-name
 	name := getRequestParam(r, "name") // entity name
+
+	// return error if microdata disabled
+	if !theCfg.isMicrodata {
+		http.Error(w, "Error: microdata not allowed: "+dn+" "+rdsn, http.StatusBadRequest)
+		return
+	}
 
 	// url or query parameters: page offset and page size
 	start, ok := getInt64RequestParam(r, "start", 0)

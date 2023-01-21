@@ -26,6 +26,7 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 		AllowUserHome     bool               // if true then store user settings in home directory
 		AllowDownload     bool               // if true then allow download from home/io/download directory
 		AllowUpload       bool               // if true then allow upload from home/io/upload directory
+		AllowMicrodata    bool               // if true then allow model run microdata
 		IsJobControl      bool               // if true then job control enabled
 		Env               map[string]string  // server config environmemt variables
 		ModelCatalog      ModelCatalogConfig // "public" state of model catalog
@@ -38,6 +39,7 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 		AllowUserHome:     theCfg.isHome,
 		AllowDownload:     theCfg.downloadDir != "",
 		AllowUpload:       theCfg.uploadDir != "",
+		AllowMicrodata:    theCfg.isMicrodata,
 		IsJobControl:      theCfg.isJobControl,
 		Env:               theCfg.env,
 		ModelCatalog:      theCatalog.toPublicConfig(),

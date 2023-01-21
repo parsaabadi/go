@@ -339,6 +339,12 @@ func doMicrodataGetCsvHandler(w http.ResponseWriter, r *http.Request, isCode, is
 	rdsn := getRequestParam(r, "run")  // run digest-or-stamp-or-name
 	name := getRequestParam(r, "name") // entity name
 
+	// return error if microdata disabled
+	if !theCfg.isMicrodata {
+		http.Error(w, "Error: microdata not allowed: "+dn+" "+rdsn, http.StatusBadRequest)
+		return
+	}
+
 	// get converter from cell list to csv rows []string
 	runId, genDigest, hdr, cvtRow, ok := theCatalog.MicrodataToCsvConverter(dn, isCode, rdsn, name)
 	if !ok {

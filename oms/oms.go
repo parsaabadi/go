@@ -146,26 +146,27 @@ import (
 
 // config keys to get values from ini-file or command line arguments.
 const (
-	listenArgKey         = "oms.Listen"        // address to listen, default: localhost:4040
-	listenShortKey       = "l"                 // address to listen (short form)
-	omsNameArgKey        = "oms.Name"          // oms instance name, if empty then derived from address to listen
-	urlFileArgKey        = "oms.UrlSaveTo"     // file path to save oms URL in form of: http://localhost:4040, if relative then must be relative to oms root directory
-	rootDirArgKey        = "oms.RootDir"       // oms root directory, expected to contain log subfolder
-	modelDirArgKey       = "oms.ModelDir"      // models executable and model.sqlite directory, if relative then must be relative to oms root directory
-	modelLogDirArgKey    = "oms.ModelLogDir"   // models log directory, if relative then must be relative to oms root directory
-	etcDirArgKey         = "oms.EtcDir"        // configuration files directory, if relative then must be relative to oms root directory
-	htmlDirArgKey        = "oms.HtmlDir"       // front-end UI directory, if relative then must be relative to oms root directory
-	jobDirArgKey         = "oms.JobDir"        // job control directory, if relative then must be relative to oms root directory
-	homeDirArgKey        = "oms.HomeDir"       // user personal home directory, if relative then must be relative to oms root directory
-	isDownloadArgKey     = "oms.AllowDownload" // if true then allow download from user home sub-directory: home/io/download
-	isUploadArgKey       = "oms.AllowUpload"   // if true then allow upload to user home sub-directory: home/io/upload
-	logRequestArgKey     = "oms.LogRequest"    // if true then log http request
-	apiOnlyArgKey        = "oms.ApiOnly"       // if true then API only web-service, no web UI
-	uiLangsArgKey        = "oms.Languages"     // list of supported languages
-	encodingArgKey       = "oms.CodePage"      // code page for converting source files, e.g. windows-1252
-	pageSizeAgrKey       = "oms.MaxRowCount"   // max number of rows to return from read parameters or output tables
-	runHistorySizeAgrKey = "oms.MaxRunHistory" // max number of completed model runs to keep in run list history
-	doubleFormatArgKey   = "oms.DoubleFormat"  // format to convert float or double value to string, e.g. %.15g
+	listenArgKey         = "oms.Listen"         // address to listen, default: localhost:4040
+	listenShortKey       = "l"                  // address to listen (short form)
+	omsNameArgKey        = "oms.Name"           // oms instance name, if empty then derived from address to listen
+	urlFileArgKey        = "oms.UrlSaveTo"      // file path to save oms URL in form of: http://localhost:4040, if relative then must be relative to oms root directory
+	rootDirArgKey        = "oms.RootDir"        // oms root directory, expected to contain log subfolder
+	modelDirArgKey       = "oms.ModelDir"       // models executable and model.sqlite directory, if relative then must be relative to oms root directory
+	modelLogDirArgKey    = "oms.ModelLogDir"    // models log directory, if relative then must be relative to oms root directory
+	etcDirArgKey         = "oms.EtcDir"         // configuration files directory, if relative then must be relative to oms root directory
+	htmlDirArgKey        = "oms.HtmlDir"        // front-end UI directory, if relative then must be relative to oms root directory
+	jobDirArgKey         = "oms.JobDir"         // job control directory, if relative then must be relative to oms root directory
+	homeDirArgKey        = "oms.HomeDir"        // user personal home directory, if relative then must be relative to oms root directory
+	isDownloadArgKey     = "oms.AllowDownload"  // if true then allow download from user home sub-directory: home/io/download
+	isUploadArgKey       = "oms.AllowUpload"    // if true then allow upload to user home sub-directory: home/io/upload
+	isMicrodataArgKey    = "oms.AllowMicrodata" // if true then allow model run microdata
+	logRequestArgKey     = "oms.LogRequest"     // if true then log http request
+	apiOnlyArgKey        = "oms.ApiOnly"        // if true then API only web-service, no web UI
+	uiLangsArgKey        = "oms.Languages"      // list of supported languages
+	encodingArgKey       = "oms.CodePage"       // code page for converting source files, e.g. windows-1252
+	pageSizeAgrKey       = "oms.MaxRowCount"    // max number of rows to return from read parameters or output tables
+	runHistorySizeAgrKey = "oms.MaxRunHistory"  // max number of completed model runs to keep in run list history
+	doubleFormatArgKey   = "oms.DoubleFormat"   // format to convert float or double value to string, e.g. %.15g
 )
 
 // max number of completed model run states to keep in run list history
@@ -181,6 +182,7 @@ var theCfg = struct {
 	downloadDir       string            // if download allowed then it is home/io/download directory
 	uploadDir         string            // if upload allowed then it is home/io/upload directory
 	inOutDir          string            // if download or upload allowed then it is home/io directory
+	isMicrodata       bool              // if true then allow model run microdata
 	isJobControl      bool              // if true then do job control: model run queue and resource allocation
 	jobDir            string            // job control directory
 	omsName           string            // oms instance name, if empty then derived from address to listen
@@ -198,6 +200,7 @@ var theCfg = struct {
 	homeDir:           "",
 	downloadDir:       "",
 	uploadDir:         "",
+	isMicrodata:       false,
 	isJobControl:      false,
 	jobDir:            "",
 	omsName:           "",
@@ -236,6 +239,7 @@ func mainBody(args []string) error {
 	_ = flag.String(homeDirArgKey, "", "user personal home directory, if relative then must be relative to root directory")
 	_ = flag.Bool(isDownloadArgKey, false, "if true then allow download from user home/io/download directory")
 	_ = flag.Bool(isUploadArgKey, false, "if true then allow upload to user home/io/upload directory")
+	_ = flag.Bool(isMicrodataArgKey, false, "if true then allow model run microdata")
 	_ = flag.String(jobDirArgKey, "", "job control directory, if relative then must be relative to root directory")
 	_ = flag.String(listenArgKey, "localhost:4040", "address to listen")
 	_ = flag.String(listenShortKey, "localhost:4040", "address to listen (short form of "+listenArgKey+")")
@@ -264,6 +268,7 @@ func mainBody(args []string) error {
 	}
 	isLogRequest = runOpts.Bool(logRequestArgKey)
 	isApiOnly := runOpts.Bool(apiOnlyArgKey)
+	theCfg.isMicrodata = runOpts.Bool(isMicrodataArgKey)
 
 	theCfg.pageMaxSize = runOpts.Int64(pageSizeAgrKey, theCfg.pageMaxSize)
 	theCfg.doubleFmt = runOpts.String(doubleFormatArgKey)
@@ -796,10 +801,13 @@ func apiReadRoutes(router *vestigo.Router) {
 	router.Post("/api/model/:model/run/:run/table/value", runTablePageReadHandler, logRequest)
 	router.Post("/api/model/:model/run/:run/table/value-id", runTableIdPageReadHandler, logRequest)
 
-	// POST /api/model/:model/run/:run/microdata/value
-	// POST /api/model/:model/run/:run/microdata/value-id
-	router.Post("/api/model/:model/run/:run/microdata/value", runMicrodataPageReadHandler, logRequest)
-	router.Post("/api/model/:model/run/:run/microdata/value-id", runMicrodataIdPageReadHandler, logRequest)
+	if theCfg.isMicrodata {
+
+		// POST /api/model/:model/run/:run/microdata/value
+		// POST /api/model/:model/run/:run/microdata/value-id
+		router.Post("/api/model/:model/run/:run/microdata/value", runMicrodataPageReadHandler, logRequest)
+		router.Post("/api/model/:model/run/:run/microdata/value-id", runMicrodataIdPageReadHandler, logRequest)
+	}
 
 	// GET /api/model/:model/workset/:set/parameter/:name/value
 	// GET /api/model/:model/workset/:set/parameter/:name/value/start/:start
@@ -860,17 +868,20 @@ func apiReadRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/table/:name/all-acc/start/", http.NotFound)
 	router.Get("/api/model/:model/run/:run/table/:name/all-acc/start/:start/count/", http.NotFound)
 
-	// GET /api/model/:model/run/:run/microdata/:name/value
-	// GET /api/model/:model/run/:run/microdata/:name/value/start/:start
-	// GET /api/model/:model/run/:run/microdata/:name/value/start/:start/count/:count
-	router.Get("/api/model/:model/run/:run/microdata/:name/value", runMicrodatarPageGetHandler, logRequest)
-	router.Get("/api/model/:model/run/:run/microdata/:name/value/start/:start", runMicrodatarPageGetHandler, logRequest)
-	router.Get("/api/model/:model/run/:run/microdata/:name/value/start/:start/count/:count", runMicrodatarPageGetHandler, logRequest)
-	// reject if request ill-formed
-	router.Get("/api/model/:model/run/:run/microdata/:name/", http.NotFound)
-	router.Get("/api/model/:model/run/:run/microdata/:name/value/", http.NotFound)
-	router.Get("/api/model/:model/run/:run/microdata/:name/value/start/", http.NotFound)
-	router.Get("/api/model/:model/run/:run/microdata/:name/value/start/:start/count/", http.NotFound)
+	if theCfg.isMicrodata {
+
+		// GET /api/model/:model/run/:run/microdata/:name/value
+		// GET /api/model/:model/run/:run/microdata/:name/value/start/:start
+		// GET /api/model/:model/run/:run/microdata/:name/value/start/:start/count/:count
+		router.Get("/api/model/:model/run/:run/microdata/:name/value", runMicrodatarPageGetHandler, logRequest)
+		router.Get("/api/model/:model/run/:run/microdata/:name/value/start/:start", runMicrodatarPageGetHandler, logRequest)
+		router.Get("/api/model/:model/run/:run/microdata/:name/value/start/:start/count/:count", runMicrodatarPageGetHandler, logRequest)
+		// reject if request ill-formed
+		router.Get("/api/model/:model/run/:run/microdata/:name/", http.NotFound)
+		router.Get("/api/model/:model/run/:run/microdata/:name/value/", http.NotFound)
+		router.Get("/api/model/:model/run/:run/microdata/:name/value/start/", http.NotFound)
+		router.Get("/api/model/:model/run/:run/microdata/:name/value/start/:start/count/", http.NotFound)
+	}
 }
 
 // add http GET web-service /api routes to read parameters or output tables as csv stream
@@ -900,17 +911,20 @@ func apiReadCsvRoutes(router *vestigo.Router) {
 	// GET /api/model/:model/run/:run/parameter/:name/csv-id-bom
 	router.Get("/api/model/:model/run/:run/parameter/:name/csv-id-bom", runParameterIdCsvBomGetHandler, logRequest)
 
-	// GET /api/model/:model/run/:run/microdata/:name/csv
-	router.Get("/api/model/:model/run/:run/microdata/:name/csv", runMicrodataCsvGetHandler, logRequest)
+	if theCfg.isMicrodata {
 
-	// GET /api/model/:model/run/:run/microdata/:name/csv-bom
-	router.Get("/api/model/:model/run/:run/microdata/:name/csv-bom", runMicrodataCsvBomGetHandler, logRequest)
+		// GET /api/model/:model/run/:run/microdata/:name/csv
+		router.Get("/api/model/:model/run/:run/microdata/:name/csv", runMicrodataCsvGetHandler, logRequest)
 
-	// GET /api/model/:model/run/:run/microdata/:name/csv-id
-	router.Get("/api/model/:model/run/:run/microdata/:name/csv-id", runMicrodataIdCsvGetHandler, logRequest)
+		// GET /api/model/:model/run/:run/microdata/:name/csv-bom
+		router.Get("/api/model/:model/run/:run/microdata/:name/csv-bom", runMicrodataCsvBomGetHandler, logRequest)
 
-	// GET /api/model/:model/run/:run/microdata/:name/csv-id-bom
-	router.Get("/api/model/:model/run/:run/microdata/:name/csv-id-bom", runMicrodataIdCsvBomGetHandler, logRequest)
+		// GET /api/model/:model/run/:run/microdata/:name/csv-id
+		router.Get("/api/model/:model/run/:run/microdata/:name/csv-id", runMicrodataIdCsvGetHandler, logRequest)
+
+		// GET /api/model/:model/run/:run/microdata/:name/csv-id-bom
+		router.Get("/api/model/:model/run/:run/microdata/:name/csv-id-bom", runMicrodataIdCsvBomGetHandler, logRequest)
+	}
 
 	// GET /api/model/:model/run/:run/table/:name/expr/csv
 	router.Get("/api/model/:model/run/:run/table/:name/expr/csv", runTableExprCsvGetHandler, logRequest)

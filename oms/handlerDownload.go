@@ -37,6 +37,9 @@ func modelDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 	if !jsonRequestDecode(w, r, false, &opts) {
 		return // error at json decode, response done with http error
 	}
+	if !theCfg.isMicrodata {
+		opts.NoMicrodata = true // microdata output disabled
+	}
 
 	// find model metadata by digest or name
 	mb, ok := theCatalog.modelBasicByDigestOrName(dn)
@@ -123,6 +126,9 @@ func runDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 	}{}
 	if !jsonRequestDecode(w, r, false, &opts) {
 		return // error at json decode, response done with http error
+	}
+	if !theCfg.isMicrodata {
+		opts.NoMicrodata = true // microdata output disabled
 	}
 
 	// find model metadata by digest or name

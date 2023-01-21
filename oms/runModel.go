@@ -133,6 +133,16 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 			continue // import database connection string not allowed as run option
 		}
 
+		// if this is microdata run option then microdata must be enabled
+		if !theCfg.isMicrodata && strings.HasPrefix(strings.ToLower(key), "-microdata") {
+
+			err = errors.New("Model run error: microdata not allowed: " + rs.ModelName + ": " + rs.ModelDigest)
+			omppLog.Log(err)
+			moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest, rStamp)
+			rs.IsFinal = true
+			return rs, err // exit with error: microdata not allowed
+		}
+
 		mArgs = append(mArgs, key, val) // append command line argument key and value
 	}
 
