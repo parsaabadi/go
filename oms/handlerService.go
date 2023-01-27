@@ -136,6 +136,19 @@ func emptyRunJobState(submitStamp string) runJobState {
 				Opts:   map[string]string{},
 				Env:    map[string]string{},
 				Tables: []string{},
+				Microdata: struct {
+					IsToDb     bool
+					IsInternal bool
+					Entity     []struct {
+						Name  string
+						Attrs []string
+					}
+				}{
+					Entity: []struct {
+						Name  string
+						Attrs []string
+					}{},
+				},
 				RunNotes: []struct {
 					LangCode string
 					Note     string
@@ -258,6 +271,21 @@ func getJobState(filePath string) (bool, *runJobState) {
 	st.Env = map[string]string{}
 	if len(st.Opts) == 0 {
 		st.Opts = map[string]string{}
+	}
+	if st.Tables == nil {
+		st.Tables = []string{}
+	}
+	if st.Microdata.Entity == nil {
+		st.Microdata.Entity = []struct {
+			Name  string
+			Attrs []string
+		}{}
+	}
+	if st.RunNotes == nil {
+		st.RunNotes = []struct {
+			LangCode string
+			Note     string
+		}{}
 	}
 
 	// read log file content

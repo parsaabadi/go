@@ -4,6 +4,7 @@
 package main
 
 import (
+	"github.com/openmpp/go/ompp/db"
 	"golang.org/x/text/language"
 )
 
@@ -100,12 +101,12 @@ func (mc *ModelCatalog) modelBasicByDigest(digest string) (modelBasic, bool) {
 	return mc.findModelBasic(true, digest)
 }
 
-// modelBasicByDigest return basic info from catalog about model by digest.
+// modelBasicByDigestOrName return basic info from catalog about model by digest or model name.
 func (mc *ModelCatalog) modelBasicByDigestOrName(dn string) (modelBasic, bool) {
 	return mc.findModelBasic(false, dn)
 }
 
-// modelBasicByDigest return basic info from catalog about model by digest.
+// findModelBasic return basic info from catalog about model by  or model name.
 func (mc *ModelCatalog) findModelBasic(isByDigestOnly bool, dn string) (modelBasic, bool) {
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
@@ -152,4 +153,26 @@ func (mc *ModelCatalog) allModels() []modelBasic {
 		}
 	}
 	return mbs
+}
+
+// modelEntityAttrs return model entities and attributesfrom catalog about model by digest.
+func (mc *ModelCatalog) entityAttrsByDigest(digest string) []db.EntityMeta {
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigest(digest)
+	if !ok {
+		return []db.EntityMeta{} // model not found, empty result
+	}
+
+	// copy model entity db rows
+	em := make([]db.EntityMeta, len(mc.modelLst[idx].meta.Entity))
+
+	for k := range mc.modelLst[idx].meta.Entity {
+
+		em[k] = mc.modelLst[idx].meta.Entity[k]
+		em[k].Attr = make([]db.EntityAttrRow, len(mc.modelLst[idx].meta.Entity[k].Attr))
+		copy(em[k].Attr, mc.modelLst[idx].meta.Entity[k].Attr)
+	}
+	return em
 }

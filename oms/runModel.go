@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"text/template"
@@ -87,7 +88,10 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 	mArgs = append(mArgs, "-OpenM.LogToConsole", "true")
 	mArgs = append(mArgs, "-OpenM.LogToFile", "false")
 
-	importDbLc := strings.ToLower("-ImportDb.")
+	importDbLcDot := strings.ToLower("-ImportDb.")
+	microdataLcDot := strings.ToLower("-microdata.")
+
+	entAttrs := theCatalog.entityAttrsByDigest(rs.ModelDigest)
 
 	// append model run options from run request
 	for krq, val := range job.Opts {
@@ -129,18 +133,43 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 		if strings.EqualFold(key, "-OpenM.Database") {
 			continue // database connection string not allowed as run option
 		}
-		if strings.HasPrefix(strings.ToLower(key), importDbLc) {
+		if strings.HasPrefix(strings.ToLower(key), importDbLcDot) {
 			continue // import database connection string not allowed as run option
 		}
 
 		// if this is microdata run option then microdata must be enabled
-		if !theCfg.isMicrodata && strings.HasPrefix(strings.ToLower(key), "-microdata") {
+		// do not allow microdata options which are part of Microdata run request:
+		//   -Microdata.ToDb -Microdata.UseInternal
+		//   -Microdata.All  -Microdata.anyEntityName
+		if strings.HasPrefix(strings.ToLower(key), microdataLcDot) {
 
-			err = errors.New("Model run error: microdata not allowed: " + rs.ModelName + ": " + rs.ModelDigest)
-			omppLog.Log(err)
-			moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest, rStamp)
-			rs.IsFinal = true
-			return rs, err // exit with error: microdata not allowed
+			if !theCfg.isMicrodata {
+				err = errors.New("Model run error: microdata not allowed: " + rs.ModelName + ": " + rs.ModelDigest)
+				omppLog.Log(err)
+				moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest, rStamp)
+				rs.IsFinal = true
+				return rs, err // exit with error: microdata not allowed
+			}
+			subKey := key[len(microdataLcDot):]
+
+			if strings.EqualFold(subKey, "All") || strings.EqualFold(subKey, "ToDb") || strings.EqualFold(subKey, "UseInternal") {
+				err = errors.New("Model run error: incorrect use of run option: " + key + ": " + rs.ModelName + ": " + rs.ModelDigest)
+				omppLog.Log(err)
+				moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest, rStamp)
+				rs.IsFinal = true
+				return rs, err // exit with error: incorrect microdata option
+			}
+
+			for k := range entAttrs {
+
+				if subKey == entAttrs[k].Name {
+					err = errors.New("Model run error: incorrect use of run option: " + key + ": " + rs.ModelName + ": " + rs.ModelDigest)
+					omppLog.Log(err)
+					moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest, rStamp)
+					rs.IsFinal = true
+					return rs, err // exit with error: incorrect microdata option
+				}
+			}
 		}
 
 		mArgs = append(mArgs, key, val) // append command line argument key and value
@@ -172,12 +201,85 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 	// if list of tables to retain is not empty then put the list into ini-file:
 	//
 	//   [Tables]
-	//   Retain   = ageSexIncome,AdditionalTables
+	//   Retain   = ageSexIncome, AdditionalTables
 	//
+	// if list of tables to retain is not empty then put the list into ini-file:
+	//
+	//   [Microdata]
+	//   ToDb        = true
+	//   UseInternal = true
+	//   Person      = age,income
+	//   Other       = All
+	//
+	iniContent := ""
+
+	// append tables to retain to ini file content
 	if len(job.Tables) > 0 {
+		iniContent += "[Tables]" + "\n" + "Retain = " + strings.Join(job.Tables, ", ") + "\n"
+	}
+
+	// append microdata run options to ini file content
+	if theCfg.isMicrodata && len(entAttrs) > 0 && job.Microdata.IsToDb && len(job.Microdata.Entity) > 0 {
+
+		iniContent += "[Microdata]" + "\n" + "ToDb = true\n"
+
+		if job.Microdata.IsInternal {
+			iniContent += "UseInternal = true\n"
+		}
+
+		// for each entity check if All attributes included or attributes must be specified as comma separated list
+		for k := range job.Microdata.Entity {
+
+			// find entity name in the list of model entities
+			eIdx := -1
+			for j := range entAttrs {
+				if entAttrs[j].Name == job.Microdata.Entity[k].Name {
+					eIdx = j
+					break
+				}
+			}
+			if eIdx < 0 || eIdx >= len(entAttrs) {
+				err = errors.New("Model run error: invalid microdata entity: " + job.Microdata.Entity[k].Name + ": " + rs.ModelName + ": " + rs.ModelDigest)
+				omppLog.Log(err)
+				moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest, rStamp)
+				rs.IsFinal = true
+				return rs, err // exit with error: microdata entity name not found
+			}
+
+			// check if all entity attributes included in run microdata
+			na := len(job.Microdata.Entity[k].Attrs)
+			isAll := na == 1 && job.Microdata.Entity[k].Attrs[0] == "All"
+
+			if !isAll {
+
+				attrs := make([]string, na)
+				copy(attrs, job.Microdata.Entity[k].Attrs)
+				sort.Strings(attrs)
+
+				for j := range entAttrs[eIdx].Attr {
+
+					n := sort.SearchStrings(attrs, entAttrs[eIdx].Attr[j].Name)
+					isAll = n >= 0 && n < na && attrs[n] == entAttrs[eIdx].Attr[j].Name
+					if !isAll {
+						break
+					}
+				}
+			}
+
+			// append entity attributes to ini file content: EntityName = All or EntityName = AttrA, AttrB
+			if isAll {
+				iniContent += job.Microdata.Entity[k].Name + " = All\n"
+			} else {
+				iniContent += job.Microdata.Entity[k].Name + " = " + strings.Join(job.Microdata.Entity[k].Attrs, ",") + "\n"
+			}
+		}
+	}
+
+	// create ini file and append -ini fileName.ini to model run options
+	if iniContent != "" {
 		p, e := filepath.Abs(filepath.Join(mb.logDir, rStamp+"."+mb.name+".ini"))
 		if e == nil {
-			e = os.WriteFile(p, []byte("[Tables]"+"\n"+"Retain = "+strings.Join(job.Tables, ", ")+"\n"), 0644)
+			e = os.WriteFile(p, []byte(iniContent), 0644)
 		}
 		if e != nil {
 			omppLog.Log("Model run error: ", e)

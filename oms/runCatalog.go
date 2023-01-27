@@ -75,8 +75,16 @@ type RunRequest struct {
 		IsNotOnRoot bool // if true then do no run modelling threads on MPI root process
 		IsNotByJob  bool // if true then do not allocate resources by job, use CPU, threads and memory as is
 	}
-	Template string   // template file name to make run model command line
-	Tables   []string // if not empty then output tables or table groups to retain, by default retain all tables
+	Template  string   // template file name to make run model command line
+	Tables    []string // if not empty then output tables or table groups to retain, by default retain all tables
+	Microdata struct {
+		IsToDb     bool       // if true then store entity microdata in database: -Microdata.ToDb true
+		IsInternal bool       // if true then allow to use internal attributes: -Microdata.UseInternal true
+		Entity     []struct { // list of entities and attributes: -Microdata.Person age,income -Microdata.Other All
+			Name  string   // entity name
+			Attrs []string // list of microdata attributes, it is also can be All
+		}
+	}
 	RunNotes []struct {
 		LangCode string // model language code
 		Note     string // run notes
