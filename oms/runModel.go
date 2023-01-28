@@ -247,16 +247,20 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 			}
 
 			// check if all entity attributes included in run microdata
-			na := len(job.Microdata.Entity[k].Attrs)
-			isAll := na == 1 && job.Microdata.Entity[k].Attrs[0] == "All"
+			na := len(job.Microdata.Entity[k].Attr)
+			isAll := na == 1 && job.Microdata.Entity[k].Attr[0] == "All"
 
 			if !isAll {
 
 				attrs := make([]string, na)
-				copy(attrs, job.Microdata.Entity[k].Attrs)
+				copy(attrs, job.Microdata.Entity[k].Attr)
 				sort.Strings(attrs)
 
 				for j := range entAttrs[eIdx].Attr {
+
+					if !job.Microdata.IsInternal && entAttrs[eIdx].Attr[j].IsInternal {
+						continue // skip: this model run does not using internal attributes
+					}
 
 					n := sort.SearchStrings(attrs, entAttrs[eIdx].Attr[j].Name)
 					isAll = n >= 0 && n < na && attrs[n] == entAttrs[eIdx].Attr[j].Name
@@ -270,7 +274,7 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 			if isAll {
 				iniContent += job.Microdata.Entity[k].Name + " = All\n"
 			} else {
-				iniContent += job.Microdata.Entity[k].Name + " = " + strings.Join(job.Microdata.Entity[k].Attrs, ",") + "\n"
+				iniContent += job.Microdata.Entity[k].Name + " = " + strings.Join(job.Microdata.Entity[k].Attr, ",") + "\n"
 			}
 		}
 	}

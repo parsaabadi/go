@@ -14,15 +14,15 @@ import (
 // CellMicro is a row of entity microdata: entity_key and attribute values,
 // if attribute type is enum based value is enum id
 type CellMicro struct {
-	Key   uint64      // microdata key, part of row primary key: entity_key
-	Attrs []attrValue // attributes value: built-in type value or enum id
+	Key  uint64      // microdata key, part of row primary key: entity_key
+	Attr []attrValue // attributes value: built-in type value or enum id
 }
 
 // CellCodeMicro is a row of entity microdata: entity_key and attribute values,
 // if attribute type is enum based value is enum code
 type CellCodeMicro struct {
-	Key   uint64      // microdata key, part of row primary key: entity_key
-	Attrs []attrValue // attributes value: built-in type value or enum code
+	Key  uint64      // microdata key, part of row primary key: entity_key
+	Attr []attrValue // attributes value: built-in type value or enum code
 }
 
 // Entity attribute value: value of built-in type or enum value,
@@ -115,14 +115,14 @@ func (cellCvt *CellMicroConverter) ToCsvIdRow() (func(interface{}, []string) err
 			return errors.New("invalid type, expected: CellMicro (internal error): " + cellCvt.Name)
 		}
 
-		n := len(cell.Attrs)
+		n := len(cell.Attr)
 		if n != nAttr || len(row) != n+1 {
 			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(nAttr+1) + ": " + cellCvt.Name)
 		}
 
 		row[0] = fmt.Sprint(cell.Key) // first column is entity microdata key
 
-		for k, a := range cell.Attrs {
+		for k, a := range cell.Attr {
 
 			// use "null" string for db NULL values
 			if a.IsNull || a.Value == nil {
@@ -195,14 +195,14 @@ func (cellCvt *CellMicroConverter) ToCsvRow() (func(interface{}, []string) error
 			return errors.New("invalid type, expected: CellMicro (internal error): " + cellCvt.Name)
 		}
 
-		n := len(cell.Attrs)
+		n := len(cell.Attr)
 		if n != nAttr || len(row) != n+1 {
 			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(nAttr+1) + ": " + cellCvt.Name)
 		}
 
 		row[0] = fmt.Sprint(cell.Key) // first column is entity microdata key
 
-		for k, a := range cell.Attrs {
+		for k, a := range cell.Attr {
 
 			// use "null" string for db NULL values
 			if a.IsNull || a.Value == nil {
@@ -286,9 +286,9 @@ func (cellCvt *CellMicroConverter) CsvToCell() (func(row []string) (interface{},
 	// return converter from csv strings into microdata key and attribute values
 	cvt := func(row []string) (interface{}, error) {
 
-		cell := CellMicro{Attrs: make([]attrValue, nAttr)}
+		cell := CellMicro{Attr: make([]attrValue, nAttr)}
 
-		n := len(cell.Attrs)
+		n := len(cell.Attr)
 		if n != nAttr || len(row) != n+1 {
 			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(nAttr+1) + ": " + cellCvt.Name)
 		}
@@ -307,14 +307,14 @@ func (cellCvt *CellMicroConverter) CsvToCell() (func(row []string) (interface{},
 		// convert attributes
 		for k := 0; k < nAttr; k++ {
 
-			cell.Attrs[k].IsNull = row[k+1] == "" || row[k+1] == "null"
+			cell.Attr[k].IsNull = row[k+1] == "" || row[k+1] == "null"
 
-			if !cell.Attrs[k].IsNull {
+			if !cell.Attr[k].IsNull {
 				v, e := fd[k](row[k+1])
 				if e != nil {
 					return nil, err
 				}
-				cell.Attrs[k].Value = v
+				cell.Attr[k].Value = v
 			}
 		}
 
@@ -381,25 +381,25 @@ func (cellCvt *CellMicroConverter) IdToCodeCell(modelDef *ModelMeta, _ string) (
 		if !ok {
 			return nil, errors.New("invalid type, expected: microdata cell (internal error): " + cellCvt.Name)
 		}
-		if len(srcCell.Attrs) != nAttr {
+		if len(srcCell.Attr) != nAttr {
 			return nil, errors.New("invalid number of attributes, expected: " + strconv.Itoa(nAttr) + ": " + cellCvt.Name)
 		}
 
 		dstCell := CellCodeMicro{
-			Key:   srcCell.Key,
-			Attrs: make([]attrValue, nAttr),
+			Key:  srcCell.Key,
+			Attr: make([]attrValue, nAttr),
 		}
 
 		// convert attributes enum id's to enum codes or built-in values to string
-		for k, a := range srcCell.Attrs {
+		for k, a := range srcCell.Attr {
 
 			if a.IsNull || a.Value == nil {
-				dstCell.Attrs[k] = attrValue{IsNull: true, Value: nil}
+				dstCell.Attr[k] = attrValue{IsNull: true, Value: nil}
 			} else {
 				if s, e := fd[k](a.Value); e != nil { // use attribute value converter
 					return nil, err
 				} else {
-					dstCell.Attrs[k].Value = s
+					dstCell.Attr[k].Value = s
 				}
 			}
 		}
@@ -481,20 +481,20 @@ func (cellCvt *CellMicroConverter) CodeToIdCell(modelDef *ModelMeta, _ string) (
 		if !ok {
 			return nil, errors.New("invalid type, expected: parameter code cell (internal error): " + cellCvt.Name)
 		}
-		if len(srcCell.Attrs) != nAttr {
+		if len(srcCell.Attr) != nAttr {
 			return nil, errors.New("invalid number of attributes, expected: " + strconv.Itoa(nAttr) + ": " + cellCvt.Name)
 		}
 
 		dstCell := CellCodeMicro{
-			Key:   srcCell.Key,
-			Attrs: make([]attrValue, nAttr),
+			Key:  srcCell.Key,
+			Attr: make([]attrValue, nAttr),
 		}
 
 		// convert attributes enum codes to enum id's or built-in values from string
-		for k, a := range srcCell.Attrs {
+		for k, a := range srcCell.Attr {
 
 			if a.IsNull || a.Value == nil {
-				dstCell.Attrs[k] = attrValue{IsNull: true, Value: nil}
+				dstCell.Attr[k] = attrValue{IsNull: true, Value: nil}
 			} else {
 
 				sv, ok := a.Value.(string)
@@ -506,7 +506,7 @@ func (cellCvt *CellMicroConverter) CodeToIdCell(modelDef *ModelMeta, _ string) (
 				if e != nil {
 					return nil, e
 				}
-				dstCell.Attrs[k].Value = v
+				dstCell.Attr[k].Value = v
 			}
 		}
 

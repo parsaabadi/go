@@ -180,7 +180,7 @@ func ReadMicrodataTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadMicroLayou
 			lt.Size++
 
 			// make new cell from conversion buffer
-			c := CellMicro{Attrs: make([]attrValue, len(entityAttrs))}
+			c := CellMicro{Attr: make([]attrValue, len(entityAttrs))}
 
 			if e := fc(&c); e != nil {
 				return false, e
@@ -216,7 +216,7 @@ func trxReadMicrodataTo(trx *sql.Tx, entity *EntityMeta, entityAttrs []EntityAtt
 			}
 
 			// make new cell from conversion buffer
-			c := CellMicro{Attrs: make([]attrValue, len(entityAttrs))}
+			c := CellMicro{Attr: make([]attrValue, len(entityAttrs))}
 
 			if e := fc(&c); e != nil {
 				return e
@@ -340,7 +340,7 @@ func scanSqlRowToCellMicro(entity *EntityMeta, entityAttrs []EntityAttrRow) ([]i
 			if e != nil {
 				return e
 			}
-			c.Attrs[k] = v
+			c.Attr[k] = v
 		}
 		return nil
 	}

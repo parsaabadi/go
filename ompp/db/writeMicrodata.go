@@ -449,7 +449,7 @@ func putInsertMicroFrom(
 			return false, nil, errors.New("invalid type, expected: microdata cell (internal error)")
 		}
 
-		n := len(cell.Attrs)
+		n := len(cell.Attr)
 		if len(row) != 1+n {
 			return false, nil, errors.New("invalid size of row buffer, expected: " + strconv.Itoa(1+n))
 		}
@@ -457,7 +457,7 @@ func putInsertMicroFrom(
 		// set sql statement microdata values: entity key, attributes value
 		row[0] = cell.Key
 
-		for k, av := range cell.Attrs {
+		for k, av := range cell.Attr {
 
 			if v, err := fv[k](av.IsNull, av.Value); err == nil {
 				row[k+1] = v

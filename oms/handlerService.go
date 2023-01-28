@@ -140,13 +140,13 @@ func emptyRunJobState(submitStamp string) runJobState {
 					IsToDb     bool
 					IsInternal bool
 					Entity     []struct {
-						Name  string
-						Attrs []string
+						Name string
+						Attr []string
 					}
 				}{
 					Entity: []struct {
-						Name  string
-						Attrs []string
+						Name string
+						Attr []string
 					}{},
 				},
 				RunNotes: []struct {
@@ -277,8 +277,8 @@ func getJobState(filePath string) (bool, *runJobState) {
 	}
 	if st.Microdata.Entity == nil {
 		st.Microdata.Entity = []struct {
-			Name  string
-			Attrs []string
+			Name string
+			Attr []string
 		}{}
 	}
 	if st.RunNotes == nil {

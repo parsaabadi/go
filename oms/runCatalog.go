@@ -81,8 +81,8 @@ type RunRequest struct {
 		IsToDb     bool       // if true then store entity microdata in database: -Microdata.ToDb true
 		IsInternal bool       // if true then allow to use internal attributes: -Microdata.UseInternal true
 		Entity     []struct { // list of entities and attributes: -Microdata.Person age,income -Microdata.Other All
-			Name  string   // entity name
-			Attrs []string // list of microdata attributes, it is also can be All
+			Name string   // entity name
+			Attr []string // list of microdata attributes, it is also can be All
 		}
 	}
 	RunNotes []struct {
