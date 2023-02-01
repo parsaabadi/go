@@ -89,6 +89,7 @@ type EntityRunPub struct {
 	Name        string   // entity name
 	GenDigest   string   // digest of entity generation, not empty only as result of select from run_entity; input from "public" digest is ignored
 	ValueDigest string   // value digest, not empty only as result of select from run_entity; input from "public" value digest is ignored
+	RowCount    int      // if not zero then entity microdata row count
 	Attr        []string // names of entity generation attributes
 }
 
@@ -186,7 +187,8 @@ type entityGenAttrRow struct {
 // RunEntityRow is db row of run_entity join to entity_gen table
 type RunEntityRow struct {
 	GenHid      int    // entity_gen_hid INT NOT NULL
-	ValueDigest string // value_digest  VARCHAR(32), -- if not NULL then digest of table value for the run
+	RowCount    int    // row_count    INT NOT NULL, -- if not zero then entity microdata row count
+	ValueDigest string // value_digest VARCHAR(32),  -- if not NULL then digest of table value for the run
 }
 
 // WorksetMeta is a model workset metadata: name, parameters, decription, notes.

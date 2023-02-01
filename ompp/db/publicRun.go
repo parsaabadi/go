@@ -121,6 +121,7 @@ func (meta *RunMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunPub, err
 		ent := &modelDef.Entity[eIdx]
 		pub.Entity[k].Name = ent.Name
 		pub.Entity[k].GenDigest = entGen.GenDigest
+		pub.Entity[k].RowCount = meta.RunEntity[k].RowCount
 		pub.Entity[k].ValueDigest = meta.RunEntity[k].ValueDigest
 		pub.Entity[k].Attr = make([]string, len(entGen.GenAttr))
 

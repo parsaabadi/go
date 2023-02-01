@@ -528,7 +528,7 @@ func getRunEntity(dbConn *sql.DB, runId int) ([]RunEntityRow, error) {
 	reLst := []RunEntityRow{}
 
 	// append run_entity rows: generation Hid and value digest
-	q := "SELECT run_id, entity_gen_hid, value_digest" +
+	q := "SELECT run_id, entity_gen_hid, row_count, value_digest" +
 		" FROM run_entity" +
 		" WHERE run_id = " + strconv.Itoa(runId) +
 		" ORDER BY 1, 2"
@@ -538,7 +538,7 @@ func getRunEntity(dbConn *sql.DB, runId int) ([]RunEntityRow, error) {
 			var r RunEntityRow
 			var nId int
 			var svd sql.NullString
-			if err := rows.Scan(&nId, &r.GenHid, &svd); err != nil {
+			if err := rows.Scan(&nId, &r.GenHid, &r.RowCount, &svd); err != nil {
 				return err
 			}
 			if svd.Valid {
@@ -1100,7 +1100,7 @@ func GetRunFullTextList(dbConn *sql.DB, modelId int, isSuccess bool, langCode st
 	}
 
 	// append run_entity rows: generation Hid and value digest
-	q = "SELECT H.run_id, RE.entity_gen_hid, RE.value_digest" +
+	q = "SELECT H.run_id, RE.entity_gen_hid, RE.row_count, RE.value_digest" +
 		" FROM run_lst H" +
 		" INNER JOIN run_entity RE ON (RE.run_id = H.run_id)" +
 		" WHERE H.model_id = " + smId +
@@ -1112,7 +1112,7 @@ func GetRunFullTextList(dbConn *sql.DB, modelId int, isSuccess bool, langCode st
 			var r RunEntityRow
 			var nId int
 			var svd sql.NullString
-			if err := rows.Scan(&nId, &r.GenHid, &svd); err != nil {
+			if err := rows.Scan(&nId, &r.GenHid, &r.RowCount, &svd); err != nil {
 				return err
 			}
 			if svd.Valid {

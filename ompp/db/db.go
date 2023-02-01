@@ -40,10 +40,10 @@ const (
 )
 
 // MinSchemaVersion is a minimal compatible db schema version
-const MinSchemaVersion = 102
+const MinSchemaVersion = 104
 
 // MaxSchemaVersion is a maximum compatible db schema version
-const MaxSchemaVersion = 103
+const MaxSchemaVersion = 104
 
 // Open database connection.
 //
@@ -491,7 +491,7 @@ func IsUnsafeQuote(c rune) bool {
 	return c == 0x2b9 || c == 0x2bc || c == 0x2c8 || c == 0x2032 || c == 0xff07
 }
 
-// make sql quoted string, ie: 'O''Brien'.
+// make sql quoted string, ie: 'O”Brien'.
 func ToQuoted(src string) string {
 
 	var sb strings.Builder
@@ -509,7 +509,7 @@ func ToQuoted(src string) string {
 	return sb.String()
 }
 
-// return "NULL" if string '' empty or return sql quoted string, ie: 'O''Brien'
+// return "NULL" if string ” empty or return sql quoted string, ie: 'O”Brien'
 func toQuotedOrNull(src string) string {
 	if src == "" {
 		return "NULL"
@@ -517,13 +517,13 @@ func toQuotedOrNull(src string) string {
 	return ToQuoted(src)
 }
 
-// make sql quoted string, ie: 'O''Brien'.
+// make sql quoted string, ie: 'O”Brien'.
 // Trim spaces and return up to maxLen bytes from src string.
 func toQuotedMax(src string, maxLen int) string {
 	return ToQuoted(leftMax(src, maxLen))
 }
 
-// return "NULL" if string '' empty or return sql quoted string, ie: 'O''Brien'
+// return "NULL" if string ” empty or return sql quoted string, ie: 'O”Brien'
 // Trim spaces and return up to maxLen bytes from src string.
 func toQuotedOrNullMax(src string, maxLen int) string {
 	return toQuotedOrNull(leftMax(src, maxLen))

@@ -286,13 +286,14 @@ func digestIntKeysCellsFrom(hSum hash.Hash, modelDef *ModelMeta, name string, cs
 //
 //	key,Age,Sex,Income\n
 //	1234,45,M,567.89\n
-func digestMicrodataCellsFrom(hSum hash.Hash, modelDef *ModelMeta, csvCvt CsvConverter) (func(interface{}) error, error) {
+func digestMicrodataCellsFrom(hSum hash.Hash, modelDef *ModelMeta, rowCount *int, csvCvt CsvConverter) (func(interface{}) error, error) {
 
 	// append header, like: key,Age,Sex,Income\n
 	cs, err := csvCvt.CsvHeader()
 	if err != nil {
 		return nil, err
 	}
+
 	for k := range cs {
 		if k != 0 {
 			if _, err = hSum.Write([]byte(",")); err != nil {
@@ -334,6 +335,7 @@ func digestMicrodataCellsFrom(hSum hash.Hash, modelDef *ModelMeta, csvCvt CsvCon
 		if _, err = hSum.Write([]byte("\n")); err != nil {
 			return err
 		}
+		*rowCount += 1 // count rows
 
 		return nil
 	}

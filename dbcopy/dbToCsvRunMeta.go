@@ -410,14 +410,14 @@ func toRunListCsv(
 	}
 
 	// write run entity rows into csv: run_entity join to entity_gen rows
-	row = make([]string, 3)
+	row = make([]string, 4)
 
 	idx = 0
 	j = 0
 	err = toCsvFile(
 		outDir,
 		"run_entity.csv",
-		[]string{"run_id", "entity_gen_hid", "value_digest"},
+		[]string{"run_id", "entity_gen_hid", "row_count", "value_digest"},
 		func() (bool, []string, error) {
 
 			if idx < 0 || idx >= len(rl) { // end of model run rows
@@ -441,7 +441,8 @@ func toRunListCsv(
 			// make run entity []string row
 			row[0] = strconv.Itoa(rl[idx].Run.RunId)
 			row[1] = strconv.Itoa(rl[idx].RunEntity[j].GenHid)
-			row[2] = rl[idx].RunEntity[j].ValueDigest
+			row[2] = strconv.Itoa(rl[idx].RunEntity[j].RowCount)
+			row[3] = rl[idx].RunEntity[j].ValueDigest
 			j++
 			return false, row, nil
 		})

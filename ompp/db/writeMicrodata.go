@@ -291,16 +291,17 @@ func doWriteMicrodataFrom(
 
 	// insert into run_entity with current run id as base run id and NULL digest
 	err = TrxUpdate(trx,
-		"INSERT INTO run_entity (run_id, entity_gen_hid, base_run_id, value_digest)"+
+		"INSERT INTO run_entity (run_id, entity_gen_hid, base_run_id, row_count, value_digest)"+
 			" VALUES ("+
-			sRunId+", "+sGenHid+", "+sRunId+", NULL)",
+			sRunId+", "+sGenHid+", "+sRunId+", 0, NULL)",
 	)
 	if err != nil {
 		return []RunEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
 	}
 
 	// create microdata digest calculator
-	hMd5, digestFrom, err := digestMicrodataFrom(modelDef, entityName, entityGen, doubleFmt)
+	var rowCount int
+	hMd5, digestFrom, err := digestMicrodataFrom(modelDef, entityName, entityGen, &rowCount, doubleFmt)
 	if err != nil {
 		return []RunEntityRow{}, errors.New("insert microdata failed: " + entityName + ": " + err.Error())
 	}
@@ -319,7 +320,9 @@ func doWriteMicrodataFrom(
 	dgst := fmt.Sprintf("%x", hMd5.Sum(nil))
 
 	err = TrxUpdate(trx,
-		"UPDATE run_entity SET value_digest = "+ToQuoted(dgst)+
+		"UPDATE run_entity"+
+			" SET value_digest = "+ToQuoted(dgst)+","+
+			" row_count = "+strconv.Itoa(rowCount)+
 			" WHERE run_id = "+sRunId+
 			" AND entity_gen_hid ="+sGenHid)
 	if err != nil {
@@ -365,7 +368,7 @@ func doWriteMicrodataFrom(
 	reRows := []RunEntityRow{}
 
 	err = TrxSelectRows(trx,
-		"SELECT run_id, entity_gen_hid, value_digest"+
+		"SELECT run_id, entity_gen_hid, row_count, value_digest"+
 			" FROM run_entity"+
 			" WHERE run_id = "+strconv.Itoa(runId)+
 			" ORDER BY 1, 2",
@@ -373,7 +376,7 @@ func doWriteMicrodataFrom(
 			var r RunEntityRow
 			var nId int
 			var svd sql.NullString
-			if err := rows.Scan(&nId, &r.GenHid, &svd); err != nil {
+			if err := rows.Scan(&nId, &r.GenHid, &r.RowCount, &svd); err != nil {
 				return err
 			}
 			if svd.Valid {
@@ -479,7 +482,7 @@ func putInsertMicroFrom(
 }
 
 // digestMicrodataFrom start run microdata digest calculation and return closure to add microdata row to digest.
-func digestMicrodataFrom(modelDef *ModelMeta, entityName string, entityGen *EntityGenMeta, doubleFmt string) (hash.Hash, func(interface{}) error, error) {
+func digestMicrodataFrom(modelDef *ModelMeta, entityName string, entityGen *EntityGenMeta, rowCount *int, doubleFmt string) (hash.Hash, func(interface{}) error, error) {
 
 	// start from entity name and generation digest
 	hMd5 := md5.New()
@@ -487,6 +490,7 @@ func digestMicrodataFrom(modelDef *ModelMeta, entityName string, entityGen *Enti
 	if err != nil {
 		return nil, nil, err
 	}
+
 	_, err = hMd5.Write([]byte(entityName + "," + entityGen.GenDigest + "\n"))
 	if err != nil {
 		return nil, nil, err
@@ -501,7 +505,7 @@ func digestMicrodataFrom(modelDef *ModelMeta, entityName string, entityGen *Enti
 		DoubleFmt: doubleFmt,
 	}
 
-	digestRow, err := digestMicrodataCellsFrom(hMd5, modelDef, cvtMicro)
+	digestRow, err := digestMicrodataCellsFrom(hMd5, modelDef, rowCount, cvtMicro)
 	if err != nil {
 		return nil, nil, err
 	}
