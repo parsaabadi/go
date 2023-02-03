@@ -267,12 +267,12 @@ func doDeleteUpDown(upDown string, upDownDir string, isAsync bool, folder string
 		"---------------",
 	}
 	if !appendToUpDownLog(logPath, true, "Start deleting: "+folder) {
-		renameToUpDownErrorLog(upDown, logPath, "")
+		renameToUpDownErrorLog(upDown, logPath, "", nil)
 		omppLog.Log("Failed to write into log file: " + folder + ".progress." + upDown + ".log")
 		return errors.New("Delete failed: " + folder)
 	}
 	if !appendToUpDownLog(logPath, false, hdrMsg...) {
-		renameToUpDownErrorLog(upDown, logPath, "")
+		renameToUpDownErrorLog(upDown, logPath, "", nil)
 		omppLog.Log("Failed to write into log file: " + folder + ".progress." + upDown + ".log")
 		return errors.New("Delete failed: " + folder)
 	}

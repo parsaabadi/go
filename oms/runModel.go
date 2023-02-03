@@ -285,6 +285,12 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 		if e == nil {
 			e = os.WriteFile(p, []byte(iniContent), 0644)
 		}
+		awd := ""
+		if e == nil {
+			if awd, e = filepath.Abs(wDir); e == nil {
+				p, e = filepath.Rel(awd, p)
+			}
+		}
 		if e != nil {
 			omppLog.Log("Model run error: ", e)
 			moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest, rStamp)
@@ -310,6 +316,12 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 		p, e := filepath.Abs(filepath.Join(mb.logDir, rStamp+".run_notes."+rn.LangCode+".md"))
 		if e == nil {
 			e = os.WriteFile(p, []byte(rn.Note), 0644)
+		}
+		awd := ""
+		if e == nil {
+			if awd, e = filepath.Abs(wDir); e == nil {
+				p, e = filepath.Rel(awd, p)
+			}
 		}
 		if e != nil {
 			omppLog.Log("Model run error: ", e)
@@ -525,7 +537,7 @@ func (rsc *RunCatalog) makeCommand(mExe, binDir, workDir, dbPath string, mArgs [
 			ExeStem   string            // base part of model exe name, usually modelName
 			Dir       string            // work directory to run the model
 			BinDir    string            // bin directory where model.exe is located
-			DbPath    string            // absolute path to sqlite database file: models/bin/model.sqlite
+			DbPath    string            // path to sqlite database file: models/bin/model.sqlite
 			MpiNp     int               // number of MPI processes
 			HostFile  string            // if not empty then absolute path to hostfile
 			Args      []string          // model command line arguments

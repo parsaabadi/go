@@ -55,7 +55,7 @@ func textToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 
 		outDir := runOpts.String(outputDirArgKey)
 		if outDir == "" {
-			outDir = filepath.Dir(inpDir)
+			outDir = inpDir
 		}
 		if err := helper.UnpackZip(inpDir+".zip", !theCfg.isKeepOutputDir, outDir); err != nil {
 			return err

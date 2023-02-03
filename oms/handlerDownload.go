@@ -81,13 +81,13 @@ func modelDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 		"---------------",
 	}
 	if !appendToUpDownLog(logPath, true, "Download of: "+baseName) {
-		renameToDownloadErrorLog(logPath, "")
+		renameToDownloadErrorLog(logPath, "", nil)
 		omppLog.Log("Failed to write into download log file: " + baseName + ".progress.download.log")
 		http.Error(w, "Model download failed: "+baseName, http.StatusBadRequest)
 		return
 	}
 	if !appendToUpDownLog(logPath, false, hdrMsg...) {
-		renameToDownloadErrorLog(logPath, "")
+		renameToDownloadErrorLog(logPath, "", nil)
 		omppLog.Log("Failed to write into download log file: " + baseName + ".progress.download.log")
 		http.Error(w, "Model download failed: "+baseName, http.StatusBadRequest)
 		return
@@ -190,13 +190,13 @@ func runDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 		"---------------",
 	}
 	if !appendToUpDownLog(logPath, true, "Download of: "+baseName) {
-		renameToDownloadErrorLog(logPath, "")
+		renameToDownloadErrorLog(logPath, "", nil)
 		omppLog.Log("Failed to write into download log file: " + baseName + ".progress.download.log")
 		http.Error(w, "Model run download failed: "+baseName, http.StatusBadRequest)
 		return
 	}
 	if !appendToUpDownLog(logPath, false, hdrMsg...) {
-		renameToDownloadErrorLog(logPath, "")
+		renameToDownloadErrorLog(logPath, "", nil)
 		omppLog.Log("Failed to write into download log file: " + baseName + ".progress.download.log")
 		http.Error(w, "Model run download failed: "+baseName, http.StatusBadRequest)
 		return
@@ -283,13 +283,13 @@ func worksetDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 		"------------------",
 	}
 	if !appendToUpDownLog(logPath, true, "Download of: "+baseName) {
-		renameToDownloadErrorLog(logPath, "")
+		renameToDownloadErrorLog(logPath, "", nil)
 		omppLog.Log("Failed to write into download log file: " + baseName + ".progress.download.log")
 		http.Error(w, "Model scenario download failed: "+baseName, http.StatusBadRequest)
 		return
 	}
 	if !appendToUpDownLog(logPath, false, hdrMsg...) {
-		renameToDownloadErrorLog(logPath, "")
+		renameToDownloadErrorLog(logPath, "", nil)
 		omppLog.Log("Failed to write into download log file: " + baseName + ".progress.download.log")
 		http.Error(w, "Model scenario download failed: "+baseName, http.StatusBadRequest)
 		return

@@ -49,7 +49,7 @@ func textToDb(modelName string, runOpts *config.RunOptions) error {
 
 		outDir := runOpts.String(outputDirArgKey)
 		if outDir == "" {
-			outDir = filepath.Dir(inpDir)
+			outDir = filepath.Join(inpDir, modelName)
 		}
 		if err = helper.UnpackZip(filepath.Join(inpDir, modelName+".zip"), !theCfg.isKeepOutputDir, outDir); err != nil {
 			return err

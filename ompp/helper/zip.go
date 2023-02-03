@@ -91,13 +91,16 @@ func UnpackZip(zipPath string, isCleanDstDir bool, dstDir string) error {
 
 	// create output directory if not exist
 	var baseDir string
-	if dstDir == "" {
+	if dstDir == "" || dstDir == "." {
 		baseDir = filepath.Dir(zipPath)
 	} else {
 
 		baseDir = filepath.Clean(dstDir)
 
 		if isCleanDstDir {
+			if baseDir == filepath.Dir(zipPath) {
+				return errors.New("Error: output directory the same as input, unable cleanup: " + baseDir)
+			}
 			if e := os.RemoveAll(baseDir); e != nil && !os.IsNotExist(e) {
 				return errors.New("Error: unable to delete: " + baseDir + " : " + e.Error())
 			}

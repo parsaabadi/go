@@ -61,15 +61,15 @@ func makeModelDownloadCommand(mb modelBasic, logPath string, isNoAcc bool, isNoM
 		cmdMsg += " -dbcopy.Utf8BomIntoCsv"
 	}
 
-	// make absolute path to download directory: dbcopy work directory is a model bin directory
-	absDownDir, err := filepath.Abs(theCfg.downloadDir)
+	// make relative path arguments to dbcopy work directory: to a model bin directory
+	downDir, dbPathRel, dbcopyRel, err := makeRelDbCopyArgs(mb.binDir, theCfg.downloadDir, mb.dbPath)
 	if err != nil {
-		renameToDownloadErrorLog(logPath, "Error at starting "+cmdMsg)
+		renameToDownloadErrorLog(logPath, "Error at starting "+cmdMsg, err)
 		return nil, cmdMsg
 	}
 
 	// make dbcopy command
-	cArgs := []string{"-m", mb.name, "-dbcopy.Zip", "-dbcopy.OutputDir", absDownDir, "-dbcopy.FromSqlite", mb.dbPath}
+	cArgs := []string{"-m", mb.name, "-dbcopy.Zip", "-dbcopy.OutputDir", downDir, "-dbcopy.FromSqlite", dbPathRel}
 	if isNoAcc {
 		cArgs = append(cArgs, "-dbcopy.NoAccumulatorsCsv")
 	}
@@ -80,7 +80,7 @@ func makeModelDownloadCommand(mb modelBasic, logPath string, isNoAcc bool, isNoM
 		cArgs = append(cArgs, "-dbcopy.Utf8BomIntoCsv")
 	}
 
-	cmd := exec.Command(theCfg.dbcopyPath, cArgs...)
+	cmd := exec.Command(dbcopyRel, cArgs...)
 	cmd.Dir = mb.binDir // dbcopy work directory is a model bin directory
 
 	return cmd, cmdMsg
@@ -105,10 +105,10 @@ func makeRunDownloadCommand(mb modelBasic, runId int, logPath string, isNoAcc bo
 		cmdMsg += " -dbcopy.Utf8BomIntoCsv"
 	}
 
-	// make absolute path to download directory: dbcopy work directory is a model bin directory
-	absDownDir, err := filepath.Abs(theCfg.downloadDir)
+	// make relative path arguments to dbcopy work directory: to a model bin directory
+	downDir, dbPathRel, dbcopyRel, err := makeRelDbCopyArgs(mb.binDir, theCfg.downloadDir, mb.dbPath)
 	if err != nil {
-		renameToDownloadErrorLog(logPath, "Error at starting "+cmdMsg)
+		renameToDownloadErrorLog(logPath, "Error at starting "+cmdMsg, err)
 		return nil, cmdMsg
 	}
 
@@ -118,8 +118,8 @@ func makeRunDownloadCommand(mb modelBasic, runId int, logPath string, isNoAcc bo
 		"-dbcopy.IdOutputNames=false",
 		"-dbcopy.RunId", strconv.Itoa(runId),
 		"-dbcopy.Zip",
-		"-dbcopy.OutputDir", absDownDir,
-		"-dbcopy.FromSqlite", mb.dbPath,
+		"-dbcopy.OutputDir", downDir,
+		"-dbcopy.FromSqlite", dbPathRel,
 	}
 	if isNoAcc {
 		cArgs = append(cArgs, "-dbcopy.NoAccumulatorsCsv")
@@ -131,7 +131,7 @@ func makeRunDownloadCommand(mb modelBasic, runId int, logPath string, isNoAcc bo
 		cArgs = append(cArgs, "-dbcopy.Utf8BomIntoCsv")
 	}
 
-	cmd := exec.Command(theCfg.dbcopyPath, cArgs...)
+	cmd := exec.Command(dbcopyRel, cArgs...)
 	cmd.Dir = mb.binDir // dbcopy work directory is a model bin directory
 
 	return cmd, cmdMsg
@@ -150,10 +150,10 @@ func makeWorksetDownloadCommand(mb modelBasic, setName string, logPath string, i
 		cmdMsg += " -dbcopy.Utf8BomIntoCsv "
 	}
 
-	// make absolute path to download directory: dbcopy work directory is a model bin directory
-	absDownDir, err := filepath.Abs(theCfg.downloadDir)
+	// make relative path arguments to dbcopy work directory: to a model bin directory
+	downDir, dbPathRel, dbcopyRel, err := makeRelDbCopyArgs(mb.binDir, theCfg.downloadDir, mb.dbPath)
 	if err != nil {
-		renameToDownloadErrorLog(logPath, "Error at starting "+cmdMsg)
+		renameToDownloadErrorLog(logPath, "Error at starting "+cmdMsg, err)
 		return nil, cmdMsg
 	}
 
@@ -163,14 +163,14 @@ func makeWorksetDownloadCommand(mb modelBasic, setName string, logPath string, i
 		"-dbcopy.IdOutputNames=false",
 		"-dbcopy.SetName", setName,
 		"-dbcopy.Zip",
-		"-dbcopy.OutputDir", absDownDir,
-		"-dbcopy.FromSqlite", mb.dbPath,
+		"-dbcopy.OutputDir", downDir,
+		"-dbcopy.FromSqlite", dbPathRel,
 	}
 	if isCsvBom {
 		cArgs = append(cArgs, "-dbcopy.Utf8BomIntoCsv")
 	}
 
-	cmd := exec.Command(theCfg.dbcopyPath, cArgs...)
+	cmd := exec.Command(dbcopyRel, cArgs...)
 	cmd.Dir = mb.binDir // dbcopy work directory is a model bin directory
 
 	return cmd, cmdMsg
@@ -187,10 +187,10 @@ func makeRunUploadCommand(mb modelBasic, runName string, logPath string) (*exec.
 		" -dbcopy.Zip" +
 		" -dbcopy.InputDir " + theCfg.uploadDir
 
-	// make absolute path to upload directory: dbcopy work directory is a model bin directory
-	absUpDir, err := filepath.Abs(theCfg.uploadDir)
+	// make relative path arguments to dbcopy work directory: to a model bin directory
+	upDir, dbPathRel, dbcopyRel, err := makeRelDbCopyArgs(mb.binDir, theCfg.uploadDir, mb.dbPath)
 	if err != nil {
-		renameToUploadErrorLog(logPath, "Error at starting "+cmdMsg)
+		renameToUploadErrorLog(logPath, "Error at starting "+cmdMsg, err)
 		return nil, cmdMsg
 	}
 
@@ -201,11 +201,11 @@ func makeRunUploadCommand(mb modelBasic, runName string, logPath string) (*exec.
 		"-dbcopy.RunName", runName,
 		"-dbcopy.To", "db",
 		"-dbcopy.Zip",
-		"-dbcopy.InputDir", absUpDir,
-		"-dbcopy.ToSqlite", mb.dbPath,
+		"-dbcopy.InputDir", upDir,
+		"-dbcopy.ToSqlite", dbPathRel,
 	}
 
-	cmd := exec.Command(theCfg.dbcopyPath, cArgs...)
+	cmd := exec.Command(dbcopyRel, cArgs...)
 	cmd.Dir = mb.binDir // dbcopy work directory is a model bin directory
 
 	return cmd, cmdMsg
@@ -225,10 +225,10 @@ func makeWorksetUploadCommand(mb modelBasic, setName string, logPath string, isN
 		cmdMsg += " -dbcopy.NoDigestCheck"
 	}
 
-	// make absolute path to upload directory: dbcopy work directory is a model bin directory
-	absUpDir, err := filepath.Abs(theCfg.uploadDir)
+	// make relative path arguments to dbcopy work directory: to a model bin directory
+	upDir, dbPathRel, dbcopyRel, err := makeRelDbCopyArgs(mb.binDir, theCfg.uploadDir, mb.dbPath)
 	if err != nil {
-		renameToUploadErrorLog(logPath, "Error at starting "+cmdMsg)
+		renameToUploadErrorLog(logPath, "Error at starting "+cmdMsg, err)
 		return nil, cmdMsg
 	}
 
@@ -239,17 +239,43 @@ func makeWorksetUploadCommand(mb modelBasic, setName string, logPath string, isN
 		"-dbcopy.SetName", setName,
 		"-dbcopy.To", "db",
 		"-dbcopy.Zip",
-		"-dbcopy.InputDir", absUpDir,
-		"-dbcopy.ToSqlite", mb.dbPath,
+		"-dbcopy.InputDir", upDir,
+		"-dbcopy.ToSqlite", dbPathRel,
 	}
 	if isNoDigestCheck {
 		cArgs = append(cArgs, "-dbcopy.NoDigestCheck")
 	}
 
-	cmd := exec.Command(theCfg.dbcopyPath, cArgs...)
+	cmd := exec.Command(dbcopyRel, cArgs...)
 	cmd.Dir = mb.binDir // dbcopy work directory is a model bin directory
 
 	return cmd, cmdMsg
+}
+
+// make relative to dbcopy work directory from targetPath, model db path and dbcopy path
+func makeRelDbCopyArgs(workDir, targetPath, dbPath string) (string, string, string, error) {
+
+	wDir, err := filepath.Abs(workDir)
+	if err != nil {
+		return "", "", "", err
+	}
+	aTarget, err := filepath.Abs(targetPath)
+	if err != nil {
+		return "", "", "", err
+	}
+	relTarget, err := filepath.Rel(wDir, aTarget)
+	if err != nil {
+		return "", "", "", err
+	}
+	relDbPath, err := filepath.Rel(wDir, dbPath)
+	if err != nil {
+		return "", "", "", err
+	}
+	relDbcopy, err := filepath.Rel(wDir, theCfg.dbcopyPath)
+	if err != nil {
+		return "", "", "", err
+	}
+	return relTarget, relDbPath, relDbcopy, nil
 }
 
 // makeDownload invoke dbcopy to create model download directory and .zip file:
@@ -296,12 +322,12 @@ func runUpDownDbcopy(upDown string, upDownDir string, baseName string, cmd *exec
 	// connect console output to output log file
 	outPipe, err := cmd.StdoutPipe()
 	if err != nil {
-		renameToUpDownErrorLog(upDown, logPath, "Error at starting "+cmdMsg)
+		renameToUpDownErrorLog(upDown, logPath, "Error at starting "+cmdMsg, err)
 		return
 	}
 	errPipe, err := cmd.StderrPipe()
 	if err != nil {
-		renameToUpDownErrorLog(upDown, logPath, "Error at starting "+cmdMsg)
+		renameToUpDownErrorLog(upDown, logPath, "Error at starting "+cmdMsg, err)
 		return
 	}
 	outDoneC := make(chan bool, 1)
@@ -324,7 +350,7 @@ func runUpDownDbcopy(upDown string, upDownDir string, baseName string, cmd *exec
 	// start console output listners
 	absLogPath, err := filepath.Abs(logPath)
 	if err != nil {
-		renameToUpDownErrorLog(upDown, logPath, "Error at starting "+cmdMsg)
+		renameToUpDownErrorLog(upDown, logPath, "Error at starting "+cmdMsg, err)
 		return
 	}
 
@@ -337,8 +363,7 @@ func runUpDownDbcopy(upDown string, upDownDir string, baseName string, cmd *exec
 
 	err = cmd.Start()
 	if err != nil {
-		omppLog.Log("Error: ", err)
-		renameToUpDownErrorLog(upDown, logPath, err.Error())
+		renameToUpDownErrorLog(upDown, logPath, err.Error(), err)
 		return
 	}
 	// else dbcopy started: wait until completed
@@ -361,10 +386,9 @@ func runUpDownDbcopy(upDown string, upDownDir string, baseName string, cmd *exec
 	// wait for dbcopy to be completed
 	e := cmd.Wait()
 	if e != nil {
-		omppLog.Log(e)
 		omppLog.Log("Error at: ", cmd.Args)
 		appendToUpDownLog(logPath, true, e.Error())
-		renameToUpDownErrorLog(upDown, logPath, "Error at: "+cmdMsg)
+		renameToUpDownErrorLog(upDown, logPath, "Error at: "+cmdMsg, e)
 		return
 	}
 	// else: completed OK
@@ -393,12 +417,11 @@ func removeUploadFile(path string, logPath string, fileName string) bool {
 func removeUpDownFile(upDown string, path string, logPath string, fileName string) bool {
 
 	if !appendToUpDownLog(logPath, true, "delete: "+fileName) {
-		renameToUpDownErrorLog(upDown, logPath, "")
+		renameToUpDownErrorLog(upDown, logPath, "", nil)
 		return false
 	}
 	if e := os.Remove(path); e != nil && !os.IsNotExist(e) {
-		omppLog.Log(e)
-		renameToUpDownErrorLog(upDown, logPath, "Error at delete "+fileName)
+		renameToUpDownErrorLog(upDown, logPath, "Error at delete "+fileName, e)
 		return false
 	}
 	return true
@@ -421,12 +444,11 @@ func removeUploadDir(path string, logPath string, dirName string) bool {
 func removeUpDownDir(upDown string, path string, logPath string, dirName string) bool {
 
 	if !appendToUpDownLog(logPath, true, "delete: "+dirName) {
-		renameToUpDownErrorLog(upDown, logPath, "")
+		renameToUpDownErrorLog(upDown, logPath, "", nil)
 		return false
 	}
 	if e := os.RemoveAll(path); e != nil && !os.IsNotExist(e) {
-		omppLog.Log(e)
-		renameToUpDownErrorLog(upDown, logPath, "Error at delete "+dirName)
+		renameToUpDownErrorLog(upDown, logPath, "Error at delete "+dirName, e)
 		return false
 	}
 	return true
@@ -444,19 +466,22 @@ func createUpDownLog(logPath string) (string, bool) {
 }
 
 // rename upload or download log file on error: model......progress.download.log into model......error.download.log
-func renameToDownloadErrorLog(logPath string, errMsg string) {
-	renameToUpDownErrorLog("download", logPath, errMsg)
+func renameToDownloadErrorLog(logPath string, logErrMsg string, err error) {
+	renameToUpDownErrorLog("download", logPath, logErrMsg, err)
 }
 
 // rename upload log file on error: model......progress.upload.log into model......error.upload.log
-func renameToUploadErrorLog(logPath string, errMsg string) {
-	renameToUpDownErrorLog("upload", logPath, errMsg)
+func renameToUploadErrorLog(logPath string, logErrMsg string, err error) {
+	renameToUpDownErrorLog("upload", logPath, logErrMsg, err)
 }
 
 // rename upload or download log file on error: model......progress.up-or-down.log into model......error.up-or-down.log
-func renameToUpDownErrorLog(upDown string, logPath string, errMsg string) {
-	if errMsg != "" {
-		appendToUpDownLog(logPath, true, errMsg)
+func renameToUpDownErrorLog(upDown string, logPath string, logErrMsg string, err error) {
+	if err != nil {
+		omppLog.Log(err)
+	}
+	if logErrMsg != "" {
+		appendToUpDownLog(logPath, true, logErrMsg)
 	}
 	os.Rename(logPath, strings.TrimSuffix(logPath, ".progress."+upDown+".log")+".error."+upDown+".log")
 }
