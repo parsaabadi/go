@@ -210,13 +210,13 @@ func toWorksetText(
 
 		cvtParam := &db.CellParamConverter{
 			ModelDef:  modelDef,
-			Name:      modelDef.Param[j].Name,
+			Name:      pub.Param[j].Name,
 			IsIdCsv:   isIdCsv,
 			DoubleFmt: theCfg.doubleFmt,
 		}
 		paramLt := db.ReadParamLayout{
 			ReadLayout: db.ReadLayout{
-				Name:   modelDef.Param[j].Name,
+				Name:   pub.Param[j].Name,
 				FromId: setId,
 			},
 			IsFromSet: true,

@@ -215,7 +215,7 @@ func toCellCsvFile(
 		cs[0] = extraFirstValue // if this is all-in-one then first column value is run id (or name or set id set name)
 	}
 
-	// convert output table cell into []string and write line into csv file
+	// convert cell into []string and write line into csv file
 	cvtWr := func(src interface{}) (bool, error) {
 
 		// write cell line: dimension(s) and value
@@ -235,7 +235,7 @@ func toCellCsvFile(
 		return true, nil
 	}
 
-	// select parameter or output table rows and write into csv file
+	// select parameter rows, output table rows or microdata rows and write into csv file
 	switch lt := readLayout.(type) {
 	case db.ReadParamLayout:
 		_, err = db.ReadParameterTo(dbConn, modelDef, &lt, cvtWr)
