@@ -86,11 +86,6 @@ if true then API only web-service, it is false by default and oms also act as ht
 
 if true then log HTTP requests on console and/or log file.
 
-	-oms.MaxRowCount 100
-
-default number of rows to return from read parameters or output tables, default: 100.
-This value is used if web-service method call does not provide explicit number of rows to read.
-
 	-oms.Languages en
 
 comma-separated list of supported languages, default: en.
@@ -107,9 +102,9 @@ By default float and double values converted into text with "%.15g" format.
 "code page" to convert source file into utf-8, for example: windows-1252.
 It is used only for compatibility with old Windows files.
 
-	-oms.MaxRunHistory 100
+	-oms.MaxRunHistory 1000
 
-max number of completed model runs to keep in run list history, default: 100.
+max number of completed model runs to keep in run list history, default: 1000.
 
 Also oms support OpenM++ standard log settings (described in openM++ wiki):
 
@@ -164,7 +159,6 @@ const (
 	apiOnlyArgKey        = "oms.ApiOnly"        // if true then API only web-service, no web UI
 	uiLangsArgKey        = "oms.Languages"      // list of supported languages
 	encodingArgKey       = "oms.CodePage"       // code page for converting source files, e.g. windows-1252
-	pageSizeAgrKey       = "oms.MaxRowCount"    // max number of rows to return from read parameters or output tables
 	runHistorySizeAgrKey = "oms.MaxRunHistory"  // max number of completed model runs to keep in run list history
 	doubleFormatArgKey   = "oms.DoubleFormat"   // format to convert float or double value to string, e.g. %.15g
 )
@@ -187,13 +181,11 @@ var theCfg = struct {
 	jobDir            string            // job control directory
 	omsName           string            // oms instance name, if empty then derived from address to listen
 	dbcopyPath        string            // if download or upload allowed then it is path to dbcopy.exe
-	pageMaxSize       int64             // default "page" size: row count to read parameters or output tables
 	runHistoryMaxSize int               // max number of completed model run states to keep in run list history
 	doubleFmt         string            // format to convert float or double value to string
 	codePage          string            // "code page" to convert source file into utf-8, for example: windows-1252
 	env               map[string]string // server config environmemt variables
 }{
-	pageMaxSize:       100,
 	htmlDir:           "html",
 	etcDir:            "etc",
 	isHome:            false,
@@ -249,7 +241,6 @@ func mainBody(args []string) error {
 	_ = flag.Bool(apiOnlyArgKey, false, "if true then API only web-service, no web UI")
 	_ = flag.String(uiLangsArgKey, "en", "comma-separated list of supported languages")
 	_ = flag.String(encodingArgKey, "", "code page to convert source file into utf-8, e.g.: windows-1252")
-	_ = flag.Int64(pageSizeAgrKey, theCfg.pageMaxSize, "max number of rows to return from read parameters or output tables")
 	_ = flag.Int(runHistorySizeAgrKey, runHistoryDefaultSize, "max number of model runs to keep in run list history")
 	_ = flag.String(doubleFormatArgKey, theCfg.doubleFmt, "format to convert float or double value to string")
 
@@ -270,7 +261,6 @@ func mainBody(args []string) error {
 	isApiOnly := runOpts.Bool(apiOnlyArgKey)
 	theCfg.isMicrodata = runOpts.Bool(isMicrodataArgKey)
 
-	theCfg.pageMaxSize = runOpts.Int64(pageSizeAgrKey, theCfg.pageMaxSize)
 	theCfg.doubleFmt = runOpts.String(doubleFormatArgKey)
 
 	theCfg.runHistoryMaxSize = runOpts.Int(runHistorySizeAgrKey, runHistoryDefaultSize)

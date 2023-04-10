@@ -225,7 +225,7 @@ func runLogPageHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid value of start log start line "+dn, http.StatusBadRequest)
 		return
 	}
-	count, ok := getIntRequestParam(r, "count", int(theCfg.pageMaxSize))
+	count, ok := getIntRequestParam(r, "count", 0)
 	if !ok {
 		http.Error(w, "Invalid value of log line count "+dn, http.StatusBadRequest)
 		return

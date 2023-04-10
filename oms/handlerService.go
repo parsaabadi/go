@@ -18,7 +18,6 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 
 	st := struct {
 		OmsName           string             // server instance name
-		RowPageMaxSize    int64              // default "page" size: row count to read parameters or output tables
 		RunHistoryMaxSize int                // max number of completed model run states to keep in run list history
 		DoubleFmt         string             // format to convert float or double value to string
 		LoginUrl          string             // user login URL for UI
@@ -33,7 +32,6 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 		RunCatalog        RunCatalogConfig   // "public" state of model run catalog
 	}{
 		OmsName:           theCfg.omsName,
-		RowPageMaxSize:    theCfg.pageMaxSize,
 		RunHistoryMaxSize: theCfg.runHistoryMaxSize,
 		DoubleFmt:         theCfg.doubleFmt,
 		AllowUserHome:     theCfg.isHome,
