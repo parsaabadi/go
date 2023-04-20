@@ -43,7 +43,7 @@ type CellMicroConverter struct {
 	theAttrs  []EntityAttrRow // if not empty then entity generation attributes
 }
 
-// retrun true if csv converter is using enum id's for dimensions
+// return true if csv converter is using enum id's for dimensions
 func (cellCvt *CellMicroConverter) IsUseEnumId() bool { return cellCvt.IsIdCsv }
 
 // CsvFileName return file name of csv file to store entity microdata rows
@@ -140,7 +140,7 @@ func (cellCvt *CellMicroConverter) ToCsvIdRow() (func(interface{}, []string) err
 //
 // Converter simply does Sprint() for key and each attribute value, if value is NULL then empty "" string used.
 // If attribute type is float and double format is not empty "" string then converter does Sprintf(using double format).
-// If attribute type is enum based then converter retrun enum code for attribute enum id.
+// If attribute type is enum based then converter return enum code for attribute enum id.
 // Converter will return error if len(row) not equal to number of fields in csv record.
 func (cellCvt *CellMicroConverter) ToCsvRow() (func(interface{}, []string) error, error) {
 
@@ -175,7 +175,7 @@ func (cellCvt *CellMicroConverter) ToCsvRow() (func(interface{}, []string) error
 				return nil, err
 			}
 
-			fd[k] = func(v interface{}) (string, error) { // convereter retrun enum code by enum id
+			fd[k] = func(v interface{}) (string, error) { // convereter return enum code by enum id
 
 				// depending on sql + driver it can be different type
 				if iv, ok := helper.ToIntValue(v); ok {
@@ -253,7 +253,7 @@ func (cellCvt *CellMicroConverter) CsvToCell() (func(row []string) (interface{},
 				return nil, err
 			}
 
-			fd[k] = func(src string) (interface{}, error) { // convereter retrun enum id by code
+			fd[k] = func(src string) (interface{}, error) { // convereter return enum id by code
 				return f(src)
 			}
 
@@ -264,7 +264,7 @@ func (cellCvt *CellMicroConverter) CsvToCell() (func(row []string) (interface{},
 				n = 32
 			}
 
-			fd[k] = func(src string) (interface{}, error) { // convereter retrun enum id by code
+			fd[k] = func(src string) (interface{}, error) { // convereter return enum id by code
 				vf, e := strconv.ParseFloat(src, n)
 				if e != nil {
 					return 0.0, e
@@ -362,7 +362,7 @@ func (cellCvt *CellMicroConverter) IdToCodeCell(modelDef *ModelMeta, _ string) (
 				return nil, err
 			}
 
-			fd[k] = func(v interface{}) (string, error) { // convereter retrun enum code by enum id
+			fd[k] = func(v interface{}) (string, error) { // convereter return enum code by enum id
 
 				// depending on sql + driver it can be different type
 				if iv, ok := helper.ToIntValue(v); ok {
@@ -444,7 +444,7 @@ func (cellCvt *CellMicroConverter) CodeToIdCell(modelDef *ModelMeta, _ string) (
 				return nil, err
 			}
 
-			fd[k] = func(src string) (interface{}, error) { // convereter retrun enum id by code
+			fd[k] = func(src string) (interface{}, error) { // convereter return enum id by code
 				return f(src)
 			}
 
@@ -455,7 +455,7 @@ func (cellCvt *CellMicroConverter) CodeToIdCell(modelDef *ModelMeta, _ string) (
 				n = 32
 			}
 
-			fd[k] = func(src string) (interface{}, error) { // convereter retrun enum id by code
+			fd[k] = func(src string) (interface{}, error) { // convereter return enum id by code
 				vf, e := strconv.ParseFloat(src, n)
 				if e != nil {
 					return 0.0, e

@@ -322,7 +322,7 @@ func worksetListHandler(w http.ResponseWriter, r *http.Request) {
 
 	dn := getRequestParam(r, "model")
 
-	wpl, _ := theCatalog.WorksetList(dn)
+	wpl, _ := theCatalog.WorksetPubList(dn)
 	jsonResponse(w, r, wpl)
 }
 

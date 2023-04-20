@@ -78,9 +78,37 @@ func (mc *ModelCatalog) WorksetDefaultStatus(dn string) (*db.WorksetRow, bool) {
 	return w, true
 }
 
-// WorksetList return list of workset_lst db rows by model digest-or-name.
+// WorksetRowListByModelDigest return list of workset_lst db rows by model digest, sorted by workset_id.
+func (mc *ModelCatalog) WorksetRowListByModelDigest(digest string) ([]db.WorksetRow, bool) {
+
+	// if model digest is empty then return empty results
+	if digest == "" {
+		omppLog.Log("Warning: invalid (empty) model digest")
+		return []db.WorksetRow{}, false
+	}
+
+	// lock catalog and find model index by digest
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigest(digest)
+	if !ok {
+		omppLog.Log("Warning: model digest not found: ", digest)
+		return []db.WorksetRow{}, false
+	}
+
+	// get workset list
+	wl, err := db.GetWorksetList(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId)
+	if err != nil {
+		omppLog.Log("Error at get workset list: ", digest, ": ", err.Error())
+		return []db.WorksetRow{}, false // return empty result: workset select error
+	}
+	return wl, true
+}
+
+// WorksetPubList return list of workset_lst db rows by model digest-or-name.
 // No text info returned (no description and notes).
-func (mc *ModelCatalog) WorksetList(dn string) ([]db.WorksetPub, bool) {
+func (mc *ModelCatalog) WorksetPubList(dn string) ([]db.WorksetPub, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {

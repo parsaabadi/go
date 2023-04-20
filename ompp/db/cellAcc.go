@@ -31,7 +31,7 @@ type CellAccConverter struct {
 	DoubleFmt          string // if not empty then format string is used to sprintf if value type is float, double, long double
 }
 
-// retrun true if csv converter is using enum id's for dimensions
+// return true if csv converter is using enum id's for dimensions
 func (cellCvt *CellAccConverter) IsUseEnumId() bool { return cellCvt.IsIdCsv }
 
 // CsvFileName return file name of csv file to store output table accumulator rows

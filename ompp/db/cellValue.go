@@ -32,7 +32,7 @@ type CsvConverter interface {
 	// return file name of csv file to store parameter or output table rows
 	CsvFileName() (string, error)
 
-	// retrun true if csv converter is using enum id's for dimensions or attributes
+	// return true if csv converter is using enum id's for dimensions or attributes
 	IsUseEnumId() bool
 
 	// return first line of csv file with column names: expr_name,dim0,dim1,expr_value.

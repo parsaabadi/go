@@ -17,33 +17,49 @@ import (
 func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 
 	st := struct {
-		OmsName           string             // server instance name
-		RunHistoryMaxSize int                // max number of completed model run states to keep in run list history
-		DoubleFmt         string             // format to convert float or double value to string
-		LoginUrl          string             // user login URL for UI
-		LogoutUrl         string             // user logout URL for UI
-		AllowUserHome     bool               // if true then store user settings in home directory
-		AllowDownload     bool               // if true then allow download from home/io/download directory
-		AllowUpload       bool               // if true then allow upload from home/io/upload directory
-		AllowMicrodata    bool               // if true then allow model run microdata
-		IsJobControl      bool               // if true then job control enabled
-		Env               map[string]string  // server config environmemt variables
-		ModelCatalog      ModelCatalogConfig // "public" state of model catalog
-		RunCatalog        RunCatalogConfig   // "public" state of model run catalog
+		OmsName        string             // server instance name
+		DoubleFmt      string             // format to convert float or double value to string
+		LoginUrl       string             // user login URL for UI
+		LogoutUrl      string             // user logout URL for UI
+		AllowUserHome  bool               // if true then store user settings in home directory
+		AllowDownload  bool               // if true then allow download from home/io/download directory
+		AllowUpload    bool               // if true then allow upload from home/io/upload directory
+		AllowMicrodata bool               // if true then allow model run microdata
+		IsJobControl   bool               // if true then job control enabled
+		IsArchive      bool               // if true the archiving is enabled: old data moved out from into archive directory
+		Env            map[string]string  // server config environmemt variables for UI
+		ModelCatalog   ModelCatalogConfig // "public" state of model catalog
+		RunCatalog     RunCatalogConfig   // "public" state of model run catalog
 	}{
-		OmsName:           theCfg.omsName,
-		RunHistoryMaxSize: theCfg.runHistoryMaxSize,
-		DoubleFmt:         theCfg.doubleFmt,
-		AllowUserHome:     theCfg.isHome,
-		AllowDownload:     theCfg.downloadDir != "",
-		AllowUpload:       theCfg.uploadDir != "",
-		AllowMicrodata:    theCfg.isMicrodata,
-		IsJobControl:      theCfg.isJobControl,
-		Env:               theCfg.env,
-		ModelCatalog:      theCatalog.toPublicConfig(),
-		RunCatalog:        *theRunCatalog.toPublicConfig(),
+		OmsName:        theCfg.omsName,
+		DoubleFmt:      theCfg.doubleFmt,
+		AllowUserHome:  theCfg.isHome,
+		AllowDownload:  theCfg.downloadDir != "",
+		AllowUpload:    theCfg.uploadDir != "",
+		AllowMicrodata: theCfg.isMicrodata,
+		IsJobControl:   theCfg.isJobControl,
+		IsArchive:      theCfg.isArchive,
+		Env:            theCfg.env,
+		ModelCatalog:   theCatalog.toPublicConfig(),
+		RunCatalog:     *theRunCatalog.toPublicConfig(),
 	}
 	jsonResponse(w, r, st)
+}
+
+// archiveStateHandler return current state of archive job by reading it from archive-state.json file.
+// GET /api/archive/state
+func archiveStateHandler(w http.ResponseWriter, r *http.Request) {
+
+	// read archive state file and send file content as json response body
+	bt, err := theArchive.readArchiveState()
+
+	if err != nil {
+		omppLog.Log("Error: unable to read from ", theCfg.archiveStatePath, " ", err)
+		http.Error(w, "Error: unable to read from "+archiveStateFile, http.StatusInternalServerError)
+		return // archive state file read error
+	}
+
+	jsonResponseBytes(w, r, bt)
 }
 
 // serviceStateHandler return service and model runs state: queue, active runs and run history

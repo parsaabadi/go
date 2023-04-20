@@ -264,7 +264,7 @@ func Gcd2(a, b int) int {
 	return a
 }
 
-// retrun greatest common divisor of all src[]
+// return greatest common divisor of all src[]
 func Gcd(src []int) int {
 
 	if len(src) <= 0 {
@@ -390,4 +390,64 @@ func ParseKeyValue(src string) (map[string]string, error) {
 	}
 
 	return kv, nil
+}
+
+// ParseCsvLine comma separated string: " value ", value, ' value '.
+// Value can be empty and can be escaped with "double" or 'single' quotes.
+// If comma is zero rune then , comma used by default.
+func ParseCsvLine(src string, comma rune) []string {
+
+	if comma == 0 {
+		comma = ','
+	}
+	vLst := []string{}
+
+	for src != "" {
+
+		// skip spaces in front of the next value
+		src = strings.TrimLeftFunc(src, func(c rune) bool {
+			return unicode.IsSpace(c)
+		})
+		if src == "" {
+			break // empty end of string, no more values
+		}
+
+		// search for end of value , comma and skip quoted part of value
+		isNext := false
+		isQuote := false
+		var cQuote rune
+
+		for nPos, chr := range src {
+
+			// if end of value as , comma found
+			if !isQuote && chr == comma {
+
+				// append to result result to the map, unquote "value" if quotes balanced
+				vLst = append(vLst, UnQuote(src[:nPos]))
+
+				// value is found: skip , comma and process next value
+				src = src[nPos+1:]
+				isNext = true
+				break
+			}
+
+			// open or close quotes
+			if !isQuote && (chr == '"' || chr == '\'') || isQuote && chr == cQuote {
+				isQuote = !isQuote
+				if isQuote {
+					cQuote = chr // opening quote
+				} else {
+					cQuote = 0 // quote closed
+				}
+				continue
+			}
+		}
+		// last value without comma at the end of line
+		if !isNext && src != "" {
+			vLst = append(vLst, UnQuote(src))
+			break
+		}
+	}
+
+	return vLst
 }

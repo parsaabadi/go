@@ -34,7 +34,7 @@ type CellAllAccConverter struct {
 	ValueName          string // If ValueName is "" empty then all accumulators use for csv else one
 }
 
-// retrun true if csv converter is using enum id's for dimensions
+// return true if csv converter is using enum id's for dimensions
 func (cellCvt *CellAllAccConverter) IsUseEnumId() bool { return cellCvt.IsIdCsv }
 
 // CsvFileName return file name of csv file to store all accumulators rows

@@ -203,8 +203,7 @@ func (mc *ModelCatalog) RunRowList(digest string, rdsn string) ([]db.RunRow, boo
 	return rLst, true
 }
 
-// RunRowAfterList return list of run_lst db rows by model digest, sorted by run_id.
-// If afterRunId > 0 then return only runs where run_id > afterRunId.
+// RunRowListByModelDigest return list of run_lst db rows by model digest, sorted by run_id.
 func (mc *ModelCatalog) RunRowListByModelDigest(digest string) ([]db.RunRow, bool) {
 
 	// if model digest is empty then return empty results

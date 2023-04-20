@@ -200,13 +200,13 @@ func (mc *ModelCatalog) getNewTimeStamp() (string, time.Time) {
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	dtNow := time.Now()
-	ts := helper.MakeTimeStamp(dtNow)
+	tNow := time.Now()
+	ts := helper.MakeTimeStamp(tNow)
 	if ts == mc.lastTimeStamp {
 		time.Sleep(2 * time.Millisecond)
-		dtNow = time.Now()
-		ts = helper.MakeTimeStamp(dtNow)
+		tNow = time.Now()
+		ts = helper.MakeTimeStamp(tNow)
 	}
 	mc.lastTimeStamp = ts
-	return ts, dtNow
+	return ts, tNow
 }

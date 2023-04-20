@@ -27,7 +27,7 @@ import (
 func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni, compUse []computeUse) (*RunState, error) {
 
 	// make model process run stamp, if not specified then use timestamp by default
-	ts, dtNow := theCatalog.getNewTimeStamp()
+	ts, tNow := theCatalog.getNewTimeStamp()
 	rStamp := helper.CleanPath(job.RunStamp)
 	if rStamp == "" {
 		rStamp = ts
@@ -39,7 +39,7 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 		ModelDigest:    job.ModelDigest,
 		RunStamp:       rStamp,
 		SubmitStamp:    job.SubmitStamp,
-		UpdateDateTime: helper.MakeDateTime(dtNow),
+		UpdateDateTime: helper.MakeDateTime(tNow),
 	}
 
 	// set directories: work directory and bin model.exe directory
@@ -615,63 +615,41 @@ func (rsc *RunCatalog) makeCommand(mExe, binDir, workDir, dbPath string, mArgs [
 // return submission stamp, job file path and two flags: if model run found and if model is runniing now
 func (rsc *RunCatalog) stopModelRun(modelDigest string, stamp string) (bool, string, string, bool) {
 
-	dtNow := time.Now()
+	tNow := time.Now()
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
 	// find model run state by digest and run stamp
-	// update model run state and append log message
-	var rs *runStateLog
-	var rsSubmit *runStateLog
-	var ok bool
-	for re := rsc.runLst.Front(); re != nil; re = re.Next() {
+	rsl := rsc.findRunStateLog(modelDigest, stamp)
 
-		rs, ok = re.Value.(*runStateLog)
-		if !ok || rs == nil {
-			continue
-		}
-		ok = rs.ModelDigest == modelDigest && rs.RunStamp == stamp
-		if ok {
-			break
-		}
-		ok = rs.ModelDigest == modelDigest && rs.SubmitStamp == stamp
-		if ok {
-			rsSubmit = rs
-		}
-	}
-	// if model run stamp not found then check if submit stamp found
-	if !ok || rs == nil {
-		if rsSubmit == nil {
+	if rsl == nil { // if model run stamp and submit stamp not found then check if there is a job file in the queue
 
-			// try to find job file in the queue
-			if qj, ok := rsc.queueJobs[stamp]; ok {
-				return true, stamp, qj.filePath, false // job file found in the queue
-			}
-			return false, "", "", false // no model run stamp and no submit stamp found
+		if qj, ok := rsc.queueJobs[stamp]; ok {
+			return true, stamp, qj.filePath, false // job file found in the queue
 		}
-		rs = rsSubmit // submit stamp found
+		return false, "", "", false // no model run stamp and no submit stamp found
 	}
 
 	// find model in the active job list or if not active then find it in job queue
 	jobPath := ""
-	if aj, ok := rsc.activeJobs[rs.SubmitStamp]; ok {
+	if aj, ok := rsc.activeJobs[rsl.SubmitStamp]; ok {
 		jobPath = aj.filePath
 	} else {
-		if qj, ok := rsc.queueJobs[rs.SubmitStamp]; ok {
+		if qj, ok := rsc.queueJobs[rsl.SubmitStamp]; ok {
 			jobPath = qj.filePath
 		}
 	}
 
-	rs.UpdateDateTime = helper.MakeDateTime(dtNow)
+	rsl.UpdateDateTime = helper.MakeDateTime(tNow)
 
 	// kill model run if model is running
-	if rs.killC != nil {
-		rs.killC <- true
-		return true, rs.SubmitStamp, jobPath, true
+	if rsl.killC != nil {
+		rsl.killC <- true
+		return true, rsl.SubmitStamp, jobPath, true
 	}
 	// else remove request from the queue
-	rs.IsFinal = true
+	rsl.IsFinal = true
 
-	return true, rs.SubmitStamp, jobPath, false
+	return true, rsl.SubmitStamp, jobPath, false
 }

@@ -4,7 +4,6 @@
 package main
 
 import (
-	"container/list"
 	"os"
 	"path/filepath"
 	"sync"
@@ -15,23 +14,22 @@ import (
 
 // RunCatalog is a most recent state of model run for each model.
 type RunCatalog struct {
-	rscLock         sync.Mutex                     // mutex to lock for model list operations
-	models          map[string]modelRunBasic       // map model digest to basic info to run the model and manage log files
-	etcDir          string                         // model run templates directory, if relative then must be relative to oms root directory
-	runTemplates    []string                       // list of model run templates
-	mpiTemplates    []string                       // list of model MPI run templates
-	presets         []RunOptionsPreset             // list of preset run options
-	runLst          *list.List                     // list of model runs state (runStateLog)
-	modelRuns       map[string]map[string]RunState // map each model digest to run stamps to run state and run log path
-	JobServiceState                                // jobs service state: paused, resources usage and limits
-	queueKeys       []string                       // run submission stamps of model runs waiting in the queue
-	queueJobs       map[string]queueJobFile        // model run jobs waiting in the queue
-	activeJobs      map[string]runJobFile          // active (currently running) model run jobs
-	historyJobs     map[string]historyJobFile      // models run jobs history
-	selectedKeys    []string                       // jobs selected from queue to run now
-	computeState    map[string]computeItem         // map names of server or cluster the state of computational resources
-	startupNames    []string                       // names of the servers which are starting now
-	shutdownNames   []string                       // names of the servers which are stopping now
+	rscLock         sync.Mutex                         // mutex to lock for model list operations
+	models          map[string]modelRunBasic           // map model digest to basic info to run the model and manage log files
+	etcDir          string                             // model run templates directory, if relative then must be relative to oms root directory
+	runTemplates    []string                           // list of model run templates
+	mpiTemplates    []string                           // list of model MPI run templates
+	presets         []RunOptionsPreset                 // list of preset run options
+	modelRuns       map[string]map[string]*runStateLog // map each model digest to run stamps to run state and log file
+	JobServiceState                                    // jobs service state: paused, resources usage and limits
+	queueKeys       []string                           // run submission stamps of model runs waiting in the queue
+	queueJobs       map[string]queueJobFile            // model run jobs waiting in the queue
+	activeJobs      map[string]runJobFile              // active (currently running) model run jobs
+	historyJobs     map[string]historyJobFile          // models run jobs history
+	selectedKeys    []string                           // jobs selected from queue to run now
+	computeState    map[string]computeItem             // map names of server or cluster the state of computational resources
+	startupNames    []string                           // names of the servers which are starting now
+	shutdownNames   []string                           // names of the servers which are stopping now
 }
 
 var theRunCatalog RunCatalog // list of most recent state of model run for each model.
@@ -150,7 +148,6 @@ type RunState struct {
 	IsLog          bool      // if true then use run log file
 	LogFileName    string    // log file name
 	logPath        string    // log file path: log/dir/modelName.RunStamp.console.log
-	isHistory      bool      // if true then it is model run history or run done outside of oms service
 	pid            int       // process id
 	cmdPath        string    // executable path
 	killC          chan bool // channel to kill model process
@@ -159,6 +156,7 @@ type RunState struct {
 // runStateLog is model run state and log file lines.
 type runStateLog struct {
 	RunState            // model run state
+	logUsedTs  int64    // unix seconds, last time when log file lines used
 	logLineLst []string // model run log lines
 }
 
@@ -311,26 +309,9 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error
 	// update etc directory and list of templates
 	rsc.etcDir = etcDir
 
-	// copy existing models run history
-	rLst := list.New()
-
-	if rsc.runLst != nil {
-		for re := rsc.runLst.Front(); re != nil; re = re.Next() {
-
-			rs, ok := re.Value.(*runStateLog) // model run state expected
-			if !ok || rs == nil {
-				continue
-			}
-			if _, ok = rbs[rs.ModelDigest]; ok { // copy existing run history
-				rLst.PushBack(rs)
-			}
-		}
-	}
-	rsc.runLst = rLst
-
 	// model log history: add new models and delete existing models
 	if rsc.modelRuns == nil {
-		rsc.modelRuns = map[string]map[string]RunState{}
+		rsc.modelRuns = map[string]map[string]*runStateLog{}
 	}
 	// if model deleted then delete model logs history
 	for d := range rsc.modelRuns {
@@ -341,7 +322,7 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error
 	// if new model added then add new empty logs history
 	for d := range rbs {
 		if _, ok := rsc.modelRuns[d]; !ok {
-			rsc.modelRuns[d] = map[string]RunState{}
+			rsc.modelRuns[d] = map[string]*runStateLog{}
 		}
 	}
 	rsc.models = rbs
@@ -353,7 +334,7 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error
 	rsc.queueKeys = []string{}
 	rsc.activeJobs = map[string]runJobFile{}
 	rsc.queueJobs = map[string]queueJobFile{}
-	rsc.historyJobs = make(map[string]historyJobFile, theCfg.runHistoryMaxSize)
+	rsc.historyJobs = make(map[string]historyJobFile, 1024) // assume long history of model runs
 	rsc.computeState = map[string]computeItem{}
 	rsc.jobLastPosition = jobPositionDefault + 1
 	rsc.jobFirstPosition = jobPositionDefault - 1

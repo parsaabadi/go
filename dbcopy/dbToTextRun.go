@@ -249,7 +249,6 @@ func toRunText(
 	}
 
 	// write output tables into csv files, if the table included in run results
-
 	nT := len(modelDef.Table)
 	omppLog.Log("  Tables: ", nT)
 

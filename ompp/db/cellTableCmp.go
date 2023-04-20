@@ -31,7 +31,7 @@ type CellTableCmpConverter struct {
 	DigestToId         map[string]int // map of run digests to run id's
 }
 
-// retrun true if csv converter is using enum id's for dimensions
+// return true if csv converter is using enum id's for dimensions
 func (cellCvt *CellTableCmpConverter) IsUseEnumId() bool { return cellCvt.IsIdCsv }
 
 // CsvFileName return file name of csv file to store output table comparison rows

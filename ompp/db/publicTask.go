@@ -165,7 +165,7 @@ func (meta *TaskMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*TaskPub, e
 // Worksets are searched by set name, which is unique inside of the model.
 // Model run searched by run digest.
 // If isCompleted true then return only completed runs where status is success, error or exit
-// else retrun all runs: success, error, exit, progress.
+// else return all runs: success, error, exit, progress.
 func (pub *TaskPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta, isCompleted bool) (*TaskMeta, bool, bool, error) {
 
 	// validate parameters

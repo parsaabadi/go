@@ -33,7 +33,7 @@ type CellParamConverter struct {
 	theParam  *ParamMeta // if not nil then parameter found
 }
 
-// retrun true if csv converter is using enum id's for dimensions
+// return true if csv converter is using enum id's for dimensions
 func (cellCvt *CellParamConverter) IsUseEnumId() bool { return cellCvt.IsIdCsv }
 
 // CsvFileName return file name of csv file to store parameter rows

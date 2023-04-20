@@ -658,7 +658,7 @@ func GetRunFull(dbConn *sql.DB, runRow *RunRow) (*RunMeta, error) {
 // run_lst, run_txt, run_option, run_parameter, run_parameter_txt, run_table, run_progress, and entity generation rows.
 //
 // If isSuccess true then return only successfully completed runs
-// else retrun all runs: success, error, exit, progress.
+// else return all runs: success, error, exit, progress.
 // If langCode not empty then only specified language selected else all languages
 func GetRunFullText(dbConn *sql.DB, runRow *RunRow, isSuccess bool, langCode string) (*RunMeta, error) {
 
@@ -818,7 +818,7 @@ func GetRunFullText(dbConn *sql.DB, runRow *RunRow, isSuccess bool, langCode str
 // run_lst, run_txt, run_option, run_parameter, run_parameter_txt, run_table, run_progress and entity generation rows.
 //
 // If isSuccess true then return only successfully completed runs
-// else retrun all runs: success, error, exit, progress.
+// else return all runs: success, error, exit, progress.
 // If langCode not empty then only specified language selected else all languages
 func GetRunFullTextList(dbConn *sql.DB, modelId int, isSuccess bool, langCode string) ([]RunMeta, error) {
 

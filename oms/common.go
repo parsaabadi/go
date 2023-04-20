@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/husobee/vestigo"
 	"golang.org/x/text/language"
@@ -318,6 +319,9 @@ func jsonRequestToFile(w http.ResponseWriter, r *http.Request, outPath string) b
 
 // dirExist return error if directory does not exist or not accessible
 func dirExist(dirPath string) bool {
+	if dirPath == "" {
+		return false
+	}
 	_, err := dirStat(dirPath)
 	return err == nil
 }
@@ -339,6 +343,9 @@ func dirStat(dirPath string) (fs.FileInfo, error) {
 
 // fileExist return error if file not exist, not accessible or it is not a regular file
 func fileExist(filePath string) bool {
+	if filePath == "" {
+		return false
+	}
 	_, err := fileStat(filePath)
 	return err == nil
 }
@@ -426,4 +433,14 @@ func dbcopyPath(omsAbsPath string) string {
 		return p
 	}
 	return "" // dbcopy not found or not accessible or it is not a regular file
+}
+
+// wait for doneC exit signal or sleep, return true on exit signal or return false at the end of sleep interval
+func isExitSleep(ms time.Duration, doneC <-chan bool) bool {
+	select {
+	case <-doneC:
+		return true
+	case <-time.After(ms * time.Millisecond):
+	}
+	return false
 }

@@ -65,7 +65,7 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// get submit stamp
-	submitStamp, dtNow := theCatalog.getNewTimeStamp()
+	submitStamp, tNow := theCatalog.getNewTimeStamp()
 
 	if req.Env == nil {
 		req.Env = map[string]string{}
@@ -112,7 +112,7 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 			ModelDigest:    job.ModelDigest,
 			RunStamp:       rStamp,
 			SubmitStamp:    submitStamp,
-			UpdateDateTime: helper.MakeDateTime(dtNow),
+			UpdateDateTime: helper.MakeDateTime(tNow),
 		})
 }
 

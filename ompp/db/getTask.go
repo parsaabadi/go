@@ -182,7 +182,7 @@ func getTaskSetLst(dbConn *sql.DB, query string) (map[int][]int, error) {
 //
 // It includes all input worksets text and model runs text.
 // If isSuccess true then return only successfully completed runs
-// else retrun all runs: success, error, exit, progress.
+// else return all runs: success, error, exit, progress.
 // If langCode not empty then only specified language selected else all languages.
 func GetTaskRunSetText(dbConn *sql.DB, taskId int, isSuccess bool, langCode string) (*TaskRunSetTxt, error) {
 
@@ -616,7 +616,7 @@ func getTaskRunSetLst(dbConn *sql.DB, query string) ([]TaskRunSetRow, error) {
 // from db-tables: task_lst, task_txt, task_set, task_run_lst, task_run_set.
 //
 // If isSuccess true then return only successfully completed runs
-// else retrun all runs: success, error, exit, progress.
+// else return all runs: success, error, exit, progress.
 // If langCode not empty then only specified language selected else all languages
 func GetTaskFull(dbConn *sql.DB, taskRow *TaskRow, isSuccess bool, langCode string) (*TaskMeta, error) {
 
@@ -713,7 +713,7 @@ func GetTaskFull(dbConn *sql.DB, taskRow *TaskRow, isSuccess bool, langCode stri
 // from db-tables: task_lst, task_txt, task_set, task_run_lst, task_run_set.
 //
 // If isSuccess true then return only successfully completed runs
-// else retrun all runs: success, error, exit, progress.
+// else return all runs: success, error, exit, progress.
 // If langCode not empty then only specified language selected else all languages
 func GetTaskFullList(dbConn *sql.DB, modelId int, isSuccess bool, langCode string) ([]TaskMeta, error) {
 
