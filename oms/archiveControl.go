@@ -44,6 +44,7 @@ type archiveState struct {
 type archiveRequest struct {
 	ModelDigest string          // model digest
 	ModelName   string          // model name
+	Version     string          // model version
 	Run         []db.RunPub     // model runs to archive now
 	Set         []db.WorksetPub // worksets to archive now
 	RunAlert    []db.RunPub     // model runs to be archived soon
@@ -248,6 +249,12 @@ func updateArchiveState(arcDt, alertDt string, modelLst []modelBasic, arcLst []a
 						arcLst[nRq].SetAlert = append(arcLst[nRq].SetAlert, wl[k])
 					}
 				}
+			}
+		}
+
+		if len(arcLst[nRq].Run) > 0 || len(arcLst[nRq].RunAlert) > 0 || len(arcLst[nRq].Set) > 0 || len(arcLst[nRq].SetAlert) > 0 {
+			if m, ok := theCatalog.ModelDicByDigest(mdl.digest); ok {
+				arcLst[nRq].Version = m.Version
 			}
 		}
 	}
