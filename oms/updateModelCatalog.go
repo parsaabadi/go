@@ -71,8 +71,9 @@ func (mc *ModelCatalog) refreshSqlite(modelDir, modelLogDir string) error {
 			continue
 		}
 		if err := db.CheckOpenmppSchemaVersion(dbc); err != nil {
-			omppLog.Log("Error: invalid database, likely not an openM++ database", fp)
+			omppLog.Log("Error: invalid database, likely not an openM++ database: ", fp)
 			dbc.Close()
+			continue
 		}
 		dbDir := filepath.Dir(fp)
 
