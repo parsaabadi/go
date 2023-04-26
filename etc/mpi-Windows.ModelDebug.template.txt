@@ -1,13 +1,11 @@
 {{/*
-This template is no longer applicable
-
 oms web-service:
-  Template to run 64-bit Debug modelName64D.exe on Windows
+  Template to run modelName_mpi.exe on Windows using Microsoft MPI
 
 To use this template rename it into:
-  run.x64.Debug.template.txt
+  mpi.ModelRun.template.txt
 
-Oms web-service using this template to make exec.Command(exeName, Args...):
+Oms web-service using template for exec.Command(exeName, Args...):
   - skip empty lines
   - substitute template arguments
   - first non-empty line is a name of executable to run
@@ -24,12 +22,24 @@ Arguments of template:
   Env       map[string]string // environment variables to run the model
 
 Example of result:
-  .\modelName64D -OpenM.LogToFile false
+  mpiexec -n 16 -wdir models\bin -env key value ..\bin\modelName_mpi -OpenM.LogToFile false
 
 */}}
 
-{{.BinDir}}\{{.ExeStem}}64D
+
+mpiexec
+-n
+{{ .MpiNp}}
+{{with .Dir}}
+-wdir
+{{.}}
+{{end}}
+{{range $key, $val := .Env}}
+-env
+{{$key}}
+{{$val}}
+{{end}}
+{{.BinDir}}\{{.ExeStem}}D_mpi
 {{range .Args}}
 {{.}}
 {{end}}
-
