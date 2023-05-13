@@ -30,6 +30,10 @@ Only model argument does not have default value and must be specified explicitly
 
 Model digest is globally unique and you may want to use it if there are multiple versions of the model.
 
+To display list of the models in SQLite database file use:
+
+	dbcopy -ls path/to/file.sqlite
+
 Copy to "text": read from database and save into metadata .json and .csv values (parameters and output tables):
 
 	dbcopy -m modelOne
@@ -285,6 +289,7 @@ const (
 	toSqliteArgKey      = "dbcopy.ToSqlite"          // output db is SQLite file
 	toDbConnStrArgKey   = "dbcopy.ToDatabase"        // output db connection string
 	toDbDriverArgKey    = "dbcopy.ToDatabaseDriver"  // output db driver name, ie: SQLite, odbc, sqlite3
+	listModelsArgKey    = "ls"                       // display list of the models in SQLite database file
 	inputDirArgKey      = "dbcopy.InputDir"          // input dir to read model .json and .csv files
 	outputDirArgKey     = "dbcopy.OutputDir"         // output dir to write model .json and .csv files
 	keepOutputDirArgKey = "dbcopy.KeepOutputDir"     // keep output directory if it is already exist
@@ -368,6 +373,7 @@ func mainBody(args []string) error {
 	_ = flag.String(toSqliteArgKey, "", "output database SQLite file path")
 	_ = flag.String(toDbConnStrArgKey, "", "output database connection string")
 	_ = flag.String(toDbDriverArgKey, db.SQLiteDbDriver, "output database driver name: SQLite, odbc, sqlite3")
+	_ = flag.String(listModelsArgKey, "", "display list of the models in SQLite database file")
 	_ = flag.String(inputDirArgKey, "", "input directory to read model .json and .csv files")
 	_ = flag.String(outputDirArgKey, "", "output directory for model .json and .csv files")
 	_ = flag.Bool(keepOutputDirArgKey, theCfg.isKeepOutputDir, "keep (do not delete) existing output directory")
@@ -400,6 +406,12 @@ func mainBody(args []string) error {
 	}
 
 	omppLog.New(logOpts) // adjust log options according to command line arguments or ini-values
+
+	// display list of the models in sqlite database file
+	// it is exclusive option and cannot be combined with any other
+	if runOpts.IsExist(listModelsArgKey) {
+		return dbListModels(runOpts.String(listModelsArgKey))
+	}
 
 	// model name or model digest is required
 	modelName := runOpts.String(modelNameArgKey)
