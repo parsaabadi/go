@@ -136,7 +136,7 @@ func (cellCvt *CellMicroConverter) ToCsvIdRow() (func(interface{}, []string) err
 	return cvt, nil
 }
 
-// ToCsvIdRow return converter from microdata cell: (microdata key, attributes as enum code or built-in type value) to csv row []string.
+// ToCsvRow return converter from microdata cell: (microdata key, attributes as enum code or built-in type value) to csv row []string.
 //
 // Converter simply does Sprint() for key and each attribute value, if value is NULL then empty "" string used.
 // If attribute type is float and double format is not empty "" string then converter does Sprintf(using double format).
@@ -167,7 +167,7 @@ func (cellCvt *CellMicroConverter) ToCsvRow() (func(interface{}, []string) error
 			} else {
 				fd[k] = func(v interface{}) (string, error) { return fmt.Sprint(v), nil }
 			}
-		} else { // enum based attribute type: frind and return enum code by enum id
+		} else { // enum based attribute type: find and return enum code by enum id
 
 			msgName := cellCvt.Name + "." + ea.Name // for error message, ex: Person.Income
 			f, err := ea.typeOf.itemIdToCode(msgName, false)
@@ -246,7 +246,7 @@ func (cellCvt *CellMicroConverter) CsvToCell() (func(row []string) (interface{},
 		// attribute type to create converter
 
 		switch {
-		case !ea.typeOf.IsBuiltIn(): // enum based attribute type: frind and return enum id by enum code
+		case !ea.typeOf.IsBuiltIn(): // enum based attribute type: find and return enum id by enum code
 
 			f, err := ea.typeOf.itemCodeToId(msgName, false)
 			if err != nil {
@@ -354,7 +354,7 @@ func (cellCvt *CellMicroConverter) IdToCodeCell(modelDef *ModelMeta, _ string) (
 			} else {
 				fd[k] = func(v interface{}) (string, error) { return fmt.Sprint(v), nil }
 			}
-		} else { // enum based attribute type: frind and return enum code by enum id
+		} else { // enum based attribute type: find and return enum code by enum id
 
 			msgName := cellCvt.Name + "." + ea.Name // for error message, ex: Person.Income
 			f, err := ea.typeOf.itemIdToCode(msgName, false)
@@ -437,7 +437,7 @@ func (cellCvt *CellMicroConverter) CodeToIdCell(modelDef *ModelMeta, _ string) (
 		// attribute type to create converter
 
 		switch {
-		case !ea.typeOf.IsBuiltIn(): // enum based attribute type: frind and return enum id by enum code
+		case !ea.typeOf.IsBuiltIn(): // enum based attribute type: find and return enum id by enum code
 
 			f, err := ea.typeOf.itemCodeToId(msgName, false)
 			if err != nil {

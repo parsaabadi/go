@@ -25,7 +25,15 @@ func DeleteRun(dbConn *sql.DB, runId int) error {
 	if err != nil {
 		return err
 	}
-	if err := doDeleteRun(trx, runId); err != nil {
+	if err = doUnlinkRun(trx, runId); err != nil {
+		trx.Rollback()
+		return err
+	}
+	if err = doDeleteRunBody(trx, runId); err != nil {
+		trx.Rollback()
+		return err
+	}
+	if err = doDeleteRunMeta(trx, runId); err != nil {
 		trx.Rollback()
 		return err
 	}
@@ -33,80 +41,38 @@ func DeleteRun(dbConn *sql.DB, runId int) error {
 	return nil
 }
 
-// doDeleteRun delete model run metadata, parameters values, output tables values and microdata values from database.
+// doUnlinkRun set run status to d=deleted and unlink run values (parameter, output tables, microdata) from base run:
+// if run values used by any other run as a base run then base run id updated to the next minimal run id.
 // It does update as part of transaction
-func doDeleteRun(trx *sql.Tx, runId int) error {
+func doUnlinkRun(trx *sql.Tx, runId int) error {
 
 	// update model run master record to prevent run use
 	sId := strconv.Itoa(runId)
-	sn := "deleted" + helper.MakeDateTime(time.Now())
-	err := TrxUpdate(trx, "UPDATE run_lst SET run_name = "+ToQuoted(sn)+" WHERE run_id = "+sId)
+	delTs := helper.MakeTimeStamp(time.Now())
+
+	err := TrxUpdate(trx, "UPDATE run_lst SET run_name = "+ToQuoted("deleted: "+delTs)+" WHERE run_id = "+sId)
 	if err != nil {
 		return err
+	}
+
+	status := ""
+	err = TrxSelectFirst(trx,
+		"SELECT status FROM run_lst WHERE run_id = "+sId,
+		func(row *sql.Row) error {
+			if err := row.Scan(&status); err != nil {
+				return err
+			}
+			return nil
+		})
+	if err != nil {
+		return err
+	}
+	if status == "d" { // run unlink already done
+		return nil
 	}
 
 	// update to NULL base run id for all worksets where base run id = target run id
 	err = TrxUpdate(trx, "UPDATE workset_lst SET base_run_id = NULL WHERE base_run_id = "+sId)
-	if err != nil {
-		return err
-	}
-
-	// build a list of run parameter values db-tables
-	var pTbls []string
-	err = TrxSelectRows(trx,
-		"SELECT P.db_run_table"+
-			" FROM run_parameter RP"+
-			" INNER JOIN parameter_dic P ON (P.parameter_hid = RP.parameter_hid)"+
-			" WHERE RP.run_id = "+sId,
-		func(rows *sql.Rows) error {
-			tn := ""
-			if err := rows.Scan(&tn); err != nil {
-				return err
-			}
-			pTbls = append(pTbls, tn)
-			return nil
-		})
-	if err != nil {
-		return err
-	}
-
-	// build a list of run expression and accumulator values db-tables
-	var eTbls []string
-	var aTbls []string
-	err = TrxSelectRows(trx,
-		"SELECT T.db_expr_table, T.db_acc_table"+
-			" FROM run_table RT"+
-			" INNER JOIN table_dic T ON (T.table_hid = RT.table_hid)"+
-			" WHERE RT.run_id = "+sId,
-		func(rows *sql.Rows) error {
-			etn := ""
-			atn := ""
-			if err := rows.Scan(&etn, &atn); err != nil {
-				return err
-			}
-			eTbls = append(eTbls, etn)
-			aTbls = append(aTbls, atn)
-			return nil
-		})
-	if err != nil {
-		return err
-	}
-
-	// build a list of run mictrodata values db-tables
-	var mTbls []string
-	err = TrxSelectRows(trx,
-		"SELECT EG.db_entity_table"+
-			" FROM entity_gen EG"+
-			" INNER JOIN run_entity RE ON (RE.entity_gen_hid = EG.entity_gen_hid)"+
-			" WHERE RE.run_id = "+sId,
-		func(rows *sql.Rows) error {
-			tn := ""
-			if err := rows.Scan(&tn); err != nil {
-				return err
-			}
-			mTbls = append(mTbls, tn)
-			return nil
-		})
 	if err != nil {
 		return err
 	}
@@ -340,7 +306,108 @@ func doDeleteRun(trx *sql.Tx, runId int) error {
 		}
 	}
 
-	// delete model runs: delete run metadata
+	// replace value digests for parameter, output tables and microdata to avoid using values as a base run values
+	delDgst := ("del-" + sId + "-" + delTs)
+
+	err = TrxUpdate(trx,
+		"UPDATE run_parameter SET value_digest = "+toQuotedMax(delDgst, codeDbMax)+" WHERE run_id = "+sId)
+	if err != nil {
+		return err
+	}
+	err = TrxUpdate(trx,
+		"UPDATE run_table SET value_digest = "+toQuotedMax(delDgst, codeDbMax)+" WHERE run_id = "+sId)
+	if err != nil {
+		return err
+	}
+	err = TrxUpdate(trx,
+		"UPDATE run_entity SET value_digest = "+toQuotedMax(delDgst, codeDbMax)+" WHERE run_id = "+sId)
+	if err != nil {
+		return err
+	}
+
+	// set run status d=deleted and replace run digest
+	err = TrxUpdate(trx,
+		"UPDATE run_lst SET status = 'd', run_digest = "+toQuotedMax(delDgst, codeDbMax)+
+			" WHERE run_id = "+sId)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// doDeleteRunMeta delete model run metadata from database.
+// Run status must be d=deleted and there are no rows in run_parameter, run_table and run_entity for that run id.
+// It does update as part of transaction
+func doDeleteRunMeta(trx *sql.Tx, runId int) error {
+
+	// check run status, it must d=deleted
+	sId := strconv.Itoa(runId)
+	status := ""
+	err := TrxSelectFirst(trx,
+		"SELECT status FROM run_lst WHERE run_id = "+sId,
+		func(row *sql.Row) error {
+			if err := row.Scan(&status); err != nil {
+				return err
+			}
+			return nil
+		})
+	if err != nil {
+		return err
+	}
+	if status != "d" {
+		return errors.New("invalid run status, it must be 'd': " + status + " run id: " + strconv.Itoa(runId))
+	}
+
+	// validate: should be no rows in run_parameter, run_table, run_entity for that run id
+	var n int = 0
+
+	err = TrxSelectFirst(trx,
+		"SELECT COUNT(*) FROM run_parameter WHERE run_id = "+sId,
+		func(row *sql.Row) error {
+			if err := row.Scan(&n); err != nil {
+				return err
+			}
+			return nil
+		})
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+	if n != 0 {
+		return errors.New("invalid run: it should zero parameters before delete: " + strconv.Itoa(n) + " run id: " + strconv.Itoa(runId))
+	}
+
+	err = TrxSelectFirst(trx,
+		"SELECT COUNT(*) FROM run_table WHERE run_id = "+sId,
+		func(row *sql.Row) error {
+			if err := row.Scan(&n); err != nil {
+				return err
+			}
+			return nil
+		})
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+	if n != 0 {
+		return errors.New("invalid run: it should zero output tables before delete: " + strconv.Itoa(n) + " run id: " + strconv.Itoa(runId))
+	}
+
+	err = TrxSelectFirst(trx,
+		"SELECT COUNT(*) FROM run_entity WHERE run_id = "+sId,
+		func(row *sql.Row) error {
+			if err := row.Scan(&n); err != nil {
+				return err
+			}
+			return nil
+		})
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+	if n != 0 {
+		return errors.New("invalid run: it should zero microdata values before delete: " + strconv.Itoa(n) + " run id: " + strconv.Itoa(runId))
+	}
+
+	// delete run metadata
 	err = TrxUpdate(trx, "DELETE FROM run_progress WHERE run_id = "+sId)
 	if err != nil {
 		return err
@@ -386,6 +453,75 @@ func doDeleteRun(trx *sql.Tx, runId int) error {
 		return err
 	}
 
+	return nil
+}
+
+// doDeleteRunBody delete model run values from database: do delete parameters, output tables and microdata values.
+// It does update as part of transaction
+func doDeleteRunBody(trx *sql.Tx, runId int) error {
+
+	// build a list of run parameter values db-tables
+	sId := strconv.Itoa(runId)
+
+	var pTbls []string
+	err := TrxSelectRows(trx,
+		"SELECT P.db_run_table"+
+			" FROM run_parameter RP"+
+			" INNER JOIN parameter_dic P ON (P.parameter_hid = RP.parameter_hid)"+
+			" WHERE RP.run_id = "+sId,
+		func(rows *sql.Rows) error {
+			tn := ""
+			if err := rows.Scan(&tn); err != nil {
+				return err
+			}
+			pTbls = append(pTbls, tn)
+			return nil
+		})
+	if err != nil {
+		return err
+	}
+
+	// build a list of run expression and accumulator values db-tables
+	var eTbls []string
+	var aTbls []string
+	err = TrxSelectRows(trx,
+		"SELECT T.db_expr_table, T.db_acc_table"+
+			" FROM run_table RT"+
+			" INNER JOIN table_dic T ON (T.table_hid = RT.table_hid)"+
+			" WHERE RT.run_id = "+sId,
+		func(rows *sql.Rows) error {
+			etn := ""
+			atn := ""
+			if err := rows.Scan(&etn, &atn); err != nil {
+				return err
+			}
+			eTbls = append(eTbls, etn)
+			aTbls = append(aTbls, atn)
+			return nil
+		})
+	if err != nil {
+		return err
+	}
+
+	// build a list of run microdata values db-tables
+	var mTbls []string
+	err = TrxSelectRows(trx,
+		"SELECT EG.db_entity_table"+
+			" FROM entity_gen EG"+
+			" INNER JOIN run_entity RE ON (RE.entity_gen_hid = EG.entity_gen_hid)"+
+			" WHERE RE.run_id = "+sId,
+		func(rows *sql.Rows) error {
+			tn := ""
+			if err := rows.Scan(&tn); err != nil {
+				return err
+			}
+			mTbls = append(mTbls, tn)
+			return nil
+		})
+	if err != nil {
+		return err
+	}
+
 	// delete rows from run microdata value tables
 	// or drop microdata value tables where no run_entity exists
 	for k := range mTbls {
@@ -415,18 +551,18 @@ func doDeleteRun(trx *sql.Tx, runId int) error {
 			return err
 		}
 
+		err = TrxUpdate(trx,
+			"UPDATE entity_gen SET db_entity_table = "+ToQuoted(mTbls[k])+
+				" WHERE db_entity_table = "+ToQuoted(dTbl)+
+				" AND NOT EXISTS (SELECT * FROM run_entity RE WHERE RE.entity_gen_hid = entity_gen.entity_gen_hid)",
+		)
+		if err != nil {
+			return err
+		}
+
 		// delete rows from microdata table
 		// or drop microdata table if there are no run_entity rows exist for that table
 		if n <= 0 {
-
-			err = TrxUpdate(trx,
-				"UPDATE entity_gen SET db_entity_table = "+ToQuoted(mTbls[k])+
-					" WHERE db_entity_table = "+ToQuoted(dTbl)+
-					" AND NOT EXISTS (SELECT * FROM run_entity RE WHERE RE.entity_gen_hid = entity_gen.entity_gen_hid)",
-			)
-			if err != nil {
-				return err
-			}
 
 			err = TrxUpdate(trx, "DELETE FROM "+mTbls[k]+" WHERE run_id = "+sId)
 			if err != nil {
@@ -441,7 +577,7 @@ func doDeleteRun(trx *sql.Tx, runId int) error {
 					" ("+
 					" SELECT * FROM entity_gen EG"+
 					" WHERE EG.entity_gen_hid = entity_gen_attr.entity_gen_hid"+
-					" AND EG.db_entity_table = "+ToQuoted(dTbl)+
+					" AND EG.db_entity_table = "+ToQuoted(mTbls[k])+
 					" )"+
 					" AND NOT EXISTS (SELECT * FROM run_entity RE WHERE RE.entity_gen_hid = entity_gen_attr.entity_gen_hid)",
 			)
@@ -450,7 +586,7 @@ func doDeleteRun(trx *sql.Tx, runId int) error {
 			}
 			err = TrxUpdate(trx,
 				"DELETE FROM entity_gen"+
-					" WHERE db_entity_table = "+ToQuoted(dTbl)+
+					" WHERE db_entity_table = "+ToQuoted(mTbls[k])+
 					" AND NOT EXISTS (SELECT * FROM run_entity RE WHERE RE.entity_gen_hid = entity_gen.entity_gen_hid)",
 			)
 			if err != nil {
@@ -462,11 +598,18 @@ func doDeleteRun(trx *sql.Tx, runId int) error {
 				return err
 			}
 		}
-	}
 
-	// delete rows from run parameter value tables
-	for k := range pTbls {
-		err = TrxUpdate(trx, "DELETE FROM "+pTbls[k]+" WHERE run_id = "+sId)
+		// delete microdata run row: there is no microdata values of that entity exist in that model run
+		err = TrxUpdate(trx,
+			"DELETE FROM run_entity"+
+				" WHERE run_id = "+sId+
+				" AND EXISTS"+
+				" ("+
+				" SELECT * FROM entity_gen EG"+
+				" WHERE EG.entity_gen_hid = run_entity.entity_gen_hid"+
+				" AND EG.db_entity_table = "+ToQuoted(mTbls[k])+
+				" )",
+		)
 		if err != nil {
 			return err
 		}
@@ -484,6 +627,26 @@ func doDeleteRun(trx *sql.Tx, runId int) error {
 		if err != nil {
 			return err
 		}
+	}
+	// delete run output tables rows: there is no output values exist in that model run
+	err = TrxUpdate(trx,
+		"DELETE FROM run_table WHERE run_id = "+sId)
+	if err != nil {
+		return err
+	}
+
+	// delete rows from run parameters value tables
+	for k := range pTbls {
+		err = TrxUpdate(trx, "DELETE FROM "+pTbls[k]+" WHERE run_id = "+sId)
+		if err != nil {
+			return err
+		}
+	}
+	// delete run parameters rows: there is no parameters values exist in that model run
+	err = TrxUpdate(trx,
+		"DELETE FROM run_parameter WHERE run_id = "+sId)
+	if err != nil {
+		return err
 	}
 
 	return nil

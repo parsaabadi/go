@@ -99,7 +99,7 @@ func profileOptionDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// runDeleteHandler delete model run including output table values and run input parameters
+// runDeleteHandler delete model run including output table values, input parameters and microdata
 // by model digest-or-name and run digest-or-stamp-or-name:
 // DELETE /api/model/:model/run/:run
 // If multiple models with same name exist then result is undefined.
@@ -112,6 +112,30 @@ func runDeleteHandler(w http.ResponseWriter, r *http.Request) {
 
 	// delete model run
 	ok, err := theCatalog.DeleteRun(dn, rdsn)
+	if err != nil {
+		http.Error(w, "Model run delete failed "+dn+": "+rdsn, http.StatusBadRequest)
+		return
+	}
+	if ok {
+		w.Header().Set("Content-Location", "/api/model/"+dn+"/run/"+rdsn)
+		w.Header().Set("Content-Type", "text/plain")
+	}
+}
+
+// runUnlinkStartHandler start non-transactiomnal delete of model run including output table values, input parameters and microdata
+// by model digest-or-name and run digest-or-stamp-or-name:
+// DELETE /api/model/:model/unlink/run/:run
+// The method starts model run delete in background thread.
+// If multiple models with same name exist then result is undefined.
+// If multiple runs with same stamp or name exist then result is undefined.
+// If no such model run exist in database then no error, empty operation.
+func runUnlinkStartHandler(w http.ResponseWriter, r *http.Request) {
+
+	dn := getRequestParam(r, "model")
+	rdsn := getRequestParam(r, "run")
+
+	// start non-transactional delete model of run
+	ok, err := theCatalog.UnlinkRunStart(dn, rdsn)
 	if err != nil {
 		http.Error(w, "Model run delete failed "+dn+": "+rdsn, http.StatusBadRequest)
 		return

@@ -1086,3 +1086,31 @@ func selectBaseRunsOfSharedValues(trx *sql.Tx, q string) ([]runBaseItem, error) 
 
 	return rbArr, nil
 }
+
+// selectBaseRunsOfSharedValuesNoTrx return list of base run id's for parameters and (or output tables)
+// where parameter shared between models and parameter value shared between runs
+// build list of new base run id's
+func selectBaseRunsOfSharedValuesNoTrx(dbConn *sql.DB, q string) ([]runBaseItem, error) {
+
+	var rbArr []runBaseItem
+	err := SelectRows(dbConn, q,
+		func(rows *sql.Rows) error {
+			var r runBaseItem
+			var n sql.NullInt64
+			if err := rows.Scan(&r.hId, &r.runId, &r.oldBase, &n); err != nil {
+				return err
+			}
+			if n.Valid {
+				r.newBase = int(n.Int64)
+			} else {
+				r.newBase = r.runId // if no new base run found then use run itself
+			}
+			rbArr = append(rbArr, r)
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	return rbArr, nil
+}

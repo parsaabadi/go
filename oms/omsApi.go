@@ -462,6 +462,10 @@ func apiUpdateRoutes(router *vestigo.Router) {
 	router.Delete("/api/model/:model/run/:run", runDeleteHandler, logRequest)
 	router.Delete("/api/model/:model/run/", http.NotFound)
 
+	// DELETE /api/model/:model/unlink/run/:run
+	router.Delete("/api/model/:model/unlink/run/:run", runUnlinkStartHandler, logRequest)
+	router.Delete("/api/model/:model/unlink/run/", http.NotFound)
+
 	// PATCH /api/model/:model/run/:run/parameter-text
 	router.Patch("/api/model/:model/run/:run/parameter-text", runParameterTextMergeHandler, logRequest)
 

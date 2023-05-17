@@ -26,6 +26,17 @@ func (src *ModelMeta) Clone() (*ModelMeta, error) {
 	return &dst, nil
 }
 
+// Clone return deep copy of source model text metadata
+func (src *ModelTxtMeta) Clone() (*ModelTxtMeta, error) {
+
+	var dst ModelTxtMeta
+
+	if err := helper.DeepCopy(src, &dst); err != nil {
+		return nil, err
+	}
+	return &dst, nil
+}
+
 // Clone return deep copy of source language metadata
 func (src *LangMeta) Clone() (*LangMeta, error) {
 
@@ -42,6 +53,17 @@ func (src *LangMeta) Clone() (*LangMeta, error) {
 	dst.updateInternals() // update internals
 
 	return dst, nil
+}
+
+// Clone return deep copy of source model words
+func (src *ModelWordMeta) Clone() (*ModelWordMeta, error) {
+
+	var dst ModelWordMeta
+
+	if err := helper.DeepCopy(src, &dst); err != nil {
+		return nil, err
+	}
+	return &dst, nil
 }
 
 // FromJson restore model metadata list from json string bytes
@@ -496,6 +518,8 @@ func NameOfRunStatus(status string) string {
 		return "exit"
 	case ErrorRunStatus:
 		return "error"
+	case DeleteRunStatus:
+		return "delete"
 	}
 	return "unknown"
 }

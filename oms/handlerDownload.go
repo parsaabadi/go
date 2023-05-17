@@ -47,14 +47,14 @@ func modelDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Model not found: "+dn, http.StatusBadRequest)
 		return // empty result: model digest not found
 	}
-	m, ok := theCatalog.ModelDicByDigest(mb.digest)
+	m, ok := theCatalog.ModelDicByDigest(mb.model.Digest)
 	if !ok {
 		http.Error(w, "Model not found: "+dn, http.StatusBadRequest)
 		return // empty result: model digest not found
 	}
 
 	// base part of: output directory name, .zip file name and log file name
-	baseName := mb.name
+	baseName := mb.model.Name
 	omppLog.Log("Download of: ", baseName)
 
 	// if download.progress.log file exist the retun error: download in progress
@@ -137,30 +137,30 @@ func runDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Model not found: "+dn, http.StatusBadRequest)
 		return // empty result: model digest not found
 	}
-	m, ok := theCatalog.ModelDicByDigest(mb.digest)
+	m, ok := theCatalog.ModelDicByDigest(mb.model.Digest)
 	if !ok {
 		http.Error(w, "Model not found: "+dn, http.StatusBadRequest)
 		return // empty result: model digest not found
 	}
 
 	// find all model runs by run digest, run stamp or name, check run status: it must be success
-	rst, ok := theCatalog.RunRowList(mb.digest, rdsn)
+	rst, ok := theCatalog.RunRowList(mb.model.Digest, rdsn)
 	if !ok || len(rst) <= 0 {
-		http.Error(w, "Model run not found: "+mb.name+" "+dn+" "+rdsn, http.StatusBadRequest)
+		http.Error(w, "Model run not found: "+mb.model.Name+" "+dn+" "+rdsn, http.StatusBadRequest)
 		return // empty result: model run not found
 	}
 	if len(rst) > 1 {
-		omppLog.Log("Warning: multiple model runs found, using first one of: ", mb.name+" "+dn+" "+rdsn)
+		omppLog.Log("Warning: multiple model runs found, using first one of: ", mb.model.Name+" "+dn+" "+rdsn)
 	}
 	r0 := rst[0] // first run, if there are multiple with the same stamp or name
 
 	if r0.Status != db.DoneRunStatus {
-		http.Error(w, "Model run is not completed successfully: "+mb.name+" "+dn+" "+rdsn, http.StatusBadRequest)
+		http.Error(w, "Model run is not completed successfully: "+mb.model.Name+" "+dn+" "+rdsn, http.StatusBadRequest)
 		return // empty result: run status must be success
 	}
 
 	// base part of: output directory name, .zip file name and log file name
-	baseName := mb.name + ".run." + helper.CleanPath(r0.Name)
+	baseName := mb.model.Name + ".run." + helper.CleanPath(r0.Name)
 	omppLog.Log("Download of: ", baseName)
 
 	// if download.progress.log file exist the retun error: download in progress
@@ -236,25 +236,25 @@ func worksetDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Model not found: "+dn, http.StatusBadRequest)
 		return // empty result: model digest not found
 	}
-	m, ok := theCatalog.ModelDicByDigest(mb.digest)
+	m, ok := theCatalog.ModelDicByDigest(mb.model.Digest)
 	if !ok {
 		http.Error(w, "Model not found: "+dn, http.StatusBadRequest)
 		return // empty result: model digest not found
 	}
 
-	// find workset by name and status: it must be read-only
-	wst, ok, notFound := theCatalog.WorksetStatus(dn, wsn)
-	if !ok || notFound {
-		http.Error(w, "Model scenario not found: "+mb.name+" "+dn+" "+wsn, http.StatusBadRequest)
+	// find workset by name and check status: it must be read-only
+	ws, ok := theCatalog.WorksetByName(dn, wsn)
+	if !ok {
+		http.Error(w, "Model scenario not found: "+mb.model.Name+" "+dn+" "+wsn, http.StatusBadRequest)
 		return // empty result: workset not found
 	}
-	if !wst.IsReadonly {
-		http.Error(w, "Model scenario must be read-only: "+mb.name+" "+dn+" "+wst.Name, http.StatusBadRequest)
+	if !ws.IsReadonly {
+		http.Error(w, "Model scenario must be read-only: "+mb.model.Name+" "+dn+" "+ws.Name, http.StatusBadRequest)
 		return // empty result: workset must be read-only
 	}
 
 	// base part of: output directory name, .zip file name and log file name
-	baseName := mb.name + ".set." + helper.CleanPath(wst.Name)
+	baseName := mb.model.Name + ".set." + helper.CleanPath(ws.Name)
 	omppLog.Log("Download of: ", baseName)
 
 	// if download.progress.log file exist the retun error: download in progress
@@ -277,8 +277,8 @@ func worksetDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 		"Model Name       : " + m.Name,
 		"Model Version    : " + m.Version + " " + m.CreateDateTime,
 		"Model Digest     : " + m.Digest,
-		"Scenario Name    : " + wst.Name,
-		"Scenario Version : " + wst.UpdateDateTime,
+		"Scenario Name    : " + ws.Name,
+		"Scenario Version : " + ws.UpdateDateTime,
 		"Folder           : " + baseName,
 		"------------------",
 	}
@@ -296,7 +296,7 @@ func worksetDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// create model scenario download files on separate thread
-	cmd, cmdMsg := makeWorksetDownloadCommand(mb, wst.Name, logPath, opts.Utf8BomIntoCsv)
+	cmd, cmdMsg := makeWorksetDownloadCommand(mb, ws.Name, logPath, opts.Utf8BomIntoCsv)
 
 	go makeDownload(baseName, cmd, cmdMsg, logPath)
 

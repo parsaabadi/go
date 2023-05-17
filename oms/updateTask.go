@@ -37,25 +37,21 @@ func (mc *ModelCatalog) UpdateTaskDef(isReplace bool, tpd *db.TaskDefPub) (bool,
 		return false, "", "", nil
 	}
 
-	// if model metadata not loaded then read it from database
-	if _, ok := mc.loadModelMeta(dn); !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return false, dn, tn, nil // return empty result: model not found or error
-	}
-
-	// lock catalog and update model run
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
+	meta, dbConn, ok := mc.modelMeta(dn)
 	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return false, dn, tn, nil // return empty result: model not found or error
+		return false, "", "", nil
+	}
+
+	langMeta := mc.modelLangMeta(dn)
+	if langMeta == nil {
+		omppLog.Log("Error: invalid (empty) model language list: ", dn)
+		return false, "", "", errors.New("Error: invalid (empty) model language list: " + dn)
 	}
 
 	// convert run from "public" into db rows
 	// all input worskset names must exist in workset_lst
-	tm, isSetNotFound, _, err := (&db.TaskPub{TaskDefPub: *tpd}).FromPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, true)
+	tm, isSetNotFound, _, err := (&db.TaskPub{TaskDefPub: *tpd}).FromPublic(dbConn, meta, true)
 	if err != nil {
 		omppLog.Log("Error at modeling task conversion: ", dn, ": ", tn, ": ", err.Error())
 		return false, dn, tn, err
@@ -67,7 +63,7 @@ func (mc *ModelCatalog) UpdateTaskDef(isReplace bool, tpd *db.TaskDefPub) (bool,
 
 	// match languages from request into model languages
 	for k := range tm.Txt {
-		lc := mc.languageMatch(idx, tm.Txt[k].LangCode)
+		lc := mc.languageCodeMatch(dn, tm.Txt[k].LangCode)
 		if lc != "" {
 			tm.Txt[k].LangCode = lc
 		}
@@ -75,9 +71,9 @@ func (mc *ModelCatalog) UpdateTaskDef(isReplace bool, tpd *db.TaskDefPub) (bool,
 
 	// replace or merge task text and task input worksets into database task_lst, task_txt, task_set tables
 	if isReplace {
-		err = tm.ReplaceTaskDef(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, mc.modelLst[idx].langMeta)
+		err = tm.ReplaceTaskDef(dbConn, meta, langMeta)
 	} else {
-		err = tm.MergeTaskDef(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, mc.modelLst[idx].langMeta)
+		err = tm.MergeTaskDef(dbConn, meta, langMeta)
 	}
 	if err != nil {
 		omppLog.Log("Error at update modeling task: ", dn, ": ", tn, ": ", err.Error())
@@ -105,24 +101,14 @@ func (mc *ModelCatalog) DeleteTask(dn, tn string) (bool, error) {
 		return false, nil
 	}
 
-	// if model metadata not loaded then read it from database
-	if _, ok := mc.loadModelMeta(dn); !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return false, nil // return empty result: model not found or error
-	}
-
-	// lock catalog and delete task
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
+	meta, dbConn, ok := mc.modelMeta(dn)
 	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return false, nil // return empty result: model not found or error
+		return false, nil
 	}
 
 	// find task in database
-	t, err := db.GetTaskByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, tn)
+	t, err := db.GetTaskByName(dbConn, meta.Model.ModelId, tn)
 	if err != nil {
 		omppLog.Log("Error at get modeling task: ", dn, ": ", tn, ": ", err.Error())
 		return false, err
@@ -132,7 +118,7 @@ func (mc *ModelCatalog) DeleteTask(dn, tn string) (bool, error) {
 	}
 
 	// delete task from database
-	err = db.DeleteTask(mc.modelLst[idx].dbConn, t.TaskId)
+	err = db.DeleteTask(dbConn, t.TaskId)
 	if err != nil {
 		omppLog.Log("Error at delete task: ", dn, ": ", tn, ": ", err.Error())
 		return false, err

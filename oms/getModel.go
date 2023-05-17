@@ -50,18 +50,13 @@ func (mc *ModelCatalog) ModelDicByDigestOrName(dn string) (db.ModelDicRow, bool)
 	return mc.modelLst[idx].meta.Model, true
 }
 
-// ModelMetaByDigestOrName return model_dic db row by model digest or name.
+// ModelMetaByDigestOrName return copy of model metadata by model digest or name.
 func (mc *ModelCatalog) ModelMetaByDigestOrName(dn string) (*db.ModelMeta, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
 		omppLog.Log("Warning: invalid (empty) model digest and name")
 		return &db.ModelMeta{}, false
-	}
-
-	// if model metadata not loaded then read it from database
-	if _, ok := mc.loadModelMeta(dn); !ok {
-		return &db.ModelMeta{}, false // return empty result: model not found or error
 	}
 
 	// lock model catalog and return copy of model metadata
@@ -82,41 +77,29 @@ func (mc *ModelCatalog) ModelMetaByDigestOrName(dn string) (*db.ModelMeta, bool)
 	return m, true
 }
 
-// loadModelMeta read language-neutral model metadata from db.
-// If metadata already loaded then do skip db reading and return index in model list.
-// It search model by digest or name if digest not found.
-// Return index in model list or < 0 on error or if model not found.
-func (mc *ModelCatalog) loadModelMeta(dn string) (int, bool) {
+// ModelTextByDigestOrName return copy of model text metadata by model digest or name.
+func (mc *ModelCatalog) ModelTextByDigestOrName(dn string) (*db.ModelTxtMeta, bool) {
 
-	// if model digest-name is empty then return empty results
+	// if model digest-or-name is empty then return empty results
 	if dn == "" {
 		omppLog.Log("Warning: invalid (empty) model digest and name")
-		return 0, false
+		return &db.ModelTxtMeta{}, false
 	}
 
-	// find model index by digest or name
+	// lock model catalog and return copy of model metadata
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
 	idx, ok := mc.indexByDigestOrName(dn)
 	if !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return 0, false // model not found, index is negative
-	}
-	if mc.modelLst[idx].meta != nil && mc.modelLst[idx].isMetaFull { // exit if model metadata already loaded
-		return idx, true
+		return &db.ModelTxtMeta{}, false // return empty result: model not found or error
 	}
 
-	// read metadata from database
-	m, err := db.GetModelById(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId)
+	txt, err := mc.modelLst[idx].txtMeta.Clone()
 	if err != nil {
-		omppLog.Log("Error at get model metadata: ", dn, ": ", err.Error())
-		return 0, false
+		omppLog.Log("Error at model text metadata clone: ", dn, ": ", err.Error())
+		return &db.ModelTxtMeta{}, false
 	}
 
-	// store model metadata
-	mc.modelLst[idx].isMetaFull = true
-	mc.modelLst[idx].meta = m
-
-	return idx, true
+	return txt, true
 }

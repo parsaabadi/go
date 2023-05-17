@@ -91,7 +91,7 @@ func dbDeleteRun(modelName string, modelDigest string, runOpts *config.RunOption
 	}
 
 	// run must be completed: status success, error or exit
-	if !db.IsRunCompleted(runRow.Status) {
+	if !db.IsRunCompleted(runRow.Status) && runRow.Status != db.DeleteRunStatus {
 		return errors.New("model run not completed: " + strconv.Itoa(runRow.RunId) + " " + runRow.Name + " " + runRow.RunDigest)
 	}
 

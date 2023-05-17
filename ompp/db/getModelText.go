@@ -15,7 +15,7 @@ import (
 func GetModelTextRowById(dbConn *sql.DB, modelId int, langCode string) ([]ModelTxtRow, error) {
 
 	// select db rows from model_dic_txt
-	txtLst := make([]ModelTxtRow, 0)
+	txtLst := []ModelTxtRow{}
 
 	q := "SELECT" +
 		" M.model_id, M.lang_id, L.lang_code, M.descr, M.note" +

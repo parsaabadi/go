@@ -18,6 +18,7 @@ const (
 	DoneRunStatus     = "s" // s = completed successfully
 	ExitRunStatus     = "x" // x = exit and not completed
 	ErrorRunStatus    = "e" // e = error failure
+	DeleteRunStatus   = "d" // d = deleted model run
 )
 
 // RunMeta is metadata of model run: name, status, run options, description, notes.

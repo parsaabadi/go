@@ -672,7 +672,7 @@ func configureArchive(isDbCopy bool, runOpts *config.RunOptions) {
 
 		// if there is an option: ArchiveKeepRun.ModelName = Run 1, run-2
 		// then parse csv list of runs: name, stamp or digest and store it as sorted unique list
-		if s := runOpts.String(archiveRunKeepSection + "." + mbs[nM].name); s != "" {
+		if s := runOpts.String(archiveRunKeepSection + "." + mbs[nM].model.Name); s != "" {
 
 			lst := helper.ParseCsvLine(s, 0)
 
@@ -693,13 +693,13 @@ func configureArchive(isDbCopy bool, runOpts *config.RunOptions) {
 				}
 				lst = lst[:j]
 
-				theCfg.archiveRunKeep[mbs[nM].digest] = lst
+				theCfg.archiveRunKeep[mbs[nM].model.Digest] = lst
 			}
 		}
 
 		// if there is an option: ArchiveKeepSet.ModelName = Scenario-1, scenario 2
 		// then parse csv list of workset names and store it as sorted unique list
-		if s := runOpts.String(archiveSetKeepSection + "." + mbs[nM].name); s != "" {
+		if s := runOpts.String(archiveSetKeepSection + "." + mbs[nM].model.Name); s != "" {
 
 			lst := helper.ParseCsvLine(s, 0)
 
@@ -720,7 +720,7 @@ func configureArchive(isDbCopy bool, runOpts *config.RunOptions) {
 				}
 				lst = lst[:j]
 
-				theCfg.archiveSetKeep[mbs[nM].digest] = lst
+				theCfg.archiveSetKeep[mbs[nM].model.Digest] = lst
 			}
 		}
 	}

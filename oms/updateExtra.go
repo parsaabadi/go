@@ -4,8 +4,6 @@
 package main
 
 import (
-	"errors"
-
 	"github.com/openmpp/go/ompp/db"
 	"github.com/openmpp/go/ompp/omppLog"
 )
@@ -22,24 +20,13 @@ func (mc *ModelCatalog) ReplaceProfile(dn string, pm *db.ProfileMeta) (bool, err
 		omppLog.Log("Warning: invalid (empty) profile name")
 		return false, nil
 	}
-
-	// if model metadata not loaded then read it from database
-	if _, ok := mc.loadModelMeta(dn); !ok {
-		omppLog.Log("Error: model digest or name not found: ", dn)
-		return false, errors.New("Error: model digest or name not found: " + dn)
-	}
-
-	// lock catalog and update profile
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
+	_, dbConn, ok := mc.modelMeta(dn)
 	if !ok {
-		omppLog.Log("Error: model digest or name not found: ", dn)
-		return false, errors.New("Error: model digest or name not found: " + dn)
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return false, nil
 	}
 
-	err := db.UpdateProfile(mc.modelLst[idx].dbConn, pm)
+	err := db.UpdateProfile(dbConn, pm)
 	if err != nil {
 		omppLog.Log("Error at update profile: ", dn, ": ", pm.Name, ": ", err.Error())
 		return false, err
@@ -62,24 +49,13 @@ func (mc *ModelCatalog) DeleteProfile(dn, profile string) (bool, error) {
 		omppLog.Log("Warning: invalid (empty) profile name")
 		return false, nil
 	}
-
-	// if model metadata not loaded then read it from database
-	if _, ok := mc.loadModelMeta(dn); !ok {
-		omppLog.Log("Error: model digest or name not found: ", dn)
-		return false, errors.New("Error: model digest or name not found: " + dn)
-	}
-
-	// lock catalog and update profile
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
+	_, dbConn, ok := mc.modelMeta(dn)
 	if !ok {
-		omppLog.Log("Error: model digest or name not found: ", dn)
-		return false, errors.New("Error: model digest or name not found: " + dn)
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return false, nil
 	}
 
-	err := db.DeleteProfile(mc.modelLst[idx].dbConn, profile)
+	err := db.DeleteProfile(dbConn, profile)
 	if err != nil {
 		omppLog.Log("Error at update profile: ", dn, ": ", profile, ": ", err.Error())
 		return false, err
@@ -106,24 +82,13 @@ func (mc *ModelCatalog) ReplaceProfileOption(dn, profile, key, val string) (bool
 		omppLog.Log("Warning: invalid (empty) profile option key")
 		return false, nil
 	}
-
-	// if model metadata not loaded then read it from database
-	if _, ok := mc.loadModelMeta(dn); !ok {
-		omppLog.Log("Error: model digest or name not found: ", dn)
-		return false, errors.New("Error: model digest or name not found: " + dn)
-	}
-
-	// lock catalog and update profile option
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
+	_, dbConn, ok := mc.modelMeta(dn)
 	if !ok {
-		omppLog.Log("Error: model digest or name not found: ", dn)
-		return false, errors.New("Error: model digest or name not found: " + dn)
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return false, nil
 	}
 
-	err := db.UpdateProfileOption(mc.modelLst[idx].dbConn, profile, key, val)
+	err := db.UpdateProfileOption(dbConn, profile, key, val)
 	if err != nil {
 		omppLog.Log("Error at update profile option: ", dn, ": ", profile, ": ", ": ", key, err.Error())
 		return false, err
@@ -150,24 +115,13 @@ func (mc *ModelCatalog) DeleteProfileOption(dn, profile, key string) (bool, erro
 		omppLog.Log("Warning: invalid (empty) profile option key")
 		return false, nil
 	}
-
-	// if model metadata not loaded then read it from database
-	if _, ok := mc.loadModelMeta(dn); !ok {
-		omppLog.Log("Error: model digest or name not found: ", dn)
-		return false, errors.New("Error: model digest or name not found: " + dn)
-	}
-
-	// lock catalog and delete profile option
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
+	_, dbConn, ok := mc.modelMeta(dn)
 	if !ok {
-		omppLog.Log("Error: model digest or name not found: ", dn)
-		return false, errors.New("Error: model digest or name not found: " + dn)
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return false, nil
 	}
 
-	err := db.DeleteProfileOption(mc.modelLst[idx].dbConn, profile, key)
+	err := db.DeleteProfileOption(dbConn, profile, key)
 	if err != nil {
 		omppLog.Log("Error at delete profile option: ", dn, ": ", profile, ": ", ": ", key, err.Error())
 		return false, err

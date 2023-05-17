@@ -77,7 +77,7 @@ func Open(dbConnStr, dbDriver string, isFacetRequired bool) (*sql.DB, Facet, err
 		return nil, DefaultFacet, errors.New("ODBC database connection not supported (executable build without ODBC library)")
 	}
 
-	// empty connection string likely produce error message "invalid openM++ database", explain it to the user source of the problem
+	// empty connection string likely produce error message "invalid openM++ database", explain to the user source of the problem
 	if dbConnStr == "" {
 		omppLog.Log("database connection string is empty, it may be an inavlid parameters")
 	}
@@ -96,6 +96,11 @@ func Open(dbConnStr, dbDriver string, isFacetRequired bool) (*sql.DB, Facet, err
 	}
 	if isFacetRequired {
 		omppLog.LogSql(facet.String())
+	}
+
+	// to avoid database lock issues for SQLite with SQLITE_THREADSAFE=1
+	if facet == SqliteFacet || dbDriver == Sqlite3DbDriver {
+		dbConn.SetMaxOpenConns(1)
 	}
 
 	return dbConn, facet, nil

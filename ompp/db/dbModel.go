@@ -102,9 +102,9 @@ type ProfileMeta struct {
 	Opts map[string]string // profile (key, value) options
 }
 
-// LangMeta is language and words in that language
+// LangMeta is languages and words for each language
 type LangMeta struct {
-	Lang      []langWord     // languages and words in that language
+	Lang      []langWord     // language lang_lst row and lang_word rows in that language
 	idIndex   map[int]int    // language id index
 	codeIndex map[string]int // language code index
 }
@@ -119,7 +119,7 @@ type LangLstRow struct {
 	Name     string // lang_name VARCHAR(255) NOT NULL
 }
 
-// langWord is language and words in that language
+// langWord is language lang_lst row and lang_word rows in that language
 type langWord struct {
 	LangLstRow                   // lang_lst db-table row
 	Words      map[string]string // lang_word db-table rows as (code, value) map

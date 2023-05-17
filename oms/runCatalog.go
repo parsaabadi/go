@@ -294,8 +294,8 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error
 	rbs := make(map[string]modelRunBasic, len(mbs))
 
 	for idx := range mbs {
-		rbs[mbs[idx].digest] = modelRunBasic{
-			name:     mbs[idx].name,
+		rbs[mbs[idx].model.Digest] = modelRunBasic{
+			name:     mbs[idx].model.Name,
 			binDir:   mbs[idx].binDir,
 			logDir:   mbs[idx].logDir,
 			isLogDir: mbs[idx].isLogDir,

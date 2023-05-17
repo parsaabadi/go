@@ -47,7 +47,7 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 	// re-base it to model work directory
 	binRoot, _ := theCatalog.getModelDir()
 
-	mb, ok := theCatalog.modelBasicByDigest(rs.ModelDigest)
+	mb, ok := theCatalog.modelBasicByDigestOrName(rs.ModelDigest)
 	if !ok {
 		err := errors.New("Model not found: " + rs.ModelName + ": " + rs.ModelDigest)
 		omppLog.Log("Model run error: ", err)
@@ -281,7 +281,7 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 
 	// create ini file and append -ini fileName.ini to model run options
 	if iniContent != "" {
-		p, e := filepath.Abs(filepath.Join(mb.logDir, rStamp+"."+mb.name+".ini"))
+		p, e := filepath.Abs(filepath.Join(mb.logDir, rStamp+"."+mb.model.Name+".ini"))
 		if e == nil {
 			e = os.WriteFile(p, []byte(iniContent), 0644)
 		}

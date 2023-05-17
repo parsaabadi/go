@@ -121,7 +121,7 @@ func modelLogUpDownGet(upDown string, upDownDir string, w http.ResponseWriter, r
 	// if this model digest then try to find model name in catalog
 	mb, ok := theCatalog.modelBasicByDigestOrName(dn)
 	if ok {
-		mName = mb.name
+		mName = mb.model.Name
 	}
 
 	// find all .up-or-down.log files

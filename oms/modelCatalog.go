@@ -42,7 +42,6 @@ type modelDef struct {
 	relDir        string            // relative database directory, relative to model root and slashed: dir/sub
 	logDir        string            // model log directory
 	isLogDir      bool              // if true then use model log directory for model run logs
-	isMetaFull    bool              // if true then ModelMeta fully loaded else only ModelDicRow
 	meta          *db.ModelMeta     // model metadata, language-neutral part, should not be nil
 	isTxtMetaFull bool              // if true then ModelTxtMeta fully loaded else only []ModelTxtRow
 	txtMeta       *db.ModelTxtMeta  // if not nil then language-specific model metadata
@@ -55,14 +54,13 @@ type modelDef struct {
 
 // modelBasic is basic model info: name, digest, files location
 type modelBasic struct {
-	name     string // model name
-	digest   string // model digest
-	binDir   string // database and .exe directory: directory part of models/bin/model.sqlite
-	logDir   string // model log directory
-	isLogDir bool   // if true then use model log directory for model run logs
-	dbPath   string // absolute path to sqlite database file: models/bin/model.sqlite
-	relDir   string // relative database directory, relative to model root and slashed: dir/sub
-	extra    string // if not empty then model extra content from models/bin/dir/model.extra.json
+	model    db.ModelDicRow // model_dic db row
+	binDir   string         // database and .exe directory: directory part of models/bin/model.sqlite
+	dbPath   string         // absolute path to sqlite database file: models/bin/model.sqlite
+	relDir   string         // relative database directory, relative to model root and slashed: dir/sub
+	logDir   string         // model log directory
+	isLogDir bool           // if true then use model log directory for model run logs
+	extra    string         // if not empty then model extra content from models/bin/dir/model.extra.json
 }
 
 // ModelMetaFull is full model metadata: language-neutral db rows

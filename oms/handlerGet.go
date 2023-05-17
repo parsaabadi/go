@@ -26,7 +26,7 @@ func modelListHandler(w http.ResponseWriter, r *http.Request) {
 
 	// by model digest get model_dic row
 	for _, b := range mbs {
-		if m, ok := theCatalog.ModelDicByDigest(b.digest); ok {
+		if m, ok := theCatalog.ModelDicByDigest(b.model.Digest); ok {
 			ml = append(ml,
 				modelListItem{
 					Model: m,
@@ -60,7 +60,7 @@ func modelTextListHandler(w http.ResponseWriter, r *http.Request) {
 
 	// by model digest get model_dic row and model_dic_txt row in UI language
 	for _, b := range mbs {
-		if mt, ok := theCatalog.ModelTextByDigest(b.digest, rqLangTags); ok {
+		if mt, ok := theCatalog.ModelTextByDigest(b.model.Digest, rqLangTags); ok {
 			mtl = append(mtl,
 				modelTxtListItem{
 					ModelDicDescrNote: *mt,
@@ -349,12 +349,12 @@ func worksetStatusHandler(w http.ResponseWriter, r *http.Request) {
 	dn := getRequestParam(r, "model")
 	wsn := getRequestParam(r, "set")
 
-	wst, ok, notFound := theCatalog.WorksetStatus(dn, wsn)
-	if !ok && notFound {
+	ws, ok := theCatalog.WorksetByName(dn, wsn)
+	if !ok {
 		omppLog.Log("Warning workset status not found: ", dn, ": ", wsn)
 	}
 
-	jsonResponse(w, r, wst) // return non-empty workset_lst row if no errors and workset exist
+	jsonResponse(w, r, ws) // return non-empty workset_lst row if no errors and workset exist
 }
 
 // worksetDefaultStatusHandler return workset_lst db row of default workset by model digest-or-name:

@@ -22,23 +22,15 @@ func (mc *ModelCatalog) ReadParameterTo(dn, src string, layout *db.ReadParamLayo
 		return nil, false
 	}
 
-	// load model metadata and return index in model catalog
-	if _, ok := mc.loadModelMeta(dn); !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return nil, false // return empty result: model not found or error
-	}
-
-	// lock catalog and search model parameter by name
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
+	// get model metadata and database connection
+	meta, dbConn, ok := mc.modelMeta(dn)
 	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return nil, false // return empty result: model not found or error
+		return nil, false
 	}
 
-	if _, ok = mc.modelLst[idx].meta.ParamByName(layout.Name); !ok {
+	// check if parameter name exist in the model
+	if _, ok = meta.ParamByName(layout.Name); !ok {
 		omppLog.Log("Warning: parameter not found: ", layout.Name)
 		return nil, false // return empty result: parameter not found or error
 	}
@@ -46,21 +38,23 @@ func (mc *ModelCatalog) ReadParameterTo(dn, src string, layout *db.ReadParamLayo
 	// find workset id by name or run id by name-or-digest
 	if layout.IsFromSet {
 
-		if wst, ok := mc.loadWorksetByName(idx, src); ok {
-			layout.FromId = wst.SetId // source workset id
-		} else {
+		w, err := db.GetWorksetByName(dbConn, meta.Model.ModelId, src)
+		if err != nil {
 			return nil, false // return empty result: workset select error
 		}
+
+		layout.FromId = w.SetId // source workset id
+
 	} else {
 
 		// get run_lst db row by digest, stamp or run name
-		rst, err := db.GetRunByDigestOrStampOrName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, src)
+		rst, err := db.GetRunByDigestOrStampOrName(dbConn, meta.Model.ModelId, src)
 		if err != nil {
-			omppLog.Log("Error at get run status: ", mc.modelLst[idx].meta.Model.Name, ": ", src, ": ", err.Error())
+			omppLog.Log("Error at get run status: ", meta.Model.Name, ": ", src, ": ", err.Error())
 			return nil, false // return empty result: run select error
 		}
 		if rst == nil {
-			omppLog.Log("Warning: run not found: ", mc.modelLst[idx].meta.Model.Name, ": ", src)
+			omppLog.Log("Warning: run not found: ", meta.Model.Name, ": ", src)
 			return nil, false // return empty result: run_lst row not found
 		}
 
@@ -68,7 +62,7 @@ func (mc *ModelCatalog) ReadParameterTo(dn, src string, layout *db.ReadParamLayo
 	}
 
 	// read parameter page
-	lt, err := db.ReadParameterTo(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, layout, cvtWr)
+	lt, err := db.ReadParameterTo(dbConn, meta, layout, cvtWr)
 	if err != nil {
 		omppLog.Log("Error at read parameter: ", dn, ": ", layout.Name, ": ", err.Error())
 		return nil, false // return empty result: values select error
@@ -91,36 +85,32 @@ func (mc *ModelCatalog) ReadOutTableTo(dn, rdsn string, layout *db.ReadTableLayo
 		return nil, false
 	}
 
-	// load model metadata and return index in model catalog
-	if _, ok := mc.loadModelMeta(dn); !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return nil, false // return empty result: model not found or error
-	}
-
-	// lock catalog and search model output table by name
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
+	// get model metadata and database connection
+	meta, dbConn, ok := mc.modelMeta(dn)
 	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return nil, false // return empty result: model not found or error
+		return nil, false
 	}
 
-	if _, ok = mc.modelLst[idx].meta.OutTableByName(layout.Name); !ok {
+	// check if output table name exist in the model
+	if _, ok = meta.OutTableByName(layout.Name); !ok {
 		omppLog.Log("Warning: output table not found: ", layout.Name)
 		return nil, false // return empty result: output table not found or error
 	}
 
 	// find model run id by digest-or-stamp-or-name
-	rst, ok := mc.loadCompletedRunByDigestOrStampOrName(idx, rdsn)
+	r, ok := mc.CompletedRunByDigestOrStampOrName(dn, rdsn)
 	if !ok {
 		return nil, false // return empty result: run select error
 	}
-	layout.FromId = rst.RunId // source run id
+	if r.Status != db.DoneRunStatus {
+		omppLog.Log("Warning: model run not completed successfully: ", rdsn, ": ", r.Status)
+		return nil, false
+	}
+	layout.FromId = r.RunId // source run id
 
 	// read output table page
-	lt, err := db.ReadOutputTableTo(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, layout, cvtWr)
+	lt, err := db.ReadOutputTableTo(dbConn, meta, layout, cvtWr)
 	if err != nil {
 		omppLog.Log("Error at read output table: ", dn, ": ", layout.Name, ": ", err.Error())
 		return nil, false // return empty result: values select error
@@ -146,23 +136,15 @@ func (mc *ModelCatalog) ReadMicrodataTo(dn, rdsn string, layout *db.ReadMicroLay
 		return nil, false
 	}
 
-	// load model metadata and return index in model catalog
-	if _, ok := mc.loadModelMeta(dn); !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return nil, false // return empty result: model not found or error
-	}
-
-	// lock catalog and search model entity by name
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
+	// get model metadata and database connection
+	meta, dbConn, ok := mc.modelMeta(dn)
 	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return nil, false // return empty result: model not found or error
+		return nil, false
 	}
 
-	if _, ok := mc.modelLst[idx].meta.EntityByName(layout.Name); !ok {
+	// find entity generation by entity name
+	if _, ok := meta.EntityByName(layout.Name); !ok {
 		omppLog.Log("Warning: model entity not found: ", layout.Name)
 		return nil, false
 	}
@@ -170,17 +152,21 @@ func (mc *ModelCatalog) ReadMicrodataTo(dn, rdsn string, layout *db.ReadMicroLay
 	// if run id not defiened then find model run id by digest-or-stamp-or-name
 	if layout.FromId <= 0 {
 
-		rst, ok := mc.loadCompletedRunByDigestOrStampOrName(idx, rdsn)
+		r, ok := mc.CompletedRunByDigestOrStampOrName(dn, rdsn)
 		if !ok {
 			return nil, false // return empty result: run select error
 		}
-		layout.FromId = rst.RunId // source run id
+		if r.Status != db.DoneRunStatus {
+			omppLog.Log("Warning: model run not completed successfully: ", rdsn, ": ", r.Status)
+			return nil, false
+		}
+		layout.FromId = r.RunId // source run id
 	}
 
 	// if generation digest undefined then find entity generation by entity name and run id
 	if layout.GenDigest == "" {
 
-		entGen, ok := mc.loadEntityGenByName(idx, layout.FromId, layout.Name)
+		entGen, ok := mc.EntityGenByName(dn, layout.FromId, layout.Name)
 		if !ok {
 			return nil, false // entity generation not found
 		}
@@ -188,7 +174,7 @@ func (mc *ModelCatalog) ReadMicrodataTo(dn, rdsn string, layout *db.ReadMicroLay
 	}
 
 	// read microdata values page
-	lt, err := db.ReadMicrodataTo(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, layout, cvtWr)
+	lt, err := db.ReadMicrodataTo(dbConn, meta, layout, cvtWr)
 	if err != nil {
 		omppLog.Log("Error at read microdata: ", dn, ": ", layout.Name, ": ", layout.GenDigest, ": ", err.Error())
 		return nil, false // return empty result: values select error

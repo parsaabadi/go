@@ -31,11 +31,6 @@ func runUploadPostHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Model not found: "+dn, http.StatusBadRequest)
 		return // empty result: model digest not found
 	}
-	m, ok := theCatalog.ModelDicByDigest(mb.digest)
-	if !ok {
-		http.Error(w, "Model not found: "+dn, http.StatusBadRequest)
-		return // empty result: model digest not found
-	}
 
 	// parse multipart form: only single part expected with run.zip file attached
 	mr, err := r.MultipartReader()
@@ -61,7 +56,7 @@ func runUploadPostHandler(w http.ResponseWriter, r *http.Request) {
 	fName := part.FileName()
 	ext := path.Ext(fName)
 	baseName := strings.TrimSuffix(fName, ext)
-	mpn := m.Name + ".run."
+	mpn := mb.model.Name + ".run."
 	runName := strings.TrimPrefix(baseName, mpn)
 
 	if baseName == "" || baseName == "." || baseName == ".." ||
@@ -99,9 +94,9 @@ func runUploadPostHandler(w http.ResponseWriter, r *http.Request) {
 	hdrMsg := []string{
 		"------------------",
 		"Upload           : " + fName,
-		"Model Name       : " + m.Name,
-		"Model Version    : " + m.Version + " " + m.CreateDateTime,
-		"Model Digest     : " + m.Digest,
+		"Model Name       : " + mb.model.Name,
+		"Model Version    : " + mb.model.Version + " " + mb.model.CreateDateTime,
+		"Model Digest     : " + mb.model.Digest,
 		"Run Name         : " + runName,
 		"Folder           : " + baseName,
 		"------------------",
@@ -153,11 +148,6 @@ func worksetUploadPostHandler(w http.ResponseWriter, r *http.Request) {
 
 	// find model metadata by digest or name
 	mb, ok := theCatalog.modelBasicByDigestOrName(dn)
-	if !ok {
-		http.Error(w, "Model not found: "+dn, http.StatusBadRequest)
-		return // empty result: model digest not found
-	}
-	m, ok := theCatalog.ModelDicByDigest(mb.digest)
 	if !ok {
 		http.Error(w, "Model not found: "+dn, http.StatusBadRequest)
 		return // empty result: model digest not found
@@ -215,7 +205,7 @@ func worksetUploadPostHandler(w http.ResponseWriter, r *http.Request) {
 	fName := part.FileName()
 	ext := path.Ext(fName)
 	baseName := strings.TrimSuffix(fName, ext)
-	mpn := m.Name + ".set."
+	mpn := mb.model.Name + ".set."
 	setName := strings.TrimPrefix(baseName, mpn)
 
 	if baseName == "" || baseName == "." || baseName == ".." ||
@@ -253,9 +243,9 @@ func worksetUploadPostHandler(w http.ResponseWriter, r *http.Request) {
 	hdrMsg := []string{
 		"------------------",
 		"Upload           : " + fName,
-		"Model Name       : " + m.Name,
-		"Model Version    : " + m.Version + " " + m.CreateDateTime,
-		"Model Digest     : " + m.Digest,
+		"Model Name       : " + mb.model.Name,
+		"Model Version    : " + mb.model.Version + " " + mb.model.CreateDateTime,
+		"Model Digest     : " + mb.model.Digest,
 		"Scenario Name    : " + setName,
 		"Folder           : " + baseName,
 		"------------------",

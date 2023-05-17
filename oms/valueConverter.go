@@ -22,30 +22,22 @@ func (mc *ModelCatalog) ParameterCellConverter(
 		return nil, false
 	}
 
-	// load model metadata and return index in model catalog
-	if _, ok := mc.loadModelMeta(dn); !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return nil, false // return empty result: model not found or error
-	}
-
-	// lock catalog and search model parameter by name
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
+	// get model metadata and database connection
+	meta, _, ok := mc.modelMeta(dn)
 	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return nil, false // return empty result: model not found or error
 	}
 
-	if _, ok = mc.modelLst[idx].meta.ParamByName(name); !ok {
+	// check if parameter name exist in the model
+	if _, ok = meta.ParamByName(name); !ok {
 		omppLog.Log("Error: model parameter not found: ", dn, ": ", name)
 		return nil, false
 	}
 
 	// create converter
 	csvCvt := db.CellParamConverter{
-		ModelDef:  mc.modelLst[idx].meta,
+		ModelDef:  meta,
 		Name:      name,
 		DoubleFmt: theCfg.doubleFmt,
 	}
@@ -53,9 +45,9 @@ func (mc *ModelCatalog) ParameterCellConverter(
 	var err error
 
 	if isToId {
-		cvt, err = csvCvt.CodeToIdCell(mc.modelLst[idx].meta, name)
+		cvt, err = csvCvt.CodeToIdCell(meta, name)
 	} else {
-		cvt, err = csvCvt.IdToCodeCell(mc.modelLst[idx].meta, name)
+		cvt, err = csvCvt.IdToCodeCell(meta, name)
 	}
 	if err != nil {
 		omppLog.Log("Failed to create parameter cell value converter: ", name, ": ", err.Error())
@@ -74,30 +66,22 @@ func (mc *ModelCatalog) TableToCodeCellConverter(dn string, name string, isAcc, 
 		return nil, false
 	}
 
-	// load model metadata and return index in model catalog
-	if _, ok := mc.loadModelMeta(dn); !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return nil, false // return empty result: model not found or error
-	}
-
-	// lock catalog and search model output table by name
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
+	// get model metadata and database connection
+	meta, _, ok := mc.modelMeta(dn)
 	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return nil, false // return empty result: model not found or error
 	}
 
-	if _, ok = mc.modelLst[idx].meta.OutTableByName(name); !ok {
+	// check if output table name exist in the model
+	if _, ok = meta.OutTableByName(name); !ok {
 		omppLog.Log("Error: model output table not found: ", dn, ": ", name)
 		return nil, false
 	}
 
 	// create converter
 	ctc := db.CellTableConverter{
-		ModelDef: mc.modelLst[idx].meta,
+		ModelDef: meta,
 		Name:     name,
 	}
 	var cvt func(interface{}) (interface{}, error)
@@ -111,21 +95,21 @@ func (mc *ModelCatalog) TableToCodeCellConverter(dn string, name string, isAcc, 
 			DoubleFmt:          theCfg.doubleFmt,
 			ValueName:          "",
 		}
-		cvt, err = csvCvt.IdToCodeCell(mc.modelLst[idx].meta, name)
+		cvt, err = csvCvt.IdToCodeCell(meta, name)
 	case isAcc:
 		csvCvt := db.CellAccConverter{
 			CellTableConverter: ctc,
 			IsIdCsv:            true,
 			DoubleFmt:          theCfg.doubleFmt,
 		}
-		cvt, err = csvCvt.IdToCodeCell(mc.modelLst[idx].meta, name)
+		cvt, err = csvCvt.IdToCodeCell(meta, name)
 	default:
 		csvCvt := db.CellExprConverter{
 			CellTableConverter: ctc,
 			IsIdCsv:            true,
 			DoubleFmt:          theCfg.doubleFmt,
 		}
-		cvt, err = csvCvt.IdToCodeCell(mc.modelLst[idx].meta, name)
+		cvt, err = csvCvt.IdToCodeCell(meta, name)
 	}
 	if err != nil {
 		omppLog.Log("Failed to create output table cell id's to code converter: ", name, ": ", err.Error())
@@ -158,24 +142,15 @@ func (mc *ModelCatalog) MicrodataCellConverter(
 		return 0, "", nil, false
 	}
 
-	// load model metadata and return index in model catalog
-	if _, ok := mc.loadModelMeta(dn); !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return 0, "", nil, false // return empty result: model not found or error
-	}
-
-	// lock catalog and search model output table by name
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
+	// get model metadata and database connection
+	meta, _, ok := mc.modelMeta(dn)
 	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return 0, "", nil, false // return empty result: model not found or error
 	}
 
 	// get run_lst db row by digest, stamp or run name
-	r, ok := mc.loadCompletedRunByDigestOrStampOrName(idx, rdsn)
+	r, ok := mc.CompletedRunByDigestOrStampOrName(dn, rdsn)
 	if !ok {
 		return 0, "", nil, false // run not found or not completed
 	}
@@ -185,14 +160,14 @@ func (mc *ModelCatalog) MicrodataCellConverter(
 	}
 
 	// find entity generation by entity name
-	entGen, ok := mc.loadEntityGenByName(idx, r.RunId, name)
+	entGen, ok := mc.EntityGenByName(dn, r.RunId, name)
 	if !ok {
 		return r.RunId, "", nil, false // entity generation not found
 	}
 
 	// create converter
 	cvtMicro := &db.CellMicroConverter{
-		ModelDef:  mc.modelLst[idx].meta,
+		ModelDef:  meta,
 		Name:      name,
 		EntityGen: entGen,
 		IsIdCsv:   isToId,
@@ -202,9 +177,9 @@ func (mc *ModelCatalog) MicrodataCellConverter(
 	var err error
 
 	if isToId {
-		cvt, err = cvtMicro.CodeToIdCell(mc.modelLst[idx].meta, name)
+		cvt, err = cvtMicro.CodeToIdCell(meta, name)
 	} else {
-		cvt, err = cvtMicro.IdToCodeCell(mc.modelLst[idx].meta, name)
+		cvt, err = cvtMicro.IdToCodeCell(meta, name)
 	}
 	if err != nil {
 		omppLog.Log("Failed to create microdata cell value converter: ", name, ": ", err.Error())
@@ -223,30 +198,22 @@ func (mc *ModelCatalog) ParameterToCsvConverter(dn string, isCode bool, name str
 		return []string{}, nil, false
 	}
 
-	// load model metadata and return index in model catalog
-	if _, ok := mc.loadModelMeta(dn); !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return []string{}, nil, false // return empty result: model not found or error
-	}
-
-	// lock catalog and search model parameter by name
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
+	// get model metadata and database connection
+	meta, _, ok := mc.modelMeta(dn)
 	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return []string{}, nil, false // return empty result: model not found or error
 	}
 
-	if _, ok = mc.modelLst[idx].meta.ParamByName(name); !ok {
+	// check if parameter name exist in the model
+	if _, ok = meta.ParamByName(name); !ok {
 		omppLog.Log("Error: model parameter not found: ", dn, ": ", name)
 		return []string{}, nil, false // return empty result: parameter not found or error
 	}
 
 	// make csv header
 	csvCvt := db.CellParamConverter{
-		ModelDef:  mc.modelLst[idx].meta,
+		ModelDef:  meta,
 		Name:      name,
 		IsIdCsv:   !isCode,
 		DoubleFmt: theCfg.doubleFmt,
@@ -283,30 +250,22 @@ func (mc *ModelCatalog) TableToCsvConverter(dn string, isCode bool, name string,
 		return []string{}, nil, false
 	}
 
-	// load model metadata and return index in model catalog
-	if _, ok := mc.loadModelMeta(dn); !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return []string{}, nil, false // return empty result: model not found or error
-	}
-
-	// lock catalog and search model output table by name
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
+	// get model metadata and database connection
+	meta, _, ok := mc.modelMeta(dn)
 	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return []string{}, nil, false // return empty result: model not found or error
 	}
 
-	if _, ok = mc.modelLst[idx].meta.OutTableByName(name); !ok {
+	// check if output table name exist in the model
+	if _, ok = meta.OutTableByName(name); !ok {
 		omppLog.Log("Error: model output table not found: ", dn, ": ", name)
 		return []string{}, nil, false // return empty result: output table not found or error
 	}
 
 	// set cell conveter to csv
 	ctc := db.CellTableConverter{
-		ModelDef: mc.modelLst[idx].meta,
+		ModelDef: meta,
 		Name:     name,
 	}
 	var csvCvt db.CsvConverter
@@ -378,24 +337,15 @@ func (mc *ModelCatalog) MicrodataToCsvConverter(
 		return 0, "", []string{}, nil, false
 	}
 
-	// load model metadata and return index in model catalog
-	if _, ok := mc.loadModelMeta(dn); !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return 0, "", []string{}, nil, false // return empty result: model not found or error
-	}
-
-	// lock catalog and search model output table by name
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
+	// get model metadata and database connection
+	meta, _, ok := mc.modelMeta(dn)
 	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return 0, "", []string{}, nil, false // return empty result: model not found or error
 	}
 
 	// get run_lst db row by digest, stamp or run name
-	r, ok := mc.loadCompletedRunByDigestOrStampOrName(idx, rdsn)
+	r, ok := mc.CompletedRunByDigestOrStampOrName(dn, rdsn)
 	if !ok {
 		return 0, "", []string{}, nil, false // run not found or not completed
 	}
@@ -405,14 +355,14 @@ func (mc *ModelCatalog) MicrodataToCsvConverter(
 	}
 
 	// find entity generation by entity name
-	entGen, ok := mc.loadEntityGenByName(idx, r.RunId, name)
+	entGen, ok := mc.EntityGenByName(dn, r.RunId, name)
 	if !ok {
 		return 0, "", []string{}, nil, false // entity generation not found
 	}
 
 	// make csv header
 	cvtMicro := &db.CellMicroConverter{
-		ModelDef:  mc.modelLst[idx].meta,
+		ModelDef:  meta,
 		Name:      name,
 		EntityGen: entGen,
 		IsIdCsv:   !isCode,

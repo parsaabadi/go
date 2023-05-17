@@ -73,17 +73,18 @@ func worksetCreateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// return error if workset already exist or unable to get workset status
-	_, ok, notFound := theCatalog.WorksetStatus(dn, wsn)
+	ws, ok := theCatalog.WorksetByName(dn, wsn)
 	if ok {
 		omppLog.Log("Error: workset already exist: " + wsn + " model: " + dn)
 		http.Error(w, "Error: workset already exist: "+wsn+" model: "+dn, http.StatusBadRequest)
 		return
 	}
-	if !notFound {
+	if !ok && ws == nil {
 		omppLog.Log("Failed to create workset: " + dn + " : " + wsn)
 		http.Error(w, "Failed to create workset: "+dn+" : "+wsn, http.StatusBadRequest)
 		return
 	}
+	// else workset not exist
 
 	// insert workset metadata with empty list of parameters and read-write status
 	newWp := db.WorksetPub{

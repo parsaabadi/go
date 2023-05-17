@@ -50,7 +50,7 @@ type PathItem struct {
 func makeModelDownloadCommand(mb modelBasic, logPath string, isNoAcc bool, isNoMd bool, isCsvBom bool) (*exec.Cmd, string) {
 
 	// make dbcopy message for user log
-	cmdMsg := "dbcopy -m " + mb.name + " -dbcopy.Zip -dbcopy.OutputDir " + theCfg.downloadDir
+	cmdMsg := "dbcopy -m " + mb.model.Name + " -dbcopy.Zip -dbcopy.OutputDir " + theCfg.downloadDir
 	if isNoAcc {
 		cmdMsg += " -dbcopy.NoAccumulatorsCsv"
 	}
@@ -69,7 +69,7 @@ func makeModelDownloadCommand(mb modelBasic, logPath string, isNoAcc bool, isNoM
 	}
 
 	// make dbcopy command
-	cArgs := []string{"-m", mb.name, "-dbcopy.Zip", "-dbcopy.OutputDir", downDir, "-dbcopy.FromSqlite", dbPathRel}
+	cArgs := []string{"-m", mb.model.Name, "-dbcopy.Zip", "-dbcopy.OutputDir", downDir, "-dbcopy.FromSqlite", dbPathRel}
 	if isNoAcc {
 		cArgs = append(cArgs, "-dbcopy.NoAccumulatorsCsv")
 	}
@@ -90,7 +90,7 @@ func makeModelDownloadCommand(mb modelBasic, logPath string, isNoAcc bool, isNoM
 func makeRunDownloadCommand(mb modelBasic, runId int, logPath string, isNoAcc bool, isNoMd bool, isCsvBom bool) (*exec.Cmd, string) {
 
 	// make dbcopy message for user log
-	cmdMsg := "dbcopy -m " + mb.name +
+	cmdMsg := "dbcopy -m " + mb.model.Name +
 		" -dbcopy.IdOutputNames=false" +
 		" -dbcopy.RunId " + strconv.Itoa(runId) +
 		" -dbcopy.Zip" +
@@ -114,7 +114,7 @@ func makeRunDownloadCommand(mb modelBasic, runId int, logPath string, isNoAcc bo
 
 	// make dbcopy command
 	cArgs := []string{
-		"-m", mb.name,
+		"-m", mb.model.Name,
 		"-dbcopy.IdOutputNames=false",
 		"-dbcopy.RunId", strconv.Itoa(runId),
 		"-dbcopy.Zip",
@@ -141,7 +141,7 @@ func makeRunDownloadCommand(mb modelBasic, runId int, logPath string, isNoAcc bo
 func makeWorksetDownloadCommand(mb modelBasic, setName string, logPath string, isCsvBom bool) (*exec.Cmd, string) {
 
 	// make dbcopy message for user log
-	cmdMsg := "dbcopy -m " + mb.name +
+	cmdMsg := "dbcopy -m " + mb.model.Name +
 		" -dbcopy.IdOutputNames=false" +
 		" -dbcopy.SetName " + setName +
 		" -dbcopy.Zip" +
@@ -159,7 +159,7 @@ func makeWorksetDownloadCommand(mb modelBasic, setName string, logPath string, i
 
 	// make dbcopy command
 	cArgs := []string{
-		"-m", mb.name,
+		"-m", mb.model.Name,
 		"-dbcopy.IdOutputNames=false",
 		"-dbcopy.SetName", setName,
 		"-dbcopy.Zip",
@@ -180,7 +180,7 @@ func makeWorksetDownloadCommand(mb modelBasic, setName string, logPath string, i
 func makeRunUploadCommand(mb modelBasic, runName string, logPath string) (*exec.Cmd, string) {
 
 	// make dbcopy message for user log
-	cmdMsg := "dbcopy -m " + mb.name +
+	cmdMsg := "dbcopy -m " + mb.model.Name +
 		" -dbcopy.IdOutputNames=false" +
 		" -dbcopy.RunName " + runName +
 		" -dbcopy.To db" +
@@ -196,7 +196,7 @@ func makeRunUploadCommand(mb modelBasic, runName string, logPath string) (*exec.
 
 	// make dbcopy command
 	cArgs := []string{
-		"-m", mb.name,
+		"-m", mb.model.Name,
 		"-dbcopy.IdOutputNames=false",
 		"-dbcopy.RunName", runName,
 		"-dbcopy.To", "db",
@@ -215,7 +215,7 @@ func makeRunUploadCommand(mb modelBasic, runName string, logPath string) (*exec.
 func makeWorksetUploadCommand(mb modelBasic, setName string, logPath string, isNoDigestCheck bool) (*exec.Cmd, string) {
 
 	// make dbcopy message for user log
-	cmdMsg := "dbcopy -m " + mb.name +
+	cmdMsg := "dbcopy -m " + mb.model.Name +
 		" -dbcopy.IdOutputNames=false" +
 		" -dbcopy.SetName " + setName +
 		" -dbcopy.To db" +
@@ -234,7 +234,7 @@ func makeWorksetUploadCommand(mb modelBasic, setName string, logPath string, isN
 
 	// make dbcopy command
 	cArgs := []string{
-		"-m", mb.name,
+		"-m", mb.model.Name,
 		"-dbcopy.IdOutputNames=false",
 		"-dbcopy.SetName", setName,
 		"-dbcopy.To", "db",

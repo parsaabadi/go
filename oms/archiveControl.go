@@ -14,18 +14,18 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
-const archiveScanInterval = 16381                  // timeout in msec, sleep interval between scanning of archive state
-const archiveNewScanInterval = 23 * 60 * 60 * 1000 // timeout in msec to find new data for archive
+const archiveScanInterval = 16381    // timeout in msec, interval between archive state scanning
+const archiveWsetScanInterval = 1637 // timeout in msec, interval between workset archive state scanning
 
 const archiveStateFile = "archive-state.json" // archive state file name
-const archiveStateMaxErr = 17                 // max number of errors during archive state write to disable archiving
+const archiveStateMaxErr = 127                // max number of errors during archive state write to disable archiving
 
 const archiveRunKeepAll = "KEEP-ALL-RUNS" // special model run name: keep all model runs in database, no archiving
 const archiveSetKeepAll = "KEEP-ALL-SETS" // special workset name: keep all worksets in database, no archiving
 
 // archive catalog and state
 type archiveCatalog struct {
-	theLock sync.Mutex // mutex to lock for archive state operations
+	fileLock sync.Mutex // mutex to lock archive state file read or write
 }
 
 var theArchive archiveCatalog // archive catalog and state
@@ -61,13 +61,15 @@ func scanArchive(doneC <-chan bool) {
 
 	arcLst := []archiveRequest{} // archive requests for each model
 
-	var lastNewScanTs int64 // unix msec, last time of scan for new archive request
-	var nextStateTs int64   // unix msec, next time to write archive state
-	tState := time.Now()    // last state update time
-	stateErrCount := 0      // error count at write archive state
-	isNewState := false     // if true then archive state updated
-	arcDt := ""             // archive date-time cut off
-	alertDt := ""           // alert about archive date-time cut off
+	var lastScanTs int64 // unix msec, last time of scan for new archive request
+	stateErrCount := 0   // error count at write archive state
+	arcDt := ""          // archive date-time cut off
+	alertDt := ""        // alert about archive date-time cut off
+
+	var nSleep int64 = archiveScanInterval
+	if nSleep < archiveWsetScanInterval {
+		nSleep = archiveWsetScanInterval
+	}
 
 	for {
 		// remove from archive request list old models which are no longer in main model catalog
@@ -78,7 +80,7 @@ func scanArchive(doneC <-chan bool) {
 
 				ok := false
 				for i := range mLst {
-					ok = arcLst[k].ModelDigest == mLst[i].digest
+					ok = arcLst[k].ModelDigest == mLst[i].model.Digest
 					if ok {
 						break
 					}
@@ -95,32 +97,22 @@ func scanArchive(doneC <-chan bool) {
 		tNow := time.Now()
 		nowTs := tNow.UnixMilli()
 
-		if lastNewScanTs+archiveNewScanInterval < nowTs {
+		if lastScanTs+nSleep < nowTs {
 
-			lastNewScanTs = nowTs
-			nextStateTs = nowTs
-			tState = tNow
-			isNewState = true
+			isWsOnly := lastScanTs+archiveScanInterval > nowTs // if true then update only workset state
+			lastScanTs = nowTs
 
 			arcDt = helper.MakeDateTime(tNow.AddDate(0, 0, -theCfg.archiveDays))
 			alertDt = helper.MakeDateTime(tNow.AddDate(0, 0, -theCfg.archiveAlertDays))
 
-			arcLst = updateArchiveState(arcDt, alertDt, mLst, arcLst)
-		}
+			arcLst = updateArchiveState(arcDt, alertDt, isWsOnly, mLst, arcLst)
 
-		// create archive state file
-		if isNewState && nextStateTs <= nowTs {
-
-			isNewState := !theArchive.createArchiveState(tState, arcDt, alertDt, arcLst)
-			if !isNewState {
-				nextStateTs = nowTs + archiveNewScanInterval
+			// create archive state file
+			if ok := theArchive.createArchiveState(tNow, arcDt, alertDt, arcLst); ok {
 				stateErrCount = 0
 			} else {
-				nextStateTs = nowTs + archiveScanInterval
 				stateErrCount++
 			}
-
-			// too many errors: disable archiving after multiple errors and exits archive scan job
 			if stateErrCount > archiveStateMaxErr {
 				omppLog.Log("Error: archiving disabled after multiple errors at writing into: ", theCfg.archiveStatePath)
 				break
@@ -128,7 +120,7 @@ func scanArchive(doneC <-chan bool) {
 		}
 
 		// wait for doneC or sleep
-		if isExitSleep(archiveScanInterval, doneC) {
+		if isExitSleep(time.Duration(nSleep), doneC) {
 			return
 		}
 	}
@@ -136,8 +128,8 @@ func scanArchive(doneC <-chan bool) {
 	theCfg.isArchive = false
 }
 
-// update archive requests state: fins model runs and worksets for archiving
-func updateArchiveState(arcDt, alertDt string, modelLst []modelBasic, arcLst []archiveRequest) []archiveRequest {
+// update archive requests state: find model runs and worksets for archiving
+func updateArchiveState(arcDt, alertDt string, isWsOnly bool, modelLst []modelBasic, arcLst []archiveRequest) []archiveRequest {
 
 	// find model runs or worksets where update time older than archive period and add new request to archive request list
 	for _, mdl := range modelLst {
@@ -145,14 +137,14 @@ func updateArchiveState(arcDt, alertDt string, modelLst []modelBasic, arcLst []a
 		// find list of model runs to keep and list worksest to keep
 		rKeep := []string{}
 		for md, lst := range theCfg.archiveRunKeep {
-			if md == mdl.digest {
+			if md == mdl.model.Digest {
 				rKeep = lst
 				break
 			}
 		}
 		wKeep := []string{}
 		for md, lst := range theCfg.archiveSetKeep {
-			if md == mdl.digest {
+			if md == mdl.model.Digest {
 				wKeep = lst
 				break
 			}
@@ -161,7 +153,7 @@ func updateArchiveState(arcDt, alertDt string, modelLst []modelBasic, arcLst []a
 		// find existing or append new archive request, clear current archive lists of runs and worksets and allert lists
 		nRq := -1
 		for k := range arcLst {
-			if arcLst[k].ModelDigest == mdl.digest {
+			if arcLst[k].ModelDigest == mdl.model.Digest {
 				nRq = k
 				break
 			}
@@ -171,8 +163,8 @@ func updateArchiveState(arcDt, alertDt string, modelLst []modelBasic, arcLst []a
 			nRq = len(arcLst)
 			arcLst = append(arcLst,
 				archiveRequest{
-					ModelDigest: mdl.digest,
-					ModelName:   mdl.name,
+					ModelDigest: mdl.model.Digest,
+					ModelName:   mdl.model.Name,
 					Run:         []db.RunPub{},
 					Set:         []db.WorksetPub{},
 					RunAlert:    []db.RunPub{},
@@ -197,27 +189,30 @@ func updateArchiveState(arcDt, alertDt string, modelLst []modelBasic, arcLst []a
 
 		// get list of model runs and filter it
 		// to append to the list of runs to be archived now and to be archived soon (user alert list)
-		rl, ok := theCatalog.RunPubList(mdl.digest)
-		if ok && len(rl) > 0 {
+		if !isWsOnly {
 
-			for k := range rl {
+			rl, ok := theCatalog.RunPubList(mdl.model.Digest)
+			if ok && len(rl) > 0 {
 
-				// skip first (base) model run
-				// skip model runs which are in runs to keep list
-				ok = k == 0
-				for i := 0; !ok && i < len(rKeep); i++ {
-					ok = rKeep[i] == archiveRunKeepAll || rKeep[i] == rl[k].RunDigest || rKeep[i] == rl[k].RunStamp || rKeep[i] == rl[k].Name
-				}
-				if ok {
-					continue
-				}
+				for k := range rl {
 
-				// append this run to request list if it is older than archive time and or alert time
-				if rl[k].UpdateDateTime < arcDt {
-					arcLst[nRq].Run = append(arcLst[nRq].Run, rl[k])
-				} else {
-					if rl[k].UpdateDateTime < alertDt {
-						arcLst[nRq].RunAlert = append(arcLst[nRq].RunAlert, rl[k])
+					// skip first (base) model run
+					// skip model runs which are in runs to keep list
+					ok = k == 0
+					for i := 0; !ok && i < len(rKeep); i++ {
+						ok = rKeep[i] == archiveRunKeepAll || rKeep[i] == rl[k].RunDigest || rKeep[i] == rl[k].RunStamp || rKeep[i] == rl[k].Name
+					}
+					if ok {
+						continue
+					}
+
+					// append this run to request list if it is older than archive time and or alert time
+					if rl[k].UpdateDateTime < arcDt {
+						arcLst[nRq].Run = append(arcLst[nRq].Run, rl[k])
+					} else {
+						if rl[k].UpdateDateTime < alertDt {
+							arcLst[nRq].RunAlert = append(arcLst[nRq].RunAlert, rl[k])
+						}
 					}
 				}
 			}
@@ -225,7 +220,7 @@ func updateArchiveState(arcDt, alertDt string, modelLst []modelBasic, arcLst []a
 
 		// get list of model worksets and filter it
 		// to append to the list of worksets to be archived now and to be archived soon (user alert list)
-		wl, ok := theCatalog.WorksetPubList(mdl.digest)
+		wl, ok := theCatalog.WorksetPubList(mdl.model.Digest)
 		if ok && len(wl) > 0 {
 
 			for k := range wl {
@@ -253,7 +248,7 @@ func updateArchiveState(arcDt, alertDt string, modelLst []modelBasic, arcLst []a
 		}
 
 		if len(arcLst[nRq].Run) > 0 || len(arcLst[nRq].RunAlert) > 0 || len(arcLst[nRq].Set) > 0 || len(arcLst[nRq].SetAlert) > 0 {
-			if m, ok := theCatalog.ModelDicByDigest(mdl.digest); ok {
+			if m, ok := theCatalog.ModelDicByDigest(mdl.model.Digest); ok {
 				arcLst[nRq].Version = m.Version
 			}
 		}
@@ -303,8 +298,8 @@ func (ac *archiveCatalog) createArchiveState(tState time.Time, arcDt, alertDt st
 	}
 
 	// lock archive state and write state into the state file
-	ac.theLock.Lock()
-	defer ac.theLock.Unlock()
+	ac.fileLock.Lock()
+	defer ac.fileLock.Unlock()
 
 	err := helper.ToJsonIndentFile(theCfg.archiveStatePath, &st)
 	if err != nil {
@@ -319,14 +314,14 @@ func (ac *archiveCatalog) createArchiveState(tState time.Time, arcDt, alertDt st
 // read archive job state from file, return empty state if archiving disabled
 func (ac *archiveCatalog) readArchiveState() ([]byte, error) {
 
-	// retrun empty state if archiving disabled
+	// return empty state if archiving disabled
 	if !theCfg.isArchive || theCfg.archiveStatePath == "" { // archiving disabled
 		return json.Marshal(emptyArchiveState())
 	}
 
 	// lock archive state and read from state file
-	ac.theLock.Lock()
-	defer ac.theLock.Unlock()
+	ac.fileLock.Lock()
+	defer ac.fileLock.Unlock()
 
 	return os.ReadFile(theCfg.archiveStatePath)
 }

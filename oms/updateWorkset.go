@@ -27,37 +27,32 @@ func (mc *ModelCatalog) UpdateWorksetReadonly(dn, wsn string, isReadonly bool) (
 		omppLog.Log("Warning: invalid (empty) workset name")
 		return "", &db.WorksetRow{}, false
 	}
-
-	// lock catalog and find model index by digest or name
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
+	meta, dbConn, ok := mc.modelMeta(dn)
 	if !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
+		omppLog.Log("Error: model digest or name not found: ", dn)
 		return "", &db.WorksetRow{}, false // return empty result: model not found or error
 	}
 
 	// find workset in database
-	w, err := db.GetWorksetByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, wsn)
+	w, err := db.GetWorksetByName(dbConn, meta.Model.ModelId, wsn)
 	if err != nil {
 		omppLog.Log("Error at get workset status: ", dn, ": ", wsn, ": ", err.Error())
 		return "", &db.WorksetRow{}, false // return empty result: workset select error
 	}
 	if w == nil {
-		omppLog.Log("Warning workset status not found: ", dn, ": ", wsn)
+		omppLog.Log("Warning: workset not found: ", dn, ": ", wsn)
 		return "", &db.WorksetRow{}, false // return empty result: workset_lst row not found
 	}
 
 	// update workset readonly status
-	err = db.UpdateWorksetReadonly(mc.modelLst[idx].dbConn, w.SetId, isReadonly)
+	err = db.UpdateWorksetReadonly(dbConn, w.SetId, isReadonly)
 	if err != nil {
 		omppLog.Log("Error at update workset status: ", dn, ": ", wsn, ": ", err.Error())
 		return "", &db.WorksetRow{}, false // return empty result: workset select error
 	}
 
 	// get workset status
-	w, err = db.GetWorkset(mc.modelLst[idx].dbConn, w.SetId)
+	w, err = db.GetWorkset(dbConn, w.SetId)
 	if err != nil {
 		omppLog.Log("Error at get workset status: ", dn, ": ", w.SetId, ": ", err.Error())
 		return "", &db.WorksetRow{}, false // return empty result: workset select error
@@ -67,7 +62,7 @@ func (mc *ModelCatalog) UpdateWorksetReadonly(dn, wsn string, isReadonly bool) (
 		return "", &db.WorksetRow{}, false // return empty result: workset_lst row not found
 	}
 
-	return mc.modelLst[idx].meta.Model.Digest, w, true
+	return meta.Model.Digest, w, true
 }
 
 // UpdateWorkset update workset metadata: create new workset, replace existsing or merge metadata.
@@ -88,24 +83,19 @@ func (mc *ModelCatalog) UpdateWorkset(isReplace bool, wp *db.WorksetPub) (bool, 
 		return false, false, nil, nil
 	}
 
-	// if model metadata not loaded then read it from database
-	if _, ok := mc.loadModelMeta(dn); !ok {
-		omppLog.Log("Error: model digest or name not found: ", dn)
-		return false, false, nil, errors.New("Error: model digest or name not found: " + dn)
-	}
-
-	// lock catalog and update workset
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
+	meta, dbConn, ok := mc.modelMeta(dn)
 	if !ok {
 		omppLog.Log("Error: model digest or name not found: ", dn)
 		return false, false, nil, errors.New("Error: model digest or name not found: " + dn)
 	}
+	langMeta := mc.modelLangMeta(dn)
+	if langMeta == nil {
+		omppLog.Log("Error: invalid (empty) model language list: ", dn)
+		return false, false, nil, errors.New("Error: invalid (empty) model language list: " + dn)
+	}
 
 	// find workset in database: it must be read-write if exists
-	w, err := db.GetWorksetByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, wp.Name)
+	w, err := db.GetWorksetByName(dbConn, meta.Model.ModelId, wp.Name)
 	if err != nil {
 		omppLog.Log("Error at get workset status: ", dn, ": ", wp.Name, ": ", err.Error())
 		return false, false, nil, err
@@ -123,7 +113,7 @@ func (mc *ModelCatalog) UpdateWorkset(isReplace bool, wp *db.WorksetPub) (bool, 
 	}
 
 	// convert workset from "public" into db rows
-	wm, err := wp.FromPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
+	wm, err := wp.FromPublic(dbConn, meta)
 	if err != nil {
 		omppLog.Log("Error at workset json conversion: ", dn, ": ", wp.Name, ": ", err.Error())
 		return false, isEraseParam, nil, err
@@ -137,14 +127,14 @@ func (mc *ModelCatalog) UpdateWorkset(isReplace bool, wp *db.WorksetPub) (bool, 
 
 	// match languages from request into model languages
 	for k := range wm.Txt {
-		lc := mc.languageMatch(idx, wm.Txt[k].LangCode)
+		lc := mc.languageCodeMatch(dn, wm.Txt[k].LangCode)
 		if lc != "" {
 			wm.Txt[k].LangCode = lc
 		}
 	}
 	for k := range wm.Param {
 		for j := range wm.Param[k].Txt {
-			lc := mc.languageMatch(idx, wm.Param[k].Txt[j].LangCode)
+			lc := mc.languageCodeMatch(dn, wm.Param[k].Txt[j].LangCode)
 			if lc != "" {
 				wm.Param[k].Txt[j].LangCode = lc
 			}
@@ -152,14 +142,14 @@ func (mc *ModelCatalog) UpdateWorkset(isReplace bool, wp *db.WorksetPub) (bool, 
 	}
 
 	// update workset metadata
-	err = wm.UpdateWorkset(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, isReplace, mc.modelLst[idx].langMeta)
+	err = wm.UpdateWorkset(dbConn, meta, isReplace, langMeta)
 	if err != nil {
 		omppLog.Log("Error at update workset: ", dn, ": ", wp.Name, ": ", err.Error())
 		return false, isEraseParam, nil, err
 	}
 
 	// get updated workset status: it must exist
-	w, err = db.GetWorksetByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, wp.Name)
+	w, err = db.GetWorksetByName(dbConn, meta.Model.ModelId, wp.Name)
 	if err != nil {
 		omppLog.Log("Error at update workset: ", dn, ": ", wp.Name, ": ", err.Error())
 		return false, isEraseParam, nil, err
@@ -184,25 +174,14 @@ func (mc *ModelCatalog) DeleteWorkset(dn, wsn string) (bool, error) {
 		omppLog.Log("Warning: invalid (empty) workset name")
 		return false, nil
 	}
-
-	// if model metadata not loaded then read it from database
-	if _, ok := mc.loadModelMeta(dn); !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return false, nil // return empty result: model not found or error
-	}
-
-	// lock catalog and delete workset
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
+	meta, dbConn, ok := mc.modelMeta(dn)
 	if !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return false, nil // return empty result: model not found or error
+		omppLog.Log("Error: model digest or name not found: ", dn)
+		return false, errors.New("Error: model digest or name not found: " + dn)
 	}
 
 	// find workset in database
-	w, err := db.GetWorksetByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, wsn)
+	w, err := db.GetWorksetByName(dbConn, meta.Model.ModelId, wsn)
 	if err != nil {
 		omppLog.Log("Error at get workset status: ", dn, ": ", wsn, ": ", err.Error())
 		return false, err
@@ -212,7 +191,7 @@ func (mc *ModelCatalog) DeleteWorkset(dn, wsn string) (bool, error) {
 	}
 
 	// delete workset from database
-	err = db.DeleteWorkset(mc.modelLst[idx].dbConn, w.SetId)
+	err = db.DeleteWorkset(dbConn, w.SetId)
 	if err != nil {
 		omppLog.Log("Error at delete workset: ", dn, ": ", wsn, ": ", err.Error())
 		return false, err
@@ -244,24 +223,20 @@ func (mc *ModelCatalog) UpdateWorksetParameter(
 		return false, errors.New("workset: " + wp.Name + " parameter empty: " + param.Name)
 	}
 
-	// if model metadata not loaded then read it from database
-	if _, ok := mc.loadModelMeta(dn); !ok {
-		omppLog.Log("Error: model digest or name not found: ", dn)
-		return false, errors.New("Error: model digest or name not found: " + dn)
-	}
-
-	// lock catalog and update workset
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
+	meta, dbConn, ok := mc.modelMeta(dn)
 	if !ok {
 		omppLog.Log("Error: model digest or name not found: ", dn)
 		return false, errors.New("Error: model digest or name not found: " + dn)
 	}
 
+	langMeta := mc.modelLangMeta(dn)
+	if langMeta == nil {
+		omppLog.Log("Error: invalid (empty) model language list: ", dn)
+		return false, errors.New("Error: invalid (empty) model language list: " + dn)
+	}
+
 	// convert workset from "public" into db rows
-	wm, err := wp.FromPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
+	wm, err := wp.FromPublic(dbConn, meta)
 	if err != nil {
 		omppLog.Log("Error at workset json conversion: ", dn, ": ", wp.Name, ": ", err.Error())
 		return false, err
@@ -269,7 +244,7 @@ func (mc *ModelCatalog) UpdateWorksetParameter(
 
 	// match languages from request into model languages
 	for j := range param.Txt {
-		lc := mc.languageMatch(idx, param.Txt[j].LangCode)
+		lc := mc.languageCodeMatch(dn, param.Txt[j].LangCode)
 		if lc != "" {
 			param.Txt[j].LangCode = lc
 		}
@@ -277,11 +252,11 @@ func (mc *ModelCatalog) UpdateWorksetParameter(
 
 	// convert cell from emun codes to enum id's
 	csvCvt := db.CellParamConverter{
-		ModelDef:  mc.modelLst[idx].meta,
+		ModelDef:  meta,
 		Name:      param.Name,
 		DoubleFmt: theCfg.doubleFmt,
 	}
-	cvt, e := csvCvt.CodeToIdCell(mc.modelLst[idx].meta, param.Name)
+	cvt, e := csvCvt.CodeToIdCell(meta, param.Name)
 	if e != nil {
 		return false, errors.New("Failed to create parameter cell value converter: " + param.Name + " : " + e.Error())
 	}
@@ -302,7 +277,7 @@ func (mc *ModelCatalog) UpdateWorksetParameter(
 	}
 
 	// update workset parameter metadata and parameter values
-	hId, err := wm.UpdateWorksetParameterFrom(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, isReplace, param, mc.modelLst[idx].langMeta, from)
+	hId, err := wm.UpdateWorksetParameterFrom(dbConn, meta, isReplace, param, langMeta, from)
 	if err != nil {
 		omppLog.Log("Error at update workset: ", dn, ": ", wp.Name, ": ", err.Error())
 		return false, err
@@ -325,22 +300,18 @@ func (mc *ModelCatalog) UpdateWorksetParameterText(dn, wsn string, pvtLst []db.P
 		return false, errors.New("Error: invalid (empty) workset name")
 	}
 
-	// if model metadata not loaded then read it from database
-	if _, ok := mc.loadModelMeta(dn); !ok {
-		return false, errors.New("Error: model digest or name not found: " + dn)
-	}
-
-	// lock catalog and update workset
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
+	meta, dbConn, ok := mc.modelMeta(dn)
 	if !ok {
 		return false, errors.New("Error: model digest or name not found: " + dn)
 	}
 
+	langMeta := mc.modelLangMeta(dn)
+	if langMeta == nil {
+		return false, errors.New("Error: invalid (empty) model language list: " + dn)
+	}
+
 	// find workset in database: it must be read-write if exists
-	w, err := db.GetWorksetByName(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, wsn)
+	w, err := db.GetWorksetByName(dbConn, meta.Model.ModelId, wsn)
 	if err != nil {
 		return false, errors.New("Workset not found: " + dn + ": " + wsn + ": " + err.Error())
 	}
@@ -352,24 +323,24 @@ func (mc *ModelCatalog) UpdateWorksetParameterText(dn, wsn string, pvtLst []db.P
 	}
 
 	// get workset parameters list
-	hIds, _, _, err := db.GetWorksetParamList(mc.modelLst[idx].dbConn, w.SetId)
+	hIds, _, _, err := db.GetWorksetParamList(dbConn, w.SetId)
 
 	// check: parameter must in workset parametrs list
 	// match languages from request into model languages
 	for j := range pvtLst {
 
-		np, ok := mc.modelLst[idx].meta.ParamByName(pvtLst[j].Name)
+		np, ok := meta.ParamByName(pvtLst[j].Name)
 		if !ok {
 			return false, errors.New("Model parameter not found: " + dn + ": " + pvtLst[j].Name)
 		}
 
-		i := sort.SearchInts(hIds, mc.modelLst[idx].meta.Param[np].ParamHid)
-		if i < 0 || i >= len(hIds) || hIds[i] != mc.modelLst[idx].meta.Param[np].ParamHid {
+		i := sort.SearchInts(hIds, meta.Param[np].ParamHid)
+		if i < 0 || i >= len(hIds) || hIds[i] != meta.Param[np].ParamHid {
 			return false, errors.New("Workset parameter not found: " + dn + ": " + wsn + ": " + pvtLst[j].Name)
 		}
 
 		for k := range pvtLst[j].Txt {
-			lc := mc.languageMatch(idx, pvtLst[j].Txt[k].LangCode)
+			lc := mc.languageCodeMatch(dn, pvtLst[j].Txt[k].LangCode)
 			if lc != "" {
 				pvtLst[j].Txt[k].LangCode = lc
 			}
@@ -377,7 +348,7 @@ func (mc *ModelCatalog) UpdateWorksetParameterText(dn, wsn string, pvtLst []db.P
 	}
 
 	// update workset parameter notes
-	err = db.UpdateWorksetParameterText(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, wsn, pvtLst, mc.modelLst[idx].langMeta)
+	err = db.UpdateWorksetParameterText(dbConn, meta, wsn, pvtLst, langMeta)
 	if err != nil {
 		return false, errors.New("Error at update workset parameter notes: " + dn + ": " + wsn + ": " + err.Error())
 	}
@@ -405,24 +376,20 @@ func (mc *ModelCatalog) UpdateWorksetParameterCsv(
 		return false, nil
 	}
 
-	// if model metadata not loaded then read it from database
-	if _, ok := mc.loadModelMeta(dn); !ok {
-		omppLog.Log("Error: model digest or name not found: ", dn)
-		return false, errors.New("Error: model digest or name not found: " + dn)
-	}
-
-	// lock catalog and update workset
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
+	meta, dbConn, ok := mc.modelMeta(dn)
 	if !ok {
 		omppLog.Log("Error: model digest or name not found: ", dn)
 		return false, errors.New("Error: model digest or name not found: " + dn)
 	}
 
+	langMeta := mc.modelLangMeta(dn)
+	if langMeta == nil {
+		omppLog.Log("Error: invalid (empty) model language list: ", dn)
+		return false, errors.New("Error: invalid (empty) model language list: " + dn)
+	}
+
 	// convert workset from "public" into db rows
-	wm, err := wp.FromPublic(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta)
+	wm, err := wp.FromPublic(dbConn, meta)
 	if err != nil {
 		omppLog.Log("Error at workset json conversion: ", dn, ": ", wp.Name, ": ", err.Error())
 		return false, err
@@ -430,7 +397,7 @@ func (mc *ModelCatalog) UpdateWorksetParameterCsv(
 
 	// match languages from request into model languages
 	for j := range param.Txt {
-		lc := mc.languageMatch(idx, param.Txt[j].LangCode)
+		lc := mc.languageCodeMatch(dn, param.Txt[j].LangCode)
 		if lc != "" {
 			param.Txt[j].LangCode = lc
 		}
@@ -443,7 +410,7 @@ func (mc *ModelCatalog) UpdateWorksetParameterCsv(
 
 		// converter from csv row []string to db cell
 		csvCvt := db.CellParamConverter{
-			ModelDef:  mc.modelLst[idx].meta,
+			ModelDef:  meta,
 			Name:      param.Name,
 			DoubleFmt: theCfg.doubleFmt,
 		}
@@ -494,8 +461,7 @@ func (mc *ModelCatalog) UpdateWorksetParameterCsv(
 	}
 
 	// update workset parameter metadata and parameter values
-	hId, err := wm.UpdateWorksetParameterFrom(
-		mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, isReplace, param, mc.modelLst[idx].langMeta, from)
+	hId, err := wm.UpdateWorksetParameterFrom(dbConn, meta, isReplace, param, langMeta, from)
 	if err != nil {
 		omppLog.Log("Error at update workset: ", dn, ": ", wp.Name, ": ", err.Error())
 		return false, err
@@ -518,41 +484,38 @@ func (mc *ModelCatalog) UpdateWorksetParameterPage(dn, wsn, name string, from fu
 		return errors.New("Invalid (empty) parameter name. Model: " + dn + " workset: " + wsn)
 	}
 
-	// load model metadata and return index in model catalog
-	if _, ok := mc.loadModelMeta(dn); !ok {
-		return errors.New("Model digest or name not found: " + dn)
-	}
-
-	// lock catalog and search model parameter by name
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
+	meta, dbConn, ok := mc.modelMeta(dn)
 	if !ok {
-		return errors.New("Model digest or name not found: " + dn)
+		return errors.New("Error: model digest or name not found: " + dn)
 	}
 
+	langMeta := mc.modelLangMeta(dn)
+	if langMeta == nil {
+		return errors.New("Error: invalid (empty) model language list: " + dn)
+	}
+
+	// find parameter Hid in model parameters list
 	pHid := 0
-	if k, ok := mc.modelLst[idx].meta.ParamByName(name); ok {
-		pHid = mc.modelLst[idx].meta.Param[k].ParamHid
+	if k, ok := meta.ParamByName(name); ok {
+		pHid = meta.Param[k].ParamHid
 	} else {
 		return errors.New("Parameter " + name + " not found in model: " + dn)
 	}
 
 	// find workset id by name
-	wst, ok := mc.loadWorksetByName(idx, wsn)
+	ws, ok := mc.WorksetByName(dn, wsn)
 	if !ok {
 		return errors.New("Workset " + wsn + " not found in model: " + dn)
 	}
 	layout := db.WriteParamLayout{
-		WriteLayout: db.WriteLayout{Name: name, ToId: wst.SetId},
+		WriteLayout: db.WriteLayout{Name: name, ToId: ws.SetId},
 		IsToRun:     false,
 		IsPage:      true,
 		DoubleFmt:   theCfg.doubleFmt,
 	}
 
 	// parameter must be in workset already
-	nSub, _, err := db.GetWorksetParam(mc.modelLst[idx].dbConn, wst.SetId, pHid)
+	nSub, _, err := db.GetWorksetParam(dbConn, ws.SetId, pHid)
 	if err != nil {
 		return errors.New("Error at getting workset parameters list: " + wsn + ": " + err.Error())
 	}
@@ -562,7 +525,7 @@ func (mc *ModelCatalog) UpdateWorksetParameterPage(dn, wsn, name string, from fu
 	layout.SubCount = nSub
 
 	// write parameter values
-	return db.WriteParameterFrom(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, &layout, from)
+	return db.WriteParameterFrom(dbConn, meta, &layout, from)
 }
 
 // DeleteWorksetParameter do delete workset parameter metadata and values from database.
@@ -582,24 +545,14 @@ func (mc *ModelCatalog) DeleteWorksetParameter(dn, wsn, name string) (bool, erro
 		return false, nil
 	}
 
-	// if model metadata not loaded then read it from database
-	if _, ok := mc.loadModelMeta(dn); !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
-		return false, nil // return empty result: model not found or error
-	}
-
-	// lock catalog and update workset
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
+	meta, dbConn, ok := mc.modelMeta(dn)
 	if !ok {
 		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return false, nil // return empty result: model not found or error
 	}
 
 	// delete workset from database
-	hId, err := db.DeleteWorksetParameter(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta.Model.ModelId, wsn, name)
+	hId, err := db.DeleteWorksetParameter(dbConn, meta.Model.ModelId, wsn, name)
 	if err != nil {
 		omppLog.Log("Error at update workset: ", dn, ": ", wsn, ": ", err.Error())
 		return false, err
@@ -628,30 +581,21 @@ func (mc *ModelCatalog) CopyParameterToWsFromRun(dn, wsn, name string, isReplace
 		return errors.New("Parameter copy failed: invalid (empty) model run digest or stamp or name")
 	}
 
-	// if model metadata not loaded then read it from database
-	if _, ok := mc.loadModelMeta(dn); !ok {
-		return errors.New("Model digest or name not found: " + dn)
-	}
-
-	// lock catalog to update workset
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
+	meta, dbConn, ok := mc.modelMeta(dn)
 	if !ok {
 		return errors.New("Model digest or name not found: " + dn)
 	}
 
-	// search model parameter by name
+	// find parameter Hid in model parameters list
 	pHid := 0
-	if k, ok := mc.modelLst[idx].meta.ParamByName(name); ok {
-		pHid = mc.modelLst[idx].meta.Param[k].ParamHid
+	if k, ok := meta.ParamByName(name); ok {
+		pHid = meta.Param[k].ParamHid
 	} else {
 		return errors.New("Parameter " + name + " not found in model: " + dn)
 	}
 
 	// find workset by name: it must be read-write
-	ws, ok := mc.loadWorksetByName(idx, wsn)
+	ws, ok := mc.WorksetByName(dn, wsn)
 	if !ok || ws == nil {
 		return errors.New("Workset not found or error at get workset status: " + dn + ": " + wsn)
 	}
@@ -661,7 +605,7 @@ func (mc *ModelCatalog) CopyParameterToWsFromRun(dn, wsn, name string, isReplace
 
 	// if it is not merge and parameter already then return error
 	if !isReplace {
-		nSub, _, e := db.GetWorksetParam(mc.modelLst[idx].dbConn, ws.SetId, pHid)
+		nSub, _, e := db.GetWorksetParam(dbConn, ws.SetId, pHid)
 		if e != nil {
 			return errors.New("Error at getting workset parameters list: " + wsn + ": " + e.Error())
 		}
@@ -671,13 +615,13 @@ func (mc *ModelCatalog) CopyParameterToWsFromRun(dn, wsn, name string, isReplace
 	}
 
 	// find run by digest or stamp or name: it must be completed
-	rs, ok := mc.loadCompletedRunByDigestOrStampOrName(idx, rdsn)
-	if !ok || rs == nil {
+	r, ok := mc.CompletedRunByDigestOrStampOrName(dn, rdsn)
+	if !ok || r == nil {
 		return errors.New("Model not found or not completed: " + dn + ": " + rdsn)
 	}
 
 	// copy parameter into workset from model run
-	err := db.CopyParameterFromRun(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, ws, name, isReplace, rs)
+	err := db.CopyParameterFromRun(dbConn, meta, ws, name, isReplace, r)
 	if err != nil {
 		return errors.New("Parameter copy failed: " + wsn + ": " + name + ": " + err.Error())
 	}
@@ -705,30 +649,21 @@ func (mc *ModelCatalog) CopyParameterBetweenWs(dn, dstWsName, name string, isRep
 		return errors.New("Parameter copy failed: invalid (empty) source workset name")
 	}
 
-	// if model metadata not loaded then read it from database
-	if _, ok := mc.loadModelMeta(dn); !ok {
-		return errors.New("Model digest or name not found: " + dn)
-	}
-
-	// lock catalog to update workset
-	mc.theLock.Lock()
-	defer mc.theLock.Unlock()
-
-	idx, ok := mc.indexByDigestOrName(dn)
+	meta, dbConn, ok := mc.modelMeta(dn)
 	if !ok {
 		return errors.New("Model digest or name not found: " + dn)
 	}
 
-	// search model parameter by name
+	// find parameter Hid in model parameters list
 	pHid := 0
-	if k, ok := mc.modelLst[idx].meta.ParamByName(name); ok {
-		pHid = mc.modelLst[idx].meta.Param[k].ParamHid
+	if k, ok := meta.ParamByName(name); ok {
+		pHid = meta.Param[k].ParamHid
 	} else {
 		return errors.New("Parameter " + name + " not found in model: " + dn)
 	}
 
 	// find destination workset by name: it must be read-write
-	dstWs, ok := mc.loadWorksetByName(idx, dstWsName)
+	dstWs, ok := mc.WorksetByName(dn, dstWsName)
 	if !ok || dstWs == nil {
 		return errors.New("Workset not found or error at get workset status: " + dn + ": " + dstWsName)
 	}
@@ -738,7 +673,7 @@ func (mc *ModelCatalog) CopyParameterBetweenWs(dn, dstWsName, name string, isRep
 
 	// if it is not merge and parameter already then return error
 	if !isReplace {
-		nSub, _, e := db.GetWorksetParam(mc.modelLst[idx].dbConn, dstWs.SetId, pHid)
+		nSub, _, e := db.GetWorksetParam(dbConn, dstWs.SetId, pHid)
 		if e != nil {
 			return errors.New("Error at getting workset parameters list: " + dstWsName + ": " + e.Error())
 		}
@@ -748,7 +683,7 @@ func (mc *ModelCatalog) CopyParameterBetweenWs(dn, dstWsName, name string, isRep
 	}
 
 	// find source workset by name: it must be read-only
-	srcWs, ok := mc.loadWorksetByName(idx, srcWsName)
+	srcWs, ok := mc.WorksetByName(dn, srcWsName)
 	if !ok || srcWs == nil {
 		return errors.New("Workset not found or error at get workset status: " + dn + ": " + srcWsName)
 	}
@@ -757,7 +692,7 @@ func (mc *ModelCatalog) CopyParameterBetweenWs(dn, dstWsName, name string, isRep
 	}
 
 	// copy parameter from one workset to another
-	err := db.CopyParameterFromWorkset(mc.modelLst[idx].dbConn, mc.modelLst[idx].meta, dstWs, name, isReplace, srcWs)
+	err := db.CopyParameterFromWorkset(dbConn, meta, dstWs, name, isReplace, srcWs)
 	if err != nil {
 		return errors.New("Parameter copy failed: " + dstWsName + ": " + name + ": " + err.Error())
 	}

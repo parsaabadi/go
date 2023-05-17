@@ -115,6 +115,35 @@ func (mc *ModelCatalog) refreshSqlite(modelDir, modelLogDir string) error {
 				}
 			}
 
+			// read metadata from database
+			meta, err := db.GetModelById(dbc, dicLst[idx].ModelId)
+			if err != nil {
+				omppLog.Log("Error at get model metadata: ", dicLst[idx].Name, " ", dicLst[idx].Digest, ": ", err.Error())
+				dbc.Close()
+				continue dicLoop // skip this database
+			}
+
+			// read model_dic_txt rows from database
+			txt, err := db.GetModelTextRowById(dbc, dicLst[idx].ModelId, "")
+			if err != nil {
+				omppLog.Log("Error at get model_dic_txt: ", dicLst[idx].Name, " ", dicLst[idx].Digest, ": ", err.Error())
+				dbc.Close()
+				continue dicLoop // skip this database
+			}
+			// partial initialization of model text metadata: only model_dic_txt rows
+			mt := &db.ModelTxtMeta{
+				ModelName:   meta.Model.Name,
+				ModelDigest: meta.Model.Digest,
+				ModelTxt:    txt}
+
+			// read model_word from database
+			w, err := db.GetModelWord(dbc, dicLst[idx].ModelId, "")
+			if err != nil {
+				omppLog.Log("Error at get model language-specific stirngs: ", dicLst[idx].Name, " ", dicLst[idx].Digest, ": ", err.Error())
+				dbc.Close()
+				continue dicLoop // skip this database
+			}
+
 			// make model languages list, starting from default language
 			ml := []string{}
 			lt := []language.Tag{}
@@ -137,18 +166,20 @@ func (mc *ModelCatalog) refreshSqlite(modelDir, modelLogDir string) error {
 
 			// append to model list
 			mLst = append(mLst, modelDef{
-				dbConn:     dbc,
-				binDir:     dbDir,
-				dbPath:     dbPath,
-				relDir:     filepath.ToSlash(dbRel),
-				logDir:     modelLogDir,
-				isLogDir:   isLogDir,
-				isMetaFull: false,
-				meta:       &db.ModelMeta{Model: dicLst[idx]},
-				langCodes:  ml,
-				langMeta:   ls,
-				matcher:    language.NewMatcher(lt),
-				extra:      me})
+				dbConn:        dbc,
+				binDir:        dbDir,
+				dbPath:        dbPath,
+				relDir:        filepath.ToSlash(dbRel),
+				logDir:        modelLogDir,
+				isLogDir:      isLogDir,
+				meta:          meta,
+				isTxtMetaFull: false,
+				txtMeta:       mt,
+				langCodes:     ml,
+				langMeta:      ls,
+				matcher:       language.NewMatcher(lt),
+				modelWord:     w,
+				extra:         me})
 		}
 	}
 
@@ -210,4 +241,26 @@ func (mc *ModelCatalog) getNewTimeStamp() (string, time.Time) {
 	}
 	mc.lastTimeStamp = ts
 	return ts, tNow
+}
+
+// setModelTextMeta update model text metadata in catalog:
+// set boolean flag to indicate if text metadata fully loaded from database and ModelTxtMeta itself.
+// Return false if model digest not found in catalog.
+func (mc *ModelCatalog) setModelTextMeta(digest string, isFull bool, txtMeta *db.ModelTxtMeta) bool {
+
+	if txtMeta == nil {
+		return false // model text is empty
+	}
+
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	idx, ok := mc.indexByDigest(digest)
+	if !ok {
+		return false // model not found, empty result
+	}
+
+	mc.modelLst[idx].isTxtMetaFull = isFull
+	mc.modelLst[idx].txtMeta = txtMeta
+	return true
 }
