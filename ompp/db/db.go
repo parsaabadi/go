@@ -98,10 +98,12 @@ func Open(dbConnStr, dbDriver string, isFacetRequired bool) (*sql.DB, Facet, err
 		omppLog.LogSql(facet.String())
 	}
 
-	// to avoid database lock issues for SQLite with SQLITE_THREADSAFE=1
-	if facet == SqliteFacet || dbDriver == Sqlite3DbDriver {
-		dbConn.SetMaxOpenConns(1)
-	}
+	/*
+		// to avoid database lock issues for SQLite with SQLITE_THREADSAFE=1
+		if facet == SqliteFacet || dbDriver == Sqlite3DbDriver {
+			dbConn.SetMaxOpenConns(1)
+		}
+	*/
 
 	return dbConn, facet, nil
 }
