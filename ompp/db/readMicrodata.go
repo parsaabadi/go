@@ -143,6 +143,43 @@ func ReadMicrodataTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadMicroLayou
 	// and define conversion function to make new cell from scan buffer
 	scanBuf, fc := scanSqlRowToCellMicro(entity, entityAttrs)
 
+	// if full page requested:
+	// select rows into the list buffer and write rows from the list into output stream
+	if layout.IsFullPage {
+
+		// make a list of output cells
+		cLst, lt, e := SelectToList(dbConn, q, layout.ReadPageLayout,
+			func(rows *sql.Rows) (interface{}, error) {
+
+				if e := rows.Scan(scanBuf...); e != nil {
+					return nil, e
+				}
+
+				// make new cell from conversion buffer
+				c := CellMicro{Attr: make([]attrValue, len(entityAttrs))}
+
+				if e := fc(&c); e != nil {
+					return nil, e
+				}
+
+				return c, nil
+			})
+		if e != nil {
+			return nil, e
+		}
+
+		// write page into output stream
+		for c := cLst.Front(); c != nil; c = c.Next() {
+
+			if _, e := cvtTo(c.Value); e != nil {
+				return nil, e
+			}
+		}
+
+		return lt, nil // done: return output page layout
+	}
+	// else: select rows and write it into output stream without buffering
+
 	// adjust page layout: starting offset and page size
 	nStart := layout.Offset
 	if nStart < 0 {

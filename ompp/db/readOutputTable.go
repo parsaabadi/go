@@ -271,6 +271,84 @@ func ReadOutputTableTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLay
 		}
 	}
 
+	// make new cell from conversion buffer
+	makeCell := func() interface{} {
+
+		if layout.IsAccum {
+
+			if !layout.IsAllAccum {
+				var ca = CellAcc{cellIdValue: cellIdValue{DimIds: make([]int, table.Rank)}}
+				ca.AccId = n1
+				ca.SubId = n2
+				copy(ca.DimIds, d)
+				ca.IsNull = !vf.Valid
+				ca.Value = 0.0
+				if !ca.IsNull {
+					ca.Value = vf.Float64
+				}
+				return ca // return accumulator cell
+			}
+			// else all accumulators
+
+			var cl = CellAllAcc{
+				DimIds: make([]int, table.Rank),
+				IsNull: make([]bool, accCount),
+				Value:  make([]float64, accCount)}
+
+			cl.SubId = n1
+			copy(cl.DimIds, d)
+
+			for k := 0; k < accCount; k++ {
+				cl.IsNull[k] = !fa[k].Valid
+				cl.Value[k] = 0.0
+				if !cl.IsNull[k] {
+					cl.Value[k] = fa[k].Float64
+				}
+			}
+			return cl // return all-accumulators cell
+		}
+		// else output table expression
+
+		var ce = CellExpr{cellIdValue: cellIdValue{DimIds: make([]int, table.Rank)}}
+		ce.ExprId = n1
+		copy(ce.DimIds, d)
+		ce.IsNull = !vf.Valid
+		ce.Value = 0.0
+		if !ce.IsNull {
+			ce.Value = vf.Float64
+		}
+		return ce // retrun table expression cell
+	}
+
+	// if full page requested:
+	// select rows into the list buffer and write rows from the list into output stream
+	if layout.IsFullPage {
+
+		// make a list of output cells
+		cLst, lt, e := SelectToList(dbConn, q, layout.ReadPageLayout,
+			func(rows *sql.Rows) (interface{}, error) {
+
+				if e := rows.Scan(scanBuf...); e != nil {
+					return nil, e
+				}
+				return makeCell(), nil
+			})
+		if e != nil {
+			return nil, e
+		}
+
+		// write page into output stream
+		for c := cLst.Front(); c != nil; c = c.Next() {
+
+			if _, e := cvtTo(c.Value); e != nil {
+				return nil, e
+			}
+		}
+
+		return lt, nil // done: return output page layout
+	}
+	// else: select rows and write it into output stream without buffering
+
 	// adjust page layout: starting offset and page size
 	nStart := layout.Offset
 	if nStart < 0 {
@@ -304,56 +382,13 @@ func ReadOutputTableTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLay
 			}
 
 			// select next row
-			if err := rows.Scan(scanBuf...); err != nil {
-				return false, err
+			if e := rows.Scan(scanBuf...); e != nil {
+				return false, e
 			}
 			lt.Size++
 
-			// make new cell from conversion buffer
-			if layout.IsAccum {
-
-				if !layout.IsAllAccum {
-					var ca = CellAcc{cellIdValue: cellIdValue{DimIds: make([]int, table.Rank)}}
-					ca.AccId = n1
-					ca.SubId = n2
-					copy(ca.DimIds, d)
-					ca.IsNull = !vf.Valid
-					ca.Value = 0.0
-					if !ca.IsNull {
-						ca.Value = vf.Float64
-					}
-					return cvtTo(ca) // process cell
-				}
-				// else all accumulators
-
-				var cl = CellAllAcc{
-					DimIds: make([]int, table.Rank),
-					IsNull: make([]bool, accCount),
-					Value:  make([]float64, accCount)}
-
-				cl.SubId = n1
-				copy(cl.DimIds, d)
-
-				for k := 0; k < accCount; k++ {
-					cl.IsNull[k] = !fa[k].Valid
-					cl.Value[k] = 0.0
-					if !cl.IsNull[k] {
-						cl.Value[k] = fa[k].Float64
-					}
-				}
-				return cvtTo(cl) // process cell
-			}
-			// else output table expression
-
-			var ce = CellExpr{cellIdValue: cellIdValue{DimIds: make([]int, table.Rank)}}
-			ce.ExprId = n1
-			copy(ce.DimIds, d)
-			ce.IsNull = !vf.Valid
-			ce.Value = 0.0
-			if !ce.IsNull {
-				ce.Value = vf.Float64
-			}
-			return cvtTo(ce) // process cell
+			// make new cell from scan conversion buffer and pass it to the writer
+			return cvtTo(makeCell())
 		})
 	if err != nil {
 		return nil, err

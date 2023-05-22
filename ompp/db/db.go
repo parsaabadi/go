@@ -291,6 +291,7 @@ func SelectRowsTo(dbConn *sql.DB, query string, cvt func(rows *sql.Rows) (bool, 
 //
 // It selects "page size" number of rows starting from row number == offset (zero based).
 // If page size <= 0 then all rows returned.
+// If IsFullPage is true then adjust offset to return full last page
 func SelectToList(
 	dbConn *sql.DB, query string, layout ReadPageLayout, cvt func(rows *sql.Rows) (interface{}, error)) (*list.List, *ReadPageLayout, error) {
 
@@ -322,6 +323,7 @@ func SelectToList(
 		Offset:     nStart,
 		Size:       0,
 		IsLastPage: false,
+		IsFullPage: nSize > 0 && layout.IsFullPage,
 	}
 
 	// convert each row and append to the result list
@@ -331,16 +333,22 @@ func SelectToList(
 		if nSize > 0 && nRow > nStart+nSize {
 			break
 		}
-		if nRow <= nStart {
+		if !lt.IsFullPage && nRow <= nStart {
 			continue
 		}
+
 		// convert and add row to the page
 		r, err := cvt(rows)
 		if err != nil {
 			return nil, nil, err
 		}
 		rs.PushBack(r)
-		lt.Size++
+
+		// if this is a full page reading mode: keep page size list of rows
+		for rs.Len() > int(nSize) {
+			rs.Remove(rs.Front())
+		}
+		lt.Size = int64(rs.Len())
 	}
 	err = rows.Err()
 	if err != nil {
@@ -352,6 +360,17 @@ func SelectToList(
 		lt.Offset = nRow
 	}
 	lt.IsLastPage = nSize <= 0 || nSize > 0 && nRow <= nStart+nSize
+
+	if lt.IsFullPage { // if this is a full page reading mode then adjust page start
+
+		lt.Offset = nRow - lt.Size
+		if !lt.IsLastPage {
+			lt.Offset--
+		}
+		if lt.Offset < 0 {
+			lt.Offset = 0
+		}
+	}
 
 	return rs, &lt, nil
 }

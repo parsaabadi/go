@@ -117,7 +117,8 @@ type ReadMicroLayout struct {
 type ReadPageLayout struct {
 	Offset     int64 // first row to return from select, zero-based ofsset
 	Size       int64 // max row count to select, if <= 0 then all rows
-	IsLastPage bool  // last page flag: if true then read returned last page of rows
+	IsLastPage bool  // output last page flag: return true if it was a last page of rows
+	IsFullPage bool  // input last page flag: if true then adjust offset to return full last page
 }
 
 // CompareLayout describes source and size of data page to read and compare parameters or output table values from multiple model runs.
