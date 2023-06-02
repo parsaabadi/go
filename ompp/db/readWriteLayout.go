@@ -153,7 +153,7 @@ const (
 type FilterColumn struct {
 	Name   string   // dimension or attribute name
 	Op     FilterOp // filter operator: equal, IN, BETWEEN
-	Values []string // enum code(s): one, two or many ids depending on filter condition
+	Values []string // enum code(s): one, two or many values depending on filter condition
 }
 
 // FilterIdColumn define dimension or attribute column and condition to filter enum ids to build select where
