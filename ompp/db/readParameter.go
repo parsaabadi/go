@@ -104,11 +104,13 @@ func ReadParameterTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayou
 	//   SELECT sub_id, dim0, dim1, param_value
 	//   FROM ageSex_p2012_817
 	//   WHERE run_id = (SELECT base_run_id FROM run_parameter WHERE run_id = 1234 AND parameter_hid = 1)
+	//   AND sub_id = 7
 	//   AND dim1 IN (1, 2, 3, 4)
 	//   ORDER BY 1, 2, 3
 	// or:
 	//   SELECT sub_id, dim0, dim1, param_value
 	//   FROM ageSex_w2012_817
+	//   AND sub_id = 7
 	//   WHERE set_id = 9876
 	//   AND dim1 IN (1, 2, 3, 4)
 	//   ORDER BY 1, 2, 3
@@ -127,6 +129,11 @@ func ReadParameterTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayou
 			" (SELECT base_run_id FROM run_parameter" +
 			" WHERE run_id = " + strconv.Itoa(srcRunId) +
 			" AND parameter_hid = " + strconv.Itoa(param.ParamHid) + ")"
+	}
+
+	// append sub-value id filter
+	if layout.IsSubId {
+		q += " AND sub_id = " + strconv.Itoa(layout.SubId)
 	}
 
 	// append dimension enum code filters, if specified

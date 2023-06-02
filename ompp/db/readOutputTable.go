@@ -105,6 +105,7 @@ func ReadOutputTableTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLay
 	//     SELECT base_run_id FROM run_table WHERE run_id = 2 AND table_hid = 12345
 	//   )
 	//   AND acc_id = 4
+	//   AND sub_id = 7
 	//   AND dim1 IN (10, 20, 30, 40)
 	//   ORDER BY 1, 2, 3, 4
 	//
@@ -140,6 +141,7 @@ func ReadOutputTableTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLay
 	//   (
 	//     SELECT base_run_id FROM run_table WHERE run_id = 2 AND table_hid = 12345
 	//   )
+	//   AND sub_id = 7
 	//   AND dim1 IN (10, 20, 30, 40)
 	//   ORDER BY 1, 2, 3, 4
 	//
@@ -191,6 +193,11 @@ func ReadOutputTableTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLay
 		} else {
 			q += " AND expr_id = " + strconv.Itoa(valId)
 		}
+	}
+
+	// append sub-value id filter
+	if layout.IsAccum && layout.IsSubId {
+		q += " AND sub_id = " + strconv.Itoa(layout.SubId)
 	}
 
 	// append dimension enum code filters, if specified

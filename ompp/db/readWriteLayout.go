@@ -89,9 +89,10 @@ type ReadLayout struct {
 // It can read parameter values from model run results or from input working set (workset).
 // If this is read from workset then it can be read-only or read-write (editable) workset.
 type ReadParamLayout struct {
-	ReadLayout      // parameter name, run id or set id page size, where filters and order by
-	IsFromSet  bool // if true then select from workset else from model run
-	IsEditSet  bool // if true then workset must be editable (readonly = false)
+	ReadLayout           // parameter name, run id or set id page size, where filters and order by
+	IsFromSet       bool // if true then select from workset else from model run
+	IsEditSet       bool // if true then workset must be editable (readonly = false)
+	ReadSubIdLayout      // sub-value id filter: select rows with only one sub-value id
 }
 
 // ReadTableLayout describes source and size of data page to read output table values.
@@ -99,10 +100,11 @@ type ReadParamLayout struct {
 // If ValueName is not empty then only accumulator or output expression
 // with that name selected (i.e: "acc1" or "expr4") else all output table accumulators (expressions) selected.
 type ReadTableLayout struct {
-	ReadLayout        // output table name, run id, page size, where filters and order by
-	ValueName  string // if not empty then expression or accumulator name to select
-	IsAccum    bool   // if true then select output table accumulator else expression
-	IsAllAccum bool   // if true then select from all accumulators view else from accumulators table
+	ReadLayout             // output table name, run id, page size, where filters and order by
+	ValueName       string // if not empty then expression or accumulator name to select
+	IsAccum         bool   // if true then select output table accumulator else expression
+	IsAllAccum      bool   // if true then select from all accumulators view else from accumulators table
+	ReadSubIdLayout        // sub-value id filter: select rows with only one sub-value id
 }
 
 // ReadMicroLayout describes source and size of data page to read entity microdata.
@@ -111,6 +113,12 @@ type ReadTableLayout struct {
 type ReadMicroLayout struct {
 	ReadLayout        // entity name, run id, page size, where filters and order by
 	GenDigest  string // entity generation digest
+}
+
+// ReadSubIdLayout supply sub-value id filter to select rows with only single sub_id from output table or input parameter values.
+type ReadSubIdLayout struct {
+	IsSubId bool // if true then select only single sub-value id
+	SubId   int  // sub-value id to select rows from output table or parameter
 }
 
 // ReadPageLayout describes first row offset and size of data page to read input parameter or output table values.
