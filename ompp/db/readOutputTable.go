@@ -324,7 +324,7 @@ func ReadOutputTableTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLay
 		if !ce.IsNull {
 			ce.Value = vf.Float64
 		}
-		return ce // retrun table expression cell
+		return ce // return table expression cell
 	}
 
 	// if full page requested:

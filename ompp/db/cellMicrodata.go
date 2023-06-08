@@ -328,7 +328,7 @@ func (cellCvt *CellMicroConverter) CsvToCell() (func(row []string) (interface{},
 // into cell of codes: (entity key, attributes as built-in values or enum codes)
 //
 // If attribute type is enum based then attribute enum id converted to enum code.
-// If attribute type is built-in (bool, int, float) then attribute value converted to string.
+// If attribute type is built-in (bool, int, float) then return attribute value as is, no conversion.
 func (cellCvt *CellMicroConverter) IdToCodeCell(modelDef *ModelMeta, _ string) (func(interface{}) (interface{}, error), error) {
 
 	// find entity metadata by entity name and attributes by generation Hid
@@ -338,22 +338,16 @@ func (cellCvt *CellMicroConverter) IdToCodeCell(modelDef *ModelMeta, _ string) (
 	}
 	nAttr := len(attrs)
 
-	// convert attributes value to string:
-	// for built-in attribute type use Sprint() or Sprintf(double format)
-	// for enum attribute type return enum code by enum id
+	// convert attributes value to string if attribute is enum based: return enum code by enum id
+	// do not convert built-in attribute type, converter function is nil
 	fd := make([]func(v interface{}) (string, error), nAttr)
 
 	for k, ea := range attrs {
 
-		if ea.typeOf.IsBuiltIn() { // built-in attribute type: format value by Sprint()
+		if ea.typeOf.IsBuiltIn() {
 
-			// for float attributes use format if specified
-			if cellCvt.DoubleFmt != "" && ea.typeOf.IsFloat() {
+			fd[k] = nil // built-in attribute type: do not convert
 
-				fd[k] = func(v interface{}) (string, error) { return fmt.Sprintf(cellCvt.DoubleFmt, v), nil }
-			} else {
-				fd[k] = func(v interface{}) (string, error) { return fmt.Sprint(v), nil }
-			}
 		} else { // enum based attribute type: find and return enum code by enum id
 
 			msgName := cellCvt.Name + "." + ea.Name // for error message, ex: Person.Income
@@ -396,10 +390,14 @@ func (cellCvt *CellMicroConverter) IdToCodeCell(modelDef *ModelMeta, _ string) (
 			if a.IsNull || a.Value == nil {
 				dstCell.Attr[k] = attrValue{IsNull: true, Value: nil}
 			} else {
-				if s, e := fd[k](a.Value); e != nil { // use attribute value converter
-					return nil, err
+				if fd[k] == nil {
+					dstCell.Attr[k].Value = a.Value // converter not defined for built-in types: retrun value as is
 				} else {
-					dstCell.Attr[k].Value = s
+					if s, e := fd[k](a.Value); e != nil { // use attribute value converter
+						return nil, err
+					} else {
+						dstCell.Attr[k].Value = s
+					}
 				}
 			}
 		}
