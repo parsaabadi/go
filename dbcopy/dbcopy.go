@@ -84,7 +84,7 @@ To use last model run or first model run do:
 
 	dbcopy -m modelOne -dbcopy.RunName "My Model Run" -dbcopy.LastRun
 	dbcopy -m modelOne -dbcopy.LastRun
-	dbcopy -m modelOne -dbcopy.FisrtRun
+	dbcopy -m modelOne -dbcopy.FirstRun
 
 To copy only one modeling task metadata and run history:
 

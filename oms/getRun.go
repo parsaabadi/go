@@ -145,7 +145,7 @@ func (mc *ModelCatalog) RunStatusList(dn, rdsn string) ([]db.RunPub, bool) {
 }
 
 // FirstOrLastRunStatus return first or last or last completed run_lst db row and run_progress db rows by model digest-or-name.
-func (mc *ModelCatalog) FirstOrLastRunStatus(dn string, isFisrt, isCompleted bool) (*db.RunPub, bool) {
+func (mc *ModelCatalog) FirstOrLastRunStatus(dn string, isFirst, isCompleted bool) (*db.RunPub, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
@@ -162,7 +162,7 @@ func (mc *ModelCatalog) FirstOrLastRunStatus(dn string, isFisrt, isCompleted boo
 	rst := &db.RunRow{}
 	var err error
 
-	if isFisrt {
+	if isFirst {
 		rst, err = db.GetFirstRun(dbConn, meta.Model.ModelId)
 	} else {
 		if !isCompleted {
