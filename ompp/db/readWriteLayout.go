@@ -129,16 +129,18 @@ type ReadPageLayout struct {
 	IsFullPage bool  // input last page flag: if true then adjust offset to return full last page
 }
 
-// CompareLayout describes source and size of data page to read and compare parameters or output table values from multiple model runs.
-type CompareLayout struct {
-	Comparison string // comparison expression, ex.: Expr0[base] - Expr0[variant]
+// CalculateLayout describes source and size of data page to read and apply calculation to parameters or output table values.
+// It can be comparison calculation for multiple model runs, ex.: Expr0[base] - Expr0[variant].
+type CalculateLayout struct {
+	Calculate  string // expression to calculate, ex.: Expr0[base] - Expr0[variant]
 	ReadLayout        // parameter or output table name, page size, where filters and order by
 }
 
-// CompareTableLayout describes source and size of data page to read and compare output table values from multiple model runs.
-type CompareTableLayout struct {
-	CompareLayout      // output table name, page size, where filters and order by
-	IsAccum       bool // if true then select output table accumulator else expression
+// CalculateLayout describes source and size of data page to read and apply calculation to output table values.
+// It can be comparison calculation for multiple model runs, ex.: Expr0[base] - Expr0[variant].
+type CalculateTableLayout struct {
+	CalculateLayout      // expression to calculate, output table name, page size, where filters and order by
+	IsAggr          bool // if true then select output table accumulator else expression
 }
 
 // FilterOp is enum type for filter operators in select where conditions

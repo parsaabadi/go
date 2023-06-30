@@ -16,8 +16,11 @@ const leftDelims = ",(+-*/%^|&~!=<>"
 // right side name delimiters
 const rightDelims = ")+-*/%^|&~!=<>"
 
-// non-aggregation functions
+// simple non-aggregation functions
 var simpleFncLst = []string{"OM_IF", "OM_DIV_BY"}
+
+// aggregation functions
+var aggrFncLst = []string{"OM_AVG", "OM_SUM", "OM_COUNT", "OM_AVG", "OM_MIN", "OM_MAX", "OM_VAR", "OM_SD", "OM_SD", "OM_CV"}
 
 // translate (substitute) all non-aggregation functions: OM_DIV_BY OM_IF...
 func translateAllSimpleFnc(expr string) (string, error) {
@@ -34,7 +37,7 @@ func translateAllSimpleFnc(expr string) (string, error) {
 			break
 		}
 
-		// translate (substitute) non-aggreagtion function by sql fragment
+		// translate (substitute) non-aggregation function by sql fragment
 		t, err := translateSimpleFnc(fncName, arg, expr)
 		if err != nil {
 			return "", err
@@ -193,12 +196,14 @@ func findFirstNameFnc(src string, fncNameLst []string) (int, int, error) {
 // translate (substitute) non-aggregation function:
 //
 // OM_DIV_BY(acc1)
-//   =>
-//   CASE WHEN ABS(acc1) > 1.0e-37 THEN acc1 ELSE NULL END
+//
+//	=>
+//	CASE WHEN ABS(acc1) > 1.0e-37 THEN acc1 ELSE NULL END
 //
 // OM_IF(acc1 > 1.5 THEN acc1 ELSE 1.5)
-//   =>
-//   CASE WHEN acc1 > 1.5 THEN acc1 ELSE 1.5 END
+//
+//	=>
+//	CASE WHEN acc1 > 1.5 THEN acc1 ELSE 1.5 END
 func translateSimpleFnc(name, arg string, src string) (string, error) {
 
 	if len(arg) <= 0 {
@@ -213,4 +218,147 @@ func translateSimpleFnc(name, arg string, src string) (string, error) {
 		return "CASE WHEN ABS(" + arg + ") > 1.0e-37 THEN " + arg + " ELSE NULL END", nil
 	}
 	return "", errors.New("unknown non-aggregation function: " + name + " : " + src)
+}
+
+// Translate aggregation function into sql expression:
+//
+//	OM_AVG(acc0) => AVG(acc0)
+//
+// or:
+//
+//	OM_SUM(acc0 - 0.5 * OM_AVG(acc0)) => SUM(acc0 - 0.5 * T2.ex2)
+//
+// or:
+//
+//	OM_VAR(acc0)
+//	=>
+//	OM_SUM((acc0 - OM_AVG(acc0)) * (acc0 - OM_AVG(acc0))) / (OM_COUNT(acc0) – 1)
+//	=>
+//	SUM((M1.acc0 - T2.ex2) * (acc0 - T2.ex2)) / (COUNT(acc0) – 1)
+func (lps *levelParseState) translateAggregationFnc(name, arg string, src string) (string, error) {
+
+	if len(arg) <= 0 {
+		return "", errors.New("invalid (empty) function argument: " + name + " : " + src)
+	}
+
+	// translate function argument
+	//   argument: acc0 - 0.5 * OM_AVG(acc0)
+	//   return:   acc0 - 0.5 * T2.ex2
+	//   push to the next level: OM_AVG(acc0)
+	sqlArg, err := lps.translateArg(arg)
+	if err != nil {
+		return "", err
+	}
+
+	switch name {
+	case "OM_AVG":
+		return "AVG(" + sqlArg + ")", nil
+
+	case "OM_SUM":
+		return "SUM(" + sqlArg + ")", nil
+
+	case "OM_COUNT":
+		return "COUNT(" + sqlArg + ")", nil
+
+	case "OM_MIN":
+		return "MIN(" + sqlArg + ")", nil
+
+	case "OM_MAX":
+		return "MAX(" + sqlArg + ")", nil
+
+	case "OM_VAR":
+		// SUM((arg - T2.ex2) * (arg - T2.ex2)) / (COUNT(arg) - 1)
+		// (COUNT(arg) - 1) =>
+		//   CASE WHEN ABS( (COUNT(arg) - 1) ) > 1.0e-37 THEN (COUNT(arg) - 1) ELSE NULL END
+
+		avgCol := lps.pushToNextLevel("OM_AVG(" + arg + ")")
+		return "SUM((" +
+				"(" + sqlArg + ") - " + lps.nextInnerAlias + "." + avgCol + ") * ((" + sqlArg + ") - " + lps.nextInnerAlias + "." + avgCol +
+				"))" +
+				" / CASE WHEN ABS( COUNT(" + sqlArg + ") - 1 ) > 1.0e-37 THEN COUNT(" + sqlArg + ") - 1 ELSE NULL END",
+			nil
+
+	case "OM_SD": // SQRT(var)
+
+		avgCol := lps.pushToNextLevel("OM_AVG(" + arg + ")")
+		return "SQRT(" +
+				"SUM((" +
+				"(" + sqlArg + ") - " + lps.nextInnerAlias + "." + avgCol + ") * ((" + sqlArg + ") - " + lps.nextInnerAlias + "." + avgCol +
+				"))" +
+				" / CASE WHEN ABS( COUNT(" + sqlArg + ") - 1 ) > 1.0e-37 THEN COUNT(" + sqlArg + ") - 1 ELSE NULL END" +
+				" )",
+			nil
+
+	case "OM_SE": // SQRT(var / COUNT(arg))
+
+		avgCol := lps.pushToNextLevel("OM_AVG(" + arg + ")")
+		return "SQRT(" +
+				"SUM((" +
+				"(" + sqlArg + ") - " + lps.nextInnerAlias + "." + avgCol + ") * ((" + sqlArg + ") - " + lps.nextInnerAlias + "." + avgCol +
+				"))" +
+				" / CASE WHEN ABS( COUNT(" + sqlArg + ") - 1 ) > 1.0e-37 THEN COUNT(" + sqlArg + ") - 1 ELSE NULL END" +
+				" / CASE WHEN ABS( COUNT(" + sqlArg + ") ) > 1.0e-37 THEN COUNT(" + sqlArg + ") ELSE NULL END" +
+				" )",
+			nil
+
+	case "OM_CV": // 100 * ( SQRT(var) / AVG(arg) )
+
+		avgCol := lps.pushToNextLevel("OM_AVG(" + arg + ")")
+		return "100 * (" +
+				" SQRT(" +
+				"SUM((" +
+				"(" + sqlArg + ") - " + lps.nextInnerAlias + "." + avgCol + ") * ((" + sqlArg + ") - " + lps.nextInnerAlias + "." + avgCol +
+				"))" +
+				" / CASE WHEN ABS( COUNT(" + sqlArg + ") - 1 ) > 1.0e-37 THEN COUNT(" + sqlArg + ") - 1 ELSE NULL END" +
+				" )" +
+				" / CASE WHEN ABS( AVG(" + sqlArg + ") ) > 1.0e-37 THEN AVG(" + sqlArg + ") ELSE NULL END" +
+				" )",
+			nil
+	}
+	return "", errors.New("unknown non-aggregation function: " + name + " : " + src)
+}
+
+// Translate function argument into sql fragment and push nested OM_ functions to next aggregation level:
+//
+//	argument: acc0 - 0.5 * OM_AVG(acc0)
+//	return:   acc0 - 0.5 * T2.ex2
+//	push to the next level: OM_AVG(acc0)
+func (lps *levelParseState) translateArg(arg string) (string, error) {
+
+	// parse until source expression not completed
+
+	// push all top level aggregation functions to the next level and substitute with joined column name:
+	//   curent level column:    T2.ex2
+	//   push to the next level:
+	//     column name:          T2.ex2
+	//     expression:           OM_AVG(acc0)
+
+	expr := arg
+
+	for {
+		// find most left (top level) aggregation function
+		fncName, namePos, _, nAfter, err := findFirstFnc(expr, aggrFncLst)
+		if err != nil {
+			return "", err
+		}
+		if fncName == "" { // all done: no any functions found
+			break
+		}
+
+		// push nested function to the next level: OM_AVG(acc0)
+		// and replace current level with column name i.e.: T2.ex2
+		if nAfter >= len(expr) {
+			colName := lps.pushToNextLevel(expr[namePos:])
+			expr = expr[:namePos] + lps.nextInnerAlias + "." + colName
+		} else {
+			colName := lps.pushToNextLevel(expr[namePos:nAfter])
+			expr = expr[:namePos] + lps.nextInnerAlias + "." + colName + expr[nAfter:]
+		}
+	}
+	// done with functions:
+	//   acc0 - 0.5 * OM_AVG(acc0)
+	//   =>
+	//   acc0 - 0.5 * T2.ex2
+
+	return expr, nil
 }

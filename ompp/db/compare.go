@@ -11,9 +11,9 @@ import (
 
 // CompareOutputTable read output table page (dimensions and values) from model run results.
 //
-// If layout.IsAccum true then select accumulator(s) else output expression value(s)
+// If layout.IsAggr true then select accumulator(s) else output expression value(s)
 // If layout.ValueName not empty then select only that expression (accumulator) else all expressions (accumulators)
-func CompareOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *CompareTableLayout, runIds []int) (*list.List, *ReadPageLayout, error) {
+func CompareOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *CalculateTableLayout, runIds []int) (*list.List, *ReadPageLayout, error) {
 
 	// validate parameters
 	if modelDef == nil {
@@ -34,14 +34,14 @@ func CompareOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *CompareTabl
 		return nil, nil, errors.New("output table not found: " + layout.Name)
 	}
 
-	// translate comparison expression to sql
+	// translate comparison calculation to sql
 	var q string
 	var err error
 
-	if layout.IsAccum {
-		q, err = translateToAccSql(modelDef, table, &layout.CompareLayout, runIds)
+	if layout.IsAggr {
+		q, err = translateToAccSql(modelDef, table, "", &layout.CalculateLayout, runIds)
 	} else {
-		q, err = translateToExprSql(modelDef, table, &layout.CompareLayout, runIds)
+		q, err = translateToExprSql(modelDef, table, "", &layout.CalculateLayout, runIds)
 	}
 	if err != nil {
 		return nil, nil, err

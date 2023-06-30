@@ -9,20 +9,27 @@ import (
 	"strings"
 )
 
-// translate output expressions comparison to sql query
-func translateToExprSql(modelDef *ModelMeta, table *TableMeta, layout *CompareLayout, runIds []int) (string, error) {
+// Translate output table expression calculation to sql query.
+// Only simple functions allowed in expression calculation.
+// Output column name outColName is optional.
+func translateToExprSql(modelDef *ModelMeta, table *TableMeta, outColName string, layout *CalculateLayout, runIds []int) (string, error) {
 
-	// clean comparison expression from cr lf and unsafe sql quotes
+	srcMsg := table.Name
+	if outColName != "" {
+		srcMsg += "." + outColName
+	}
+
+	// clean source calculation from cr lf and unsafe sql quotes
 	// return error if unsafe sql or comment found outside of 'quotes', ex.: -- ; DELETE INSERT UPDATE...
-	expr := cleanSourceExpr(layout.Comparison)
-	if e := errorIfUnsafeSqlOrComment(expr); e != nil {
-		return "", e
+	expr := cleanSourceExpr(layout.Calculate)
+	if err := errorIfUnsafeSqlOrComment(expr); err != nil {
+		return "", errors.New("Error at " + srcMsg + ": " + err.Error())
 	}
 
 	// translate (substitute) all simple functions: OM_DIV_BY OM_IF...
 	expr, err := translateAllSimpleFnc(expr)
 	if err != nil {
-		return "", err
+		return "", errors.New("Error at " + srcMsg + ": " + err.Error())
 	}
 
 	// make sql column names as src0,...,srcN and make sure column names are different from expression names
@@ -39,7 +46,7 @@ func translateToExprSql(modelDef *ModelMeta, table *TableMeta, layout *CompareLa
 				isFound = srcCols[k] == table.Expr[j].Name
 			}
 		}
-		if isFound { // column name exist as expreesion name: use _ undescore to create unique names
+		if isFound { // column name exist as expression name: use _ undescore to create unique names
 			nU++
 		}
 	}
@@ -57,7 +64,7 @@ func translateToExprSql(modelDef *ModelMeta, table *TableMeta, layout *CompareLa
 		varNames[k] = table.Expr[k].Name + "[variant]"
 	}
 
-	// for each 'unquoted' part of comparison check if there is any table expression name
+	// for each 'unquoted' part of formula check if there is any table expression name
 	// substitute each table expression name with corresponding sql column name
 	/*
 		If this is base and variant expression:
@@ -81,9 +88,9 @@ func translateToExprSql(modelDef *ModelMeta, table *TableMeta, layout *CompareLa
 	for nEnd := 0; nStart >= 0 && nEnd >= 0; {
 
 		if nStart, nEnd, err = nextUnquoted(expr, nStart); err != nil {
-			return "", err
+			return "", errors.New("Error at " + srcMsg + ": " + err.Error())
 		}
-		if nStart < 0 || nEnd < 0 { // end of source comparison
+		if nStart < 0 || nEnd < 0 { // end of source formula
 			break
 		}
 
@@ -154,7 +161,7 @@ func translateToExprSql(modelDef *ModelMeta, table *TableMeta, layout *CompareLa
 		}
 
 		if !isFound {
-			nStart = nEnd // to the next 'unquoted part' of expression string
+			nStart = nEnd // to the next 'unquoted part' of calculation string
 		}
 	}
 
@@ -164,10 +171,10 @@ func translateToExprSql(modelDef *ModelMeta, table *TableMeta, layout *CompareLa
 		!isSrcOnly && (isAnyBase && !isAnyVar || !isAnyBase && isAnyVar) ||
 		(baseMinIdx < 0 || baseMinIdx >= exprCount) ||
 		!isSrcOnly && (varMinIdx < 0 || varMinIdx >= exprCount) {
-		return expr, errors.New("Invalid (or mixed forms) of expression names used in: " + layout.Comparison)
+		return expr, errors.New("Error at " + srcMsg + ": invalid (or mixed forms) of expression names used in: " + layout.Calculate)
 	}
 	if !isSrcOnly && !isAnyBase && !isAnyVar {
-		return expr, errors.New("Error: there are no expression names found in: " + layout.Comparison)
+		return expr, errors.New("Error at " + srcMsg + ": there are no expression names found in: " + layout.Calculate)
 	}
 
 	/*
@@ -199,7 +206,7 @@ func translateToExprSql(modelDef *ModelMeta, table *TableMeta, layout *CompareLa
 			WHERE B.run_id = 102
 		)
 		SELECT
-			C.run_id, C.dim0, C.dim1, C.val
+			C.run_id, C.dim0, C.dim1, C.val AS Result
 		FROM cr C
 		WHERE C.run_id IN (103, 104, 105, 106, 107, 108, 109, 110, 111, 112)
 		ORDER BY 1, 2, 3
@@ -210,8 +217,8 @@ func translateToExprSql(modelDef *ModelMeta, table *TableMeta, layout *CompareLa
 	cteBodyCols := "BR.run_id"
 
 	for _, d := range table.Dim {
-		cteHdrCols += ", " + d.Name
-		cteBodyCols += ", C." + d.Name
+		cteHdrCols += ", " + d.colName
+		cteBodyCols += ", C." + d.colName
 	}
 	cteBodyCols += ", C.expr_value"
 
@@ -245,12 +252,12 @@ func translateToExprSql(modelDef *ModelMeta, table *TableMeta, layout *CompareLa
 
 	sql += ", cr (run_id"
 	for _, d := range table.Dim {
-		sql += ", " + d.Name
+		sql += ", " + d.colName
 	}
 	sql += ", val) AS (SELECT " + bvAlias + ".run_id"
 
 	for _, d := range table.Dim {
-		sql += ", " + bvAlias + "." + d.Name
+		sql += ", " + bvAlias + "." + d.colName
 	}
 	sql += ", " + expr +
 		" FROM cs" + strconv.Itoa(baseMinIdx) + " B"
@@ -263,7 +270,7 @@ func translateToExprSql(modelDef *ModelMeta, table *TableMeta, layout *CompareLa
 				alias := "B" + strconv.Itoa(k)
 				sql += " INNER JOIN cs" + strconv.Itoa(k) + " " + alias + " ON (" + alias + ".run_id = B.run_id"
 				for _, d := range table.Dim {
-					sql += " AND " + alias + "." + d.Name + " = B." + d.Name
+					sql += " AND " + alias + "." + d.colName + " = B." + d.colName
 				}
 				sql += ")"
 			}
@@ -276,7 +283,7 @@ func translateToExprSql(modelDef *ModelMeta, table *TableMeta, layout *CompareLa
 				alias := "B" + strconv.Itoa(k)
 				sql += " INNER JOIN cs" + strconv.Itoa(k) + " " + alias + " ON (" + alias + ".run_id = B.run_id"
 				for _, d := range table.Dim {
-					sql += " AND " + alias + "." + d.Name + " = B." + d.Name
+					sql += " AND " + alias + "." + d.colName + " = B." + d.colName
 				}
 				sql += ")"
 			}
@@ -288,7 +295,7 @@ func translateToExprSql(modelDef *ModelMeta, table *TableMeta, layout *CompareLa
 			if k > 0 {
 				sql += " AND "
 			}
-			sql += "V." + d.Name + " = B." + d.Name
+			sql += "V." + d.colName + " = B." + d.colName
 		}
 		sql += ")"
 
@@ -298,7 +305,7 @@ func translateToExprSql(modelDef *ModelMeta, table *TableMeta, layout *CompareLa
 				alias := "V" + strconv.Itoa(k)
 				sql += " INNER JOIN cs" + strconv.Itoa(k) + " " + alias + " ON (" + alias + ".run_id = B.run_id"
 				for _, d := range table.Dim {
-					sql += " AND " + alias + "." + d.Name + " = B." + d.Name
+					sql += " AND " + alias + "." + d.colName + " = B." + d.colName
 				}
 				sql += ")"
 			}
@@ -312,11 +319,15 @@ func translateToExprSql(modelDef *ModelMeta, table *TableMeta, layout *CompareLa
 	// build main body select sql
 	sql += " SELECT C.run_id"
 	for _, d := range table.Dim {
-		sql += ", C." + d.Name
+		sql += ", C." + d.colName
 	}
-	sql += ", C.val" +
+	sql += ", C.val"
+	if outColName != "" {
+		sql += " AS " + outColName // output cloumn name is optional
+	}
+	sql +=
 		" FROM cr C" +
-		" WHERE C.run_id IN ("
+			" WHERE C.run_id IN ("
 	if isSrcOnly {
 		isFound := false
 		for k := 0; !isFound && k < len(runIds); k++ {
@@ -346,15 +357,14 @@ func translateToExprSql(modelDef *ModelMeta, table *TableMeta, layout *CompareLa
 			}
 		}
 		if dix < 0 {
-			return "", errors.New("output table " + table.Name + " does not have dimension " + layout.Filter[k].Name)
+			return "", errors.New("Error at " + srcMsg + ": output table " + table.Name + " does not have dimension " + layout.Filter[k].Name)
 		}
 
 		f, err := makeWhereFilter(
 			&layout.Filter[k], "C", table.Dim[dix].colName, table.Dim[dix].typeOf, table.Dim[dix].IsTotal, table.Dim[dix].Name, "output table "+table.Name)
 		if err != nil {
-			return "", err
+			return "", errors.New("Error at " + srcMsg + ": " + err.Error())
 		}
-
 		sql += " AND " + f
 	}
 
@@ -370,13 +380,13 @@ func translateToExprSql(modelDef *ModelMeta, table *TableMeta, layout *CompareLa
 			}
 		}
 		if dix < 0 {
-			return "", errors.New("output table " + table.Name + " does not have dimension " + layout.FilterById[k].Name)
+			return "", errors.New("Error at " + srcMsg + ": output table " + table.Name + " does not have dimension " + layout.FilterById[k].Name)
 		}
 
 		f, err := makeWhereIdFilter(
 			&layout.FilterById[k], "C", table.Dim[dix].colName, table.Dim[dix].typeOf, table.Dim[dix].Name, "output table "+table.Name)
 		if err != nil {
-			return "", err
+			return "", errors.New("Error at " + srcMsg + ": " + err.Error())
 		}
 
 		sql += " AND " + f
@@ -386,9 +396,4 @@ func translateToExprSql(modelDef *ModelMeta, table *TableMeta, layout *CompareLa
 	sql += makeOrderBy(table.Rank, layout.OrderBy, 1)
 
 	return sql, nil
-}
-
-// translate accumulators comparison to sql query
-func translateToAccSql(modelDef *ModelMeta, table *TableMeta, layout *CompareLayout, runIds []int) (string, error) {
-	return "", nil
 }
