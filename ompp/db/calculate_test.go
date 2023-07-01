@@ -242,7 +242,7 @@ func TestTranslateToExprSql(t *testing.T) {
 			},
 		}
 
-		sql, err := translateToExprSql(modelDef, table, "", cmpLt, runIds)
+		sql, err := translateToExprSql(table, "", cmpLt, runIds)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -365,7 +365,7 @@ func TestParseAggrCalculation(t *testing.T) {
 	}
 }
 
-func TestTransalteAggrToSql(t *testing.T) {
+func TestTransalteAccAggrToSql(t *testing.T) {
 
 	// load ini-file and parse test run options
 	kvIni, err := config.NewIni("testdata/test.ompp.db.calculate.ini", "")
@@ -373,10 +373,10 @@ func TestTransalteAggrToSql(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	modelName := kvIni["TransalteAggrToSql.ModelName"]
-	modelDigest := kvIni["TransalteAggrToSql.ModelDigest"]
-	modelSqliteDbPath := kvIni["TransalteAggrToSql.DbPath"]
-	tableName := kvIni["TransalteAggrToSql.TableName"]
+	modelName := kvIni["TransalteAccAggrToSql.ModelName"]
+	modelDigest := kvIni["TransalteAccAggrToSql.ModelDigest"]
+	modelSqliteDbPath := kvIni["TransalteAccAggrToSql.DbPath"]
+	tableName := kvIni["TransalteAccAggrToSql.TableName"]
 
 	// open source database connection and check is it valid
 	cs := MakeSqliteDefaultReadOnly(modelSqliteDbPath)
@@ -416,7 +416,7 @@ func TestTransalteAggrToSql(t *testing.T) {
 		valid string
 	}{}
 	for k := 0; k < 100; k++ {
-		s := kvIni["TransalteAggrToSql.Src_"+strconv.Itoa(k+1)]
+		s := kvIni["TransalteAccAggrToSql.Src_"+strconv.Itoa(k+1)]
 		if s == "" {
 			continue
 		}
@@ -427,8 +427,8 @@ func TestTransalteAggrToSql(t *testing.T) {
 				valid string
 			}{
 				src:   s,
-				name:  kvIni["TransalteAggrToSql.Name_"+strconv.Itoa(k+1)],
-				valid: kvIni["TransalteAggrToSql.Valid_"+strconv.Itoa(k+1)],
+				name:  kvIni["TransalteAccAggrToSql.Name_"+strconv.Itoa(k+1)],
+				valid: kvIni["TransalteAccAggrToSql.Valid_"+strconv.Itoa(k+1)],
 			})
 	}
 
@@ -437,10 +437,16 @@ func TestTransalteAggrToSql(t *testing.T) {
 
 		t.Log(v.src)
 
-		sql, e := transalteAggrToSql(table, v.name, v.src)
+		cteSql, mainSql, e := transalteAccAggrToSql(table, v.name, v.src)
 		if e != nil {
 			t.Fatal(e)
 		}
+
+		sql := ""
+		if cteSql != "" {
+			sql += "WITH " + cteSql + " "
+		}
+		sql += mainSql
 
 		if err != nil {
 			t.Fatal(err)

@@ -34,18 +34,112 @@ type levelParseState struct {
 
 // Translate output table accumulators calculation into sql query.
 // Output column name outColName is optional.
-func translateToAccSql(modelDef *ModelMeta, table *TableMeta, outColName string, layout *CalculateLayout, runIds []int) (string, error) {
+func translateToAccSql(table *TableMeta, outColName string, layout *CalculateLayout, runIds []int) (string, error) {
 
 	srcMsg := table.Name
 	if outColName != "" {
 		srcMsg += "." + outColName
 	}
 
-	// translate output table aggregation expression into sql query
-	sql, err := transalteAggrToSql(table, outColName, layout.Calculate)
+	// translate output table aggregation expression into sql query:
+	//   WITH asrc (run_id, acc_id, sub_id, dim0, dim1, acc_value ) AS
+	//   (
+	//     SELECT
+	//       BR.run_id, C.acc_id, C.sub_id, C.dim0, C.dim1, C.acc_value
+	//     FROM age_acc C
+	//     INNER JOIN run_table BR ON (BR.base_run_id = C.run_id AND BR.table_hid = 101)
+	//   )
+	//   SELECT
+	//     A.run_id, A.dim0, A.dim1, A.val AS OutColName
+	//   FROM
+	//   (
+	//     SELECT
+	//       M1.run_id, M1.dim0, M1.dim1,
+	//       SUM(M1.acc_value + 0.5 * T2.ex2) AS val
+	//     FROM asrc M1
+	//     INNER JOIN ........
+	//     WHERE M1.acc_id = 0
+	//     GROUP BY M1.run_id, M1.dim0, M1.dim1
+	//   ) A
+	//
+	cteSql, mainSql, err := transalteAccAggrToSql(table, outColName, layout.Calculate)
 	if err != nil {
 		return "", errors.New("Error at " + srcMsg + ": " + err.Error())
 	}
+
+	sql := ""
+	if cteSql != "" {
+		sql += "WITH " + cteSql + " "
+	}
+	sql += mainSql
+
+	// append run id's
+	sql += " WHERE M1.run_id IN ("
+
+	isFound := false
+	for k := 0; !isFound && k < len(runIds); k++ {
+		isFound = runIds[k] == layout.FromId
+	}
+	if !isFound {
+		sql += strconv.Itoa(layout.FromId) + ", "
+	}
+	for k := 0; k < len(runIds); k++ {
+		if k > 0 {
+			sql += ", "
+		}
+		sql += strconv.Itoa(runIds[k])
+	}
+	sql += ")"
+
+	// append dimension enum code filters, if specified
+	for k := range layout.Filter {
+
+		// find dimension index by name
+		dix := -1
+		for j := range table.Dim {
+			if table.Dim[j].Name == layout.Filter[k].Name {
+				dix = j
+				break
+			}
+		}
+		if dix < 0 {
+			return "", errors.New("Error at " + srcMsg + ": output table " + table.Name + " does not have dimension " + layout.Filter[k].Name)
+		}
+
+		f, err := makeWhereFilter(
+			&layout.Filter[k], "A", table.Dim[dix].colName, table.Dim[dix].typeOf, table.Dim[dix].IsTotal, table.Dim[dix].Name, "output table "+table.Name)
+		if err != nil {
+			return "", errors.New("Error at " + srcMsg + ": " + err.Error())
+		}
+		sql += " AND " + f
+	}
+
+	// append dimension enum id filters, if specified
+	for k := range layout.FilterById {
+
+		// find dimension index by name
+		dix := -1
+		for j := range table.Dim {
+			if table.Dim[j].Name == layout.FilterById[k].Name {
+				dix = j
+				break
+			}
+		}
+		if dix < 0 {
+			return "", errors.New("Error at " + srcMsg + ": output table " + table.Name + " does not have dimension " + layout.FilterById[k].Name)
+		}
+
+		f, err := makeWhereIdFilter(
+			&layout.FilterById[k], "A", table.Dim[dix].colName, table.Dim[dix].typeOf, table.Dim[dix].Name, "output table "+table.Name)
+		if err != nil {
+			return "", errors.New("Error at " + srcMsg + ": " + err.Error())
+		}
+
+		sql += " AND " + f
+	}
+
+	// append ORDER BY, default order by: run_id, dimensions
+	sql += makeOrderBy(table.Rank, layout.OrderBy, 1)
 
 	return sql, nil
 }
@@ -55,121 +149,181 @@ func translateToAccSql(modelDef *ModelMeta, table *TableMeta, outColName string,
 // Calculation must return a single value as a result of aggregation, ex.: AVG(acc_value).
 // Output column name outColName is optional.
 //
+//	WITH asrc (run_id, acc_id, sub_id, dim0, dim1, acc_value ) AS
+//	(
 //	  SELECT
-//	    M1.run_id,
-//		   M1.dim0,
-//		   M1.dim1,
-//	    SUM(M1.acc_value + 0.5 * T2.ex2) AS OutputColName
-//	  FROM age_acc M1
+//	    BR.run_id, C.acc_id, C.sub_id, C.dim0, C.dim1, C.acc_value
+//	  FROM age_acc C
+//	  INNER JOIN run_table BR ON (BR.base_run_id = C.run_id AND BR.table_hid = 101)
+//	)
+//	SELECT
+//	  A.run_id, A.dim0, A.dim1, A.val AS OutColName
+//	FROM
+//	(
+//	  SELECT
+//	    M1.run_id, M1.dim0, M1.dim1,
+//	    SUM(M1.acc_value + 0.5 * T2.ex2) AS val
+//	  FROM asrc M1
 //	  INNER JOIN ........
 //	  WHERE M1.acc_id = 0
 //	  GROUP BY M1.run_id, M1.dim0, M1.dim1
-func transalteAggrToSql(table *TableMeta, outColName string, calculateExpr string) (string, error) {
+//	) A
+func transalteAccAggrToSql(table *TableMeta, outColName string, calculateExpr string) (string, string, error) {
 
 	// clean source calculation from cr lf and unsafe sql quotes
 	// return error if unsafe sql or comment found outside of 'quotes', ex.: -- ; DELETE INSERT UPDATE...
 	startExpr := cleanSourceExpr(calculateExpr)
 	err := errorIfUnsafeSqlOrComment(startExpr)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	// translate (substitute) all simple functions: OM_DIV_BY OM_IF...
 	startExpr, err = translateAllSimpleFnc(startExpr)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	// parse aggregation expression
 	levelArr, err := parseAggrCalculation(table, outColName, startExpr)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	// build output sql from parser state:
+	//   WITH asrc (run_id, acc_id, sub_id, dim0, dim1, acc_value ) AS
+	//   (
+	//     SELECT
+	//       BR.run_id, C.acc_id, C.sub_id, C.dim0, C.dim1, C.acc_value
+	//     FROM age_acc C
+	//     INNER JOIN run_table BR ON (BR.base_run_id = C.run_id AND BR.table_hid = 101)
+	//   )
 	//   SELECT
-	//     M1.run_id, M1.dim0, M1.dim1,
-	//     SUM(M1.acc_value + 0.5 * T2.ex2) AS OutputColName
-	//   FROM age_acc M1
-	//   INNER JOIN ........
-	//   WHERE M1.acc_id = 0
-	//   GROUP BY M1.run_id, M1.dim0, M1.dim1
+	//     A.run_id, A.dim0, A.dim1, A.val AS OutColName
+	//   FROM
+	//   (
+	//     SELECT
+	//       M1.run_id, M1.dim0, M1.dim1,
+	//       SUM(M1.acc_value + 0.5 * T2.ex2) AS val
+	//     FROM asrc M1
+	//     INNER JOIN ........
+	//     WHERE M1.acc_id = 0
+	//     GROUP BY M1.run_id, M1.dim0, M1.dim1
+	//   ) A
 	//
-	sql, err := makeAggrSql(table, outColName, levelArr)
+	cteSql, mainSql, err := makeAggrSql(table, outColName, levelArr)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	return sql, nil
+	return cteSql, mainSql, nil
 }
 
 // Build aggregation sql from parser state.
 // Output column name outColName is optional.
-func makeAggrSql(table *TableMeta, outColName string, levelArr []levelDef) (string, error) {
+func makeAggrSql(table *TableMeta, outColName string, levelArr []levelDef) (string, string, error) {
 
 	// build output sql for expression:
 	//
 	// OM_SUM(acc0 + 0.5 * OM_AVG(acc1 + acc4 + 0.1 * (OM_MAX(acc0) - OM_MIN(acc1)) ))
 	// =>
-	//   SELECT
-	//     M1.run_id, M1.dim0, M1.dim1,
-	//     SUM(M1.acc_value + 0.5 * T2.ex2) AS OutputColName
-	//   FROM age_acc M1
-	//   INNER JOIN
+	//   WITH asrc (run_id, acc_id, sub_id, dim0, dim1, acc_value ) AS
 	//   (
 	//     SELECT
-	//       M2.run_id, M2.dim0, M2.dim1,
-	//       AVG(M2.acc_value + L2A4.acc4 + 0.1 * (T3.ex31 - T3.ex32)) AS ex2
-	//     FROM age_acc M2
-	//     INNER JOIN
-	//     (
-	//       SELECT run_id, dim0, dim1, sub_id, acc_value AS acc4 FROM age_acc WHERE acc_id = 4
-	//     ) L2A4
-	//     ON (L2A4.run_id = M2.run_id AND L2A4.dim0 = M2.dim0 AND L2A4.dim1 = M2.dim1 AND L2A4.sub_id = M2.sub_id)
+	//       BR.run_id, C.acc_id, C.sub_id, C.dim0, C.dim1, C.acc_value
+	//     FROM age_acc C
+	//     INNER JOIN run_table BR ON (BR.base_run_id = C.run_id AND BR.table_hid = 101)
+	//   )
+	//   SELECT
+	//     A.run_id, A.dim0, A.dim1, A.val AS OutColName
+	//   FROM
+	//   (
+	//     SELECT
+	//       M1.run_id, M1.dim0, M1.dim1,
+	//       SUM(M1.acc_value + 0.5 * T2.ex2) AS val
+	//     FROM asrc M1
 	//     INNER JOIN
 	//     (
 	//       SELECT
-	//         M3.run_id, M3.dim0, M3.dim1,
-	//         MAX(M3.acc_value) AS ex31,
-	//         MIN(L3A1.acc1)    AS ex32
-	//       FROM age_acc M3
+	//         M2.run_id, M2.dim0, M2.dim1,
+	//         AVG(M2.acc_value + L2A4.acc4 + 0.1 * (T3.ex31 - T3.ex32)) AS ex2
+	//       FROM asrc M2
 	//       INNER JOIN
 	//       (
-	//         SELECT run_id, dim0, dim1, sub_id, acc_value AS acc1 FROM age_acc WHERE acc_id = 1
-	//       ) L3A1
-	//       ON (L3A1.run_id = M3.run_id AND L3A1.dim0 = M3.dim0 AND L3A1.dim1 = M3.dim1 AND L3A1.sub_id = M3.sub_id)
-	//       WHERE M3.acc_id = 0
-	//       GROUP BY M3.run_id, M3.dim0, M3.dim1
-	//     ) T3
-	//     ON (T3.run_id = M2.run_id AND T3.dim0 = M2.dim0 AND T3.dim1 = M2.dim1)
-	//     WHERE M2.acc_id = 1
-	//     GROUP BY M2.run_id, M2.dim0, M2.dim1
-	//   ) T2
-	//   ON (T2.run_id = M1.run_id AND T2.dim0 = M1.dim0 AND T2.dim1 = M1.dim1)
-	//   WHERE M1.acc_id = 0
-	//   GROUP BY M1.run_id, M1.dim0, M1.dim1
+	//         SELECT run_id, dim0, dim1, sub_id, acc_value AS acc4 FROM asrc WHERE acc_id = 4
+	//       ) L2A4
+	//       ON (L2A4.run_id = M2.run_id AND L2A4.dim0 = M2.dim0 AND L2A4.dim1 = M2.dim1 AND L2A4.sub_id = M2.sub_id)
+	//       INNER JOIN
+	//       (
+	//         SELECT
+	//           M3.run_id, M3.dim0, M3.dim1,
+	//           MAX(M3.acc_value) AS ex31,
+	//           MIN(L3A1.acc1)    AS ex32
+	//         FROM asrc M3
+	//         INNER JOIN
+	//         (
+	//           SELECT run_id, dim0, dim1, sub_id, acc_value AS acc1 FROM asrc WHERE acc_id = 1
+	//         ) L3A1
+	//         ON (L3A1.run_id = M3.run_id AND L3A1.dim0 = M3.dim0 AND L3A1.dim1 = M3.dim1 AND L3A1.sub_id = M3.sub_id)
+	//           WHERE M3.acc_id = 0
+	//         GROUP BY M3.run_id, M3.dim0, M3.dim1
+	//       ) T3
+	//       ON (T3.run_id = M2.run_id AND T3.dim0 = M2.dim0 AND T3.dim1 = M2.dim1)
+	//       WHERE M2.acc_id = 1
+	//       GROUP BY M2.run_id, M2.dim0, M2.dim1
+	//     ) T2
+	//     ON (T2.run_id = M1.run_id AND T2.dim0 = M1.dim0 AND T2.dim1 = M1.dim1)
+	//     WHERE M1.acc_id = 0
+	//     GROUP BY M1.run_id, M1.dim0, M1.dim1
+	//   ) A
 	//
-	sql := ""
+	cteSql := "asrc (run_id, acc_id, sub_id"
+	for _, d := range table.Dim {
+		cteSql += ", " + d.colName
+	}
+	cteSql += ", acc_value) AS" +
+		" (" +
+		"SELECT BR.run_id, C.acc_id, C.sub_id"
+	for _, d := range table.Dim {
+		cteSql += ", C." + d.colName
+	}
+	cteSql += ", C.acc_value" +
+		" FROM " + table.DbAccTable + " C" +
+		" INNER JOIN run_table BR ON (BR.base_run_id = C.run_id AND BR.table_hid =" + strconv.Itoa(table.TableHid) + ")" +
+		")"
 
+	// SELECT A.run_id, A.dim0, A.dim1, A.val AS OutColName FROM
+	// (
+	mainSql := "SELECT A.run_id"
+	for _, d := range table.Dim {
+		mainSql += ", A." + d.colName
+	}
+	mainSql += ", A.val"
+	if outColName != "" {
+		mainSql += " AS " + outColName
+	}
+	mainSql += " FROM ( "
+
+	// main aggregation sql body
 	for nLev, lv := range levelArr {
 
 		// select run_id, dim0,...,sub_id, acc_value
 		// from accumulator table where acc_id = first accumulator
 		//
-		sql += "SELECT " + lv.fromAlias + ".run_id"
+		mainSql += "SELECT " + lv.fromAlias + ".run_id"
 
 		for _, d := range table.Dim {
-			sql += ", " + lv.fromAlias + "." + d.colName
+			mainSql += ", " + lv.fromAlias + "." + d.colName
 		}
 
 		for _, expr := range lv.exprArr {
-			sql += ", " + expr.sqlExpr
+			mainSql += ", " + expr.sqlExpr
 			if expr.colName != "" {
-				sql += " AS " + expr.colName
+				mainSql += " AS " + expr.colName
 			}
 		}
 
-		sql += " FROM " + table.DbAccTable + " " + lv.fromAlias
+		mainSql += " FROM asrc " + lv.fromAlias
 
 		// INNER JON accumulator table for all other accumulators ON run_id, dim0,...,sub_id
 		for nAcc, acc := range table.Acc {
@@ -179,28 +333,28 @@ func makeAggrSql(table *TableMeta, outColName string, levelArr []levelDef) (stri
 			}
 			accAlias := "L" + strconv.Itoa(lv.level) + "A" + strconv.Itoa(nAcc)
 
-			sql += " INNER JOIN (SELECT run_id, "
+			mainSql += " INNER JOIN (SELECT run_id, "
 
 			for _, d := range table.Dim {
-				sql += d.colName + ", "
+				mainSql += d.colName + ", "
 			}
 
-			sql += "sub_id, acc_value AS " + acc.colName +
-				" FROM " + table.DbAccTable +
+			mainSql += "sub_id, acc_value AS " + acc.colName +
+				" FROM asrc" +
 				" WHERE acc_id = " + strconv.Itoa(acc.AccId) +
 				") " + accAlias
 
-			sql += " ON (" + accAlias + ".run_id = " + lv.fromAlias + ".run_id"
+			mainSql += " ON (" + accAlias + ".run_id = " + lv.fromAlias + ".run_id"
 
 			for _, d := range table.Dim {
-				sql += " AND " + accAlias + "." + d.colName + " = " + lv.fromAlias + "." + d.colName
+				mainSql += " AND " + accAlias + "." + d.colName + " = " + lv.fromAlias + "." + d.colName
 			}
 
-			sql += " AND " + accAlias + ".sub_id = " + lv.fromAlias + ".sub_id)"
+			mainSql += " AND " + accAlias + ".sub_id = " + lv.fromAlias + ".sub_id)"
 		}
 
 		if nLev < len(levelArr)-1 { // if not lowest level then continue INNER JOIN down to the next level
-			sql += " INNER JOIN ("
+			mainSql += " INNER JOIN ("
 		}
 	}
 
@@ -215,28 +369,29 @@ func makeAggrSql(table *TableMeta, outColName string, levelArr []levelDef) (stri
 			firstId = table.Acc[levelArr[nLev].firstAccIdx].AccId
 		}
 
-		sql += " WHERE " + levelArr[nLev].fromAlias + ".acc_id = " + strconv.Itoa(firstId)
+		mainSql += " WHERE " + levelArr[nLev].fromAlias + ".acc_id = " + strconv.Itoa(firstId)
 
-		sql += " GROUP BY " + levelArr[nLev].fromAlias + ".run_id"
+		mainSql += " GROUP BY " + levelArr[nLev].fromAlias + ".run_id"
 
 		for _, d := range table.Dim {
-			sql += ", " + levelArr[nLev].fromAlias + "." + d.colName
+			mainSql += ", " + levelArr[nLev].fromAlias + "." + d.colName
 		}
 
 		if nLev > 0 {
 
-			sql += ") " + levelArr[nLev].innerAlias +
+			mainSql += ") " + levelArr[nLev].innerAlias +
 				" ON (" + levelArr[nLev].innerAlias + ".run_id = " + levelArr[nLev-1].fromAlias + ".run_id"
 
 			for _, d := range table.Dim {
-				sql += " AND " + levelArr[nLev].innerAlias + "." + d.colName + " = " + levelArr[nLev-1].fromAlias + "." + d.colName
+				mainSql += " AND " + levelArr[nLev].innerAlias + "." + d.colName + " = " + levelArr[nLev-1].fromAlias + "." + d.colName
 			}
 
-			sql += ")"
+			mainSql += ")"
 		}
 	}
+	mainSql += " ) A"
 
-	return sql, nil
+	return cteSql, mainSql, nil
 }
 
 // Parse output table accumulators calculation.
@@ -252,7 +407,7 @@ func parseAggrCalculation(table *TableMeta, outColName string, calculateExpr str
 		nextInnerAlias: "T" + strconv.Itoa(nLevel+1),
 		exprArr: []aggregationColumnExpr{
 			aggregationColumnExpr{
-				colName: outColName,
+				colName: "val",
 				srcExpr: calculateExpr,
 			}},
 		accUsageArr: make([]bool, len(table.Acc)),

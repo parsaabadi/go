@@ -39,9 +39,9 @@ func CompareOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *CalculateTa
 	var err error
 
 	if layout.IsAggr {
-		q, err = translateToAccSql(modelDef, table, "", &layout.CalculateLayout, runIds)
+		q, err = translateToAccSql(table, "", &layout.CalculateLayout, runIds)
 	} else {
-		q, err = translateToExprSql(modelDef, table, "", &layout.CalculateLayout, runIds)
+		q, err = translateToExprSql(table, "", &layout.CalculateLayout, runIds)
 	}
 	if err != nil {
 		return nil, nil, err
