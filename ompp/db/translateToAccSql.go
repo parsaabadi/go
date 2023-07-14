@@ -27,19 +27,37 @@ type levelDef struct {
 
 // level parse state
 type levelParseState struct {
-	levelDef                               // current level
+	*levelDef                              // current level
 	nextExprNumber int                     // number of aggregation epxpressions
 	nextExprArr    []aggregationColumnExpr // aggregation expressions for the next level
 }
 
 // Translate output table accumulators calculation into sql query.
-// Output column name outColName is optional.
-func translateToAccSql(table *TableMeta, outColName string, layout *CalculateLayout, runIds []int) (string, error) {
+func translateToAccSql(table *TableMeta, readLt *ReadLayout, calcLt *CalculateLayout, runIds []int) (string, error) {
 
-	srcMsg := table.Name
-	if outColName != "" {
-		srcMsg += "." + outColName
+	// make sql:
+	// WITH cte
+	// SELECT main sql for calculation
+	// WHERE run id IN (....)
+	// AND dimension filters
+	// ORDER BY 1, 2,....
+
+	cteSql, mainSql, err := partialTranslateToAccSql(table, readLt, calcLt, runIds)
+	if err != nil {
+		return "", err
 	}
+
+	sql := "WITH " + cteSql + " " + mainSql
+
+	// append ORDER BY, default order by: run_id, expression id, dimensions
+	sql += makeOrderBy(table.Rank, readLt.OrderBy, 2)
+
+	return sql, nil
+}
+
+// Translate all output table accumulators aggregation calculations to sql query, apply dimension filters and selected run id's.
+// Return list of CTE sql's and main sql's.
+func partialTranslateToAccSql(table *TableMeta, readLt *ReadLayout, calcLt *CalculateLayout, runIds []int) (string, string, error) {
 
 	// translate output table aggregation expression into sql query:
 	//   WITH asrc (run_id, acc_id, sub_id, dim0, dim1, acc_value ) AS
@@ -50,104 +68,108 @@ func translateToAccSql(table *TableMeta, outColName string, layout *CalculateLay
 	//     INNER JOIN run_table BR ON (BR.base_run_id = C.run_id AND BR.table_hid = 101)
 	//   )
 	//   SELECT
-	//     A.run_id, A.dim0, A.dim1, A.val AS OutColName
+	//     A.run_id, CalcId AS calc_id, A.dim0, A.dim1, A.calc_value
 	//   FROM
 	//   (
 	//     SELECT
 	//       M1.run_id, M1.dim0, M1.dim1,
-	//       SUM(M1.acc_value + 0.5 * T2.ex2) AS val
+	//       SUM(M1.acc_value + 0.5 * T2.ex2) AS calc_value
 	//     FROM asrc M1
 	//     INNER JOIN ........
 	//     WHERE M1.acc_id = 0
 	//     GROUP BY M1.run_id, M1.dim0, M1.dim1
 	//   ) A
+	// WHERE A.run_id IN (103, 104, 105, 106, 107, 108, 109, 110, 111, 112)
+	// AND A.dim0 = .....
+	// ORDER BY 1, 2, 3, 4
 	//
-	cteSql, mainSql, err := transalteAccAggrToSql(table, outColName, layout.Calculate)
+
+	cteSql, mainSql, err := transalteAccAggrToSql(table, calcLt.CalcId, calcLt.Calculate)
 	if err != nil {
-		return "", errors.New("Error at " + srcMsg + ": " + err.Error())
+		return "", "", errors.New("Error at " + table.Name + " " + calcLt.Calculate + ": " + err.Error())
 	}
 
-	sql := ""
-	if cteSql != "" {
-		sql += "WITH " + cteSql + " "
-	}
-	sql += mainSql
+	// make where clause and dimension filters:
+	// WHERE A.run_id IN (103, 104, 105, 106, 107, 108, 109, 110, 111, 112)
+	// AND A.dim0 = .....
 
 	// append run id's
-	sql += " WHERE M1.run_id IN ("
+	where := " WHERE A.run_id IN ("
 
 	isFound := false
 	for k := 0; !isFound && k < len(runIds); k++ {
-		isFound = runIds[k] == layout.FromId
+		isFound = runIds[k] == readLt.FromId
 	}
 	if !isFound {
-		sql += strconv.Itoa(layout.FromId) + ", "
+		where += strconv.Itoa(readLt.FromId)
+		if len(runIds) > 0 {
+			where += ", "
+		}
 	}
 	for k := 0; k < len(runIds); k++ {
 		if k > 0 {
-			sql += ", "
+			where += ", "
 		}
-		sql += strconv.Itoa(runIds[k])
+		where += strconv.Itoa(runIds[k])
 	}
-	sql += ")"
+	where += ")"
 
 	// append dimension enum code filters, if specified
-	for k := range layout.Filter {
+	for k := range readLt.Filter {
 
 		// find dimension index by name
 		dix := -1
 		for j := range table.Dim {
-			if table.Dim[j].Name == layout.Filter[k].Name {
+			if table.Dim[j].Name == readLt.Filter[k].Name {
 				dix = j
 				break
 			}
 		}
 		if dix < 0 {
-			return "", errors.New("Error at " + srcMsg + ": output table " + table.Name + " does not have dimension " + layout.Filter[k].Name)
+			return "", "", errors.New("Error at " + table.Name + " " + calcLt.Calculate + ": output table " + table.Name + " does not have dimension " + readLt.Filter[k].Name)
 		}
 
 		f, err := makeWhereFilter(
-			&layout.Filter[k], "A", table.Dim[dix].colName, table.Dim[dix].typeOf, table.Dim[dix].IsTotal, table.Dim[dix].Name, "output table "+table.Name)
+			&readLt.Filter[k], "A", table.Dim[dix].colName, table.Dim[dix].typeOf, table.Dim[dix].IsTotal, table.Dim[dix].Name, "output table "+table.Name)
 		if err != nil {
-			return "", errors.New("Error at " + srcMsg + ": " + err.Error())
+			return "", "", errors.New("Error at " + table.Name + " " + calcLt.Calculate + ": " + err.Error())
 		}
-		sql += " AND " + f
+		where += " AND " + f
 	}
 
 	// append dimension enum id filters, if specified
-	for k := range layout.FilterById {
+	for k := range readLt.FilterById {
 
 		// find dimension index by name
 		dix := -1
 		for j := range table.Dim {
-			if table.Dim[j].Name == layout.FilterById[k].Name {
+			if table.Dim[j].Name == readLt.FilterById[k].Name {
 				dix = j
 				break
 			}
 		}
 		if dix < 0 {
-			return "", errors.New("Error at " + srcMsg + ": output table " + table.Name + " does not have dimension " + layout.FilterById[k].Name)
+			return "", "", errors.New("Error at " + table.Name + " " + calcLt.Calculate + ": output table " + table.Name + " does not have dimension " + readLt.FilterById[k].Name)
 		}
 
 		f, err := makeWhereIdFilter(
-			&layout.FilterById[k], "A", table.Dim[dix].colName, table.Dim[dix].typeOf, table.Dim[dix].Name, "output table "+table.Name)
+			&readLt.FilterById[k], "A", table.Dim[dix].colName, table.Dim[dix].typeOf, table.Dim[dix].Name, "output table "+table.Name)
 		if err != nil {
-			return "", errors.New("Error at " + srcMsg + ": " + err.Error())
+			return "", "", errors.New("Error at " + table.Name + " " + calcLt.Calculate + ": " + err.Error())
 		}
 
-		sql += " AND " + f
+		where += " AND " + f
 	}
 
-	// append ORDER BY, default order by: run_id, dimensions
-	sql += makeOrderBy(table.Rank, layout.OrderBy, 1)
+	// append WHERE to main sql query and return result
+	mainSql += where
 
-	return sql, nil
+	return cteSql, mainSql, nil
 }
 
 // Translate output table aggregation expression into sql query.
 // Only native accumulators allowed.
 // Calculation must return a single value as a result of aggregation, ex.: AVG(acc_value).
-// Output column name outColName is optional.
 //
 //	WITH asrc (run_id, acc_id, sub_id, dim0, dim1, acc_value ) AS
 //	(
@@ -157,18 +179,18 @@ func translateToAccSql(table *TableMeta, outColName string, layout *CalculateLay
 //	  INNER JOIN run_table BR ON (BR.base_run_id = C.run_id AND BR.table_hid = 101)
 //	)
 //	SELECT
-//	  A.run_id, A.dim0, A.dim1, A.val AS OutColName
+//	  A.run_id, CalcId AS calc_id, A.dim0, A.dim1, A.calc_value
 //	FROM
 //	(
 //	  SELECT
 //	    M1.run_id, M1.dim0, M1.dim1,
-//	    SUM(M1.acc_value + 0.5 * T2.ex2) AS val
+//	    SUM(M1.acc_value + 0.5 * T2.ex2) AS calc_value
 //	  FROM asrc M1
 //	  INNER JOIN ........
 //	  WHERE M1.acc_id = 0
 //	  GROUP BY M1.run_id, M1.dim0, M1.dim1
 //	) A
-func transalteAccAggrToSql(table *TableMeta, outColName string, calculateExpr string) (string, string, error) {
+func transalteAccAggrToSql(table *TableMeta, calcId int, calculateExpr string) (string, string, error) {
 
 	// clean source calculation from cr lf and unsafe sql quotes
 	// return error if unsafe sql or comment found outside of 'quotes', ex.: -- ; DELETE INSERT UPDATE...
@@ -185,33 +207,13 @@ func transalteAccAggrToSql(table *TableMeta, outColName string, calculateExpr st
 	}
 
 	// parse aggregation expression
-	levelArr, err := parseAggrCalculation(table, outColName, startExpr)
+	levelArr, err := parseAggrCalculation(table, startExpr)
 	if err != nil {
 		return "", "", err
 	}
 
-	// build output sql from parser state:
-	//   WITH asrc (run_id, acc_id, sub_id, dim0, dim1, acc_value ) AS
-	//   (
-	//     SELECT
-	//       BR.run_id, C.acc_id, C.sub_id, C.dim0, C.dim1, C.acc_value
-	//     FROM age_acc C
-	//     INNER JOIN run_table BR ON (BR.base_run_id = C.run_id AND BR.table_hid = 101)
-	//   )
-	//   SELECT
-	//     A.run_id, A.dim0, A.dim1, A.val AS OutColName
-	//   FROM
-	//   (
-	//     SELECT
-	//       M1.run_id, M1.dim0, M1.dim1,
-	//       SUM(M1.acc_value + 0.5 * T2.ex2) AS val
-	//     FROM asrc M1
-	//     INNER JOIN ........
-	//     WHERE M1.acc_id = 0
-	//     GROUP BY M1.run_id, M1.dim0, M1.dim1
-	//   ) A
-	//
-	cteSql, mainSql, err := makeAggrSql(table, outColName, levelArr)
+	// build output sql from parser state: CTE and main sql query
+	cteSql, mainSql, err := makeAggrSql(table, calcId, levelArr)
 	if err != nil {
 		return "", "", err
 	}
@@ -220,8 +222,7 @@ func transalteAccAggrToSql(table *TableMeta, outColName string, calculateExpr st
 }
 
 // Build aggregation sql from parser state.
-// Output column name outColName is optional.
-func makeAggrSql(table *TableMeta, outColName string, levelArr []levelDef) (string, string, error) {
+func makeAggrSql(table *TableMeta, calcId int, levelArr []levelDef) (string, string, error) {
 
 	// build output sql for expression:
 	//
@@ -235,12 +236,12 @@ func makeAggrSql(table *TableMeta, outColName string, levelArr []levelDef) (stri
 	//     INNER JOIN run_table BR ON (BR.base_run_id = C.run_id AND BR.table_hid = 101)
 	//   )
 	//   SELECT
-	//     A.run_id, A.dim0, A.dim1, A.val AS OutColName
+	//     A.run_id, CalcId AS calc_id, A.dim0, A.dim1, A.calc_value
 	//   FROM
 	//   (
 	//     SELECT
 	//       M1.run_id, M1.dim0, M1.dim1,
-	//       SUM(M1.acc_value + 0.5 * T2.ex2) AS val
+	//       SUM(M1.acc_value + 0.5 * T2.ex2) AS calc_value
 	//     FROM asrc M1
 	//     INNER JOIN
 	//     (
@@ -289,20 +290,17 @@ func makeAggrSql(table *TableMeta, outColName string, levelArr []levelDef) (stri
 	}
 	cteSql += ", C.acc_value" +
 		" FROM " + table.DbAccTable + " C" +
-		" INNER JOIN run_table BR ON (BR.base_run_id = C.run_id AND BR.table_hid =" + strconv.Itoa(table.TableHid) + ")" +
+		" INNER JOIN run_table BR ON (BR.base_run_id = C.run_id AND BR.table_hid = " + strconv.Itoa(table.TableHid) + ")" +
 		")"
 
-	// SELECT A.run_id, A.dim0, A.dim1, A.val AS OutColName FROM
-	// (
-	mainSql := "SELECT A.run_id"
+	// SELECT A.run_id, CalcId AS calc_id, A.dim0, A.dim1, A.calc_value FROM (
+	//
+	mainSql := "SELECT A.run_id, " + strconv.Itoa(calcId) + " AS calc_id"
+
 	for _, d := range table.Dim {
 		mainSql += ", A." + d.colName
 	}
-	mainSql += ", A.val"
-	if outColName != "" {
-		mainSql += " AS " + outColName
-	}
-	mainSql += " FROM ( "
+	mainSql += ", A.calc_value FROM ( "
 
 	// main aggregation sql body
 	for nLev, lv := range levelArr {
@@ -395,27 +393,25 @@ func makeAggrSql(table *TableMeta, outColName string, levelArr []levelDef) (stri
 }
 
 // Parse output table accumulators calculation.
-// Output column name outColName is optional.
-func parseAggrCalculation(table *TableMeta, outColName string, calculateExpr string) ([]levelDef, error) {
+func parseAggrCalculation(table *TableMeta, calculateExpr string) ([]levelDef, error) {
 
 	// start with source expression and column name
 	nLevel := 1
-	level := levelDef{
-		level:          nLevel,
-		fromAlias:      "M" + strconv.Itoa(nLevel),
-		innerAlias:     "T" + strconv.Itoa(nLevel),
-		nextInnerAlias: "T" + strconv.Itoa(nLevel+1),
-		exprArr: []aggregationColumnExpr{
-			aggregationColumnExpr{
-				colName: "val",
+
+	levelArr := []levelDef{
+		levelDef{
+			level:          nLevel,
+			fromAlias:      "M" + strconv.Itoa(nLevel),
+			innerAlias:     "T" + strconv.Itoa(nLevel),
+			nextInnerAlias: "T" + strconv.Itoa(nLevel+1),
+			exprArr: []aggregationColumnExpr{{
+				colName: "calc_value",
 				srcExpr: calculateExpr,
 			}},
-		accUsageArr: make([]bool, len(table.Acc)),
-	}
-	levelArr := []levelDef{level}
-
+			accUsageArr: make([]bool, len(table.Acc)),
+		}}
 	lps := &levelParseState{
-		levelDef:       level,
+		levelDef:       &levelArr[len(levelArr)-1],
 		nextExprNumber: 1,
 		nextExprArr:    []aggregationColumnExpr{},
 	}
@@ -432,10 +428,10 @@ func parseAggrCalculation(table *TableMeta, outColName string, calculateExpr str
 	//	        => next level expression:    OM_AVG(acc0)
 	for {
 
-		for nL := range level.exprArr {
+		for nL := range lps.exprArr {
 
 			// parse until source expression not completed
-			sqlExpr := level.exprArr[nL].srcExpr
+			sqlExpr := lps.exprArr[nL].srcExpr
 
 			for {
 				// find most left (top level) aggregation function
@@ -460,7 +456,7 @@ func parseAggrCalculation(table *TableMeta, outColName string, calculateExpr str
 					sqlExpr = sqlExpr[:namePos] + t + sqlExpr[nAfter:]
 				}
 			}
-			level.exprArr[nL].sqlExpr = sqlExpr
+			lps.exprArr[nL].sqlExpr = sqlExpr
 
 			// accumultors first pass: collect accumulators usage is current sql expression
 			var err error = nil
@@ -480,7 +476,7 @@ func parseAggrCalculation(table *TableMeta, outColName string, calculateExpr str
 				for k := 0; k < len(table.Acc); k++ {
 
 					if findNamePos(sqlExpr[nStart:nEnd], table.Acc[k].Name) >= 0 {
-						level.accUsageArr[k] = true
+						lps.accUsageArr[k] = true
 					}
 				}
 
@@ -492,10 +488,10 @@ func parseAggrCalculation(table *TableMeta, outColName string, calculateExpr str
 		// replace accumulators names by column name in joined accumulator table:
 		//   acc0 => M1.acc_value
 		//   acc2 => L1A2.acc2
-		for nL := range level.exprArr {
+		for ne := range lps.exprArr {
 
 			var e error
-			if level.exprArr[nL].sqlExpr, e = lps.processAccumulators(level.exprArr[nL].sqlExpr, table.Acc); e != nil {
+			if lps.exprArr[ne].sqlExpr, e = lps.processAccumulators(lps.exprArr[ne].sqlExpr, table.Acc); e != nil {
 				return []levelDef{}, e
 			}
 		}
@@ -507,17 +503,17 @@ func parseAggrCalculation(table *TableMeta, outColName string, calculateExpr str
 		// else push aggregation expressions to the next level
 
 		nLevel++
-		level = levelDef{
-			level:          nLevel,
-			fromAlias:      "M" + strconv.Itoa(nLevel),
-			innerAlias:     "T" + strconv.Itoa(nLevel),
-			nextInnerAlias: "T" + strconv.Itoa(nLevel+1),
-			exprArr:        append([]aggregationColumnExpr{}, lps.nextExprArr...),
-			accUsageArr:    make([]bool, len(table.Acc)),
-		}
-		levelArr = append(levelArr, level)
+		levelArr = append(levelArr,
+			levelDef{
+				level:          nLevel,
+				fromAlias:      "M" + strconv.Itoa(nLevel),
+				innerAlias:     "T" + strconv.Itoa(nLevel),
+				nextInnerAlias: "T" + strconv.Itoa(nLevel+1),
+				exprArr:        append([]aggregationColumnExpr{}, lps.nextExprArr...),
+				accUsageArr:    make([]bool, len(table.Acc)),
+			})
 
-		lps.levelDef = level
+		lps.levelDef = &levelArr[len(levelArr)-1]
 		lps.nextExprArr = []aggregationColumnExpr{}
 	}
 

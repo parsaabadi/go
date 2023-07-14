@@ -326,7 +326,6 @@ func (lps *levelParseState) translateAggregationFnc(name, arg string, src string
 func (lps *levelParseState) translateArg(arg string) (string, error) {
 
 	// parse until source expression not completed
-
 	// push all top level aggregation functions to the next level and substitute with joined column name:
 	//   curent level column:    T2.ex2
 	//   push to the next level:
@@ -356,9 +355,8 @@ func (lps *levelParseState) translateArg(arg string) (string, error) {
 		}
 	}
 	// done with functions:
-	//   acc0 - 0.5 * OM_AVG(acc0)
-	//   =>
-	//   acc0 - 0.5 * T2.ex2
+	//   argument: acc0 - 0.5 * OM_AVG(acc0)
+	//   return:   acc0 - 0.5 * T2.ex2
 
 	return expr, nil
 }

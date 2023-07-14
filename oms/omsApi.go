@@ -283,6 +283,17 @@ func apiReadRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/table/:name/all-acc/start/", http.NotFound)
 	router.Get("/api/model/:model/run/:run/table/:name/all-acc/start/:start/count/", http.NotFound)
 
+	// GET /api/model/:model/run/:run/table/:name/calc/:aggr
+	// GET /api/model/:model/run/:run/table/:name/calc/:aggr/start/:start
+	// GET /api/model/:model/run/:run/table/:name/calc/:aggr/start/:start/count/:count
+	router.Get("/api/model/:model/run/:run/table/:name/calc/:aggr", runTableCalcPageGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/calc/:aggr/start/:start", runTableCalcPageGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/calc/:aggr/start/:start/count/:count", runTableCalcPageGetHandler, logRequest)
+	// reject if request ill-formed
+	router.Get("/api/model/:model/run/:run/table/:name/calc/", http.NotFound)
+	router.Get("/api/model/:model/run/:run/table/:name/calc/:aggr/start/", http.NotFound)
+	router.Get("/api/model/:model/run/:run/table/:name/calc/:aggr/start/:start/count/", http.NotFound)
+
 	if theCfg.isMicrodata {
 
 		// GET /api/model/:model/run/:run/microdata/:name/value

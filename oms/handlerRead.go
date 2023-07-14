@@ -148,7 +148,7 @@ func doReadTablePageHandler(w http.ResponseWriter, r *http.Request, isCode bool)
 	enc := json.NewEncoder(w)
 	cvtWr := jsonCellWriter(w, enc, cvtCell)
 
-	// read parameter page into json array response, convert enum id's to code if requested
+	// read output table page into json array response, convert enum id's to code if requested
 	lt, ok := theCatalog.ReadOutTableTo(dn, rdn, &layout, cvtWr)
 	if !ok {
 		http.Error(w, "Error at run output table read "+rdn+": "+layout.Name, http.StatusBadRequest)
@@ -296,7 +296,8 @@ func doTableGetPageHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllA
 
 	// setup read layout
 	layout := db.ReadTableLayout{
-		ReadLayout: db.ReadLayout{Name: name,
+		ReadLayout: db.ReadLayout{
+			Name:           name,
 			ReadPageLayout: db.ReadPageLayout{Offset: start, Size: count},
 		},
 		IsAccum:    isAcc,
@@ -321,10 +322,87 @@ func doTableGetPageHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllA
 	enc := json.NewEncoder(w)
 	cvtWr := jsonCellWriter(w, enc, cvtCell)
 
-	// read parameter page into json array response, convert enum id's to code if requested
+	// read output table page into json array response, convert enum id's to code if requested
 	_, ok = theCatalog.ReadOutTableTo(dn, rdsn, &layout, cvtWr)
 	if !ok {
 		http.Error(w, "Error at run output table read "+rdsn+": "+layout.Name, http.StatusBadRequest)
+		return
+	}
+	w.Write([]byte{']'}) // end of json output array
+}
+
+// runTableCalcPageGetHandler for all output table expressions calculate a "page" of additional measure: SUM AVG COUNT MIN MAX VAR SD SE CV.
+// GET /api/model/:model/run/:run/table/:name/calc/:aggr
+// GET /api/model/:model/run/:run/table/:name/calc/:aggr/start/:start
+// GET /api/model/:model/run/:run/table/:name/calc/:aggr/start/:start/count/:count
+// Enum-based dimension items returned as enum codes.
+func runTableCalcPageGetHandler(w http.ResponseWriter, r *http.Request) {
+	doTableCalcGetPageHandler(w, r, true)
+}
+
+// doTableCalcGetPageHandler for all output table expressions calculate a "page" of additional measure.
+// Meausre calculated as one aggregation: SUM AVG COUNT MIN MAX VAR SD SE CV.
+// Caslculation applied to derived accumulator with the same name as expression name.
+// Page is part of output table values defined by zero-based "start" row number and row count.
+// If row count <= 0 then all rows returned.
+// Enum-based dimension items returned as enum id or as enum codes.
+func doTableCalcGetPageHandler(w http.ResponseWriter, r *http.Request, isCode bool) {
+
+	// url or query parameters
+	dn := getRequestParam(r, "model")  // model digest-or-name
+	rdsn := getRequestParam(r, "run")  // run digest-or-stamp-or-name
+	name := getRequestParam(r, "name") // output table name
+	aggr := getRequestParam(r, "aggr") // aggregation function to calculate
+
+	// url or query parameters: page offset, page size and aggregation function name
+	start, ok := getInt64RequestParam(r, "start", 0)
+	if !ok {
+		http.Error(w, "Invalid value of start row number to read "+name, http.StatusBadRequest)
+		return
+	}
+	count, ok := getInt64RequestParam(r, "count", 0)
+	if !ok {
+		http.Error(w, "Invalid value of max row count to read "+name, http.StatusBadRequest)
+		return
+	}
+
+	// setup read layout and calculate layout
+	tableLt := db.ReadTableLayout{
+		ReadLayout: db.ReadLayout{
+			Name:           name,
+			ReadPageLayout: db.ReadPageLayout{Offset: start, Size: count},
+		},
+	}
+
+	calcLt, ok := theCatalog.TableAllExprCalculateLayout(dn, name, aggr)
+	if !ok {
+		http.Error(w, "Invalid calculation expression "+aggr, http.StatusBadRequest)
+		return
+	}
+
+	// if required get converter from id's cell into code cell
+	var cvtCell func(interface{}) (interface{}, error)
+	runIds := []int{}
+	if isCode {
+		cvtCell, _, runIds, ok = theCatalog.TableToCodeCalcCellConverter(dn, rdsn, tableLt.Name, nil)
+		if !ok {
+			http.Error(w, "Error at run output table read: "+name, http.StatusBadRequest)
+			return
+		}
+	}
+
+	// write to response: page layout and page data
+	jsonSetHeaders(w, r) // start response with set json headers, i.e. content type
+
+	w.Write([]byte{'['}) // start of json output array
+
+	enc := json.NewEncoder(w)
+	cvtWr := jsonCellWriter(w, enc, cvtCell)
+
+	// calculate output table measure and read measure page into json array response, convert enum id's to code if requested
+	_, ok = theCatalog.ReadOutTableCalculateTo(dn, rdsn, &tableLt, calcLt, runIds, cvtWr)
+	if !ok {
+		http.Error(w, "Error at run output table read "+rdsn+": "+tableLt.Name, http.StatusBadRequest)
 		return
 	}
 	w.Write([]byte{']'}) // end of json output array

@@ -201,7 +201,7 @@ func (mc *ModelCatalog) languageCodeMatch(dn string, langCode string) string {
 
 // indexByDigest return index of model by digest.
 //
-// It can be used only inside of lock.
+// It can be used only inside the lock.
 func (mc *ModelCatalog) indexByDigest(digest string) (int, bool) {
 	for k := range mc.modelLst {
 		if mc.modelLst[k].meta.Model.Digest == digest {
@@ -212,10 +212,10 @@ func (mc *ModelCatalog) indexByDigest(digest string) (int, bool) {
 }
 
 // indexByDigestOrName return index of model by digest or by name.
+//
+// It can be used only inside the lock.
 // If digest exist in model list then return index by digest else first index of name.
 // If not found then return false flag.
-//
-// It can be used only inside of lock.
 func (mc *ModelCatalog) indexByDigestOrName(dn string) (int, bool) {
 	n := -1
 	for k := range mc.modelLst {

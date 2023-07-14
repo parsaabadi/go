@@ -62,7 +62,7 @@ func TestCompareOutputTable(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	csvCvt := &CellTableCmpConverter{
+	csvCvt := &CellTableCalcConverter{
 		CellTableConverter: CellTableConverter{
 			ModelDef: modelDef,
 			Name:     tableName,
@@ -74,13 +74,6 @@ func TestCompareOutputTable(t *testing.T) {
 	for _, r := range rLst {
 		csvCvt.IdToDigest[r.RunId] = r.RunDigest
 		csvCvt.DigestToId[r.RunDigest] = r.RunId
-	}
-
-	// create csv ouput directory
-	csvDir := filepath.Join("testdata", "TestCompareOutputTable-"+helper.MakeTimeStamp(time.Now()))
-	err = os.MkdirAll(csvDir, 0750)
-	if err != nil {
-		t.Fatal(err)
 	}
 
 	for k := 0; k < 100; k++ {
@@ -121,26 +114,34 @@ func TestCompareOutputTable(t *testing.T) {
 		}
 		t.Log("run id's:", runIds)
 
+		tableLt := &ReadTableLayout{
+			ReadLayout: ReadLayout{
+				Name:   tableName,
+				FromId: baseRunId,
+			},
+		}
 		cmpLt := &CalculateTableLayout{
 			CalculateLayout: CalculateLayout{
 				Calculate: cmpExpr,
-				ReadLayout: ReadLayout{
-					Name:   tableName,
-					FromId: baseRunId,
-				},
 			},
 			IsAggr: isAggr,
 		}
 
-		cLst, rdLt, err := CompareOutputTable(srcDb, modelDef, cmpLt, runIds)
+		cLst, rdLt, err := CompareOutputTable(srcDb, modelDef, tableLt, cmpLt, runIds)
 		if err != nil {
 			t.Fatal(err)
 		}
 		t.Log("Row count:", cLst.Len())
-		t.Log("Read layout:", rdLt)
+		t.Log("Read layout Offset Size IsFullPage IsLastPage:", rdLt.Offset, rdLt.Size, rdLt.IsFullPage, rdLt.IsLastPage)
 
-		// create new into csv output file
-		err = writeToCsvIdFile(csvDir, modelDef, tableName, csvCvt, cLst)
+		// create new output directory and csv file
+		csvDir := filepath.Join("testdata", "TestCompareOutputTable-"+helper.MakeTimeStamp(time.Now()))
+		err = os.MkdirAll(csvDir, 0750)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = writeTestToCsvIdFile(csvDir, modelDef, tableName, csvCvt, cLst)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -151,7 +152,7 @@ func TestCompareOutputTable(t *testing.T) {
 }
 
 // create or truncate csv file and write cell list, using id's, not codes
-func writeToCsvIdFile(
+func writeTestToCsvIdFile(
 	csvDir string,
 	modelDef *ModelMeta,
 	name string,

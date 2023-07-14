@@ -4,13 +4,17 @@
 package db
 
 import (
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/openmpp/go/ompp/config"
+	"github.com/openmpp/go/ompp/helper"
 )
 
 func TestCleanSourceExpr(t *testing.T) {
@@ -234,15 +238,13 @@ func TestTranslateToExprSql(t *testing.T) {
 
 		valid := kvIni["TranslateToExprSql.Valid_"+strconv.Itoa(k+1)]
 
-		cmpLt := &CalculateLayout{
-			Calculate: cmpExpr,
-			ReadLayout: ReadLayout{
-				Name:   tableName,
-				FromId: baseRunId,
-			},
+		readLt := &ReadLayout{
+			Name:   tableName,
+			FromId: baseRunId,
 		}
+		cmpLt := CalculateLayout{Calculate: cmpExpr}
 
-		sql, err := translateToExprSql(table, "", cmpLt, runIds)
+		sql, err := translateToExprSql(table, readLt, &cmpLt, runIds)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -302,7 +304,6 @@ func TestParseAggrCalculation(t *testing.T) {
 
 	validLst := []struct {
 		src   string
-		name  string
 		valid string
 	}{}
 	for k := 0; k < 100; k++ {
@@ -313,11 +314,9 @@ func TestParseAggrCalculation(t *testing.T) {
 		validLst = append(validLst,
 			struct {
 				src   string
-				name  string
 				valid string
 			}{
 				src:   s,
-				name:  kvIni["ParseAggrCalculation.Name_"+strconv.Itoa(k+1)],
 				valid: kvIni["ParseAggrCalculation.Valid_"+strconv.Itoa(k+1)],
 			})
 	}
@@ -327,7 +326,7 @@ func TestParseAggrCalculation(t *testing.T) {
 
 		t.Log(v.src)
 
-		r, e := parseAggrCalculation(table, v.name, v.src)
+		r, e := parseAggrCalculation(table, v.src)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -412,7 +411,6 @@ func TestTransalteAccAggrToSql(t *testing.T) {
 
 	validLst := []struct {
 		src   string
-		name  string
 		valid string
 	}{}
 	for k := 0; k < 100; k++ {
@@ -423,11 +421,9 @@ func TestTransalteAccAggrToSql(t *testing.T) {
 		validLst = append(validLst,
 			struct {
 				src   string
-				name  string
 				valid string
 			}{
 				src:   s,
-				name:  kvIni["TransalteAccAggrToSql.Name_"+strconv.Itoa(k+1)],
 				valid: kvIni["TransalteAccAggrToSql.Valid_"+strconv.Itoa(k+1)],
 			})
 	}
@@ -437,7 +433,7 @@ func TestTransalteAccAggrToSql(t *testing.T) {
 
 		t.Log(v.src)
 
-		cteSql, mainSql, e := transalteAccAggrToSql(table, v.name, v.src)
+		cteSql, mainSql, e := transalteAccAggrToSql(table, 0, v.src)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -458,5 +454,160 @@ func TestTransalteAccAggrToSql(t *testing.T) {
 		} else {
 			t.Log("=>", sql)
 		}
+	}
+}
+
+func TestCalculateOutputTable(t *testing.T) {
+
+	// load ini-file and parse test run options
+	kvIni, err := config.NewIni("testdata/test.ompp.db.calculate.ini", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	modelName := kvIni["CalculateOutputTable.ModelName"]
+	modelDigest := kvIni["CalculateOutputTable.ModelDigest"]
+	modelSqliteDbPath := kvIni["CalculateOutputTable.DbPath"]
+	tableName := kvIni["CalculateOutputTable.TableName"]
+
+	// open source database connection and check is it valid
+	cs := MakeSqliteDefaultReadOnly(modelSqliteDbPath)
+	t.Log(cs)
+
+	srcDb, _, err := Open(cs, SQLiteDbDriver, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srcDb.Close()
+
+	if err := CheckOpenmppSchemaVersion(srcDb); err != nil {
+		t.Fatal(err)
+	}
+
+	// get model metadata
+	modelDef, err := GetModel(srcDb, modelName, modelDigest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if modelDef == nil {
+		t.Errorf("model not found: %s :%s:", modelName, modelDigest)
+	}
+	t.Log("Model:", modelDef.Model.Name, " ", modelDef.Model.Digest)
+
+	// create csv converter by including all model runs (test only)
+	rLst, err := GetRunList(srcDb, modelDef.Model.ModelId)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	csvCvt := &CellTableCalcConverter{
+		CellTableConverter: CellTableConverter{
+			ModelDef: modelDef,
+			Name:     tableName,
+		},
+		IsIdCsv:    true,
+		IdToDigest: map[int]string{},
+		DigestToId: map[string]int{},
+	}
+	for _, r := range rLst {
+		csvCvt.IdToDigest[r.RunId] = r.RunDigest
+		csvCvt.DigestToId[r.RunDigest] = r.RunId
+	}
+
+	for k := 0; k < 100; k++ {
+
+		calcLt := []CalculateTableLayout{}
+
+		appendToCalc := func(src string, isAggr bool, idOffset int) {
+
+			ce := strings.Split(src, ",")
+			for k := range ce {
+
+				c := strings.TrimSpace(ce[k])
+				if c[0] == '"' && c[len(c)-1] == '"' {
+					c = c[1 : len(c)-1]
+				}
+
+				if c != "" {
+
+					calcLt = append(calcLt, CalculateTableLayout{
+						CalculateLayout: CalculateLayout{
+							Calculate: c,
+							CalcId:    idOffset + k,
+						},
+						IsAggr: isAggr,
+					})
+					t.Log("Calculate:", c)
+					t.Log(tableName, " Is aggregation:", isAggr)
+				}
+			}
+		}
+
+		if cLst := kvIni["CalculateOutputTable.Calculate_"+strconv.Itoa(k+1)]; cLst != "" {
+			appendToCalc(cLst, false, CALCULATED_ID_OFFSET)
+		}
+		if cLst := kvIni["CalculateOutputTable.CalculateAggr_"+strconv.Itoa(k+1)]; cLst != "" {
+			appendToCalc(cLst, true, 2*CALCULATED_ID_OFFSET)
+		}
+		if len(calcLt) <= 0 {
+			continue
+		}
+
+		runIds := []int{}
+		if sVal := kvIni["CalculateOutputTable.RunIds_"+strconv.Itoa(k+1)]; sVal != "" {
+
+			sArr := strings.Split(sVal, ",")
+			for k := range sArr {
+				if id, err := strconv.Atoi(sArr[k]); err != nil {
+					t.Fatal(err)
+				} else {
+					runIds = append(runIds, id)
+				}
+			}
+		}
+		if len(runIds) <= 0 {
+			t.Fatal("ERROR: empty run list at CalculateOutputTable.RunIds", k+1)
+		}
+		t.Log("run id's:", runIds)
+
+		tableLt := &ReadTableLayout{
+			ReadLayout: ReadLayout{
+				Name:   tableName,
+				FromId: runIds[0],
+			},
+		}
+
+		// translate sql to produce log
+		var table *TableMeta
+		if k, ok := modelDef.OutTableByName(tableName); ok {
+			table = &modelDef.Table[k]
+		} else {
+			t.Errorf("output table not found: " + tableName)
+		}
+		q, _ := translateTableCalcToSql(table, &tableLt.ReadLayout, calcLt, runIds)
+		t.Log("Sql:", q)
+
+		// read table
+		cLst, rdLt, err := CalculateOutputTable(srcDb, modelDef, tableLt, calcLt, runIds)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Log("Row count:", cLst.Len())
+		t.Log("Read layout Offset Size IsFullPage IsLastPage:", rdLt.Offset, rdLt.Size, rdLt.IsFullPage, rdLt.IsLastPage)
+
+		// create new output directory and csv file
+		csvDir := filepath.Join("testdata", "TestCalculateOutputTable-"+helper.MakeTimeStamp(time.Now()))
+		err = os.MkdirAll(csvDir, 0750)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = writeTestToCsvIdFile(csvDir, modelDef, tableName, csvCvt, cLst)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// read valid csv input and compare
+		// valid := kvIni["CalculateOutputTable.Valid_"+strconv.Itoa(k+1)]
 	}
 }

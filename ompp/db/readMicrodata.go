@@ -238,7 +238,7 @@ func ReadMicrodataTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadMicroLayou
 	return &lt, nil
 }
 
-// trxReadMicrodataTo read ead entity microdata rows (microdata key, attributes) from workset or model run results and process each row by cvtTo().
+// trxReadMicrodataTo read entity microdata rows (microdata key, attributes) from workset or model run results and process each row by cvtTo().
 func trxReadMicrodataTo(trx *sql.Tx, entity *EntityMeta, entityAttrs []EntityAttrRow, query string, cvtTo func(src interface{}) error) error {
 
 	// select microdata cells: (microdata key, attributes)

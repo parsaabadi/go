@@ -241,7 +241,7 @@ func scanModelRuns(doneC <-chan bool) {
 			}
 
 			// get list of the model runs
-			rl, ok := theCatalog.RunRowListByModelDigest(dgst)
+			rl, ok := theCatalog.RunRowListByModel(dgst)
 			if !ok || len(rl) <= 0 {
 				continue // no model runs (or ignore get runs error)
 			}

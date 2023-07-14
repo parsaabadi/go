@@ -345,7 +345,7 @@ func SelectToList(
 		rs.PushBack(r)
 
 		// if this is a full page reading mode: keep page size list of rows
-		for rs.Len() > int(nSize) {
+		for nSize > 0 && rs.Len() > int(nSize) {
 			rs.Remove(rs.Front())
 		}
 		lt.Size = int64(rs.Len())

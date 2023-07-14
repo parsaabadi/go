@@ -119,6 +119,59 @@ func (mc *ModelCatalog) ReadOutTableTo(dn, rdsn string, layout *db.ReadTableLayo
 	return lt, true
 }
 
+// ReadOutTableCalculateTo select "page" of calculated output table values from model run(s) and pass each row into cvtWr().
+//
+// It can calculate multiple values based on expressions and/or accumulators aggregation.
+// Optional list of run id's can be supplied to read more than one run from output table.
+// Output table values identified by model digest-or-name run id(s) and output table name.
+// Page of values is a rows from output table expression or accumulator table or all accumulators view.
+// Page started at zero based offset row and up to max page size rows, if page size <= 0 then all values returned.
+// Values can be from expression table, accumulator table or "all accumulators" view.
+// Rows can be filtered and ordered (see db.ReadTableLayout for details).
+func (mc *ModelCatalog) ReadOutTableCalculateTo(
+	dn, rdsn string, layout *db.ReadTableLayout, calcLt []db.CalculateTableLayout, runIds []int, cvtWr func(src interface{}) (bool, error),
+) (*db.ReadPageLayout, bool) {
+
+	// if model digest-or-name is empty then return empty results
+	if dn == "" {
+		omppLog.Log("Warning: invalid (empty) model digest and name")
+		return nil, false
+	}
+
+	// get model metadata and database connection
+	meta, dbConn, ok := mc.modelMeta(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return nil, false
+	}
+
+	// check if output table name exist in the model
+	if _, ok = meta.OutTableByName(layout.Name); !ok {
+		omppLog.Log("Warning: output table not found: ", layout.Name)
+		return nil, false // return empty result: output table not found or error
+	}
+
+	// find model run id by digest-or-stamp-or-name
+	r, ok := mc.CompletedRunByDigestOrStampOrName(dn, rdsn)
+	if !ok {
+		return nil, false // return empty result: run select error
+	}
+	if r.Status != db.DoneRunStatus {
+		omppLog.Log("Warning: model run not completed successfully: ", rdsn, ": ", r.Status)
+		return nil, false
+	}
+	layout.FromId = r.RunId // source run id
+
+	// read output table page
+	lt, err := db.ReadOutputTableCalculteTo(dbConn, meta, layout, calcLt, runIds, cvtWr)
+	if err != nil {
+		omppLog.Log("Error at read output table: ", dn, ": ", layout.Name, ": ", err.Error())
+		return nil, false // return empty result: values select error
+	}
+
+	return lt, true
+}
+
 // ReadMicrodataTo select "page" of microdata values from model run and pass each row into cvtWr().
 // Microdata identified by model digest-or-name, run digest-or-stamp-or-name and entity name.
 // Page of values is a rows from microdata value table started at zero based offset row

@@ -409,3 +409,153 @@ func ReadOutputTableTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLay
 
 	return &lt, nil
 }
+
+// ReadOutputTableCalculteTo read calculated output table page (run id, expression(s) id, dimensions and values) and process each row by cvtTo().
+//
+// It can calculate multiple values based on expressions and/or accumulators aggregation.
+// Optional runLst list of run digest-or-stamp-or-name can be supplied to read more than one run from output table.
+func ReadOutputTableCalculteTo(
+	dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLayout, calcLt []CalculateTableLayout, runIds []int, cvtTo func(src interface{}) (bool, error),
+) (*ReadPageLayout, error) {
+
+	// validate parameters
+	if modelDef == nil {
+		return nil, errors.New("invalid (empty) model metadata, look like model not found")
+	}
+	if layout == nil {
+		return nil, errors.New("invalid (empty) page layout")
+	}
+	if layout.Name == "" {
+		return nil, errors.New("invalid (empty) output table name")
+	}
+	if len(calcLt) <= 0 {
+		return nil, errors.New("invalid (empty) output table calculation expression(s): " + layout.Name)
+	}
+
+	// find output table id by name
+	var table *TableMeta
+	if k, ok := modelDef.OutTableByName(layout.Name); ok {
+		table = &modelDef.Table[k]
+	} else {
+		return nil, errors.New("output table not found: " + layout.Name)
+	}
+
+	// make sql to select calculated output table expression(s) from model run(s)
+	q, err := translateTableCalcToSql(table, &layout.ReadLayout, calcLt, runIds)
+	if err != nil {
+		return nil, err
+	}
+
+	// prepare db-row scan conversion buffer: run_id, expression id, dimensions, value
+	var runId int
+	var calcId int
+	d := make([]int, table.Rank)
+	var vf sql.NullFloat64
+	var scanBuf []interface{}
+
+	scanBuf = append(scanBuf, &runId)
+	scanBuf = append(scanBuf, &calcId)
+
+	for k := 0; k < table.Rank; k++ {
+		scanBuf = append(scanBuf, &d[k])
+	}
+	scanBuf = append(scanBuf, &vf)
+
+	// make new cell from conversion buffer
+	makeCell := func() interface{} {
+		c := CellTableCalc{
+			cellIdValue: cellIdValue{DimIds: make([]int, table.Rank)},
+			CalcId:      calcId,
+			RunId:       runId,
+		}
+		copy(c.DimIds, d)
+		c.IsNull = !vf.Valid
+		c.Value = 0.0
+		if !c.IsNull {
+			c.Value = vf.Float64
+		}
+		return c
+	}
+
+	// if full page requested:
+	// select rows into the list buffer and write rows from the list into output stream
+	if layout.IsFullPage {
+
+		// make a list of output cells
+		cLst, lt, e := SelectToList(dbConn, q, layout.ReadPageLayout,
+			func(rows *sql.Rows) (interface{}, error) {
+
+				if e := rows.Scan(scanBuf...); e != nil {
+					return nil, e
+				}
+				return makeCell(), nil
+			})
+		if e != nil {
+			return nil, e
+		}
+
+		// write page into output stream
+		for c := cLst.Front(); c != nil; c = c.Next() {
+
+			if _, e := cvtTo(c.Value); e != nil {
+				return nil, e
+			}
+		}
+
+		return lt, nil // done: return output page layout
+	}
+	// else: select rows and write it into output stream without buffering
+
+	// adjust page layout: starting offset and page size
+	nStart := layout.Offset
+	if nStart < 0 {
+		nStart = 0
+	}
+	nSize := layout.Size
+	if nSize < 0 {
+		nSize = 0
+	}
+	var nRow int64
+
+	lt := ReadPageLayout{
+		Offset:     nStart,
+		Size:       0,
+		IsLastPage: false,
+	}
+
+	// select cells:
+	// expr_id or or sub_id or acc_id and sub_id, dimension(s) enum ids
+	// value or all accumulator values and null status
+	err = SelectRowsTo(dbConn, q,
+		func(rows *sql.Rows) (bool, error) {
+
+			// if page size is limited then select only a page of rows
+			nRow++
+			if nSize > 0 && nRow > nStart+nSize {
+				return false, nil
+			}
+			if nRow <= nStart {
+				return true, nil
+			}
+
+			// select next row
+			if e := rows.Scan(scanBuf...); e != nil {
+				return false, e
+			}
+			lt.Size++
+
+			// make new cell from scan conversion buffer and pass it to the writer
+			return cvtTo(makeCell())
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	// check for the empty result page or last page
+	if lt.Size <= 0 {
+		lt.Offset = nRow
+	}
+	lt.IsLastPage = nSize <= 0 || nSize > 0 && nRow <= nStart+nSize
+
+	return &lt, nil
+}

@@ -9,146 +9,177 @@ import (
 	"strings"
 )
 
-// Translate output table expression calculation to sql query, apply dimension filters, order by and selected run id's.
+// Translate all output table expression calculation to sql query, apply dimension filters, selected run id's and order by.
 // It can be a multiple runs comparison and base run id is layout.FromId
 // Or simple expression calcultion inside of single run, in that case layout.FromId and runIds[] are merged.
 // Only simple functions allowed in expression calculation.
-// Output column name outColName is optional.
-func translateToExprSql(table *TableMeta, outColName string, layout *CalculateLayout, runIds []int) (string, error) {
+func translateToExprSql(table *TableMeta, readLt *ReadLayout, calcLt *CalculateLayout, runIds []int) (string, error) {
 
-	srcMsg := table.Name
-	if outColName != "" {
-		srcMsg += "." + outColName
-	}
+	// make sql:
+	// WITH cte array
+	// SELECT main sql calculation
+	// WHERE run id IN (....)
+	// AND dimension filters
+	// ORDER BY 1, 2,....
 
-	// translate output table expression calcultion to sql:
-	// if it is run comparison then
-	//
-	//  SELECT V.run_id, V.dim0, V.dim1, (B.src0 - V.src1) AS OutColName
-	//  FROM B inner join V
-	//  B is [base] run and V is [variant] run
-	//
-	// else it is not run comparison but simple expression calculation
-	//
-	//  SELECT B.run_id, B.dim0, B.dim1, (B.src0 + B.src1) AS OutColName
-	//  FROM B
-	//
-	cteSql, mainSql, isRunCmp, err := translateExprCalcToSql(table, outColName, layout.Calculate)
+	cteSql, mainSql, _, err := partialTranslateToExprSql(table, readLt, calcLt, runIds)
 	if err != nil {
-		return "", errors.New("Error at " + srcMsg + ": " + err.Error())
+		return "", err
 	}
 
 	sql := ""
-	if cteSql != "" {
-		sql += "WITH " + cteSql + " "
-	}
-	sql += mainSql
-
-	// append run id's
-	if !isRunCmp {
-		sql += " WHERE B.run_id IN ("
-
-		isFound := false
-		for k := 0; !isFound && k < len(runIds); k++ {
-			isFound = runIds[k] == layout.FromId
-		}
-		if !isFound {
-			sql += strconv.Itoa(layout.FromId) + ", "
-		}
-	} else {
-		sql += " WHERE B.run_id = " + strconv.Itoa(layout.FromId)
-		sql += " AND V.run_id IN ("
-	}
-	for k := 0; k < len(runIds); k++ {
+	for k := range cteSql {
 		if k > 0 {
-			sql += ", "
+			sql += ", " + cteSql[k]
+		} else {
+			sql += "WITH " + cteSql[k]
 		}
-		sql += strconv.Itoa(runIds[k])
 	}
-	sql += ")"
+	sql += " " + mainSql
 
-	// append dimension enum code filters, if specified
-	for k := range layout.Filter {
-
-		// find dimension index by name
-		dix := -1
-		for j := range table.Dim {
-			if table.Dim[j].Name == layout.Filter[k].Name {
-				dix = j
-				break
-			}
-		}
-		if dix < 0 {
-			return "", errors.New("Error at " + srcMsg + ": output table " + table.Name + " does not have dimension " + layout.Filter[k].Name)
-		}
-
-		f, err := makeWhereFilter(
-			&layout.Filter[k], "B", table.Dim[dix].colName, table.Dim[dix].typeOf, table.Dim[dix].IsTotal, table.Dim[dix].Name, "output table "+table.Name)
-		if err != nil {
-			return "", errors.New("Error at " + srcMsg + ": " + err.Error())
-		}
-		sql += " AND " + f
-	}
-
-	// append dimension enum id filters, if specified
-	for k := range layout.FilterById {
-
-		// find dimension index by name
-		dix := -1
-		for j := range table.Dim {
-			if table.Dim[j].Name == layout.FilterById[k].Name {
-				dix = j
-				break
-			}
-		}
-		if dix < 0 {
-			return "", errors.New("Error at " + srcMsg + ": output table " + table.Name + " does not have dimension " + layout.FilterById[k].Name)
-		}
-
-		f, err := makeWhereIdFilter(
-			&layout.FilterById[k], "B", table.Dim[dix].colName, table.Dim[dix].typeOf, table.Dim[dix].Name, "output table "+table.Name)
-		if err != nil {
-			return "", errors.New("Error at " + srcMsg + ": " + err.Error())
-		}
-
-		sql += " AND " + f
-	}
-
-	// append ORDER BY, default order by: run_id, dimensions
-	sql += makeOrderBy(table.Rank, layout.OrderBy, 1)
+	// append ORDER BY, default order by: run_id, expression id, dimensions
+	sql += makeOrderBy(table.Rank, readLt.OrderBy, 2)
 
 	return sql, nil
 }
 
+// Translate all output table expression calculations to sql query, apply dimension filters and selected run id's.
+// Return list of CTE sql's and main sql's.
+// It can be a multiple runs comparison and base run id is layout.FromId
+// Or simple expression calcultion inside of single run, in that case layout.FromId and runIds[] are merged.
+// Only simple functions allowed in expression calculation.
+func partialTranslateToExprSql(table *TableMeta, readLt *ReadLayout, calcLt *CalculateLayout, runIds []int) ([]string, string, bool, error) {
+
+	// translate output table expression calcultions to sql:
+	// if it is run comparison then
+	//
+	//  SELECT V.run_id, CalcId AS calc_id, V.dim0, V.dim1, (B.src0 - V.src1) AS calc_value
+	//  FROM B inner join V on dimensions
+	//  B is [base] run and V is [variant] run
+	//
+	// else it is not run comparison but simple expression calculation
+	//
+	//  SELECT B.run_id, CalcId AS calc_id, B.dim0, B.dim1, (B.src0 + B.src1) AS calc_value
+	//  FROM B
+	//
+	cteSql, mainSql, isRunCompare, err := translateExprCalcToSql(table, calcLt.CalcId, calcLt.Calculate)
+	if err != nil {
+		return []string{}, "", false, errors.New("Error at " + table.Name + " " + calcLt.Calculate + ": " + err.Error())
+	}
+
+	// make where clause and dimension filters:
+	// WHERE B.run_id = 102
+	// AND V.run_id IN (103, 104, 105, 106, 107, 108, 109, 110, 111, 112)
+	// AND B.dim0 = .....
+
+	// append run id's
+	where := " WHERE"
+	if !isRunCompare {
+		where += " B.run_id IN ("
+
+		isFound := false
+		for k := 0; !isFound && k < len(runIds); k++ {
+			isFound = runIds[k] == readLt.FromId
+		}
+		if !isFound {
+			where += strconv.Itoa(readLt.FromId)
+			if len(runIds) > 0 {
+				where += ", "
+			}
+		}
+	} else {
+		where += " B.run_id = " + strconv.Itoa(readLt.FromId)
+		where += " AND V.run_id IN ("
+	}
+	for k := 0; k < len(runIds); k++ {
+		if k > 0 {
+			where += ", "
+		}
+		where += strconv.Itoa(runIds[k])
+	}
+	where += ")"
+
+	// append dimension enum code filters, if specified
+	for k := range readLt.Filter {
+
+		// find dimension index by name
+		dix := -1
+		for j := range table.Dim {
+			if table.Dim[j].Name == readLt.Filter[k].Name {
+				dix = j
+				break
+			}
+		}
+		if dix < 0 {
+			return []string{}, "", false, errors.New("Error at " + table.Name + " " + calcLt.Calculate + ": output table " + table.Name + " does not have dimension " + readLt.Filter[k].Name)
+		}
+
+		f, err := makeWhereFilter(
+			&readLt.Filter[k], "B", table.Dim[dix].colName, table.Dim[dix].typeOf, table.Dim[dix].IsTotal, table.Dim[dix].Name, "output table "+table.Name)
+		if err != nil {
+			return []string{}, "", false, errors.New("Error at " + table.Name + " " + calcLt.Calculate + ": " + err.Error())
+		}
+		where += " AND " + f
+	}
+
+	// append dimension enum id filters, if specified
+	for k := range readLt.FilterById {
+
+		// find dimension index by name
+		dix := -1
+		for j := range table.Dim {
+			if table.Dim[j].Name == readLt.FilterById[k].Name {
+				dix = j
+				break
+			}
+		}
+		if dix < 0 {
+			return []string{}, "", false, errors.New("Error at " + table.Name + " " + calcLt.Calculate + ": output table " + table.Name + " does not have dimension " + readLt.FilterById[k].Name)
+		}
+
+		f, err := makeWhereIdFilter(
+			&readLt.FilterById[k], "B", table.Dim[dix].colName, table.Dim[dix].typeOf, table.Dim[dix].Name, "output table "+table.Name)
+		if err != nil {
+			return []string{}, "", false, errors.New("Error at " + table.Name + " " + calcLt.Calculate + ": " + err.Error())
+		}
+
+		where += " AND " + f
+	}
+
+	// append WHERE to main sql query and return result
+	mainSql += where
+
+	return cteSql, mainSql, isRunCompare, nil
+}
+
 // Translate output table expression calculation to sql query.
 // Only simple functions allowed in expression calculation.
-// Output column name outColName is optional.
 //
-// Return SELECT for value calculation and bool flag if it is a multiple runs comparison
-// or expression calculation inside of a single run.
+// Return array of CTE sql, SELECT for value calculation
+// and bool flag: if true then it is multiple runs comparison else expression calculation inside of a single run(s).
 // If it is run comparison then
 //
-// SELECT V.run_id, B.dim0, B.dim1, (B.src0 - V.src1) AS OutColName
-// FROM B inner join V
+// SELECT V.run_id, CalcId AS calc_id, B.dim0, B.dim1, (B.src0 - V.src1) AS calc_value
+// FROM B inner join V on dimensions
 // B is [base] run and V is [variant] run
 //
 // else it is not run comparison but simple expression calculation
 //
-// SELECT B.run_id, B.dim0, B.dim1, (B.src0 + B.src1) AS OutColName
+// SELECT B.run_id, CalcId AS calc_id, B.dim0, B.dim1, (B.src0 + B.src1) AS calc_value
 // FROM B
-func translateExprCalcToSql(table *TableMeta, outColName string, calculateExpr string) (string, string, bool, error) {
+func translateExprCalcToSql(table *TableMeta, calcId int, calculateExpr string) ([]string, string, bool, error) {
 
 	// clean source calculation from cr lf and unsafe sql quotes
 	// return error if unsafe sql or comment found outside of 'quotes', ex.: -- ; DELETE INSERT UPDATE...
 	expr := cleanSourceExpr(calculateExpr)
 	if err := errorIfUnsafeSqlOrComment(expr); err != nil {
-		return "", "", false, err
+		return []string{}, "", false, err
 	}
 
 	// translate (substitute) all simple functions: OM_DIV_BY OM_IF...
 	expr, err := translateAllSimpleFnc(expr)
 	if err != nil {
-		return "", "", false, err
+		return []string{}, "", false, err
 	}
 
 	// make sql column names as src0,...,srcN and make sure column names are different from expression names
@@ -207,7 +238,7 @@ func translateExprCalcToSql(table *TableMeta, outColName string, calculateExpr s
 	for nEnd := 0; nStart >= 0 && nEnd >= 0; {
 
 		if nStart, nEnd, err = nextUnquoted(expr, nStart); err != nil {
-			return "", "", false, err
+			return []string{}, "", false, err
 		}
 		if nStart < 0 || nEnd < 0 { // end of source formula
 			break
@@ -290,10 +321,10 @@ func translateExprCalcToSql(table *TableMeta, outColName string, calculateExpr s
 		!isSrcOnly && (isAnyBase && !isAnyVar || !isAnyBase && isAnyVar) ||
 		(baseMinIdx < 0 || baseMinIdx >= exprCount) ||
 		!isSrcOnly && (varMinIdx < 0 || varMinIdx >= exprCount) {
-		return expr, "", false, errors.New("invalid (or mixed forms) of expression names used in: " + calculateExpr)
+		return []string{}, expr, false, errors.New("invalid (or mixed forms) of expression names used in: " + calculateExpr)
 	}
 	if !isSrcOnly && !isAnyBase && !isAnyVar {
-		return expr, "", false, errors.New("error: there are no expression names found in: " + calculateExpr)
+		return []string{}, expr, false, errors.New("error: there are no expression names found in: " + calculateExpr)
 	}
 
 	/*
@@ -314,8 +345,8 @@ func translateExprCalcToSql(table *TableMeta, outColName string, calculateExpr s
 			WHERE C.expr_id = 1
 		)
 		SELECT
-			V.run_id, B.dim0, B.dim1,
-			(B1.src1 + V1.src1 + V.src0) / CASE WHEN ABS(B.src0) > 1.0e-37 THEN B.src0 ELSE NULL END AS OutColName
+			V.run_id, CalcId AS calc_id, B.dim0, B.dim1,
+			(B1.src1 + V1.src1 + V.src0) / CASE WHEN ABS(B.src0) > 1.0e-37 THEN B.src0 ELSE NULL END AS calc_value
 		FROM cs0 B
 		INNER JOIN cs1 B1 ON (B1.run_id = B.run_id AND B1.dim0 = B.dim0 AND B1.dim1 = B.dim1)
 		INNER JOIN cs0 V ON (V.dim0 = B.dim0 AND V.dim1 = B.dim1)
@@ -336,51 +367,48 @@ func translateExprCalcToSql(table *TableMeta, outColName string, calculateExpr s
 	cteBodyCols += ", C.expr_value"
 
 	// add CTEs for source expressions
-	cteSql := ""
+	cteSql := []string{}
 
 	for k, isUsed := range nameUsage {
 		if !isUsed {
 			continue
 		}
 
-		if cteSql != "" {
-			cteSql += ", "
-		}
-		cteSql += "cs" + strconv.Itoa(k) + " (" + cteHdrCols + ", " + srcCols[k] + ") AS" +
-			" (" +
-			"SELECT " + cteBodyCols + " FROM " + table.DbExprTable + " C" +
-			" INNER JOIN run_table BR ON (BR.base_run_id = C.run_id AND BR.table_hid = " + strconv.Itoa(table.TableHid) + ")" +
-			" WHERE C.expr_id = " + strconv.Itoa(table.Expr[k].ExprId) +
-			")"
+		cteSql = append(cteSql,
+			"cs"+strconv.Itoa(k)+" ("+cteHdrCols+", "+srcCols[k]+") AS"+
+				" ("+
+				"SELECT "+cteBodyCols+" FROM "+table.DbExprTable+" C"+
+				" INNER JOIN run_table BR ON (BR.base_run_id = C.run_id AND BR.table_hid = "+strconv.Itoa(table.TableHid)+")"+
+				" WHERE C.expr_id = "+strconv.Itoa(table.Expr[k].ExprId)+
+				")",
+		)
 	}
 
 	// SELECT for value calculation
 	// if it is run comparison then
 	//
-	//   SELECT V.run_id, B.dim0, B.dim1, (B.src0 - V.src1) AS OutColName
-	//   FROM B inner join V
+	//   SELECT V.run_id, CalcId AS calc_id, B.dim0, B.dim1, (B.src0 - V.src1) AS calc_value
+	//   FROM B inner join V on dimensions
 	//   B is [base] run and V is [variant] run
 	//
 	// else it is not run comparison but simple expression calculation
 	//
-	//   SELECT B.run_id, B.dim0, B.dim1, (B.src0 + B.src1) AS OutColName
+	//   SELECT B.run_id, CalcId AS calc_id, B.dim0, B.dim1, (B.src0 + B.src1) AS calc_value
 	//   FROM B
 	//
 	mainSql := ""
 
 	if isSrcOnly {
-		mainSql += "SELECT B.run_id"
+		mainSql += "SELECT B.run_id, " + strconv.Itoa(calcId) + " AS calc_id"
 	} else {
-		mainSql += "SELECT V.run_id"
+		mainSql += "SELECT V.run_id, " + strconv.Itoa(calcId) + " AS calc_id"
 
 	}
 	for _, d := range table.Dim {
 		mainSql += ", B." + d.colName
 	}
-	mainSql += ", " + expr
-	if outColName != "" {
-		mainSql += " AS " + outColName // output cloumn name is optional
-	}
+	mainSql += ", " + expr + " AS calc_value"
+
 	mainSql += " FROM cs" + strconv.Itoa(baseMinIdx) + " B"
 
 	if isSrcOnly {

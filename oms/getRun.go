@@ -197,48 +197,48 @@ func (mc *ModelCatalog) FirstOrLastRunStatus(dn string, isFirst, isCompleted boo
 	return rp, true
 }
 
-// RunRowList return list of run_lst db rows by model digest and run digest-stamp-or-name sorted by run_id.
+// RunRowList return list of run_lst db rows by model digest-or-name and run digest-stamp-or-name sorted by run_id.
 // If there are multiple rows with same run stamp or run digest then multiple rows returned.
-func (mc *ModelCatalog) RunRowList(digest string, rdsn string) ([]db.RunRow, bool) {
+func (mc *ModelCatalog) RunRowList(dn string, rdsn string) ([]db.RunRow, bool) {
 
 	// if model digest is empty then return empty results
-	if digest == "" {
-		omppLog.Log("Warning: invalid (empty) model digest")
+	if dn == "" {
+		omppLog.Log("Warning: invalid (empty) model digest and name")
 		return []db.RunRow{}, false
 	}
-	meta, dbConn, ok := mc.modelMeta(digest)
+	meta, dbConn, ok := mc.modelMeta(dn)
 	if !ok {
-		omppLog.Log("Warning: model digest not found: ", digest)
+		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return []db.RunRow{}, false
 	}
 
 	// get run_lst db rows by digest, stamp or run name
 	rLst, err := db.GetRunListByDigestOrStampOrName(dbConn, meta.Model.ModelId, rdsn)
 	if err != nil {
-		omppLog.Log("Error at get run status: ", digest, ": ", rdsn, ": ", err.Error())
+		omppLog.Log("Error at get run status: ", dn, ": ", rdsn, ": ", err.Error())
 		return []db.RunRow{}, false // return empty result: run select error
 	}
 	return rLst, true
 }
 
-// RunRowListByModelDigest return list of run_lst db rows by model digest, sorted by run_id.
-func (mc *ModelCatalog) RunRowListByModelDigest(digest string) ([]db.RunRow, bool) {
+// RunRowListByModel return list of run_lst db rows by model digest-or-name, sorted by run_id.
+func (mc *ModelCatalog) RunRowListByModel(dn string) ([]db.RunRow, bool) {
 
 	// if model digest is empty then return empty results
-	if digest == "" {
-		omppLog.Log("Warning: invalid (empty) model digest")
+	if dn == "" {
+		omppLog.Log("Warning: invalid (empty) model digest and name")
 		return []db.RunRow{}, false
 	}
-	meta, dbConn, ok := mc.modelMeta(digest)
+	meta, dbConn, ok := mc.modelMeta(dn)
 	if !ok {
-		omppLog.Log("Warning: model digest not found: ", digest)
+		omppLog.Log("Warning: model digest or name not found: ", dn)
 		return []db.RunRow{}, false
 	}
 
 	// get run list
 	rl, err := db.GetRunList(dbConn, meta.Model.ModelId)
 	if err != nil {
-		omppLog.Log("Error at get run list: ", digest, ": ", err.Error())
+		omppLog.Log("Error at get run list: ", dn, ": ", err.Error())
 		return []db.RunRow{}, false // return empty result: run select error
 	}
 	return rl, true

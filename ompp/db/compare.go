@@ -9,51 +9,56 @@ import (
 	"errors"
 )
 
-// CompareOutputTable read output table page (dimensions and values) from model run results.
+// CompareOutputTable read output table page (dimensions and values) and compare multiple runs using calculation.
 //
-// If layout.IsAggr true then select accumulator(s) else output expression value(s)
-// If layout.ValueName not empty then select only that expression (accumulator) else all expressions (accumulators)
-func CompareOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *CalculateTableLayout, runIds []int) (*list.List, *ReadPageLayout, error) {
+// If cmpLt.IsAggr true then do accumulator(s) aggregation else calculate expression value(s), ex: Expr1[variant] - Expr1[base].
+func CompareOutputTable(dbConn *sql.DB, modelDef *ModelMeta, tableLt *ReadTableLayout, cmpLt *CalculateTableLayout, runIds []int) (*list.List, *ReadPageLayout, error) {
 
 	// validate parameters
 	if modelDef == nil {
 		return nil, nil, errors.New("invalid (empty) model metadata, look like model not found")
 	}
-	if layout == nil {
-		return nil, nil, errors.New("invalid (empty) page layout")
+	if tableLt == nil || cmpLt == nil {
+		return nil, nil, errors.New("invalid (empty) output table layout or comparison")
 	}
-	if layout.Name == "" {
+	if tableLt.Name == "" {
 		return nil, nil, errors.New("invalid (empty) output table name")
+	}
+	if cmpLt == nil || cmpLt.Calculate == "" {
+		return nil, nil, errors.New("invalid (empty) comparison expression")
 	}
 
 	// find output table id by name
 	var table *TableMeta
-	if k, ok := modelDef.OutTableByName(layout.Name); ok {
+	if k, ok := modelDef.OutTableByName(tableLt.Name); ok {
 		table = &modelDef.Table[k]
 	} else {
-		return nil, nil, errors.New("output table not found: " + layout.Name)
+		return nil, nil, errors.New("output table not found: " + tableLt.Name)
 	}
 
 	// translate comparison calculation to sql
 	var q string
 	var err error
 
-	if layout.IsAggr {
-		q, err = translateToAccSql(table, "", &layout.CalculateLayout, runIds)
+	if cmpLt.IsAggr {
+		q, err = translateToAccSql(table, &tableLt.ReadLayout, &cmpLt.CalculateLayout, runIds)
 	} else {
-		q, err = translateToExprSql(table, "", &layout.CalculateLayout, runIds)
+		q, err = translateToExprSql(table, &tableLt.ReadLayout, &cmpLt.CalculateLayout, runIds)
 	}
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// prepare db-row scan conversion buffer: run_id, dimensions, value
+	// prepare db-row scan conversion buffer: run_id, expression id, dimensions, value
 	var runId int
+	var calcId int
 	d := make([]int, table.Rank)
 	var vf sql.NullFloat64
 	var scanBuf []interface{}
 
 	scanBuf = append(scanBuf, &runId)
+	scanBuf = append(scanBuf, &calcId)
+
 	for k := 0; k < table.Rank; k++ {
 		scanBuf = append(scanBuf, &d[k])
 	}
@@ -61,7 +66,7 @@ func CompareOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *CalculateTa
 
 	// select cells:
 	// run_id, dimension(s) enum ids, value null status
-	cLst, lt, err := SelectToList(dbConn, q, layout.ReadPageLayout,
+	cLst, lt, err := SelectToList(dbConn, q, tableLt.ReadPageLayout,
 		func(rows *sql.Rows) (interface{}, error) {
 
 			if err := rows.Scan(scanBuf...); err != nil {
@@ -69,8 +74,9 @@ func CompareOutputTable(dbConn *sql.DB, modelDef *ModelMeta, layout *CalculateTa
 			}
 
 			// make new cell from conversion buffer
-			c := CellTableCmp{
+			c := CellTableCalc{
 				cellIdValue: cellIdValue{DimIds: make([]int, table.Rank)},
+				CalcId:      calcId,
 				RunId:       runId,
 			}
 			copy(c.DimIds, d)

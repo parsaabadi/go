@@ -91,7 +91,7 @@ func (mc *ModelCatalog) TableToCodeCellConverter(dn string, name string, isAcc, 
 	case isAcc && isAllAcc:
 		csvCvt := db.CellAllAccConverter{
 			CellTableConverter: ctc,
-			IsIdCsv:            true,
+			IsIdCsv:            false,
 			DoubleFmt:          theCfg.doubleFmt,
 			ValueName:          "",
 		}
@@ -99,14 +99,14 @@ func (mc *ModelCatalog) TableToCodeCellConverter(dn string, name string, isAcc, 
 	case isAcc:
 		csvCvt := db.CellAccConverter{
 			CellTableConverter: ctc,
-			IsIdCsv:            true,
+			IsIdCsv:            false,
 			DoubleFmt:          theCfg.doubleFmt,
 		}
 		cvt, err = csvCvt.IdToCodeCell(meta, name)
 	default:
 		csvCvt := db.CellExprConverter{
 			CellTableConverter: ctc,
-			IsIdCsv:            true,
+			IsIdCsv:            false,
 			DoubleFmt:          theCfg.doubleFmt,
 		}
 		cvt, err = csvCvt.IdToCodeCell(meta, name)
@@ -117,6 +117,192 @@ func (mc *ModelCatalog) TableToCodeCellConverter(dn string, name string, isAcc, 
 	}
 
 	return cvt, true
+}
+
+// TableToCodeCalcCellConverter return output table calculated value converter from id's cell into code cell and run id(s).
+// Function accept base run digest-or-stamp-or-name and optional list of variant runs digest-or-stamp-or-name.
+// All runs must be completed sucessfully.
+func (mc *ModelCatalog) TableToCodeCalcCellConverter(
+	dn string, rdsn string, tableName string, runLst []string,
+) (func(interface{}) (interface{}, error), int, []int, bool) {
+
+	// if model digest-or-name is empty then return empty results
+	if dn == "" {
+		omppLog.Log("Warning: invalid (empty) model digest and name")
+		return nil, 0, nil, false
+	}
+
+	// get model metadata and database connection
+	meta, _, ok := mc.modelMeta(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return nil, 0, nil, false // return empty result: model not found or error
+	}
+
+	// check if output table name exist in the model
+	if _, ok = meta.OutTableByName(tableName); !ok {
+		omppLog.Log("Error: model output table not found: ", dn, ": ", tableName)
+		return nil, 0, nil, false
+	}
+
+	// create converter
+	csvCvt := db.CellTableCalcConverter{
+		CellTableConverter: db.CellTableConverter{
+			ModelDef: meta,
+			Name:     tableName,
+		},
+		IsIdCsv:    false,
+		DoubleFmt:  theCfg.doubleFmt,
+		IdToDigest: map[int]string{},
+		DigestToId: map[string]int{},
+	}
+	cvt, err := csvCvt.IdToCodeCell(meta, tableName)
+
+	// find model run id by digest-or-stamp-or-name
+	r, ok := mc.CompletedRunByDigestOrStampOrName(dn, rdsn)
+	if !ok {
+		return nil, 0, nil, false // return empty result: run select error
+	}
+	if r.Status != db.DoneRunStatus {
+		omppLog.Log("Warning: model run not completed successfully: ", rdsn, ": ", r.Status)
+		return nil, 0, nil, false
+	}
+	baseRunId := r.RunId // source run id
+
+	csvCvt.IdToDigest[r.RunId] = r.RunDigest // add base run digest to converter
+	csvCvt.DigestToId[r.RunDigest] = r.RunId
+
+	// check if all additional model runs completed sucessfully
+	runIds := []int{}
+
+	if len(runLst) > 0 {
+		rLst, _ := mc.RunRowListByModel(meta.Model.Digest)
+
+		for _, rn := range runLst {
+
+			rId := 0
+			for k := 0; rId <= 0 && k < len(rLst); k++ {
+
+				if rn == rLst[k].RunDigest || rn == rLst[k].RunStamp || rn == rLst[k].Name {
+					rId = rLst[k].RunId
+				}
+				if rId > 0 {
+					if rLst[k].Status != db.DoneRunStatus {
+						omppLog.Log("Warning: model run not completed successfully: ", rLst[k].RunDigest, ": ", rLst[k].Status)
+						return nil, 0, nil, false
+					}
+					csvCvt.IdToDigest[rLst[k].RunId] = rLst[k].RunDigest // add run digest to converter
+					csvCvt.DigestToId[rLst[k].RunDigest] = rLst[k].RunId
+				}
+			}
+			if rId <= 0 {
+				omppLog.Log("Warning: model run not found: ", rn)
+				continue
+			}
+			// else: model run completed successfully, include run id into the list of additional runs
+
+			isFound := false
+			for k := 0; !isFound && k < len(runIds); k++ {
+				isFound = rId == runIds[k]
+			}
+			if !isFound {
+				runIds = append(runIds, rId)
+			}
+		}
+	}
+
+	if err != nil {
+		omppLog.Log("Failed to create output table cell id's to code converter: ", tableName, ": ", err.Error())
+		return nil, 0, nil, false
+	}
+
+	return cvt, baseRunId, runIds, true
+}
+
+// TableToCodeCalcCellConverter return calculate layout for all expressions by aggregation name: sum avg count min max var sd se cv
+func (mc *ModelCatalog) TableAllExprCalculateLayout(dn string, name string, aggr string) ([]db.CalculateTableLayout, bool) {
+
+	// check aggregation operation
+	fnc := ""
+	switch aggr {
+	case "sum":
+		fnc = "OM_SUM"
+	case "avg":
+		fnc = "OM_AVG"
+	case "count":
+		fnc = "OM_COUNT"
+	case "min":
+		fnc = "OM_MIN"
+	case "max":
+		fnc = "OM_MAX"
+	case "var":
+		fnc = "OM_VAR"
+	case "sd":
+		fnc = "OM_SD"
+	case "se":
+		fnc = "OM_SE"
+	case "cv":
+		fnc = "OM_CV"
+	default:
+		omppLog.Log("Error: invalid aggregation name: ", aggr, ": ", dn, ": ", name)
+		return []db.CalculateTableLayout{}, false
+	}
+
+	// if model digest-or-name is empty then return empty results
+	if dn == "" {
+		omppLog.Log("Warning: invalid (empty) model digest and name")
+		return []db.CalculateTableLayout{}, false
+	}
+
+	// get model metadata and database connection
+	meta, _, ok := mc.modelMeta(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return []db.CalculateTableLayout{}, false // return empty result: model not found or error
+	}
+
+	// find output table by name
+	idx, ok := meta.OutTableByName(name)
+	if !ok {
+		omppLog.Log("Error: model output table not found: ", dn, ": ", name)
+		return []db.CalculateTableLayout{}, false
+	}
+	table := &meta.Table[idx]
+
+	// calculate output table expression and aggregation expression
+	// for example: if Expr1 = AVG(acc1) and aggregation function is SD()
+	// then append to calculation: Expr1 and SD(acc1)
+	calcLt := []db.CalculateTableLayout{}
+
+	for _, ex := range table.Expr {
+
+		// append output table expression
+		calcLt = append(calcLt, db.CalculateTableLayout{
+			CalculateLayout: db.CalculateLayout{
+				Calculate: ex.Name,
+				CalcId:    ex.ExprId,
+			},
+			IsAggr: false,
+		})
+
+		for _, acc := range table.Acc {
+
+			// find derived accumulator with the same name as expression name
+			if acc.IsDerived && acc.Name == ex.Name {
+
+				calcLt = append(calcLt, db.CalculateTableLayout{
+					CalculateLayout: db.CalculateLayout{
+						Calculate: fnc + "(" + acc.SrcAcc + ")",
+						CalcId:    ex.ExprId + db.CALCULATED_ID_OFFSET,
+					},
+					IsAggr: true,
+				})
+				break
+			}
+		}
+	}
+
+	return calcLt, true
 }
 
 // MicrodataCellConverter return microdata value converter between code cell and id's cell.
