@@ -97,7 +97,7 @@ func TestErrorIfUnsafeSqlOrComment(t *testing.T) {
 		if e := errorIfUnsafeSqlOrComment(src); e != nil {
 			t.Log("OK:", e)
 		} else {
-			t.Error("Fail:", src)
+			t.Error("****FAIL:", src)
 		}
 	}
 
@@ -109,7 +109,7 @@ func TestErrorIfUnsafeSqlOrComment(t *testing.T) {
 		t.Log(q)
 
 		if e := errorIfUnsafeSqlOrComment(q); e != nil {
-			t.Error("Fail:", e)
+			t.Error("****FAIL:", e)
 		}
 	}
 }
@@ -153,7 +153,7 @@ func TestTranslateAllSimpleFnc(t *testing.T) {
 
 		if r != v.valid {
 			t.Error("Expected:", v.valid)
-			t.Error("Fail:    ", r)
+			t.Error("****FAIL:", r)
 		} else {
 			t.Log("=>", r)
 		}
@@ -250,7 +250,7 @@ func TestTranslateToExprSql(t *testing.T) {
 		}
 		if sql != valid {
 			t.Error("Expected:", valid)
-			t.Error("Fail:    ", sql)
+			t.Error("****FAIL:", sql)
 		} else {
 			t.Log("=>", sql)
 		}
@@ -357,7 +357,7 @@ func TestParseAggrCalculation(t *testing.T) {
 
 		if s != v.valid {
 			t.Error("Expected:", v.valid)
-			t.Error("Fail:    ", s)
+			t.Error("****FAIL:", s)
 		} else {
 			t.Log("=>", s)
 		}
@@ -450,7 +450,133 @@ func TestTransalteAccAggrToSql(t *testing.T) {
 
 		if sql != v.valid {
 			t.Error("Expected:", v.valid)
-			t.Error("Fail:    ", sql)
+			t.Error("****FAIL:", sql)
+		} else {
+			t.Log("=>", sql)
+		}
+	}
+}
+
+func TestTranslateTableCalcToSql(t *testing.T) {
+
+	// load ini-file and parse test run options
+	kvIni, err := config.NewIni("testdata/test.ompp.db.calculate.ini", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	modelName := kvIni["TranslateTableCalcToSql.ModelName"]
+	modelDigest := kvIni["TranslateTableCalcToSql.ModelDigest"]
+	modelSqliteDbPath := kvIni["TranslateTableCalcToSql.DbPath"]
+	tableName := kvIni["TranslateTableCalcToSql.TableName"]
+
+	// open source database connection and check is it valid
+	cs := MakeSqliteDefaultReadOnly(modelSqliteDbPath)
+	t.Log(cs)
+
+	srcDb, _, err := Open(cs, SQLiteDbDriver, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srcDb.Close()
+
+	if err := CheckOpenmppSchemaVersion(srcDb); err != nil {
+		t.Fatal(err)
+	}
+
+	// get model metadata
+	modelDef, err := GetModel(srcDb, modelName, modelDigest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if modelDef == nil {
+		t.Errorf("model not found: %s :%s:", modelName, modelDigest)
+	}
+	t.Log("Model:", modelDef.Model.Name, " ", modelDef.Model.Digest)
+
+	// find output table id by name
+	var table *TableMeta
+	if k, ok := modelDef.OutTableByName(tableName); ok {
+		table = &modelDef.Table[k]
+	} else {
+		t.Errorf("output table not found: " + tableName)
+	}
+
+	t.Log("Check calculation SQL")
+	for k := 0; k < 100; k++ {
+
+		calcLt := []CalculateTableLayout{}
+
+		appendToCalc := func(src string, isAggr bool, idOffset int) {
+
+			ce := strings.Split(src, ",")
+			for k := range ce {
+
+				c := strings.TrimSpace(ce[k])
+				if c[0] == '"' && c[len(c)-1] == '"' {
+					c = c[1 : len(c)-1]
+				}
+
+				if c != "" {
+
+					calcLt = append(calcLt, CalculateTableLayout{
+						CalculateLayout: CalculateLayout{
+							Calculate: c,
+							CalcId:    idOffset + k,
+						},
+						IsAggr: isAggr,
+					})
+					t.Log("Calculate:", c)
+					t.Log(tableName, " Is aggregation:", isAggr)
+				}
+			}
+		}
+
+		if cLst := kvIni["TranslateTableCalcToSql.Calculate_"+strconv.Itoa(k+1)]; cLst != "" {
+			appendToCalc(cLst, false, CALCULATED_ID_OFFSET)
+		}
+		if cLst := kvIni["TranslateTableCalcToSql.CalculateAggr_"+strconv.Itoa(k+1)]; cLst != "" {
+			appendToCalc(cLst, true, 2*CALCULATED_ID_OFFSET)
+		}
+		if len(calcLt) <= 0 {
+			continue
+		}
+
+		runIds := []int{}
+		if sVal := kvIni["TranslateTableCalcToSql.RunIds_"+strconv.Itoa(k+1)]; sVal != "" {
+
+			sArr := strings.Split(sVal, ",")
+			for k := range sArr {
+				if id, err := strconv.Atoi(sArr[k]); err != nil {
+					t.Fatal(err)
+				} else {
+					runIds = append(runIds, id)
+				}
+			}
+		}
+		if len(runIds) <= 0 {
+			t.Fatal("ERROR: empty run list at TranslateTableCalcToSql.RunIds", k+1)
+		}
+		t.Log("run id's:", runIds)
+
+		tableLt := &ReadTableLayout{
+			ReadLayout: ReadLayout{
+				Name:   tableName,
+				FromId: runIds[0],
+			},
+		}
+
+		sql, e := translateTableCalcToSql(table, &tableLt.ReadLayout, calcLt, runIds)
+		if e != nil {
+			t.Fatal(e)
+		}
+
+		// read valid sql and compare
+		valid := kvIni["TranslateTableCalcToSql.Valid_"+strconv.Itoa(k+1)]
+
+		if sql != valid {
+			t.Error("Expected:", valid)
+			t.Error("****FAIL:", sql)
 		} else {
 			t.Log("=>", sql)
 		}
@@ -576,16 +702,6 @@ func TestCalculateOutputTable(t *testing.T) {
 				FromId: runIds[0],
 			},
 		}
-
-		// translate sql to produce log
-		var table *TableMeta
-		if k, ok := modelDef.OutTableByName(tableName); ok {
-			table = &modelDef.Table[k]
-		} else {
-			t.Errorf("output table not found: " + tableName)
-		}
-		q, _ := translateTableCalcToSql(table, &tableLt.ReadLayout, calcLt, runIds)
-		t.Log("Sql:", q)
 
 		// read table
 		cLst, rdLt, err := CalculateOutputTable(srcDb, modelDef, tableLt, calcLt, runIds)

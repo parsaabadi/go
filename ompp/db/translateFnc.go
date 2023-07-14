@@ -20,7 +20,7 @@ const rightDelims = ")+-*/%^|&~!=<>"
 var simpleFncLst = []string{"OM_IF", "OM_DIV_BY"}
 
 // aggregation functions
-var aggrFncLst = []string{"OM_AVG", "OM_SUM", "OM_COUNT", "OM_AVG", "OM_MIN", "OM_MAX", "OM_VAR", "OM_SD", "OM_SD", "OM_CV"}
+var aggrFncLst = []string{"OM_AVG", "OM_SUM", "OM_COUNT", "OM_AVG", "OM_MIN", "OM_MAX", "OM_VAR", "OM_SD", "OM_SE", "OM_CV"}
 
 // translate (substitute) all non-aggregation functions: OM_DIV_BY OM_IF...
 func translateAllSimpleFnc(expr string) (string, error) {
