@@ -299,6 +299,111 @@ func doTableGetCsvHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllAc
 	csvWr.Flush() // flush csv to response
 }
 
+// runTableCalcCsvGetHandler write into CSV response all output table expressions
+// and for each expression additional measure: SUM AVG COUNT MIN MAX VAR SD SE CV.
+// GET /api/model/:model/run/:run/table/:name/calc/:calc/csv
+// Dimension(s) returned as enum codes.
+func runTableCalcCsvGetHandler(w http.ResponseWriter, r *http.Request) {
+	doTableCalcGetCsvHandler(w, r, true, false)
+}
+
+// runTableCalcCsvBomGetHandler write into CSV response all output table expressions
+// and for each expression additional measure: SUM AVG COUNT MIN MAX VAR SD SE CV.
+// GET /api/model/:model/run/:run/table/:name/calc/:calc/csv-bom
+// Dimension(s) returned as enum codes.
+// Response starts from utf-8 BOM bytes.
+func runTableCalcCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
+	doTableCalcGetCsvHandler(w, r, true, true)
+}
+
+// runTableCalcIdCsvGetHandler write into CSV response all output table expressions
+// and for each expression additional measure: SUM AVG COUNT MIN MAX VAR SD SE CV.
+// GET /api/model/:model/run/:run/table/:name/calc/:calc/csv-id
+// Dimension(s) returned as enum id's.
+func runTableCalcIdCsvGetHandler(w http.ResponseWriter, r *http.Request) {
+	doTableCalcGetCsvHandler(w, r, false, false)
+}
+
+// runTableCalcIdCsvBomGetHandler write into CSV response all output table expressions
+// and for each expression additional measure: SUM AVG COUNT MIN MAX VAR SD SE CV.
+// GET /api/model/:model/run/:run/table/:name/calc/:calc/csv-id-bom
+// Dimension(s) returned as enum id's.
+// Response starts from utf-8 BOM bytes.
+func runTableCalcIdCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
+	doTableCalcGetCsvHandler(w, r, false, true)
+}
+
+// doTableCalcGetCsvHandler write into CSV response all output table expressions
+// and for each expression additional measure: SUM AVG COUNT MIN MAX VAR SD SE CV.
+// It does read all output table values, not a "page" of values.
+// Dimension(s) and enum-based parameters returned as enum codes or enum id's.
+func doTableCalcGetCsvHandler(w http.ResponseWriter, r *http.Request, isCode, isBom bool) {
+
+	// url or query parameters
+	dn := getRequestParam(r, "model")  // model digest-or-name
+	rdsn := getRequestParam(r, "run")  // run digest-or-stamp-or-name
+	name := getRequestParam(r, "name") // output table name
+	calc := getRequestParam(r, "calc") // calculation function name: sum avg count min max var sd se cv
+
+	// setup read layout and calculate layout
+	// page size =0, read all values
+	tableLt := db.ReadTableLayout{
+		ReadLayout: db.ReadLayout{Name: name},
+	}
+
+	calcLt, ok := theCatalog.TableAllExprCalculateLayout(dn, name, calc)
+	if !ok {
+		http.Error(w, "Invalid calculation expression "+calc, http.StatusBadRequest)
+		return
+	}
+
+	// get converter from cell list to csv rows []string
+	hdr, cvtRow, _, runIds, ok := theCatalog.TableToCalcCsvConverter(dn, rdsn, isCode, name, nil)
+	if !ok {
+		http.Error(w, "Failed to create output table csv converter: "+name, http.StatusBadRequest)
+		return
+	}
+
+	// set response headers: Content-Disposition: attachment; filename=name.csv
+	csvSetHeaders(w, name)
+
+	// write csv body
+	if isBom {
+		if _, err := w.Write(helper.Utf8bom); err != nil {
+			http.Error(w, "Error at csv write: "+rdsn+": "+name, http.StatusBadRequest)
+			return
+		}
+	}
+
+	csvWr := csv.NewWriter(w)
+
+	if err := csvWr.Write(hdr); err != nil {
+		http.Error(w, "Error at csv write: "+rdsn+": "+name, http.StatusBadRequest)
+		return
+	}
+
+	// convert output table cell into []string and write line into csv file
+	cs := make([]string, len(hdr))
+
+	cvtWr := func(c interface{}) (bool, error) {
+
+		if err := cvtRow(c, cs); err != nil {
+			return false, err
+		}
+		if err := csvWr.Write(cs); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+
+	_, ok = theCatalog.ReadOutTableCalculateTo(dn, rdsn, &tableLt, calcLt, runIds, cvtWr)
+	if !ok {
+		http.Error(w, "Error at run output table read "+rdsn+": "+name, http.StatusBadRequest)
+		return
+	}
+	csvWr.Flush() // flush csv to response
+}
+
 // runMicrodataCsvGetHandler read a microdata values from model run results and write it as csv response.
 // GET /api/model/:model/run/:run/microdata/:name/csv
 // Enum-based microdata attributes returned as enum codes.

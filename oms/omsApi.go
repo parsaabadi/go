@@ -216,6 +216,11 @@ func apiReadRoutes(router *vestigo.Router) {
 	router.Post("/api/model/:model/run/:run/table/value", runTablePageReadHandler, logRequest)
 	router.Post("/api/model/:model/run/:run/table/value-id", runTableIdPageReadHandler, logRequest)
 
+	// POST /api/model/:model/run/:run/table/calc
+	// POST /api/model/:model/run/:run/table/calc-id
+	router.Post("/api/model/:model/run/:run/table/calc", runTableCalcPageReadHandler, logRequest)
+	router.Post("/api/model/:model/run/:run/table/calc-id", runTableCalcIdPageReadHandler, logRequest)
+
 	if theCfg.isMicrodata {
 
 		// POST /api/model/:model/run/:run/microdata/value
@@ -283,16 +288,16 @@ func apiReadRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/table/:name/all-acc/start/", http.NotFound)
 	router.Get("/api/model/:model/run/:run/table/:name/all-acc/start/:start/count/", http.NotFound)
 
-	// GET /api/model/:model/run/:run/table/:name/calc/:aggr
-	// GET /api/model/:model/run/:run/table/:name/calc/:aggr/start/:start
-	// GET /api/model/:model/run/:run/table/:name/calc/:aggr/start/:start/count/:count
-	router.Get("/api/model/:model/run/:run/table/:name/calc/:aggr", runTableCalcPageGetHandler, logRequest)
-	router.Get("/api/model/:model/run/:run/table/:name/calc/:aggr/start/:start", runTableCalcPageGetHandler, logRequest)
-	router.Get("/api/model/:model/run/:run/table/:name/calc/:aggr/start/:start/count/:count", runTableCalcPageGetHandler, logRequest)
+	// GET /api/model/:model/run/:run/table/:name/calc/:calc
+	// GET /api/model/:model/run/:run/table/:name/calc/:calc/start/:start
+	// GET /api/model/:model/run/:run/table/:name/calc/:calc/start/:start/count/:count
+	router.Get("/api/model/:model/run/:run/table/:name/calc/:calc", runTableCalcPageGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/calc/:calc/start/:start", runTableCalcPageGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/calc/:calc/start/:start/count/:count", runTableCalcPageGetHandler, logRequest)
 	// reject if request ill-formed
 	router.Get("/api/model/:model/run/:run/table/:name/calc/", http.NotFound)
-	router.Get("/api/model/:model/run/:run/table/:name/calc/:aggr/start/", http.NotFound)
-	router.Get("/api/model/:model/run/:run/table/:name/calc/:aggr/start/:start/count/", http.NotFound)
+	router.Get("/api/model/:model/run/:run/table/:name/calc/:calc/start/", http.NotFound)
+	router.Get("/api/model/:model/run/:run/table/:name/calc/:calc/start/:start/count/", http.NotFound)
 
 	if theCfg.isMicrodata {
 
@@ -314,79 +319,70 @@ func apiReadRoutes(router *vestigo.Router) {
 func apiReadCsvRoutes(router *vestigo.Router) {
 
 	// GET /api/model/:model/workset/:set/parameter/:name/csv
-	router.Get("/api/model/:model/workset/:set/parameter/:name/csv", worksetParameterCsvGetHandler, logRequest)
-
 	// GET /api/model/:model/workset/:set/parameter/:name/csv-bom
-	router.Get("/api/model/:model/workset/:set/parameter/:name/csv-bom", worksetParameterCsvBomGetHandler, logRequest)
-
 	// GET /api/model/:model/workset/:set/parameter/:name/csv-id
-	router.Get("/api/model/:model/workset/:set/parameter/:name/csv-id", worksetParameterIdCsvGetHandler, logRequest)
-
 	// GET /api/model/:model/workset/:set/parameter/:name/csv-id-bom
+	router.Get("/api/model/:model/workset/:set/parameter/:name/csv", worksetParameterCsvGetHandler, logRequest)
+	router.Get("/api/model/:model/workset/:set/parameter/:name/csv-bom", worksetParameterCsvBomGetHandler, logRequest)
+	router.Get("/api/model/:model/workset/:set/parameter/:name/csv-id", worksetParameterIdCsvGetHandler, logRequest)
 	router.Get("/api/model/:model/workset/:set/parameter/:name/csv-id-bom", worksetParameterIdCsvBomGetHandler, logRequest)
 
 	// GET /api/model/:model/run/:run/parameter/:name/csv
-	router.Get("/api/model/:model/run/:run/parameter/:name/csv", runParameterCsvGetHandler, logRequest)
-
 	// GET /api/model/:model/run/:run/parameter/:name/csv-bom
-	router.Get("/api/model/:model/run/:run/parameter/:name/csv-bom", runParameterCsvBomGetHandler, logRequest)
-
 	// GET /api/model/:model/run/:run/parameter/:name/csv-id
-	router.Get("/api/model/:model/run/:run/parameter/:name/csv-id", runParameterIdCsvGetHandler, logRequest)
-
 	// GET /api/model/:model/run/:run/parameter/:name/csv-id-bom
+	router.Get("/api/model/:model/run/:run/parameter/:name/csv", runParameterCsvGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/parameter/:name/csv-bom", runParameterCsvBomGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/parameter/:name/csv-id", runParameterIdCsvGetHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/parameter/:name/csv-id-bom", runParameterIdCsvBomGetHandler, logRequest)
 
 	if theCfg.isMicrodata {
 
 		// GET /api/model/:model/run/:run/microdata/:name/csv
-		router.Get("/api/model/:model/run/:run/microdata/:name/csv", runMicrodataCsvGetHandler, logRequest)
-
 		// GET /api/model/:model/run/:run/microdata/:name/csv-bom
-		router.Get("/api/model/:model/run/:run/microdata/:name/csv-bom", runMicrodataCsvBomGetHandler, logRequest)
-
 		// GET /api/model/:model/run/:run/microdata/:name/csv-id
-		router.Get("/api/model/:model/run/:run/microdata/:name/csv-id", runMicrodataIdCsvGetHandler, logRequest)
-
 		// GET /api/model/:model/run/:run/microdata/:name/csv-id-bom
+		router.Get("/api/model/:model/run/:run/microdata/:name/csv", runMicrodataCsvGetHandler, logRequest)
+		router.Get("/api/model/:model/run/:run/microdata/:name/csv-bom", runMicrodataCsvBomGetHandler, logRequest)
+		router.Get("/api/model/:model/run/:run/microdata/:name/csv-id", runMicrodataIdCsvGetHandler, logRequest)
 		router.Get("/api/model/:model/run/:run/microdata/:name/csv-id-bom", runMicrodataIdCsvBomGetHandler, logRequest)
 	}
 
 	// GET /api/model/:model/run/:run/table/:name/expr/csv
-	router.Get("/api/model/:model/run/:run/table/:name/expr/csv", runTableExprCsvGetHandler, logRequest)
-
 	// GET /api/model/:model/run/:run/table/:name/expr/csv-bom
-	router.Get("/api/model/:model/run/:run/table/:name/expr/csv-bom", runTableExprCsvBomGetHandler, logRequest)
-
 	// GET /api/model/:model/run/:run/table/:name/expr/csv-id
-	router.Get("/api/model/:model/run/:run/table/:name/expr/csv-id", runTableExprIdCsvGetHandler, logRequest)
-
 	// GET /api/model/:model/run/:run/table/:name/expr/csv-id-bom
+	router.Get("/api/model/:model/run/:run/table/:name/expr/csv", runTableExprCsvGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/expr/csv-bom", runTableExprCsvBomGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/expr/csv-id", runTableExprIdCsvGetHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/table/:name/expr/csv-id-bom", runTableExprIdCsvBomGetHandler, logRequest)
 
 	// GET /api/model/:model/run/:run/table/:name/acc/csv
-	router.Get("/api/model/:model/run/:run/table/:name/acc/csv", runTableAccCsvGetHandler, logRequest)
-
 	// GET /api/model/:model/run/:run/table/:name/acc/csv-bom
-	router.Get("/api/model/:model/run/:run/table/:name/acc/csv-bom", runTableAccCsvBomGetHandler, logRequest)
-
 	// GET /api/model/:model/run/:run/table/:name/acc/csv-id
-	router.Get("/api/model/:model/run/:run/table/:name/acc/csv-id", runTableAccIdCsvGetHandler, logRequest)
-
 	// GET /api/model/:model/run/:run/table/:name/acc/csv-id-bom
+	router.Get("/api/model/:model/run/:run/table/:name/acc/csv", runTableAccCsvGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/acc/csv-bom", runTableAccCsvBomGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/acc/csv-id", runTableAccIdCsvGetHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/table/:name/acc/csv-id-bom", runTableAccIdCsvBomGetHandler, logRequest)
 
 	// GET /api/model/:model/run/:run/table/:name/all-acc/csv
-	router.Get("/api/model/:model/run/:run/table/:name/all-acc/csv", runTableAllAccCsvGetHandler, logRequest)
-
 	// GET /api/model/:model/run/:run/table/:name/all-acc/csv-bom
-	router.Get("/api/model/:model/run/:run/table/:name/all-acc/csv-bom", runTableAllAccCsvBomGetHandler, logRequest)
-
 	// GET /api/model/:model/run/:run/table/:name/all-acc/csv-id
-	router.Get("/api/model/:model/run/:run/table/:name/all-acc/csv-id", runTableAllAccIdCsvGetHandler, logRequest)
-
 	// GET /api/model/:model/run/:run/table/:name/all-acc/csv-id-bom
+	router.Get("/api/model/:model/run/:run/table/:name/all-acc/csv", runTableAllAccCsvGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/all-acc/csv-bom", runTableAllAccCsvBomGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/all-acc/csv-id", runTableAllAccIdCsvGetHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/table/:name/all-acc/csv-id-bom", runTableAllAccIdCsvBomGetHandler, logRequest)
+
+	// GET /api/model/:model/run/:run/table/:name/calc/:calc/csv
+	// GET /api/model/:model/run/:run/table/:name/calc/:calc/csv-bom
+	// GET /api/model/:model/run/:run/table/:name/calc/:calc/csv-id
+	// GET /api/model/:model/run/:run/table/:name/calc/:calc/csv-id-bom
+	router.Get("/api/model/:model/run/:run/table/:name/calc/:calc/csv", runTableCalcCsvGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/calc/:calc/csv-bom", runTableCalcCsvBomGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/calc/:calc/csv-id", runTableCalcIdCsvGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/calc/:calc/csv-id-bom", runTableCalcIdCsvBomGetHandler, logRequest)
 }
 
 // add web-service /api routes to update metadata

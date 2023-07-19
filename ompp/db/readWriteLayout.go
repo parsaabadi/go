@@ -129,6 +129,12 @@ type ReadPageLayout struct {
 	IsFullPage bool  // input last page flag: if true then adjust offset to return full last page
 }
 
+// ReadCalculteTableLayout describe table read layout and additional measures to calculte.
+type ReadCalculteTableLayout struct {
+	ReadTableLayout                        // output table read layout, only read of expression(s) supported, not accumulators
+	Calculation     []CalculateTableLayout // additional measures to calculate
+}
+
 // CalculateLayout describes calculation to parameters or output table values.
 // It can be comparison calculation for multiple model runs, ex.: Expr0[base] - Expr0[variant].
 type CalculateLayout struct {
@@ -139,7 +145,7 @@ type CalculateLayout struct {
 // CalculateLayout describes calculation to output table values.
 // It can be comparison calculation for multiple model runs, ex.: Expr0[base] - Expr0[variant].
 type CalculateTableLayout struct {
-	CalculateLayout      // expression to calculate, output table name, page size, where filters and order by
+	CalculateLayout      // expression to calculate and layout
 	IsAggr          bool // if true then select output table accumulator else expression
 }
 

@@ -36,7 +36,7 @@ func (mc *ModelCatalog) ParameterCellConverter(
 	}
 
 	// create converter
-	csvCvt := db.CellParamConverter{
+	ctc := db.CellParamConverter{
 		ModelDef:  meta,
 		Name:      name,
 		DoubleFmt: theCfg.doubleFmt,
@@ -45,9 +45,9 @@ func (mc *ModelCatalog) ParameterCellConverter(
 	var err error
 
 	if isToId {
-		cvt, err = csvCvt.CodeToIdCell(meta, name)
+		cvt, err = ctc.CodeToIdCell(meta, name)
 	} else {
-		cvt, err = csvCvt.IdToCodeCell(meta, name)
+		cvt, err = ctc.IdToCodeCell(meta, name)
 	}
 	if err != nil {
 		omppLog.Log("Failed to create parameter cell value converter: ", name, ": ", err.Error())
@@ -121,7 +121,7 @@ func (mc *ModelCatalog) TableToCodeCellConverter(dn string, name string, isAcc, 
 
 // TableToCodeCalcCellConverter return output table calculated value converter from id's cell into code cell and run id(s).
 // Function accept base run digest-or-stamp-or-name and optional list of variant runs digest-or-stamp-or-name.
-// All runs must be completed sucessfully.
+// All runs must be completed successfully.
 func (mc *ModelCatalog) TableToCodeCalcCellConverter(
 	dn string, rdsn string, tableName string, runLst []string,
 ) (func(interface{}) (interface{}, error), int, []int, bool) {
@@ -146,7 +146,7 @@ func (mc *ModelCatalog) TableToCodeCalcCellConverter(
 	}
 
 	// create converter
-	csvCvt := db.CellTableCalcConverter{
+	ctc := db.CellTableCalcConverter{
 		CellTableConverter: db.CellTableConverter{
 			ModelDef: meta,
 			Name:     tableName,
@@ -156,70 +156,21 @@ func (mc *ModelCatalog) TableToCodeCalcCellConverter(
 		IdToDigest: map[int]string{},
 		DigestToId: map[string]int{},
 	}
-	cvt, err := csvCvt.IdToCodeCell(meta, tableName)
 
-	// find model run id by digest-or-stamp-or-name
-	r, ok := mc.CompletedRunByDigestOrStampOrName(dn, rdsn)
-	if !ok {
-		return nil, 0, nil, false // return empty result: run select error
-	}
-	if r.Status != db.DoneRunStatus {
-		omppLog.Log("Warning: model run not completed successfully: ", rdsn, ": ", r.Status)
-		return nil, 0, nil, false
-	}
-	baseRunId := r.RunId // source run id
-
-	csvCvt.IdToDigest[r.RunId] = r.RunDigest // add base run digest to converter
-	csvCvt.DigestToId[r.RunDigest] = r.RunId
-
-	// check if all additional model runs completed sucessfully
-	runIds := []int{}
-
-	if len(runLst) > 0 {
-		rLst, _ := mc.RunRowListByModel(meta.Model.Digest)
-
-		for _, rn := range runLst {
-
-			rId := 0
-			for k := 0; rId <= 0 && k < len(rLst); k++ {
-
-				if rn == rLst[k].RunDigest || rn == rLst[k].RunStamp || rn == rLst[k].Name {
-					rId = rLst[k].RunId
-				}
-				if rId > 0 {
-					if rLst[k].Status != db.DoneRunStatus {
-						omppLog.Log("Warning: model run not completed successfully: ", rLst[k].RunDigest, ": ", rLst[k].Status)
-						return nil, 0, nil, false
-					}
-					csvCvt.IdToDigest[rLst[k].RunId] = rLst[k].RunDigest // add run digest to converter
-					csvCvt.DigestToId[rLst[k].RunDigest] = rLst[k].RunId
-				}
-			}
-			if rId <= 0 {
-				omppLog.Log("Warning: model run not found: ", rn)
-				continue
-			}
-			// else: model run completed successfully, include run id into the list of additional runs
-
-			isFound := false
-			for k := 0; !isFound && k < len(runIds); k++ {
-				isFound = rId == runIds[k]
-			}
-			if !isFound {
-				runIds = append(runIds, rId)
-			}
-		}
-	}
-
+	cvt, err := ctc.IdToCodeCell(meta, tableName)
 	if err != nil {
 		omppLog.Log("Failed to create output table cell id's to code converter: ", tableName, ": ", err.Error())
 		return nil, 0, nil, false
 	}
 
-	return cvt, baseRunId, runIds, true
+	// validate all runs: it must be completed successfully
+	// set run digests and run id's maps in the convereter
+	baseRunId, runIds, ok := mc.setRunDigestIdMap(meta.Model.Digest, rdsn, runLst, ctc)
+
+	return cvt, baseRunId, runIds, ok
 }
 
-// TableToCodeCalcCellConverter return calculate layout for all expressions by aggregation name: sum avg count min max var sd se cv
+// TableAllExprCalculateLayout return calculate layout for all expressions by aggregation name: sum avg count min max var sd se cv
 func (mc *ModelCatalog) TableAllExprCalculateLayout(dn string, name string, aggr string) ([]db.CalculateTableLayout, bool) {
 
 	// check aggregation operation
@@ -303,6 +254,68 @@ func (mc *ModelCatalog) TableAllExprCalculateLayout(dn string, name string, aggr
 	}
 
 	return calcLt, true
+}
+
+// set run digest to id and id to digest maps for ctc CellTableCalcConverter.
+// Function accept base run digest-or-stamp-or-name and optional list of variant runs digest-or-stamp-or-name.
+// All runs must be completed successfully.
+// Return base run id and optional list of run id's and Ok boolen flag.
+func (mc *ModelCatalog) setRunDigestIdMap(digest string, rdsn string, runLst []string, ctc db.CellTableCalcConverter) (int, []int, bool) {
+
+	// find model run id by digest-or-stamp-or-name
+	r, ok := mc.CompletedRunByDigestOrStampOrName(digest, rdsn)
+	if !ok {
+		return 0, nil, false // return empty result: run select error
+	}
+	if r.Status != db.DoneRunStatus {
+		omppLog.Log("Warning: model run not completed successfully: ", rdsn, ": ", r.Status)
+		return 0, nil, false
+	}
+	baseRunId := r.RunId // source run id
+
+	ctc.IdToDigest[r.RunId] = r.RunDigest // add base run digest to converter
+	ctc.DigestToId[r.RunDigest] = r.RunId
+
+	// check if all additional model runs completed successfully
+	runIds := []int{}
+
+	if len(runLst) > 0 {
+		rLst, _ := mc.RunRowListByModel(digest)
+
+		for _, rn := range runLst {
+
+			rId := 0
+			for k := 0; rId <= 0 && k < len(rLst); k++ {
+
+				if rn == rLst[k].RunDigest || rn == rLst[k].RunStamp || rn == rLst[k].Name {
+					rId = rLst[k].RunId
+				}
+				if rId > 0 {
+					if rLst[k].Status != db.DoneRunStatus {
+						omppLog.Log("Warning: model run not completed successfully: ", rLst[k].RunDigest, ": ", rLst[k].Status)
+						return 0, nil, false
+					}
+					ctc.IdToDigest[rLst[k].RunId] = rLst[k].RunDigest // add run digest to converter
+					ctc.DigestToId[rLst[k].RunDigest] = rLst[k].RunId
+				}
+			}
+			if rId <= 0 {
+				omppLog.Log("Warning: model run not found: ", rn)
+				continue
+			}
+			// else: model run completed successfully, include run id into the list of additional runs
+
+			isFound := false
+			for k := 0; !isFound && k < len(runIds); k++ {
+				isFound = rId == runIds[k]
+			}
+			if !isFound {
+				runIds = append(runIds, rId)
+			}
+		}
+	}
+
+	return baseRunId, runIds, true
 }
 
 // MicrodataCellConverter return microdata value converter between code cell and id's cell.
@@ -427,7 +440,7 @@ func (mc *ModelCatalog) ParameterToCsvConverter(dn string, isCode bool, name str
 	return hdr, cvt, true
 }
 
-// TableToCsvConverter return csv header as starting array , output table cell to csv converter and and boolean Ok flag.
+// TableToCsvConverter return csv header as starting array, output table cell to csv converter and and boolean Ok flag.
 func (mc *ModelCatalog) TableToCsvConverter(dn string, isCode bool, name string, isAcc, isAllAcc bool) ([]string, func(interface{}, []string) error, bool) {
 
 	// if model digest-or-name is empty then return empty results
@@ -499,6 +512,75 @@ func (mc *ModelCatalog) TableToCsvConverter(dn string, isCode bool, name string,
 	}
 
 	return hdr, cvt, true
+}
+
+// TableToCalcCsvConverter return csv header as starting array,  output table calculated value to csv converter and and boolean Ok flag.
+// Function accept base run digest-or-stamp-or-name and optional list of variant runs digest-or-stamp-or-name.
+// All runs must be completed successfully.
+func (mc *ModelCatalog) TableToCalcCsvConverter(
+	dn string, rdsn string, isCode bool, tableName string, runLst []string,
+) ([]string, func(interface{}, []string) error, int, []int, bool) {
+
+	// if model digest-or-name is empty then return empty results
+	if dn == "" {
+		omppLog.Log("Warning: invalid (empty) model digest and name")
+		return []string{}, nil, 0, nil, false
+	}
+
+	// get model metadata and database connection
+	meta, _, ok := mc.modelMeta(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return []string{}, nil, 0, nil, false // return empty result: model not found or error
+	}
+
+	// check if output table name exist in the model
+	if _, ok = meta.OutTableByName(tableName); !ok {
+		omppLog.Log("Error: model output table not found: ", dn, ": ", tableName)
+		return []string{}, nil, 0, nil, false // return empty result: output table not found or error
+	}
+
+	// create cell conveter to csv
+	ctc := db.CellTableCalcConverter{
+		CellTableConverter: db.CellTableConverter{
+			ModelDef: meta,
+			Name:     tableName,
+		},
+		IsIdCsv:    !isCode,
+		DoubleFmt:  theCfg.doubleFmt,
+		IdToDigest: map[int]string{},
+		DigestToId: map[string]int{},
+	}
+
+	// validate all runs: it must be completed successfully
+	// set run digests and run id's maps in the convereter
+	baseRunId, runIds, ok := mc.setRunDigestIdMap(meta.Model.Digest, rdsn, runLst, ctc)
+	if !ok {
+		omppLog.Log("Failed to create output table converter to csv, invalid run digest or model run not completed: ", dn, ": ", tableName)
+		return []string{}, nil, 0, nil, false // return empty result: output table not found or error
+	}
+
+	// make csv header
+	hdr, err := ctc.CsvHeader()
+	if err != nil {
+		omppLog.Log("Failed to make output table csv header: ", dn, ": ", tableName, ": ", err.Error())
+		return []string{}, nil, 0, nil, false
+	}
+
+	// create converter from db cell into csv row []string
+	var cvt func(interface{}, []string) error
+
+	if isCode {
+		cvt, err = ctc.ToCsvRow()
+	} else {
+		cvt, err = ctc.ToCsvIdRow()
+	}
+	if err != nil {
+		omppLog.Log("Failed to create output table converter to csv: ", dn, ": ", tableName, ": ", err.Error())
+		return []string{}, nil, 0, nil, false
+	}
+
+	return hdr, cvt, baseRunId, runIds, true
 }
 
 // MicrodataToCsvConverter return model run id, entity generation digest,
