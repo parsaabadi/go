@@ -219,7 +219,9 @@ func doReadTableCalcPageHandler(w http.ResponseWriter, r *http.Request, isCode b
 	cvtWr := jsonCellWriter(w, enc, cvtCell)
 
 	// calculate output table measure and read measure page into json array response, convert enum id's to code if requested
-	lt, ok := theCatalog.ReadOutTableCalculateTo(dn, rdsn, &layout.ReadTableLayout, layout.Calculation, runIds, cvtWr)
+	lt, ok := theCatalog.ReadOutTableCalculateTo(
+		dn, rdsn, &db.ReadTableLayout{ReadLayout: layout.ReadLayout}, layout.Calculation, runIds, cvtWr,
+	)
 	if !ok {
 		http.Error(w, "Error at run output table read "+rdsn+": "+layout.Name, http.StatusBadRequest)
 		return

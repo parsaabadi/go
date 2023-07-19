@@ -131,8 +131,8 @@ type ReadPageLayout struct {
 
 // ReadCalculteTableLayout describe table read layout and additional measures to calculte.
 type ReadCalculteTableLayout struct {
-	ReadTableLayout                        // output table read layout, only read of expression(s) supported, not accumulators
-	Calculation     []CalculateTableLayout // additional measures to calculate
+	ReadLayout                         // output table name, run id, page size, where filters and order by
+	Calculation []CalculateTableLayout // additional measures to calculate
 }
 
 // CalculateLayout describes calculation to parameters or output table values.
