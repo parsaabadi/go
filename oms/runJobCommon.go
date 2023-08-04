@@ -85,9 +85,14 @@ func jobStatePath() string {
 	return filepath.Join(theCfg.jobDir, "state", theCfg.omsName+".json")
 }
 
-// return job queue paused file path e.g.: job/state/jobs.queue.paused
+// return this oms instance job queue paused file path e.g.: job/state/jobs.queue-#-_4040-#-paused
 func jobQueuePausedPath() string {
-	return filepath.Join(theCfg.jobDir, "state", "jobs.queue.paused")
+	return filepath.Join(theCfg.jobDir, "state", "jobs.queue-#-"+theCfg.omsName+"-#-paused")
+}
+
+// return all job queue paused file path e.g.: job/state/jobs.queue.all.paused
+func jobAllQueuePausedPath() string {
+	return filepath.Join(theCfg.jobDir, "state", "jobs.queue.all.paused")
 }
 
 // return compute server or cluster ready file path: job/state/comp-ready-#-name
@@ -480,9 +485,14 @@ func deleteCompStateFiles(name, state string) bool {
 	return isNoError
 }
 
-// return true if jobs queue processing is paused
+// return true if jobs queue processing is paused for this oms instance
 func isPausedJobQueue() bool {
-	return fileExist(jobQueuePausedPath())
+	return fileExist(jobQueuePausedPath()) || fileExist(jobAllQueuePausedPath())
+}
+
+// return true if jobs queue processing is paused for all oms instances
+func isPausedJobAllQueue() bool {
+	return fileExist(jobAllQueuePausedPath())
 }
 
 // read job control state from the file, return empty state on error or if state file not exist

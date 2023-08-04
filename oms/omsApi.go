@@ -682,6 +682,13 @@ func apiAdminRoutes(router *vestigo.Router) {
 	router.Post("/api/admin/jobs-pause/:pause", jobsPauseHandler, logRequest)
 	router.Post("/api/admin/jobs-pause/", http.NotFound)
 
+	if theCfg.isAdminAll {
+
+		// POST /api/admin-all/jobs-pause/:pause
+		router.Post("/api/admin-all/jobs-pause/:pause", jobsAllPauseHandler, logRequest)
+		router.Post("/api/admin-all/jobs-pause/", http.NotFound)
+	}
+
 	// DO NOT USE in production, development only
 	//
 	// POST /api/admin/run-test/:exe/:arg

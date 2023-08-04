@@ -58,9 +58,22 @@ func allModelsCloseHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 }
 
-// jobsPauseHandler pause or resume jobs queue processing
+// jobsPauseHandler pause or resume jobs queue processing by this oms instance
 // POST /api/admin/jobs-pause/:pause
 func jobsPauseHandler(w http.ResponseWriter, r *http.Request) {
+	doJobsPause(jobQueuePausedPath(), "/api/admin/jobs-pause/", w, r)
+}
+
+// jobsAllPauseHandler pause or resume jobs queue processing by all oms instances
+// POST /api/admin-all/jobs-pause/:pause
+func jobsAllPauseHandler(w http.ResponseWriter, r *http.Request) {
+	doJobsPause(jobAllQueuePausedPath(), "/api/admin-all/jobs-pause/", w, r)
+}
+
+// Pause or resume jobs queue processing by this oms instance all by all oms instances
+// POST /api/admin/jobs-pause/:pause
+// POST /api/admin-all/jobs-pause/:pause
+func doJobsPause(filePath, urlPath string, w http.ResponseWriter, r *http.Request) {
 
 	// url or query parameters: pause or resume boolean flag
 	sp := getRequestParam(r, "pause")
@@ -73,15 +86,16 @@ func jobsPauseHandler(w http.ResponseWriter, r *http.Request) {
 	// create jobs paused state file or remove it to resume queue processing
 	isOk := false
 	if isPause {
-		isOk = fileCreateEmpty(false, jobQueuePausedPath())
+		isOk = fileCreateEmpty(false, filePath)
 	} else {
-		isOk = fileDeleteAndLog(false, jobQueuePausedPath())
+		isOk = fileDeleteAndLog(false, filePath)
 	}
 	if !isOk {
 		isPause = !isPause // operation failed
 	}
 
-	w.Header().Set("Content-Location", "/api/admin/jobs-pause/"+strconv.FormatBool(isPause))
+	// Content-Location: /api/admin/jobs-pause/true
+	w.Header().Set("Content-Location", urlPath+strconv.FormatBool(isPause))
 	w.Header().Set("Content-Type", "text/plain")
 }
 

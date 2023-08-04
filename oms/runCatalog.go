@@ -171,7 +171,8 @@ type RunStateLogPage struct {
 
 // service state and job control state
 type JobServiceState struct {
-	IsQueuePaused     bool    // if true then jobs queue is paused, jobs are not selected from queue
+	IsQueuePaused     bool    // this oms instance: if true then jobs queue is paused, jobs are not selected from queue
+	IsAllQueuePaused  bool    // all oms instances: if true then jobs queue is paused, jobs are not selected from queue
 	JobUpdateDateTime string  // last date-time jobs list updated
 	MpiRes            RunRes  // MPI total available resources available (CPU cores and memory) as sum of all servers or localhost resources
 	ActiveTotalRes    RunRes  // MPI active model run resources (CPU cores and memory) used by all oms instances

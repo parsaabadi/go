@@ -555,6 +555,7 @@ func initJobComputeState(jobIniPath string, updateTs time.Time, computeState map
 
 	jsState := JobServiceState{
 		IsQueuePaused:     isPausedJobQueue(),
+		IsAllQueuePaused:  isPausedJobAllQueue(),
 		JobUpdateDateTime: helper.MakeDateTime(updateTs),
 		maxStartTime:      serverTimeoutDefault,
 		maxStopTime:       serverTimeoutDefault,

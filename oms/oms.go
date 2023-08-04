@@ -79,6 +79,10 @@ if true then allow download from user home/io/download directory.
 
 if true then allow upload to user home/io/upload directory.
 
+	-oms.AllowMicrodata
+
+if true then allow model runs microdata usage else model microdata API disabled.
+
 	-oms.ArchiveDays
 
 number of days to keep model runs, input sets, downloads and uploads before moving it into achive directory.
@@ -95,6 +99,10 @@ if true then API only web-service, it is false by default and oms also act as ht
 	-oms.LogRequest false
 
 if true then log HTTP requests on console and/or log file.
+
+	-oms.Admin
+
+if true then allow global administrative routes: /admin-all/
 
 	-oms.Languages en
 
@@ -164,6 +172,7 @@ const (
 	isMicrodataArgKey  = "oms.AllowMicrodata" // if true then allow model run microdata
 	logRequestArgKey   = "oms.LogRequest"     // if true then log http request
 	apiOnlyArgKey      = "oms.ApiOnly"        // if true then API only web-service, no web UI
+	adminAllArgKey     = "oms.Admin"          // if true then allow global administrative routes: /admin-all/
 	uiLangsArgKey      = "oms.Languages"      // list of supported languages
 	encodingArgKey     = "oms.CodePage"       // code page for converting source files, e.g. windows-1252
 	doubleFormatArgKey = "oms.DoubleFormat"   // format to convert float or double value to string, e.g. %.15g
@@ -185,6 +194,7 @@ var theCfg = struct {
 	uploadDir    string            // if upload allowed then it is home/io/upload directory
 	inOutDir     string            // if download or upload allowed then it is home/io directory
 	isMicrodata  bool              // if true then allow model run microdata
+	isAdminAll   bool              // if true then admin-all routes are enabled
 	isJobControl bool              // if true then do job control: model run queue and resource allocation
 	jobDir       string            // job control directory
 	omsName      string            // oms instance name, if empty then derived from address to listen
@@ -207,7 +217,6 @@ var theCfg = struct {
 	homeDir:          "",
 	downloadDir:      "",
 	uploadDir:        "",
-	isMicrodata:      false,
 	isJobControl:     false,
 	jobDir:           "",
 	omsName:          "",
@@ -261,6 +270,7 @@ func mainBody(args []string) error {
 	_ = flag.String(archiveDirArgKey, theCfg.archiveDir, "achive directory, default is user home/io/download directory")
 	_ = flag.Bool(logRequestArgKey, false, "if true then log HTTP requests")
 	_ = flag.Bool(apiOnlyArgKey, false, "if true then API only web-service, no web UI")
+	_ = flag.Bool(adminAllArgKey, false, "if true then allow global administrative routes: /admin-all/")
 	_ = flag.String(uiLangsArgKey, "en", "comma-separated list of supported languages")
 	_ = flag.String(encodingArgKey, "", "code page to convert source file into utf-8, e.g.: windows-1252")
 	_ = flag.String(doubleFormatArgKey, theCfg.doubleFmt, "format to convert float or double value to string")
@@ -281,6 +291,7 @@ func mainBody(args []string) error {
 	isLogRequest = runOpts.Bool(logRequestArgKey)
 	isApiOnly := runOpts.Bool(apiOnlyArgKey)
 	theCfg.isMicrodata = runOpts.Bool(isMicrodataArgKey)
+	theCfg.isAdminAll = runOpts.Bool(adminAllArgKey)
 
 	theCfg.doubleFmt = runOpts.String(doubleFormatArgKey)
 
