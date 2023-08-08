@@ -53,7 +53,7 @@ func UpdateModel(dbConn *sql.DB, dbFacet Facet, modelDef *ModelMeta) (bool, erro
 	return isExist, nil
 }
 
-// doInsertModel insert new existing model metadata in database.
+// doInsertModel insert new model metadata in database.
 // It does update as part of transaction
 // Parameters, output tables, entities Hid's and db table names updated with actual database values
 // If new model inserted then modelDef updated with actual id's (model id, parameter Hid...)
