@@ -86,9 +86,11 @@ func doUnlinkRun(trx *sql.Tx, runId int) error {
 			" ("+
 			" SELECT MIN(NR.run_id)"+
 			" FROM run_parameter NR"+
+			" INNER JOIN run_lst RL ON (RL.run_id = NR.run_id)"+
 			" WHERE NR.parameter_hid = RP.parameter_hid"+
 			" AND NR.base_run_id = RP.base_run_id"+
 			" AND NR.run_id <> NR.base_run_id"+
+			" AND RL.status IN ("+ToQuoted(DoneRunStatus)+", "+ToQuoted(ProgressRunStatus)+")"+
 			" )"+
 			" FROM run_parameter RP"+
 			" WHERE RP.run_id <> RP.base_run_id"+
@@ -159,9 +161,11 @@ func doUnlinkRun(trx *sql.Tx, runId int) error {
 			" ("+
 			" SELECT MIN(NR.run_id)"+
 			" FROM run_table NR"+
+			" INNER JOIN run_lst RL ON (RL.run_id = NR.run_id)"+
 			" WHERE NR.table_hid = RT.table_hid"+
 			" AND NR.base_run_id = RT.base_run_id"+
 			" AND NR.run_id <> NR.base_run_id"+
+			" AND RL.status IN ("+ToQuoted(DoneRunStatus)+", "+ToQuoted(ProgressRunStatus)+")"+
 			" )"+
 			" FROM run_table RT"+
 			" WHERE RT.run_id <> RT.base_run_id"+
@@ -242,9 +246,11 @@ func doUnlinkRun(trx *sql.Tx, runId int) error {
 			" ("+
 			" SELECT MIN(NR.run_id)"+
 			" FROM run_entity NR"+
+			" INNER JOIN run_lst RL ON (RL.run_id = NR.run_id)"+
 			" WHERE NR.entity_gen_hid = RE.entity_gen_hid"+
 			" AND NR.base_run_id = RE.base_run_id"+
 			" AND NR.run_id <> NR.base_run_id"+
+			" AND RL.status IN ("+ToQuoted(DoneRunStatus)+", "+ToQuoted(ProgressRunStatus)+")"+
 			" )"+
 			" FROM run_entity RE"+
 			" WHERE RE.run_id <> RE.base_run_id"+

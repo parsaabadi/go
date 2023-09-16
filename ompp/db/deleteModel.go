@@ -131,6 +131,7 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 			" WHERE NR.base_run_id = MRP.base_run_id AND NR.parameter_hid = MRP.parameter_hid"+
 			" AND NR.run_id <> MRP.base_run_id"+
 			" AND NL.model_id <> "+smId+
+			" AND NL.status IN ("+ToQuoted(DoneRunStatus)+", "+ToQuoted(ProgressRunStatus)+")"+
 			" )"+
 			" FROM run_parameter MRP"+
 			" INNER JOIN run_lst MRL ON (MRL.run_id = MRP.run_id)"+
@@ -215,6 +216,7 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 			" WHERE NR.base_run_id = MRT.base_run_id AND NR.table_hid = MRT.table_hid"+
 			" AND NR.run_id <> MRT.base_run_id"+
 			" AND NL.model_id <> "+smId+
+			" AND NL.status IN ("+ToQuoted(DoneRunStatus)+", "+ToQuoted(ProgressRunStatus)+")"+
 			" )"+
 			" FROM run_table MRT"+
 			" INNER JOIN run_lst MRL ON (MRL.run_id = MRT.run_id)"+
@@ -309,6 +311,7 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 			" WHERE NR.base_run_id = MRE.base_run_id AND NR.entity_gen_hid = MRE.entity_gen_hid"+
 			" AND NR.run_id <> MRE.base_run_id"+
 			" AND NL.model_id <> "+smId+
+			" AND NL.status IN ("+ToQuoted(DoneRunStatus)+", "+ToQuoted(ProgressRunStatus)+")"+
 			" )"+
 			" FROM run_entity MRE"+
 			" INNER JOIN run_lst MRL ON (MRL.run_id = MRE.run_id)"+
@@ -1066,34 +1069,6 @@ func selectBaseRunsOfSharedValues(trx *sql.Tx, q string) ([]runBaseItem, error) 
 
 	var rbArr []runBaseItem
 	err := TrxSelectRows(trx, q,
-		func(rows *sql.Rows) error {
-			var r runBaseItem
-			var n sql.NullInt64
-			if err := rows.Scan(&r.hId, &r.runId, &r.oldBase, &n); err != nil {
-				return err
-			}
-			if n.Valid {
-				r.newBase = int(n.Int64)
-			} else {
-				r.newBase = r.runId // if no new base run found then use run itself
-			}
-			rbArr = append(rbArr, r)
-			return nil
-		})
-	if err != nil {
-		return nil, err
-	}
-
-	return rbArr, nil
-}
-
-// selectBaseRunsOfSharedValuesNoTrx return list of base run id's for parameters and (or output tables)
-// where parameter shared between models and parameter value shared between runs
-// build list of new base run id's
-func selectBaseRunsOfSharedValuesNoTrx(dbConn *sql.DB, q string) ([]runBaseItem, error) {
-
-	var rbArr []runBaseItem
-	err := SelectRows(dbConn, q,
 		func(rows *sql.Rows) error {
 			var r runBaseItem
 			var n sql.NullInt64

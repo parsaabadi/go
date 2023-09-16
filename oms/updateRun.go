@@ -115,15 +115,15 @@ func (mc *ModelCatalog) UnlinkRunStart(dn, rdsn string) (bool, error) {
 	}
 
 	// do unlink run from database in background
-	go func(dbc *sql.DB, runId int, dn, rdsn string) {
+	go func(dbc *sql.DB, modelId, runId int, dn, rdsn string) {
 
-		e := db.UnlinkRun(dbc, runId)
+		e := db.UnlinkRun(dbc, modelId, runId)
 		if e != nil {
 			omppLog.Log("Error at unlink model run: ", dn, ": ", rdsn, ": ", e.Error())
 		} else {
 			omppLog.Log("Completed unlink model run: ", dn, ": ", rdsn)
 		}
-	}(dbConn, r.RunId, dn, rdsn)
+	}(dbConn, meta.Model.ModelId, r.RunId, dn, rdsn)
 
 	return true, nil
 }

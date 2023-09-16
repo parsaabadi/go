@@ -14,7 +14,7 @@ import (
 
 // UnlinkRun delete model run metadata, parameters run values and output tables run values from database.
 // It is incremental delete using multiple small transactions and can be restarted if breaks in the middle.
-func UnlinkRun(dbConn *sql.DB, runId int) error {
+func UnlinkRun(dbConn *sql.DB, modelId int, runId int) error {
 
 	// validate parameters
 	if runId <= 0 {
@@ -23,7 +23,7 @@ func UnlinkRun(dbConn *sql.DB, runId int) error {
 
 	// start run delete inside of transaction scope:
 	// update base run mark run metadata as delete-in-progress
-	if err := doUnlinkRunSmallTrx(dbConn, runId); err != nil {
+	if err := doUnlinkRunSmallTrx(dbConn, modelId, runId); err != nil {
 		return err
 	}
 
@@ -43,13 +43,14 @@ func UnlinkRun(dbConn *sql.DB, runId int) error {
 		return e
 	}
 	trx.Commit()
+
 	return nil
 }
 
 // doUnlinkRun set run status to d=deleted and unlink run values (parameter, output tables, microdata) from base run:
 // if run values used by any other run as a base run then base run id updated to the next minimal run id.
 // It does update as part of transaction
-func doUnlinkRunSmallTrx(dbConn *sql.DB, runId int) error {
+func doUnlinkRunSmallTrx(dbConn *sql.DB, modelId int, runId int) error {
 
 	// update model run master record to prevent run use
 	sId := strconv.Itoa(runId)
@@ -91,25 +92,52 @@ func doUnlinkRunSmallTrx(dbConn *sql.DB, runId int) error {
 		tx.Rollback()
 		return err
 	}
+
+	// replace value digests for parameter, output tables and microdata to avoid using values as a base run values
+	delDgst := ("del-" + sId + "-" + delTs)
+
+	err = TrxUpdate(tx,
+		"UPDATE run_parameter SET value_digest = "+toQuotedMax(delDgst, codeDbMax)+" WHERE run_id = "+sId)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	err = TrxUpdate(tx,
+		"UPDATE run_table SET value_digest = "+toQuotedMax(delDgst, codeDbMax)+" WHERE run_id = "+sId)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	err = TrxUpdate(tx,
+		"UPDATE run_entity SET value_digest = "+toQuotedMax(delDgst, codeDbMax)+" WHERE run_id = "+sId)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
 	tx.Commit()
 
-	// delete model runs:
-	// for all model parameters where parameter run value shared between runs
-	// build list of new base run id's
-	rbArr, err := selectBaseRunsOfSharedValuesNoTrx(dbConn,
+	// select list of parameters from parameter_dic join to model_parameter_dic
+	type pTbl struct {
+		hId    int    // parameter Hid
+		name   string // parameter name
+		dbName string // database table name
+	}
+	pArr := []pTbl{}
+	err = SelectRows(dbConn,
 		"SELECT"+
-			" RP.parameter_hid, RP.run_id, RP.base_run_id,"+
-			" ("+
-			" SELECT MIN(NR.run_id)"+
-			" FROM run_parameter NR"+
-			" WHERE NR.parameter_hid = RP.parameter_hid"+
-			" AND NR.base_run_id = RP.base_run_id"+
-			" AND NR.run_id <> NR.base_run_id"+
-			" )"+
-			" FROM run_parameter RP"+
-			" WHERE RP.run_id <> RP.base_run_id"+
-			" AND RP.base_run_id = "+sId+
-			" ORDER BY 1, 3")
+			" D.parameter_hid, D.parameter_name, D.db_run_table"+
+			" FROM parameter_dic D"+
+			" INNER JOIN model_parameter_dic M ON (M.parameter_hid = D.parameter_hid)"+
+			" WHERE M.model_id = "+strconv.Itoa(modelId)+
+			" ORDER BY 1",
+		func(rows *sql.Rows) error {
+			var r pTbl
+			if err := rows.Scan(&r.hId, &r.name, &r.dbName); err != nil {
+				return err
+			}
+			pArr = append(pArr, r)
+			return nil
+		})
 	if err != nil {
 		return err
 	}
@@ -117,44 +145,43 @@ func doUnlinkRunSmallTrx(dbConn *sql.DB, runId int) error {
 	// delete model runs:
 	// where parameter run value shared between runs
 	// re-base run values: update run id for parameter values with new base run id
-	tblName := ""
-	hId := 0
-	oldId := 0
-	for k := range rbArr {
+	for _, p := range pArr {
 
-		// find db table name for parameter run value
-		// if not same parameter as before
-		if hId == 0 || hId != rbArr[k].hId {
+		trx, err := dbConn.Begin()
+		if err != nil {
+			return err
+		}
 
-			err = SelectFirst(dbConn,
-				"SELECT db_run_table FROM parameter_dic WHERE parameter_hid = "+strconv.Itoa(rbArr[k].hId),
-				func(row *sql.Row) error {
-					if err := row.Scan(&tblName); err != nil {
-						return err
-					}
-					return nil
-				})
-			if err != nil {
-				return err
-			}
+		// for all model parameters where parameter run value shared between runs
+		// build list of new base run id's
+		rbArr, err := selectBaseRunsOfSharedValues(trx,
+			"SELECT"+
+				" RP.parameter_hid, RP.run_id, RP.base_run_id,"+
+				" ("+
+				" SELECT MIN(NR.run_id)"+
+				" FROM run_parameter NR"+
+				" INNER JOIN run_lst RL ON (RL.run_id = NR.run_id)"+
+				" WHERE NR.parameter_hid = RP.parameter_hid"+
+				" AND NR.base_run_id = RP.base_run_id"+
+				" AND NR.run_id <> NR.base_run_id"+
+				" AND RL.status IN ("+ToQuoted(DoneRunStatus)+", "+ToQuoted(ProgressRunStatus)+")"+
+				" )"+
+				" FROM run_parameter RP"+
+				" WHERE RP.parameter_hid = "+strconv.Itoa(p.hId)+
+				" AND RP.run_id <> RP.base_run_id"+
+				" AND RP.base_run_id = "+sId+
+				" ORDER BY 1, 3")
+		if err != nil {
+			return err
 		}
 
 		// re-base run values in parameter value table and in run_parameter list
-		// if not same parameter and base run id as before
-		if hId == 0 || oldId == 0 || hId != rbArr[k].hId || oldId != rbArr[k].oldBase {
+		for _, rb := range rbArr {
 
-			hId = rbArr[k].hId
-			oldId = rbArr[k].oldBase
-
-			// update parameter value run id with new base run id
-			trx, err := dbConn.Begin()
-			if err != nil {
-				return err
-			}
 			err = TrxUpdate(trx,
-				"UPDATE "+tblName+
-					" SET run_id = "+strconv.Itoa(rbArr[k].newBase)+
-					" WHERE run_id = "+strconv.Itoa(rbArr[k].oldBase))
+				"UPDATE "+p.dbName+
+					" SET run_id = "+strconv.Itoa(rb.newBase)+
+					" WHERE run_id = "+strconv.Itoa(rb.oldBase))
 			if err != nil {
 				trx.Rollback()
 				return err
@@ -162,34 +189,41 @@ func doUnlinkRunSmallTrx(dbConn *sql.DB, runId int) error {
 
 			// set new base run id in run_paramter table
 			err = TrxUpdate(trx,
-				"UPDATE run_parameter SET base_run_id = "+strconv.Itoa(rbArr[k].newBase)+
-					" WHERE base_run_id = "+strconv.Itoa(rbArr[k].oldBase)+
-					" AND parameter_hid = "+strconv.Itoa(rbArr[k].hId))
+				"UPDATE run_parameter SET base_run_id = "+strconv.Itoa(rb.newBase)+
+					" WHERE base_run_id = "+strconv.Itoa(rb.oldBase)+
+					" AND parameter_hid = "+strconv.Itoa(rb.hId))
 			if err != nil {
 				trx.Rollback()
 				return err
 			}
-			trx.Commit()
 		}
+
+		trx.Commit()
 	}
 
-	// delete model runs:
-	// for all model output tables where output table value shared between runs
-	// build list of new base run id's
-	rbArr, err = selectBaseRunsOfSharedValuesNoTrx(dbConn,
+	// select list of output tables from parameter_dic join to model_parameter_dic
+	type tTbl struct {
+		hId     int    // output table Hid
+		name    string // output table name
+		eDbName string // expressions database table name
+		aDbName string // accumulators database table name
+	}
+	tArr := []tTbl{}
+	err = SelectRows(dbConn,
 		"SELECT"+
-			" RT.table_hid, RT.run_id, RT.base_run_id,"+
-			" ("+
-			" SELECT MIN(NR.run_id)"+
-			" FROM run_table NR"+
-			" WHERE NR.table_hid = RT.table_hid"+
-			" AND NR.base_run_id = RT.base_run_id"+
-			" AND NR.run_id <> NR.base_run_id"+
-			" )"+
-			" FROM run_table RT"+
-			" WHERE RT.run_id <> RT.base_run_id"+
-			" AND RT.base_run_id = "+sId+
-			" ORDER BY 1, 3")
+			" D.table_hid, D.table_name, D.db_expr_table, D.db_acc_table"+
+			" FROM table_dic D"+
+			" INNER JOIN model_table_dic M ON (M.table_hid = D.table_hid)"+
+			" WHERE M.model_id = "+strconv.Itoa(modelId)+
+			" ORDER BY 1",
+		func(rows *sql.Rows) error {
+			var r tTbl
+			if err := rows.Scan(&r.hId, &r.name, &r.eDbName, &r.aDbName); err != nil {
+				return err
+			}
+			tArr = append(tArr, r)
+			return nil
+		})
 	if err != nil {
 		return err
 	}
@@ -197,55 +231,54 @@ func doUnlinkRunSmallTrx(dbConn *sql.DB, runId int) error {
 	// delete model runs:
 	// where output table shared between models and output value shared between runs
 	// re-base run values: update run id for accumulators and expressions with new base run id
-	eTbl := ""
-	aTbl := ""
-	hId = 0
-	oldId = 0
-	for k := range rbArr {
+	for _, t := range tArr {
 
-		// find db table names for accumulators and expressions run value
-		// if not same output table as before
-		if hId == 0 || hId != rbArr[k].hId {
+		trx, err := dbConn.Begin()
+		if err != nil {
+			return err
+		}
 
-			err = SelectFirst(dbConn,
-				"SELECT db_expr_table, db_acc_table FROM table_dic WHERE table_hid = "+strconv.Itoa(rbArr[k].hId),
-				func(row *sql.Row) error {
-					if err := row.Scan(&eTbl, &aTbl); err != nil {
-						return err
-					}
-					return nil
-				})
-			if err != nil {
-				return err
-			}
+		// for all model output tables where output table value shared between runs
+		// build list of new base run id's
+		rbArr, err := selectBaseRunsOfSharedValues(trx,
+			"SELECT"+
+				" RT.table_hid, RT.run_id, RT.base_run_id,"+
+				" ("+
+				" SELECT MIN(NR.run_id)"+
+				" FROM run_table NR"+
+				" INNER JOIN run_lst RL ON (RL.run_id = NR.run_id)"+
+				" WHERE NR.table_hid = RT.table_hid"+
+				" AND NR.base_run_id = RT.base_run_id"+
+				" AND NR.run_id <> NR.base_run_id"+
+				" AND RL.status IN ("+ToQuoted(DoneRunStatus)+", "+ToQuoted(ProgressRunStatus)+")"+
+				" )"+
+				" FROM run_table RT"+
+				" WHERE RT.table_hid = "+strconv.Itoa(t.hId)+
+				" AND RT.run_id <> RT.base_run_id"+
+				" AND RT.base_run_id = "+sId+
+				" ORDER BY 1, 3")
+		if err != nil {
+			return err
 		}
 
 		// re-base run values:
 		// update run id in accumulators and expression tables with new base run id
 		// update output value base run id in run_table list
-		// if not same output table and base run id as before
-		if hId == 0 || oldId == 0 || hId != rbArr[k].hId || oldId != rbArr[k].oldBase {
-
-			hId = rbArr[k].hId
-			oldId = rbArr[k].oldBase
+		for _, rb := range rbArr {
 
 			// update accumulators and expressions value run id with new base run id
-			trx, err := dbConn.Begin()
-			if err != nil {
-				return err
-			}
 			err = TrxUpdate(trx,
-				"UPDATE "+eTbl+
-					" SET run_id = "+strconv.Itoa(rbArr[k].newBase)+
-					" WHERE run_id = "+strconv.Itoa(rbArr[k].oldBase))
+				"UPDATE "+t.eDbName+
+					" SET run_id = "+strconv.Itoa(rb.newBase)+
+					" WHERE run_id = "+strconv.Itoa(rb.oldBase))
 			if err != nil {
 				trx.Rollback()
 				return err
 			}
 			err = TrxUpdate(trx,
-				"UPDATE "+aTbl+
-					" SET run_id = "+strconv.Itoa(rbArr[k].newBase)+
-					" WHERE run_id = "+strconv.Itoa(rbArr[k].oldBase))
+				"UPDATE "+t.aDbName+
+					" SET run_id = "+strconv.Itoa(rb.newBase)+
+					" WHERE run_id = "+strconv.Itoa(rb.oldBase))
 			if err != nil {
 				trx.Rollback()
 				return err
@@ -253,34 +286,39 @@ func doUnlinkRunSmallTrx(dbConn *sql.DB, runId int) error {
 
 			// set new base run id in run_table
 			err = TrxUpdate(trx,
-				"UPDATE run_table SET base_run_id = "+strconv.Itoa(rbArr[k].newBase)+
-					" WHERE base_run_id = "+strconv.Itoa(rbArr[k].oldBase)+
-					" AND table_hid = "+strconv.Itoa(rbArr[k].hId))
+				"UPDATE run_table SET base_run_id = "+strconv.Itoa(rb.newBase)+
+					" WHERE base_run_id = "+strconv.Itoa(rb.oldBase)+
+					" AND table_hid = "+strconv.Itoa(rb.hId))
 			if err != nil {
 				trx.Rollback()
 				return err
 			}
-			trx.Commit()
 		}
+
+		trx.Commit()
 	}
 
-	// delete model runs:
-	// for all entity generations where microdata run value shared between runs
-	// build list of new base run id's
-	rbArr, err = selectBaseRunsOfSharedValuesNoTrx(dbConn,
+	// select list of entity generations for that run
+	type gTbl struct {
+		hId    int    // parameter Hid
+		dbName string // database table name
+	}
+	gArr := []gTbl{}
+	err = SelectRows(dbConn,
 		"SELECT"+
-			" RE.entity_gen_hid, RE.run_id, RE.base_run_id,"+
-			" ("+
-			" SELECT MIN(NR.run_id)"+
-			" FROM run_entity NR"+
-			" WHERE NR.entity_gen_hid = RE.entity_gen_hid"+
-			" AND NR.base_run_id = RE.base_run_id"+
-			" AND NR.run_id <> NR.base_run_id"+
-			" )"+
+			" RE.entity_gen_hid, EG.db_entity_table"+
 			" FROM run_entity RE"+
-			" WHERE RE.run_id <> RE.base_run_id"+
-			" AND RE.base_run_id = "+sId+
-			" ORDER BY 1, 3")
+			" INNER JOIN entity_gen EG ON (EG.entity_gen_hid = RE.entity_gen_hid)"+
+			" WHERE RE.run_id = "+sId+
+			" ORDER BY 1",
+		func(rows *sql.Rows) error {
+			var r gTbl
+			if err := rows.Scan(&r.hId, &r.dbName); err != nil {
+				return err
+			}
+			gArr = append(gArr, r)
+			return nil
+		})
 	if err != nil {
 		return err
 	}
@@ -288,44 +326,45 @@ func doUnlinkRunSmallTrx(dbConn *sql.DB, runId int) error {
 	// delete model runs:
 	// where microdata run value shared between runs
 	// re-base run values: update run id for microdata values with new base run id
-	tblName = ""
-	hId = 0
-	oldId = 0
-	for k := range rbArr {
+	for _, g := range gArr {
 
-		// find db table name for microdata run value
-		// if not same microdata as before
-		if hId == 0 || hId != rbArr[k].hId {
+		trx, err := dbConn.Begin()
+		if err != nil {
+			return err
+		}
 
-			err = SelectFirst(dbConn,
-				"SELECT db_entity_table FROM entity_gen WHERE entity_gen_hid = "+strconv.Itoa(rbArr[k].hId),
-				func(row *sql.Row) error {
-					if err := row.Scan(&tblName); err != nil {
-						return err
-					}
-					return nil
-				})
-			if err != nil {
-				return err
-			}
+		// for all entity generations where microdata run value shared between runs
+		// build list of new base run id's
+		rbArr, err := selectBaseRunsOfSharedValues(trx,
+			"SELECT"+
+				" RE.entity_gen_hid, RE.run_id, RE.base_run_id,"+
+				" ("+
+				" SELECT MIN(NR.run_id)"+
+				" FROM run_entity NR"+
+				" INNER JOIN run_lst RL ON (RL.run_id = NR.run_id)"+
+				" WHERE NR.entity_gen_hid = RE.entity_gen_hid"+
+				" AND NR.base_run_id = RE.base_run_id"+
+				" AND NR.run_id <> NR.base_run_id"+
+				" AND RL.status IN ("+ToQuoted(DoneRunStatus)+", "+ToQuoted(ProgressRunStatus)+")"+
+				" )"+
+				" FROM run_entity RE"+
+				" WHERE RE.entity_gen_hid = "+strconv.Itoa(g.hId)+
+				" AND RE.run_id <> RE.base_run_id"+
+				" AND RE.base_run_id = "+sId+
+				" ORDER BY 1, 3")
+		if err != nil {
+			return err
 		}
 
 		// re-base run values in microdata value table and in run_entity list
 		// if not same microdata and base run id as before
-		if hId == 0 || oldId == 0 || hId != rbArr[k].hId || oldId != rbArr[k].oldBase {
-
-			hId = rbArr[k].hId
-			oldId = rbArr[k].oldBase
+		for _, rb := range rbArr {
 
 			// update microdata value run id with new base run id
-			trx, err := dbConn.Begin()
-			if err != nil {
-				return err
-			}
 			err = TrxUpdate(trx,
-				"UPDATE "+tblName+
-					" SET run_id = "+strconv.Itoa(rbArr[k].newBase)+
-					" WHERE run_id = "+strconv.Itoa(rbArr[k].oldBase))
+				"UPDATE "+g.dbName+
+					" SET run_id = "+strconv.Itoa(rb.newBase)+
+					" WHERE run_id = "+strconv.Itoa(rb.oldBase))
 			if err != nil {
 				trx.Rollback()
 				return err
@@ -333,52 +372,31 @@ func doUnlinkRunSmallTrx(dbConn *sql.DB, runId int) error {
 
 			// set new base run id in run_entity table
 			err = TrxUpdate(trx,
-				"UPDATE run_entity SET base_run_id = "+strconv.Itoa(rbArr[k].newBase)+
-					" WHERE base_run_id = "+strconv.Itoa(rbArr[k].oldBase)+
-					" AND entity_gen_hid = "+strconv.Itoa(rbArr[k].hId))
+				"UPDATE run_entity SET base_run_id = "+strconv.Itoa(rb.newBase)+
+					" WHERE base_run_id = "+strconv.Itoa(rb.oldBase)+
+					" AND entity_gen_hid = "+strconv.Itoa(rb.hId))
 			if err != nil {
 				trx.Rollback()
 				return err
 			}
-			trx.Commit()
 		}
-	}
 
-	// replace value digests for parameter, output tables and microdata to avoid using values as a base run values
-	delDgst := ("del-" + sId + "-" + delTs)
-
-	trx, err := dbConn.Begin()
-	if err != nil {
-		return err
-	}
-	err = TrxUpdate(trx,
-		"UPDATE run_parameter SET value_digest = "+toQuotedMax(delDgst, codeDbMax)+" WHERE run_id = "+sId)
-	if err != nil {
-		trx.Rollback()
-		return err
-	}
-	err = TrxUpdate(trx,
-		"UPDATE run_table SET value_digest = "+toQuotedMax(delDgst, codeDbMax)+" WHERE run_id = "+sId)
-	if err != nil {
-		trx.Rollback()
-		return err
-	}
-	err = TrxUpdate(trx,
-		"UPDATE run_entity SET value_digest = "+toQuotedMax(delDgst, codeDbMax)+" WHERE run_id = "+sId)
-	if err != nil {
-		trx.Rollback()
-		return err
+		trx.Commit()
 	}
 
 	// set run status d=deleted and replace run digest
-	err = TrxUpdate(trx,
+	tx, err = dbConn.Begin()
+	if err != nil {
+		return err
+	}
+	err = TrxUpdate(tx,
 		"UPDATE run_lst SET status = 'd', run_digest = "+toQuotedMax(delDgst, codeDbMax)+
 			" WHERE run_id = "+sId)
 	if err != nil {
-		trx.Rollback()
+		tx.Rollback()
 		return err
 	}
-	trx.Commit()
+	tx.Commit()
 
 	return nil
 }
