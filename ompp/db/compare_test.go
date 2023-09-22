@@ -14,7 +14,6 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
-
 	"github.com/openmpp/go/ompp/config"
 	"github.com/openmpp/go/ompp/helper"
 )
@@ -78,19 +77,42 @@ func TestCompareOutputTable(t *testing.T) {
 
 	for k := 0; k < 100; k++ {
 
-		cmpExpr := kvIni["CompareOutputTable.Calculate_"+strconv.Itoa(k+1)]
-		if cmpExpr == "" {
-			continue
-		}
-		t.Log("Calculate:", cmpExpr)
+		calcLt := []CalculateTableLayout{}
 
-		isAggr := false
-		if sVal := kvIni["CompareOutputTable.IsAggr_"+strconv.Itoa(k+1)]; sVal != "" {
-			if isAggr, err = strconv.ParseBool(sVal); err != nil {
-				t.Fatal(err)
+		appendToCalc := func(src string, isAggr bool, idOffset int) {
+
+			ce := strings.Split(src, ",")
+			for j := range ce {
+
+				c := strings.TrimSpace(ce[j])
+				if c[0] == '"' && c[len(c)-1] == '"' {
+					c = c[1 : len(c)-1]
+				}
+
+				if c != "" {
+
+					calcLt = append(calcLt, CalculateTableLayout{
+						CalculateLayout: CalculateLayout{
+							Calculate: c,
+							CalcId:    idOffset + j,
+						},
+						IsAggr: isAggr,
+					})
+					t.Log(calcLt[len(calcLt)-1].CalcId, "Calculate:", c)
+					t.Log(tableName, " Is aggregation:", isAggr)
+				}
 			}
 		}
-		t.Log(tableName, " Is aggregation:", isAggr)
+
+		if cLst := kvIni["CompareOutputTable.Calculate_"+strconv.Itoa(k+1)]; cLst != "" {
+			appendToCalc(cLst, false, CALCULATED_ID_OFFSET)
+		}
+		if cLst := kvIni["CompareOutputTable.CalculateAggr_"+strconv.Itoa(k+1)]; cLst != "" {
+			appendToCalc(cLst, true, 2*CALCULATED_ID_OFFSET)
+		}
+		if len(calcLt) <= 0 {
+			continue
+		}
 
 		var baseRunId int = 0
 		if sVal := kvIni["CompareOutputTable.BaseRunId_"+strconv.Itoa(k+1)]; sVal != "" {
@@ -104,13 +126,16 @@ func TestCompareOutputTable(t *testing.T) {
 		if sVal := kvIni["CompareOutputTable.RunIds_"+strconv.Itoa(k+1)]; sVal != "" {
 
 			sArr := strings.Split(sVal, ",")
-			for k := range sArr {
-				if id, err := strconv.Atoi(sArr[k]); err != nil {
+			for j := range sArr {
+				if id, err := strconv.Atoi(sArr[j]); err != nil {
 					t.Fatal(err)
 				} else {
 					runIds = append(runIds, id)
 				}
 			}
+		}
+		if len(runIds) <= 0 {
+			t.Fatal("ERROR: empty run list at CompareOutputTable.RunIds", k+1)
 		}
 		t.Log("run id's:", runIds)
 
@@ -120,14 +145,9 @@ func TestCompareOutputTable(t *testing.T) {
 				FromId: baseRunId,
 			},
 		}
-		cmpLt := &CalculateTableLayout{
-			CalculateLayout: CalculateLayout{
-				Calculate: cmpExpr,
-			},
-			IsAggr: isAggr,
-		}
 
-		cLst, rdLt, err := CompareOutputTable(srcDb, modelDef, tableLt, cmpLt, runIds)
+		// read table
+		cLst, rdLt, err := CalculateOutputTable(srcDb, modelDef, tableLt, calcLt, runIds)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -140,6 +160,7 @@ func TestCompareOutputTable(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		t.Log("Output to:", csvDir)
 
 		err = writeTestToCsvIdFile(csvDir, modelDef, tableName, csvCvt, cLst)
 		if err != nil {

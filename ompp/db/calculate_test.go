@@ -657,7 +657,7 @@ func TestCalculateOutputTable(t *testing.T) {
 		appendToCalc := func(src string, isAggr bool, idOffset int) {
 
 			ce := strings.Split(src, ",")
-			for k := range ce {
+			for j := range ce {
 
 				c := strings.TrimSpace(ce[k])
 				if c[0] == '"' && c[len(c)-1] == '"' {
@@ -669,11 +669,11 @@ func TestCalculateOutputTable(t *testing.T) {
 					calcLt = append(calcLt, CalculateTableLayout{
 						CalculateLayout: CalculateLayout{
 							Calculate: c,
-							CalcId:    idOffset + k,
+							CalcId:    idOffset + j,
 						},
 						IsAggr: isAggr,
 					})
-					t.Log("Calculate:", c)
+					t.Log(calcLt[len(calcLt)-1].CalcId, "Calculate:", c)
 					t.Log(tableName, " Is aggregation:", isAggr)
 				}
 			}

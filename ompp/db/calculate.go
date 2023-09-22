@@ -21,10 +21,13 @@ func CalculateOutputTable(dbConn *sql.DB, modelDef *ModelMeta, tableLt *ReadTabl
 		return nil, nil, errors.New("invalid (empty) model metadata, look like model not found")
 	}
 	if tableLt == nil {
-		return nil, nil, errors.New("invalid (empty) page layout")
+		return nil, nil, errors.New("invalid (empty) output table layout")
 	}
 	if tableLt.Name == "" {
 		return nil, nil, errors.New("invalid (empty) output table name")
+	}
+	if len(calcLt) <= 0 {
+		return nil, nil, errors.New("invalid (empty) calculation expression(s)")
 	}
 
 	// find output table id by name
@@ -35,7 +38,7 @@ func CalculateOutputTable(dbConn *sql.DB, modelDef *ModelMeta, tableLt *ReadTabl
 		return nil, nil, errors.New("output table not found: " + tableLt.Name)
 	}
 
-	// translate comparison calculation to sql
+	// translate calculation to sql
 	q, err := translateTableCalcToSql(table, &tableLt.ReadLayout, calcLt, runIds)
 	if err != nil {
 		return nil, nil, err
