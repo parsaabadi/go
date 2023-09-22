@@ -96,14 +96,16 @@ func partialTranslateToAccSql(table *TableMeta, readLt *ReadLayout, calcLt *Calc
 	// append run id's
 	where := " WHERE A.run_id IN ("
 
-	isFound := false
-	for k := 0; !isFound && k < len(runIds); k++ {
-		isFound = runIds[k] == readLt.FromId
-	}
-	if !isFound {
-		where += strconv.Itoa(readLt.FromId)
-		if len(runIds) > 0 {
-			where += ", "
+	if readLt.FromId > 0 {
+		isFound := false
+		for k := 0; !isFound && k < len(runIds); k++ {
+			isFound = runIds[k] == readLt.FromId
+		}
+		if !isFound {
+			where += strconv.Itoa(readLt.FromId)
+			if len(runIds) > 0 {
+				where += ", "
+			}
 		}
 	}
 	for k := 0; k < len(runIds); k++ {

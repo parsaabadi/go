@@ -77,14 +77,17 @@ func partialTranslateToExprSql(table *TableMeta, readLt *ReadLayout, calcLt *Cal
 	if !isRunCompare {
 		where += " B.run_id IN ("
 
-		isFound := false
-		for k := 0; !isFound && k < len(runIds); k++ {
-			isFound = runIds[k] == readLt.FromId
-		}
-		if !isFound {
-			where += strconv.Itoa(readLt.FromId)
-			if len(runIds) > 0 {
-				where += ", "
+		if readLt.FromId > 0 {
+
+			isFound := false
+			for k := 0; !isFound && k < len(runIds); k++ {
+				isFound = runIds[k] == readLt.FromId
+			}
+			if !isFound {
+				where += strconv.Itoa(readLt.FromId)
+				if len(runIds) > 0 {
+					where += ", "
+				}
 			}
 		}
 	} else {

@@ -226,8 +226,8 @@ func TestTranslateToExprSql(t *testing.T) {
 		if sVal := kvIni["TranslateToExprSql.RunIds_"+strconv.Itoa(k+1)]; sVal != "" {
 
 			sArr := strings.Split(sVal, ",")
-			for k := range sArr {
-				if id, err := strconv.Atoi(sArr[k]); err != nil {
+			for j := range sArr {
+				if id, err := strconv.Atoi(sArr[j]); err != nil {
 					t.Fatal(err)
 				} else {
 					runIds = append(runIds, id)
@@ -542,12 +542,20 @@ func TestTranslateTableCalcToSql(t *testing.T) {
 			continue
 		}
 
+		baseRunId := 0
+		if sVal := kvIni["TranslateTableCalcToSql.BaseRunId_"+strconv.Itoa(k+1)]; sVal != "" {
+			baseRunId, err = strconv.Atoi(sVal)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+
 		runIds := []int{}
 		if sVal := kvIni["TranslateTableCalcToSql.RunIds_"+strconv.Itoa(k+1)]; sVal != "" {
 
 			sArr := strings.Split(sVal, ",")
-			for k := range sArr {
-				if id, err := strconv.Atoi(sArr[k]); err != nil {
+			for j := range sArr {
+				if id, err := strconv.Atoi(sArr[j]); err != nil {
 					t.Fatal(err)
 				} else {
 					runIds = append(runIds, id)
@@ -561,9 +569,11 @@ func TestTranslateTableCalcToSql(t *testing.T) {
 
 		tableLt := &ReadTableLayout{
 			ReadLayout: ReadLayout{
-				Name:   tableName,
-				FromId: runIds[0],
+				Name: tableName,
 			},
+		}
+		if baseRunId > 0 {
+			tableLt.FromId = baseRunId
 		}
 
 		sql, e := translateTableCalcToSql(table, &tableLt.ReadLayout, calcLt, runIds)
@@ -683,8 +693,8 @@ func TestCalculateOutputTable(t *testing.T) {
 		if sVal := kvIni["CalculateOutputTable.RunIds_"+strconv.Itoa(k+1)]; sVal != "" {
 
 			sArr := strings.Split(sVal, ",")
-			for k := range sArr {
-				if id, err := strconv.Atoi(sArr[k]); err != nil {
+			for j := range sArr {
+				if id, err := strconv.Atoi(sArr[j]); err != nil {
 					t.Fatal(err)
 				} else {
 					runIds = append(runIds, id)
