@@ -221,6 +221,11 @@ func apiReadRoutes(router *vestigo.Router) {
 	router.Post("/api/model/:model/run/:run/table/calc", runTableCalcPageReadHandler, logRequest)
 	router.Post("/api/model/:model/run/:run/table/calc-id", runTableCalcIdPageReadHandler, logRequest)
 
+	// POST /api/model/:model/run/:run/table/compare
+	// POST /api/model/:model/run/:run/table/compare-id
+	router.Post("/api/model/:model/run/:run/table/compare", runTableComparePageReadHandler, logRequest)
+	router.Post("/api/model/:model/run/:run/table/compare-id", runTableCompareIdPageReadHandler, logRequest)
+
 	if theCfg.isMicrodata {
 
 		// POST /api/model/:model/run/:run/microdata/value

@@ -135,6 +135,16 @@ type ReadCalculteTableLayout struct {
 	Calculation []CalculateTableLayout // additional measures to calculate
 }
 
+// ReadCompareTableLayout to compare output table runs with base run using multiple comparison expressions and/or calculation measures.
+//
+// Comparison expression(s) must contain [base] and [variant] expression(s), ex.: Expr0[base] - Expr0[variant].
+// Calculation measure(s) can include table exprissions, ex.: Expr0 + Expr1
+// or aggregation of table accumulators, ex.: OM_SUM(acc0) / OM_COUNT(acc0)
+type ReadCompareTableLayout struct {
+	ReadCalculteTableLayout          // output table, base run and comparison expressions or calculations
+	Runs                    []string // runs to compare: list of digest, stamp or name
+}
+
 // CalculateLayout describes calculation to parameters or output table values.
 // It can be comparison calculation for multiple model runs, ex.: Expr0[base] - Expr0[variant].
 type CalculateLayout struct {

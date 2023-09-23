@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/openmpp/go/ompp/db"
+	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // worksetParameterPageReadHandler read a "page" of parameter values from workset.
@@ -180,7 +181,7 @@ func runTableCalcIdPageReadHandler(w http.ResponseWriter, r *http.Request) {
 	doReadTableCalcPageHandler(w, r, false)
 }
 
-// doTableCalcGetPageHandler for all output table expressions calculate a "page" of additional measures.
+// doTableCalcGetPageHandler calculate a "page" of additional measures for output table using expressions or by aggregating accumulators.
 // Json is posted to specify table name, "page" size and additional measures calculations,
 // see db.ReadCalculteTableLayout for more details.
 // Page is part of output table values defined by zero-based "start" row number and row count.
@@ -205,7 +206,7 @@ func doReadTableCalcPageHandler(w http.ResponseWriter, r *http.Request, isCode b
 	if isCode {
 		cvtCell, _, runIds, ok = theCatalog.TableToCodeCalcCellConverter(dn, rdsn, layout.Name, nil)
 		if !ok {
-			http.Error(w, "Error at run output table read: "+layout.Name, http.StatusBadRequest)
+			http.Error(w, "Error at run output table calculate: "+layout.Name, http.StatusBadRequest)
 			return
 		}
 	}
@@ -223,7 +224,7 @@ func doReadTableCalcPageHandler(w http.ResponseWriter, r *http.Request, isCode b
 		dn, rdsn, &db.ReadTableLayout{ReadLayout: layout.ReadLayout}, layout.Calculation, runIds, cvtWr,
 	)
 	if !ok {
-		http.Error(w, "Error at run output table read "+rdsn+": "+layout.Name, http.StatusBadRequest)
+		http.Error(w, "Error at run output table calculate "+rdsn+": "+layout.Name, http.StatusBadRequest)
 		return
 	}
 
@@ -237,6 +238,147 @@ func doReadTableCalcPageHandler(w http.ResponseWriter, r *http.Request, isCode b
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 	w.Write([]byte("}")) // end of data page and end of json
+}
+
+// runTableComparePageReadHandler compare model runs and return a "page" of comparison expressions and/or calculated additional measures.
+// POST /api/model/:model/run/:run/table/compare
+// Dimension items returned as enum codes or, if dimension type simple as string values
+func runTableComparePageReadHandler(w http.ResponseWriter, r *http.Request) {
+	doReadTableComparePageHandler(w, r, true)
+}
+
+// runTableCompareIdPageReadHandler compare model runs and return a "page" of comparison expressions and/or calculated additional measures.
+// POST /api/model/:model/run/:run/table/compare-id
+// Dimension(s) returned as enum id, not enum codes.
+func runTableCompareIdPageReadHandler(w http.ResponseWriter, r *http.Request) {
+	doReadTableComparePageHandler(w, r, false)
+}
+
+// doReadTableComparePageHandler compare model runs with base run and return a "page" of comparison values or calculated additional measures.
+// Json is posted to specify table name, "page" size and additional measures calculations,
+// see db.ReadCompareTableLayout for more details.
+// Page is part of output table values defined by zero-based "start" row number and row count.
+// If row count <= 0 then all rows returned.
+// Dimension items returned enum id's or as enum codes and for dimension type simple as string values.
+func doReadTableComparePageHandler(w http.ResponseWriter, r *http.Request, isCode bool) {
+
+	// url parameters
+	dn := getRequestParam(r, "model") // model digest-or-name
+	rdsn := getRequestParam(r, "run") // base run digest-or-stamp-or-name
+
+	// decode json request body
+	var layout db.ReadCompareTableLayout
+	if !jsonRequestDecode(w, r, true, &layout) {
+		return // error at json decode, response done with http error
+	}
+
+	// check if base run compeleted successfully
+	rBase, ok := theCatalog.CompletedRunByDigestOrStampOrName(dn, rdsn)
+	if !ok {
+		omppLog.Log("Error at table compare: base run not found or not completed successfully: ", rdsn)
+		http.Error(w, "Error at run output table compare: "+layout.Name+": "+"base run must be completed successfully: "+rdsn, http.StatusBadRequest)
+		return
+	}
+	if rBase.Status != db.DoneRunStatus {
+		omppLog.Log("Error at table compare: base run not completed successfully: ", rdsn, ": ", rBase.Status)
+		http.Error(w, "Error at run output table compare: "+layout.Name+": "+"base run must be completed successfully: "+rdsn, http.StatusBadRequest)
+		return
+	}
+	layout.FromId = rBase.RunId // set base run
+
+	// if required get converter from id's cell into code cell
+	// validate all runs: it must be completed successfully
+	var cvtCell func(interface{}) (interface{}, error)
+	runIds := []int{}
+	ok = false
+	if isCode {
+		cvtCell, _, runIds, ok = theCatalog.TableToCodeCalcCellConverter(dn, rdsn, layout.Name, layout.Runs)
+		if !ok {
+			http.Error(w, "Error at run output table compare: "+layout.Name, http.StatusBadRequest)
+			return
+		}
+	} else {
+		runIds, ok = isSuccessAllRuns(dn, layout.Runs)
+		if !ok {
+			omppLog.Log("Error at table compare: all runs must be completed successfully: ", dn, ": ", layout.Name)
+			http.Error(w, "Error at run output table compare: "+layout.Name+": "+"all runs must be completed successfully: "+rdsn, http.StatusBadRequest)
+			return
+		}
+	}
+	if len(runIds) <= 0 {
+		omppLog.Log("Warning at table compare: only base run found, no runs to comparte with: ", dn, ": ", layout.Name)
+	}
+
+	// write to response: page layout and page data
+	jsonSetHeaders(w, r) // start response with set json headers, i.e. content type
+
+	w.Write([]byte("{\"Page\":[")) // start of data page and start of json output array
+
+	enc := json.NewEncoder(w)
+	cvtWr := jsonCellWriter(w, enc, cvtCell)
+
+	// calculate output table measure and read measure page into json array response, convert enum id's to code if requested
+	lt, ok := theCatalog.ReadOutTableCalculateTo(
+		dn, rdsn, &db.ReadTableLayout{ReadLayout: layout.ReadLayout}, layout.Calculation, runIds, cvtWr,
+	)
+	if !ok {
+		http.Error(w, "Error at run output table compare "+rdsn+": "+layout.Name, http.StatusBadRequest)
+		return
+	}
+
+	w.Write([]byte{']'}) // end of data page array
+
+	// continue response with output page layout: offset, size, last page flag
+	w.Write([]byte(",\"Layout\":"))
+
+	err := json.NewEncoder(w).Encode(lt)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	w.Write([]byte("}")) // end of data page and end of json
+}
+
+// check if all runs completed successfully and return run id's for all existing runs, skip runs which do exist.
+func isSuccessAllRuns(digest string, runLst []string) ([]int, bool) {
+
+	// check if all additional model runs completed successfully
+	runIds := []int{}
+
+	if len(runLst) > 0 {
+		rLst, _ := theCatalog.RunRowListByModel(digest)
+
+		for _, rn := range runLst {
+
+			rId := 0
+			for k := 0; rId <= 0 && k < len(rLst); k++ {
+
+				if rn == rLst[k].RunDigest || rn == rLst[k].RunStamp || rn == rLst[k].Name {
+					rId = rLst[k].RunId
+				}
+				if rId > 0 {
+					if rLst[k].Status != db.DoneRunStatus {
+						omppLog.Log("Warning: model run not completed successfully: ", rLst[k].RunDigest, ": ", rLst[k].Status)
+						return []int{}, false
+					}
+				}
+			}
+			if rId <= 0 {
+				omppLog.Log("Warning: model run not found: ", rn)
+				continue
+			}
+			// else: model run completed successfully, include run id into the list of additional runs
+
+			isFound := false
+			for k := 0; !isFound && k < len(runIds); k++ {
+				isFound = rId == runIds[k]
+			}
+			if !isFound {
+				runIds = append(runIds, rId)
+			}
+		}
+	}
+
+	return runIds, true
 }
 
 // worksetParameterPageGetHandler read a "page" of parameter values from workset.
