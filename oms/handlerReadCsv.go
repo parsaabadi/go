@@ -345,13 +345,18 @@ func doTableCalcGetCsvHandler(w http.ResponseWriter, r *http.Request, isCode, is
 	name := getRequestParam(r, "name") // output table name
 	calc := getRequestParam(r, "calc") // calculation function name: sum avg count min max var sd se cv
 
+	if calc == "" {
+		http.Error(w, "Invalid (empty) calculation expression "+calc, http.StatusBadRequest)
+		return
+	}
+
 	// setup read layout and calculate layout
 	// page size =0, read all values
 	tableLt := db.ReadTableLayout{
 		ReadLayout: db.ReadLayout{Name: name},
 	}
 
-	calcLt, ok := theCatalog.TableAllExprCalculateLayout(dn, name, calc)
+	calcLt, ok := theCatalog.TableAggrExprCalculateLayout(dn, name, calc)
 	if !ok {
 		http.Error(w, "Invalid calculation expression "+calc, http.StatusBadRequest)
 		return
@@ -359,6 +364,126 @@ func doTableCalcGetCsvHandler(w http.ResponseWriter, r *http.Request, isCode, is
 
 	// get converter from cell list to csv rows []string
 	hdr, cvtRow, _, runIds, ok := theCatalog.TableToCalcCsvConverter(dn, rdsn, isCode, name, nil)
+	if !ok {
+		http.Error(w, "Failed to create output table csv converter: "+name, http.StatusBadRequest)
+		return
+	}
+
+	// set response headers: Content-Disposition: attachment; filename=name.csv
+	csvSetHeaders(w, name)
+
+	// write csv body
+	if isBom {
+		if _, err := w.Write(helper.Utf8bom); err != nil {
+			http.Error(w, "Error at csv write: "+rdsn+": "+name, http.StatusBadRequest)
+			return
+		}
+	}
+
+	csvWr := csv.NewWriter(w)
+
+	if err := csvWr.Write(hdr); err != nil {
+		http.Error(w, "Error at csv write: "+rdsn+": "+name, http.StatusBadRequest)
+		return
+	}
+
+	// convert output table cell into []string and write line into csv file
+	cs := make([]string, len(hdr))
+
+	cvtWr := func(c interface{}) (bool, error) {
+
+		if err := cvtRow(c, cs); err != nil {
+			return false, err
+		}
+		if err := csvWr.Write(cs); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+
+	_, ok = theCatalog.ReadOutTableCalculateTo(dn, rdsn, &tableLt, calcLt, runIds, cvtWr)
+	if !ok {
+		http.Error(w, "Error at run output table read "+rdsn+": "+name, http.StatusBadRequest)
+		return
+	}
+	csvWr.Flush() // flush csv to response
+}
+
+// runTableCompareCsvGetHandler write into CSV response output table comparison between base and variant model runs.
+// It is either calculation for each expression: DIFF RATIO PERCENT or multiple arbitrary calculations.
+// For example, PERCENT is: 100 * expr0[variant] / expr0[base], 100 * expr1[variant] / expr1[base],....
+// Or arbitrary comma separated expression(s): expr0 , expr1[variant] + expr2[base] , ....
+// GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/csv
+// Dimension(s) returned as enum codes.
+func runTableCompareCsvGetHandler(w http.ResponseWriter, r *http.Request) {
+	doTableCompareGetCsvHandler(w, r, true, false)
+}
+
+// runTableCompareCsvBomGetHandler write into CSV response output table comparison between base and variant model runs.
+// It is either calculation for each expression: DIFF RATIO PERCENT or multiple arbitrary calculations.
+// For example, PERCENT is: 100 * expr0[variant] / expr0[base], 100 * expr1[variant] / expr1[base],....
+// Or arbitrary comma separated expression(s): expr0 , expr1[variant] + expr2[base] , ....
+// Dimension(s) returned as enum codes.
+// Response starts from utf-8 BOM bytes.
+func runTableCompareCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
+	doTableCompareGetCsvHandler(w, r, true, true)
+}
+
+// runTableCompareIdCsvGetHandler write into CSV response output table comparison between base and variant model runs.
+// It is either calculation for each expression: DIFF RATIO PERCENT or multiple arbitrary calculations.
+// For example, PERCENT is: 100 * expr0[variant] / expr0[base], 100 * expr1[variant] / expr1[base],....
+// Or arbitrary comma separated expression(s): expr0 , expr1[variant] + expr2[base] , ....
+// GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/csv/csv-id
+// Dimension(s) returned as enum id's.
+func runTableCompareIdCsvGetHandler(w http.ResponseWriter, r *http.Request) {
+	doTableCompareGetCsvHandler(w, r, false, false)
+}
+
+// runTableCompareIdCsvBomGetHandler write into CSV response output table comparison between base and variant model runs.
+// It is either calculation for each expression: DIFF RATIO PERCENT or multiple arbitrary calculations.
+// For example, PERCENT is: 100 * expr0[variant] / expr0[base], 100 * expr1[variant] / expr1[base],....
+// Or arbitrary comma separated expression(s): expr0 , expr1[variant] + expr2[base] , ....
+// GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/csv/csv-id-bom
+// Dimension(s) returned as enum id's.
+// Response starts from utf-8 BOM bytes.
+func runTableCompareIdCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
+	doTableCompareGetCsvHandler(w, r, false, true)
+}
+
+// doTableCompareGetCsvHandler write into CSV response output table comparison between base and variant model runs.
+// It is either calculation for each expression: DIFF RATIO PERCENT or multiple arbitrary calculations.
+// For example, PERCENT is: 100 * expr0[variant] / expr0[base], 100 * expr1[variant] / expr1[base],....
+// Or arbitrary comma separated expression(s): expr0 , 7 + expr1[variant] + expr2[base] , ....
+// It does read all output table values, not a "page" of values.
+// Dimension(s) and enum-based parameters returned as enum codes or enum id's.
+func doTableCompareGetCsvHandler(w http.ResponseWriter, r *http.Request, isCode, isBom bool) {
+
+	// url or query parameters
+	dn := getRequestParam(r, "model")        // model digest-or-name
+	rdsn := getRequestParam(r, "run")        // base run digest-or-stamp-or-name
+	name := getRequestParam(r, "name")       // output table name
+	compare := getRequestParam(r, "compare") // comparison function name: diff ratio percent
+	vRdsn := getRequestParam(r, "variant")   // variant run digest-or-stamp-or-name
+
+	if compare == "" {
+		http.Error(w, "Invalid (empty) comparison expression", http.StatusBadRequest)
+		return
+	}
+
+	// setup read layout and calculate layout
+	// page size =0, read all values
+	tableLt := db.ReadTableLayout{
+		ReadLayout: db.ReadLayout{Name: name},
+	}
+
+	calcLt, ok := theCatalog.TableExprCompareLayout(dn, name, compare)
+	if !ok {
+		http.Error(w, "Invalid comparison expression "+compare, http.StatusBadRequest)
+		return
+	}
+
+	// get converter from cell list to csv rows []string
+	hdr, cvtRow, _, runIds, ok := theCatalog.TableToCalcCsvConverter(dn, rdsn, isCode, name, []string{vRdsn})
 	if !ok {
 		http.Error(w, "Failed to create output table csv converter: "+name, http.StatusBadRequest)
 		return

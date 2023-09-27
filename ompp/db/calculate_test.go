@@ -510,9 +510,9 @@ func TestTranslateTableCalcToSql(t *testing.T) {
 		appendToCalc := func(src string, isAggr bool, idOffset int) {
 
 			ce := strings.Split(src, ",")
-			for k := range ce {
+			for j := range ce {
 
-				c := strings.TrimSpace(ce[k])
+				c := strings.TrimSpace(ce[j])
 				if c[0] == '"' && c[len(c)-1] == '"' {
 					c = c[1 : len(c)-1]
 				}
@@ -522,7 +522,7 @@ func TestTranslateTableCalcToSql(t *testing.T) {
 					calcLt = append(calcLt, CalculateTableLayout{
 						CalculateLayout: CalculateLayout{
 							Calculate: c,
-							CalcId:    idOffset + k,
+							CalcId:    idOffset + j,
 						},
 						IsAggr: isAggr,
 					})
@@ -659,7 +659,7 @@ func TestCalculateOutputTable(t *testing.T) {
 			ce := strings.Split(src, ",")
 			for j := range ce {
 
-				c := strings.TrimSpace(ce[k])
+				c := strings.TrimSpace(ce[j])
 				if c[0] == '"' && c[len(c)-1] == '"' {
 					c = c[1 : len(c)-1]
 				}

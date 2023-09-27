@@ -304,6 +304,17 @@ func apiReadRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/table/:name/calc/:calc/start/", http.NotFound)
 	router.Get("/api/model/:model/run/:run/table/:name/calc/:calc/start/:start/count/", http.NotFound)
 
+	// GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant
+	// GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/start/:start
+	// GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/start/:start/count/:count
+	router.Get("/api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant", runTableComparePageGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/start/:start", runTableComparePageGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/start/:start/count/:count", runTableComparePageGetHandler, logRequest)
+	// reject if request ill-formed
+	router.Get("/api/model/:model/run/:run/table/:name/compare/:compare/variant/", http.NotFound)
+	router.Get("/api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/start/", http.NotFound)
+	router.Get("/api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/start/:start/count/", http.NotFound)
+
 	if theCfg.isMicrodata {
 
 		// GET /api/model/:model/run/:run/microdata/:name/value
@@ -388,6 +399,15 @@ func apiReadCsvRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/table/:name/calc/:calc/csv-bom", runTableCalcCsvBomGetHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/table/:name/calc/:calc/csv-id", runTableCalcIdCsvGetHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/table/:name/calc/:calc/csv-id-bom", runTableCalcIdCsvBomGetHandler, logRequest)
+
+	// GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/csv
+	// GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/csv-bom
+	// GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/csv-id
+	// GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/csv-id-bom
+	router.Get("/api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/csv", runTableCompareCsvGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/csv-bom", runTableCompareCsvBomGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/csv-id", runTableCompareIdCsvGetHandler, logRequest)
+	router.Get("/api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/csv-id-bom", runTableCompareIdCsvBomGetHandler, logRequest)
 }
 
 // add web-service /api routes to update metadata

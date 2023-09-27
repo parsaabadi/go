@@ -4,6 +4,8 @@
 package main
 
 import (
+	"strings"
+
 	"github.com/openmpp/go/ompp/db"
 	"github.com/openmpp/go/ompp/omppLog"
 )
@@ -170,8 +172,10 @@ func (mc *ModelCatalog) TableToCodeCalcCellConverter(
 	return cvt, baseRunId, runIds, ok
 }
 
-// TableAllExprCalculateLayout return calculate layout for all expressions by aggregation name: sum avg count min max var sd se cv
-func (mc *ModelCatalog) TableAllExprCalculateLayout(dn string, name string, aggr string) ([]db.CalculateTableLayout, bool) {
+// TableAggrExprCalculateLayout return calculate layout
+// either for all expressions by aggregation name: sum avg count min max var sd se cv
+// or from comma separated list of aggregation exprission(s), for example: OM_AVG(acc0) , OM_SD(acc1)
+func (mc *ModelCatalog) TableAggrExprCalculateLayout(dn string, name string, aggr string) ([]db.CalculateTableLayout, bool) {
 
 	// check aggregation operation
 	fnc := ""
@@ -194,7 +198,35 @@ func (mc *ModelCatalog) TableAllExprCalculateLayout(dn string, name string, aggr
 		fnc = "OM_SE"
 	case "cv":
 		fnc = "OM_CV"
-	default:
+	default: // comma separated list of expressions
+
+		calcLt := []db.CalculateTableLayout{}
+
+		ce := strings.Split(aggr, ",")
+		for j := range ce {
+
+			c := strings.TrimSpace(ce[j])
+			if c[0] == '"' && c[len(c)-1] == '"' {
+				c = c[1 : len(c)-1]
+			}
+			if c != "" {
+				calcLt = append(calcLt, db.CalculateTableLayout{
+					CalculateLayout: db.CalculateLayout{
+						Calculate: c,
+						CalcId:    j + db.CALCULATED_ID_OFFSET,
+					},
+					IsAggr: true,
+				})
+			}
+		}
+		if len(calcLt) <= 0 {
+			omppLog.Log("Error: invalid (empty) calculation expression")
+			return []db.CalculateTableLayout{}, false
+		}
+
+		return calcLt, true
+	}
+	if fnc == "" {
 		omppLog.Log("Error: invalid aggregation name: ", aggr, ": ", dn, ": ", name)
 		return []db.CalculateTableLayout{}, false
 	}
@@ -251,6 +283,109 @@ func (mc *ModelCatalog) TableAllExprCalculateLayout(dn string, name string, aggr
 				break
 			}
 		}
+	}
+
+	return calcLt, true
+}
+
+// TableExprCompareLayout return calculate layout
+// either for all expressions by name: diff ratio percent
+// or from comma separated list of exprission(s), for example: expr0 , 7 + expr1[variant] + expr2[base]
+func (mc *ModelCatalog) TableExprCompareLayout(dn string, name string, cmp string) ([]db.CalculateTableLayout, bool) {
+
+	// check comparison expression
+	var fnc func(expr string) string
+	switch cmp {
+	case "diff":
+		fnc = func(expr string) string {
+			return expr + "[variant] - " + expr + "[base]"
+		}
+	case "ratio":
+		fnc = func(expr string) string {
+			return expr + "[variant] / " + expr + "[base]"
+		}
+	case "percent":
+		fnc = func(expr string) string {
+			return "100 * " + expr + "[variant] / " + expr + "[base]"
+		}
+	default: // comma separated list of expressions
+
+		calcLt := []db.CalculateTableLayout{}
+
+		ce := strings.Split(cmp, ",")
+		for j := range ce {
+
+			c := strings.TrimSpace(ce[j])
+			if c[0] == '"' && c[len(c)-1] == '"' {
+				c = c[1 : len(c)-1]
+			}
+			if c != "" {
+				calcLt = append(calcLt, db.CalculateTableLayout{
+					CalculateLayout: db.CalculateLayout{
+						Calculate: c,
+						CalcId:    j + db.CALCULATED_ID_OFFSET,
+					},
+					IsAggr: false,
+				})
+			}
+		}
+		if len(calcLt) <= 0 {
+			omppLog.Log("Error: invalid (empty) comparison expression")
+			return []db.CalculateTableLayout{}, false
+		}
+
+		return calcLt, true
+	}
+	if fnc == nil {
+		omppLog.Log("Error: invalid comparison name: ", cmp, ": ", dn, ": ", name)
+		return []db.CalculateTableLayout{}, false
+	}
+
+	// if model digest-or-name is empty then return empty results
+	if dn == "" {
+		omppLog.Log("Warning: invalid (empty) model digest and name")
+		return []db.CalculateTableLayout{}, false
+	}
+
+	// get model metadata and database connection
+	meta, _, ok := mc.modelMeta(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return []db.CalculateTableLayout{}, false // return empty result: model not found or error
+	}
+
+	// find output table by name
+	idx, ok := meta.OutTableByName(name)
+	if !ok {
+		omppLog.Log("Error: model output table not found: ", dn, ": ", name)
+		return []db.CalculateTableLayout{}, false
+	}
+	table := &meta.Table[idx]
+
+	// calculate output table expression and comparison expression
+	// for example: if table has Expr0 and Expr1 values and comparion is DIFF
+	// then append to calculation: Expr0, Expr0[variant] - Expr0[base], Expr1, Expr1[variant] - Expr1[base]
+	calcLt := []db.CalculateTableLayout{}
+
+	for _, ex := range table.Expr {
+
+		// append output table expression
+		calcLt = append(calcLt, db.CalculateTableLayout{
+			CalculateLayout: db.CalculateLayout{
+				Calculate: ex.Name,
+				CalcId:    ex.ExprId,
+			},
+			IsAggr: false,
+		})
+
+		// append comaprison
+		calcLt = append(calcLt, db.CalculateTableLayout{
+			CalculateLayout: db.CalculateLayout{
+				Calculate: fnc(ex.Name),
+				CalcId:    ex.ExprId + db.CALCULATED_ID_OFFSET,
+			},
+			IsAggr: false,
+		})
 	}
 
 	return calcLt, true

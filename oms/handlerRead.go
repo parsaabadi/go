@@ -289,7 +289,7 @@ func doReadTableComparePageHandler(w http.ResponseWriter, r *http.Request, isCod
 	// if required get converter from id's cell into code cell
 	// validate all runs: it must be completed successfully
 	var cvtCell func(interface{}) (interface{}, error)
-	runIds := []int{}
+	var runIds []int
 	ok = false
 	if isCode {
 		cvtCell, _, runIds, ok = theCatalog.TableToCodeCalcCellConverter(dn, rdsn, layout.Name, layout.Runs)
@@ -382,18 +382,22 @@ func isSuccessAllRuns(digest string, runLst []string) ([]int, bool) {
 }
 
 // worksetParameterPageGetHandler read a "page" of parameter values from workset.
-// GET /api/model/:model/workset/:set/parameter/:name/value
-// GET /api/model/:model/workset/:set/parameter/:name/value/start/:start
-// GET /api/model/:model/workset/:set/parameter/:name/value/start/:start/count/:count
+//
+//	GET /api/model/:model/workset/:set/parameter/:name/value
+//	GET /api/model/:model/workset/:set/parameter/:name/value/start/:start
+//	GET /api/model/:model/workset/:set/parameter/:name/value/start/:start/count/:count
+//
 // Dimension(s) and enum-based parameters returned as enum codes.
 func worksetParameterPageGetHandler(w http.ResponseWriter, r *http.Request) {
 	doParameterGetPageHandler(w, r, "set", true, true)
 }
 
 // runParameterPageGetHandler read a "page" of parameter values from model run results.
-// GET /api/model/:model/run/:run/parameter/:name/value
-// GET /api/model/:model/run/:run/parameter/:name/value/start/:start
-// GET /api/model/:model/run/:run/parameter/:name/value/start/:start/count/:count
+//
+//	GET /api/model/:model/run/:run/parameter/:name/value
+//	GET /api/model/:model/run/:run/parameter/:name/value/start/:start
+//	GET /api/model/:model/run/:run/parameter/:name/value/start/:start/count/:count
+//
 // Dimension(s) and enum-based parameters returned as enum codes.
 func runParameterPageGetHandler(w http.ResponseWriter, r *http.Request) {
 	doParameterGetPageHandler(w, r, "run", false, true)
@@ -546,22 +550,21 @@ func doTableGetPageHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllA
 	w.Write([]byte{']'}) // end of json output array
 }
 
-// runTableCalcPageGetHandler for all output table expressions calculate a "page" of additional measure: SUM AVG COUNT MIN MAX VAR SD SE CV.
-// GET /api/model/:model/run/:run/table/:name/calc/:calc
-// GET /api/model/:model/run/:run/table/:name/calc/:calc/start/:start
-// GET /api/model/:model/run/:run/table/:name/calc/:calc/start/:start/count/:count
-// Enum-based dimension items returned as enum codes.
-func runTableCalcPageGetHandler(w http.ResponseWriter, r *http.Request) {
-	doTableCalcGetPageHandler(w, r, true)
-}
-
-// doTableCalcGetPageHandler for all output table expressions calculate a "page" of additional measure.
-// Meausre calculated as one aggregation: SUM AVG COUNT MIN MAX VAR SD SE CV.
-// Caslculation applied to derived accumulator with the same name as expression name.
+// runTableCalcPageGetHandler for all output table expressions calculate a "page" of additional measures.
+//
+// Measures calculated either as aggregation for each expresion: SUM AVG COUNT MIN MAX VAR SD SE CV
+// or as comma separated list of arbitrary calcialtion expressions, for example: OM_AVG(acc0),OM_SD(acc1)
+//
+//	GET /api/model/:model/run/:run/table/:name/calc/:calc
+//	GET /api/model/:model/run/:run/table/:name/calc/:calc/start/:start
+//	GET /api/model/:model/run/:run/table/:name/calc/:calc/start/:start/count/:count
+//
+// Calculation applied to derived accumulator with the same name as expression name.
+//
 // Page is part of output table values defined by zero-based "start" row number and row count.
 // If row count <= 0 then all rows returned.
-// Enum-based dimension items returned as enum id or as enum codes.
-func doTableCalcGetPageHandler(w http.ResponseWriter, r *http.Request, isCode bool) {
+// Enum-based dimension items returned as enum codes.
+func runTableCalcPageGetHandler(w http.ResponseWriter, r *http.Request) {
 
 	// url or query parameters
 	dn := getRequestParam(r, "model")  // model digest-or-name
@@ -569,7 +572,11 @@ func doTableCalcGetPageHandler(w http.ResponseWriter, r *http.Request, isCode bo
 	name := getRequestParam(r, "name") // output table name
 	calc := getRequestParam(r, "calc") // calculation function name: sum avg count min max var sd se cv
 
-	// url or query parameters: page offset, page size and calculation expression
+	// validate parameters: page offset, page size and calculation expression
+	if calc == "" {
+		http.Error(w, "Invalid (empty) calculation expression "+calc, http.StatusBadRequest)
+		return
+	}
 	start, ok := getInt64RequestParam(r, "start", 0)
 	if !ok {
 		http.Error(w, "Invalid value of start row number to read "+name, http.StatusBadRequest)
@@ -589,21 +596,93 @@ func doTableCalcGetPageHandler(w http.ResponseWriter, r *http.Request, isCode bo
 		},
 	}
 
-	calcLt, ok := theCatalog.TableAllExprCalculateLayout(dn, name, calc)
+	calcLt, ok := theCatalog.TableAggrExprCalculateLayout(dn, name, calc)
 	if !ok {
 		http.Error(w, "Invalid calculation expression "+calc, http.StatusBadRequest)
 		return
 	}
 
-	// if required get converter from id's cell into code cell
-	var cvtCell func(interface{}) (interface{}, error)
-	runIds := []int{}
-	if isCode {
-		cvtCell, _, runIds, ok = theCatalog.TableToCodeCalcCellConverter(dn, rdsn, tableLt.Name, nil)
-		if !ok {
-			http.Error(w, "Error at run output table read: "+name, http.StatusBadRequest)
-			return
-		}
+	// get converter from id's cell into code cell
+	cvtCell, _, runIds, ok := theCatalog.TableToCodeCalcCellConverter(dn, rdsn, tableLt.Name, nil)
+	if !ok {
+		http.Error(w, "Failed to create output table csv converter: "+name, http.StatusBadRequest)
+		return
+	}
+
+	// write to response: page layout and page data
+	jsonSetHeaders(w, r) // start response with set json headers, i.e. content type
+
+	w.Write([]byte{'['}) // start of json output array
+
+	enc := json.NewEncoder(w)
+	cvtWr := jsonCellWriter(w, enc, cvtCell)
+
+	// calculate output table measure and read measure page into json array response, convert enum id's to code if requested
+	_, ok = theCatalog.ReadOutTableCalculateTo(dn, rdsn, &tableLt, calcLt, runIds, cvtWr)
+	if !ok {
+		http.Error(w, "Error at run output table read "+rdsn+": "+name, http.StatusBadRequest)
+		return
+	}
+	w.Write([]byte{']'}) // end of json output array
+}
+
+// runTableComparePageGetHandler compare model runs and return a "page" of comparison measures.
+//
+// It is either calculation for each expression: DIFF RATIO PERCENT or multiple arbitrary calculations.
+// For example, PERCENT is: 100 * expr0[variant] / expr0[base], 100 * expr1[variant] / expr1[base],....
+// Or arbitrary comma separated expression(s): expr0 , expr1[variant] + expr2[base] , ....
+//
+// GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant
+// GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/start/:start
+// GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/start/:start/count/:count
+//
+// Page is part of output table values defined by zero-based "start" row number and row count.
+// If row count <= 0 then all rows returned.
+// Enum-based dimension items returned as enum codes.
+func runTableComparePageGetHandler(w http.ResponseWriter, r *http.Request) {
+
+	// url or query parameters
+	dn := getRequestParam(r, "model")        // model digest-or-name
+	rdsn := getRequestParam(r, "run")        // base run digest-or-stamp-or-name
+	name := getRequestParam(r, "name")       // output table name
+	compare := getRequestParam(r, "compare") // comparison function name: diff ratio percent
+	vRdsn := getRequestParam(r, "variant")   // variant run digest-or-stamp-or-name
+
+	// validate parameters: page offset, page size and calculation expression
+	if compare == "" {
+		http.Error(w, "Invalid (empty) comparison expression", http.StatusBadRequest)
+		return
+	}
+	start, ok := getInt64RequestParam(r, "start", 0)
+	if !ok {
+		http.Error(w, "Invalid value of start row number to read "+name, http.StatusBadRequest)
+		return
+	}
+	count, ok := getInt64RequestParam(r, "count", 0)
+	if !ok {
+		http.Error(w, "Invalid value of max row count to read "+name, http.StatusBadRequest)
+		return
+	}
+
+	// setup read layout and calculate layout
+	tableLt := db.ReadTableLayout{
+		ReadLayout: db.ReadLayout{
+			Name:           name,
+			ReadPageLayout: db.ReadPageLayout{Offset: start, Size: count},
+		},
+	}
+
+	calcLt, ok := theCatalog.TableExprCompareLayout(dn, name, compare)
+	if !ok {
+		http.Error(w, "Invalid comparison expression "+compare, http.StatusBadRequest)
+		return
+	}
+
+	// get converter from id's cell into code cell
+	cvtCell, _, runIds, ok := theCatalog.TableToCodeCalcCellConverter(dn, rdsn, tableLt.Name, []string{vRdsn})
+	if !ok {
+		http.Error(w, "Failed to create output table converter: "+name, http.StatusBadRequest)
+		return
 	}
 
 	// write to response: page layout and page data
