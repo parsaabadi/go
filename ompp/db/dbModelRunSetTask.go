@@ -46,6 +46,7 @@ type RunPub struct {
 	CreateDateTime      string            // create_dt     VARCHAR(32)  NOT NULL, -- start date-time
 	Status              string            // status        VARCHAR(1)   NOT NULL, -- run status: i=init p=progress s=success x=exit e=error(failed)
 	UpdateDateTime      string            // update_dt     VARCHAR(32)  NOT NULL, -- last update date-time
+	RunId               int               // used only as output value, input value ignored
 	RunDigest           string            // run_digest    VARCHAR(32)  NULL,     -- digest of the run metadata: model digest, run name, sub count, created date-time, run stamp
 	ValueDigest         string            // value_digest  VARCHAR(32),           -- if not NULL then digest of the run values: all parameters and output tables
 	RunStamp            string            // run_stamp     VARCHAR(32)  NOT NULL, -- process run stamp, by default is log time stamp

@@ -33,6 +33,7 @@ func (meta *RunMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunPub, err
 		CreateDateTime:      meta.Run.CreateDateTime,
 		Status:              meta.Run.Status,
 		UpdateDateTime:      meta.Run.UpdateDateTime,
+		RunId:               meta.Run.RunId,
 		RunDigest:           meta.Run.RunDigest,
 		ValueDigest:         meta.Run.ValueDigest,
 		RunStamp:            meta.Run.RunStamp,
@@ -162,7 +163,7 @@ func (pub *RunPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunMeta, er
 	// run header: run_lst row with zero default run id
 	meta := RunMeta{
 		Run: RunRow{
-			RunId:          0, // run id is undefined
+			RunId:          0, // ignore input value
 			ModelId:        modelDef.Model.ModelId,
 			Name:           pub.Name,
 			SubCount:       pub.SubCount,
