@@ -411,8 +411,11 @@ func doTableCalcGetCsvHandler(w http.ResponseWriter, r *http.Request, isCode, is
 
 // runTableCompareCsvGetHandler write into CSV response output table comparison between base and variant model runs.
 // It is either calculation for each expression: DIFF RATIO PERCENT or multiple arbitrary calculations.
-// For example, PERCENT is: 100 * expr0[variant] / expr0[base], 100 * expr1[variant] / expr1[base],....
+// For example, RATIO is: expr0[variant] / expr0[base], expr1[variant] / expr1[base],....
 // Or arbitrary comma separated expression(s): expr0 , expr1[variant] + expr2[base] , ....
+// Variant runs can be a comma separated list of run digests or run stamps or run names.
+// If run name conations comma then name must be "double quoted" or 'single quoted'.
+// For example: "Year 1995, 1996", 'Age [30, 40]'
 // GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/csv
 // Dimension(s) returned as enum codes.
 func runTableCompareCsvGetHandler(w http.ResponseWriter, r *http.Request) {
@@ -421,8 +424,12 @@ func runTableCompareCsvGetHandler(w http.ResponseWriter, r *http.Request) {
 
 // runTableCompareCsvBomGetHandler write into CSV response output table comparison between base and variant model runs.
 // It is either calculation for each expression: DIFF RATIO PERCENT or multiple arbitrary calculations.
-// For example, PERCENT is: 100 * expr0[variant] / expr0[base], 100 * expr1[variant] / expr1[base],....
+// For example, RATIO is: expr0[variant] / expr0[base], expr1[variant] / expr1[base],....
 // Or arbitrary comma separated expression(s): expr0 , expr1[variant] + expr2[base] , ....
+// Variant runs can be a comma separated list of run digests or run stamps or run names.
+// If run name conations comma then name must be "double quoted" or 'single quoted'.
+// For example: "Year 1995, 1996", 'Age [30, 40]'
+// GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/csv-bom
 // Dimension(s) returned as enum codes.
 // Response starts from utf-8 BOM bytes.
 func runTableCompareCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
@@ -431,8 +438,11 @@ func runTableCompareCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
 
 // runTableCompareIdCsvGetHandler write into CSV response output table comparison between base and variant model runs.
 // It is either calculation for each expression: DIFF RATIO PERCENT or multiple arbitrary calculations.
-// For example, PERCENT is: 100 * expr0[variant] / expr0[base], 100 * expr1[variant] / expr1[base],....
+// For example, RATIO is: expr0[variant] / expr0[base], expr1[variant] / expr1[base],....
 // Or arbitrary comma separated expression(s): expr0 , expr1[variant] + expr2[base] , ....
+// Variant runs can be a comma separated list of run digests or run stamps or run names.
+// If run name conations comma then name must be "double quoted" or 'single quoted'.
+// For example: "Year 1995, 1996", 'Age [30, 40]'
 // GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/csv/csv-id
 // Dimension(s) returned as enum id's.
 func runTableCompareIdCsvGetHandler(w http.ResponseWriter, r *http.Request) {
@@ -441,8 +451,11 @@ func runTableCompareIdCsvGetHandler(w http.ResponseWriter, r *http.Request) {
 
 // runTableCompareIdCsvBomGetHandler write into CSV response output table comparison between base and variant model runs.
 // It is either calculation for each expression: DIFF RATIO PERCENT or multiple arbitrary calculations.
-// For example, PERCENT is: 100 * expr0[variant] / expr0[base], 100 * expr1[variant] / expr1[base],....
+// For example, RATIO is: expr0[variant] / expr0[base], expr1[variant] / expr1[base],....
 // Or arbitrary comma separated expression(s): expr0 , expr1[variant] + expr2[base] , ....
+// Variant runs can be a comma separated list of run digests or run stamps or run names.
+// If run name conations comma then name must be "double quoted" or 'single quoted'.
+// For example: "Year 1995, 1996", 'Age [30, 40]'
 // GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/csv/csv-id-bom
 // Dimension(s) returned as enum id's.
 // Response starts from utf-8 BOM bytes.
@@ -452,8 +465,11 @@ func runTableCompareIdCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
 
 // doTableCompareGetCsvHandler write into CSV response output table comparison between base and variant model runs.
 // It is either calculation for each expression: DIFF RATIO PERCENT or multiple arbitrary calculations.
-// For example, PERCENT is: 100 * expr0[variant] / expr0[base], 100 * expr1[variant] / expr1[base],....
+// For example, RATIO is: expr0[variant] / expr0[base], expr1[variant] / expr1[base],....
 // Or arbitrary comma separated expression(s): expr0 , 7 + expr1[variant] + expr2[base] , ....
+// Variant runs can be a comma separated list of run digests or run stamps or run names.
+// If run name conations comma then name must be "double quoted" or 'single quoted'.
+// For example: "Year 1995, 1996", 'Age [30, 40]'
 // It does read all output table values, not a "page" of values.
 // Dimension(s) and enum-based parameters returned as enum codes or enum id's.
 func doTableCompareGetCsvHandler(w http.ResponseWriter, r *http.Request, isCode, isBom bool) {
@@ -463,10 +479,16 @@ func doTableCompareGetCsvHandler(w http.ResponseWriter, r *http.Request, isCode,
 	rdsn := getRequestParam(r, "run")        // base run digest-or-stamp-or-name
 	name := getRequestParam(r, "name")       // output table name
 	compare := getRequestParam(r, "compare") // comparison function name: diff ratio percent
-	vRdsn := getRequestParam(r, "variant")   // variant run digest-or-stamp-or-name
+	vr := getRequestParam(r, "variant")      // comma separated list of variant runs digest-or-stamp-or-name
 
 	if compare == "" {
 		http.Error(w, "Invalid (empty) comparison expression", http.StatusBadRequest)
+		return
+	}
+
+	vRdsn := helper.ParseCsvLine(vr, 0)
+	if len(vRdsn) <= 0 {
+		http.Error(w, "Invalid or empty list runs to compare", http.StatusBadRequest)
 		return
 	}
 
@@ -483,7 +505,7 @@ func doTableCompareGetCsvHandler(w http.ResponseWriter, r *http.Request, isCode,
 	}
 
 	// get converter from cell list to csv rows []string
-	hdr, cvtRow, _, runIds, ok := theCatalog.TableToCalcCsvConverter(dn, rdsn, isCode, name, []string{vRdsn})
+	hdr, cvtRow, _, runIds, ok := theCatalog.TableToCalcCsvConverter(dn, rdsn, isCode, name, vRdsn)
 	if !ok {
 		http.Error(w, "Failed to create output table csv converter: "+name, http.StatusBadRequest)
 		return
