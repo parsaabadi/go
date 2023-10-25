@@ -306,7 +306,7 @@ func (mc *ModelCatalog) TableExprCompareLayout(dn string, name string, cmp strin
 		}
 	case "percent":
 		fnc = func(expr string) string {
-			return "100 * " + expr + "[variant] / " + expr + "[base]"
+			return "100 * (" + expr + "[variant] - " + expr + "[base]" + ") / " + expr + "[base]"
 		}
 	default: // comma separated list of expressions
 
