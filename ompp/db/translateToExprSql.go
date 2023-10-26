@@ -11,7 +11,7 @@ import (
 
 // Translate all output table expression calculation to sql query, apply dimension filters, selected run id's and order by.
 // It can be a multiple runs comparison and base run id is layout.FromId
-// Or simple expression calcultion inside of single run, in that case layout.FromId and runIds[] are merged.
+// Or simple expression calculation inside of single run, in that case layout.FromId and runIds[] are merged.
 // Only simple functions allowed in expression calculation.
 func translateToExprSql(table *TableMeta, readLt *ReadLayout, calcLt *CalculateLayout, runIds []int) (string, error) {
 
@@ -46,11 +46,11 @@ func translateToExprSql(table *TableMeta, readLt *ReadLayout, calcLt *CalculateL
 // Translate all output table expression calculations to sql query, apply dimension filters and selected run id's.
 // Return list of CTE sql's and main sql's.
 // It can be a multiple runs comparison and base run id is layout.FromId
-// Or simple expression calcultion inside of single run, in that case layout.FromId and runIds[] are merged.
+// Or simple expression calculation inside of single run, in that case layout.FromId and runIds[] are merged.
 // Only simple functions allowed in expression calculation.
 func partialTranslateToExprSql(table *TableMeta, readLt *ReadLayout, calcLt *CalculateLayout, runIds []int) ([]string, string, bool, error) {
 
-	// translate output table expression calcultions to sql:
+	// translate output table expression calculation to sql:
 	// if it is run comparison then
 	//
 	//  SELECT V.run_id, CalcId AS calc_id, V.dim0, V.dim1, (B.src0 - V.src1) AS calc_value

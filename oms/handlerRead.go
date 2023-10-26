@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/openmpp/go/ompp/db"
+	"github.com/openmpp/go/ompp/helper"
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
@@ -204,7 +205,7 @@ func doReadTableCalcPageHandler(w http.ResponseWriter, r *http.Request, isCode b
 	runIds := []int{}
 	ok := false
 	if isCode {
-		cvtCell, _, runIds, ok = theCatalog.TableToCodeCalcCellConverter(dn, rdsn, layout.Name, nil)
+		cvtCell, _, runIds, ok = theCatalog.TableToCodeCalcCellConverter(dn, rdsn, layout.Name, layout.Calculation, nil)
 		if !ok {
 			http.Error(w, "Error at run output table calculate: "+layout.Name, http.StatusBadRequest)
 			return
@@ -292,7 +293,7 @@ func doReadTableComparePageHandler(w http.ResponseWriter, r *http.Request, isCod
 	var runIds []int
 	ok = false
 	if isCode {
-		cvtCell, _, runIds, ok = theCatalog.TableToCodeCalcCellConverter(dn, rdsn, layout.Name, layout.Runs)
+		cvtCell, _, runIds, ok = theCatalog.TableToCodeCalcCellConverter(dn, rdsn, layout.Name, layout.Calculation, layout.Runs)
 		if !ok {
 			http.Error(w, "Error at run output table compare: "+layout.Name, http.StatusBadRequest)
 			return
@@ -603,7 +604,7 @@ func runTableCalcPageGetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// get converter from id's cell into code cell
-	cvtCell, _, runIds, ok := theCatalog.TableToCodeCalcCellConverter(dn, rdsn, tableLt.Name, nil)
+	cvtCell, _, runIds, ok := theCatalog.TableToCodeCalcCellConverter(dn, rdsn, tableLt.Name, calcLt, nil)
 	if !ok {
 		http.Error(w, "Failed to create output table csv converter: "+name, http.StatusBadRequest)
 		return
@@ -631,6 +632,9 @@ func runTableCalcPageGetHandler(w http.ResponseWriter, r *http.Request) {
 // It is either calculation for each expression: DIFF RATIO PERCENT or multiple arbitrary calculations.
 // For example, RATIO is: expr0[variant] / expr0[base], expr1[variant] / expr1[base],....
 // Or arbitrary comma separated expression(s): expr0 , expr1[variant] + expr2[base] , ....
+// Variant runs can be a comma separated list of run digests or run stamps or run names.
+// If run name conations comma then name must be "double quoted" or 'single quoted'.
+// For example: "Year 1995, 1996", 'Age [30, 40]'
 //
 // GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant
 // GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/start/:start
@@ -646,11 +650,16 @@ func runTableComparePageGetHandler(w http.ResponseWriter, r *http.Request) {
 	rdsn := getRequestParam(r, "run")        // base run digest-or-stamp-or-name
 	name := getRequestParam(r, "name")       // output table name
 	compare := getRequestParam(r, "compare") // comparison function name: diff ratio percent
-	vRdsn := getRequestParam(r, "variant")   // variant run digest-or-stamp-or-name
+	vr := getRequestParam(r, "variant")      // variant run digest-or-stamp-or-name
 
 	// validate parameters: page offset, page size and calculation expression
 	if compare == "" {
 		http.Error(w, "Invalid (empty) comparison expression", http.StatusBadRequest)
+		return
+	}
+	vRdsn := helper.ParseCsvLine(vr, 0)
+	if len(vRdsn) <= 0 {
+		http.Error(w, "Invalid or empty list runs to compare", http.StatusBadRequest)
 		return
 	}
 	start, ok := getInt64RequestParam(r, "start", 0)
@@ -679,7 +688,7 @@ func runTableComparePageGetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// get converter from id's cell into code cell
-	cvtCell, _, runIds, ok := theCatalog.TableToCodeCalcCellConverter(dn, rdsn, tableLt.Name, []string{vRdsn})
+	cvtCell, _, runIds, ok := theCatalog.TableToCodeCalcCellConverter(dn, rdsn, tableLt.Name, calcLt, vRdsn)
 	if !ok {
 		http.Error(w, "Failed to create output table converter: "+name, http.StatusBadRequest)
 		return

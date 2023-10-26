@@ -363,7 +363,7 @@ func doTableCalcGetCsvHandler(w http.ResponseWriter, r *http.Request, isCode, is
 	}
 
 	// get converter from cell list to csv rows []string
-	hdr, cvtRow, _, runIds, ok := theCatalog.TableToCalcCsvConverter(dn, rdsn, isCode, name, nil)
+	hdr, cvtRow, _, runIds, ok := theCatalog.TableToCalcCsvConverter(dn, rdsn, isCode, name, calcLt, nil)
 	if !ok {
 		http.Error(w, "Failed to create output table csv converter: "+name, http.StatusBadRequest)
 		return
@@ -485,7 +485,6 @@ func doTableCompareGetCsvHandler(w http.ResponseWriter, r *http.Request, isCode,
 		http.Error(w, "Invalid (empty) comparison expression", http.StatusBadRequest)
 		return
 	}
-
 	vRdsn := helper.ParseCsvLine(vr, 0)
 	if len(vRdsn) <= 0 {
 		http.Error(w, "Invalid or empty list runs to compare", http.StatusBadRequest)
@@ -505,7 +504,7 @@ func doTableCompareGetCsvHandler(w http.ResponseWriter, r *http.Request, isCode,
 	}
 
 	// get converter from cell list to csv rows []string
-	hdr, cvtRow, _, runIds, ok := theCatalog.TableToCalcCsvConverter(dn, rdsn, isCode, name, vRdsn)
+	hdr, cvtRow, _, runIds, ok := theCatalog.TableToCalcCsvConverter(dn, rdsn, isCode, name, calcLt, vRdsn)
 	if !ok {
 		http.Error(w, "Failed to create output table csv converter: "+name, http.StatusBadRequest)
 		return

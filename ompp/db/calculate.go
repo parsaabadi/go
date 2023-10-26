@@ -91,7 +91,7 @@ func CalculateOutputTable(dbConn *sql.DB, modelDef *ModelMeta, tableLt *ReadTabl
 
 // Translate all output table calculations to sql query, apply dimension filters, selected run id's and order by.
 // It can be a multiple runs comparison and base run id is layout.FromId.
-// Or simple expression calcultion inside of single run or accumulators aggregation inside of single run,
+// Or simple expression calculation inside of single run or accumulators aggregation inside of single run,
 // in that case layout.FromId and runIds[] are merged.
 func translateTableCalcToSql(table *TableMeta, readLt *ReadLayout, calcLt []CalculateTableLayout, runIds []int) (string, error) {
 

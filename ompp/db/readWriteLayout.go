@@ -20,7 +20,7 @@ type WriteLayout struct {
 
 // WriteParamLayout describes parameter values for insert or update.
 //
-// Double format string is used for digest calcultion if value type if float or double.
+// Double format string is used for digest calculation if value type if float or double.
 type WriteParamLayout struct {
 	WriteLayout        // common write layout: parameter name, run or set id
 	SubCount    int    // sub-values count
@@ -31,7 +31,7 @@ type WriteParamLayout struct {
 
 // WriteTableLayout describes output table values for insert or update.
 //
-// Double format string is used for digest calcultion if value type if float or double.
+// Double format string is used for digest calculation if value type if float or double.
 type WriteTableLayout struct {
 	WriteLayout        // common write layout: output table name and run id
 	SubCount    int    // sub-values count
@@ -40,7 +40,7 @@ type WriteTableLayout struct {
 
 // WriteMicroLayout describes source and size of data page to read entity microdata.
 //
-// Double format string is used for digest calcultion if value type if float or double.
+// Double format string is used for digest calculation if value type if float or double.
 type WriteMicroLayout struct {
 	WriteLayout        // common write layout: entity name and run id
 	DoubleFmt   string // used for float model types digest calculation
@@ -149,7 +149,8 @@ type ReadCompareTableLayout struct {
 // It can be comparison calculation for multiple model runs, ex.: Expr0[base] - Expr0[variant].
 type CalculateLayout struct {
 	Calculate string // expression to calculate, ex.: Expr0[base] - Expr0[variant]
-	CalcId    int    // calculated expression id
+	CalcId    int    // calculated expression id, calc_id column in csv,     ex.: 0, 1200, 2400
+	Name      string // calculated expression name, calc_name column in csv, ex.: Expr0, AVG_Expr0, RATIO_Expro0
 }
 
 // CalculateLayout describes calculation to output table values.

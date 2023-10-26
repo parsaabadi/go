@@ -4,9 +4,10 @@
 package main
 
 import (
-	"strings"
+	"strconv"
 
 	"github.com/openmpp/go/ompp/db"
+	"github.com/openmpp/go/ompp/helper"
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
@@ -125,7 +126,7 @@ func (mc *ModelCatalog) TableToCodeCellConverter(dn string, name string, isAcc, 
 // Function accept base run digest-or-stamp-or-name and optional list of variant runs digest-or-stamp-or-name.
 // All runs must be completed successfully.
 func (mc *ModelCatalog) TableToCodeCalcCellConverter(
-	dn string, rdsn string, tableName string, runLst []string,
+	dn string, rdsn string, tableName string, calcLt []db.CalculateTableLayout, runLst []string,
 ) (func(interface{}) (interface{}, error), int, []int, bool) {
 
 	// if model digest-or-name is empty then return empty results
@@ -153,10 +154,16 @@ func (mc *ModelCatalog) TableToCodeCalcCellConverter(
 			ModelDef: meta,
 			Name:     tableName,
 		},
-		IsIdCsv:    false,
-		DoubleFmt:  theCfg.doubleFmt,
-		IdToDigest: map[int]string{},
-		DigestToId: map[string]int{},
+		IsIdCsv:      false,
+		DoubleFmt:    theCfg.doubleFmt,
+		IdToDigest:   map[int]string{},
+		DigestToId:   map[string]int{},
+		CalcIdToName: map[int]string{},
+		CalcNameToId: map[string]int{},
+	}
+	if e := ctc.SetCalcIdNameMap(calcLt); e != nil {
+		omppLog.Log("Failed to create output table cell id's to code converter: ", tableName, ": ", e.Error())
+		return nil, 0, nil, false
 	}
 
 	cvt, err := ctc.IdToCodeCell(meta, tableName)
@@ -202,18 +209,15 @@ func (mc *ModelCatalog) TableAggrExprCalculateLayout(dn string, name string, agg
 
 		calcLt := []db.CalculateTableLayout{}
 
-		ce := strings.Split(aggr, ",")
+		ce := helper.ParseCsvLine(aggr, 0)
 		for j := range ce {
 
-			c := strings.TrimSpace(ce[j])
-			if c[0] == '"' && c[len(c)-1] == '"' {
-				c = c[1 : len(c)-1]
-			}
-			if c != "" {
+			if ce[j] != "" {
 				calcLt = append(calcLt, db.CalculateTableLayout{
 					CalculateLayout: db.CalculateLayout{
-						Calculate: c,
+						Calculate: ce[j],
 						CalcId:    j + db.CALCULATED_ID_OFFSET,
+						Name:      "ex_" + strconv.Itoa(j+db.CALCULATED_ID_OFFSET),
 					},
 					IsAggr: true,
 				})
@@ -264,6 +268,7 @@ func (mc *ModelCatalog) TableAggrExprCalculateLayout(dn string, name string, agg
 			CalculateLayout: db.CalculateLayout{
 				Calculate: ex.Name,
 				CalcId:    ex.ExprId,
+				Name:      ex.Name,
 			},
 			IsAggr: false,
 		})
@@ -277,6 +282,7 @@ func (mc *ModelCatalog) TableAggrExprCalculateLayout(dn string, name string, agg
 					CalculateLayout: db.CalculateLayout{
 						Calculate: fnc + "(" + acc.SrcAcc + ")",
 						CalcId:    ex.ExprId + db.CALCULATED_ID_OFFSET,
+						Name:      fnc + "_" + ex.Name,
 					},
 					IsAggr: true,
 				})
@@ -312,18 +318,15 @@ func (mc *ModelCatalog) TableExprCompareLayout(dn string, name string, cmp strin
 
 		calcLt := []db.CalculateTableLayout{}
 
-		ce := strings.Split(cmp, ",")
+		ce := helper.ParseCsvLine(cmp, 0)
 		for j := range ce {
 
-			c := strings.TrimSpace(ce[j])
-			if c[0] == '"' && c[len(c)-1] == '"' {
-				c = c[1 : len(c)-1]
-			}
-			if c != "" {
+			if ce[j] != "" {
 				calcLt = append(calcLt, db.CalculateTableLayout{
 					CalculateLayout: db.CalculateLayout{
-						Calculate: c,
+						Calculate: ce[j],
 						CalcId:    j + db.CALCULATED_ID_OFFSET,
+						Name:      "ex_" + strconv.Itoa(j+db.CALCULATED_ID_OFFSET),
 					},
 					IsAggr: false,
 				})
@@ -374,15 +377,17 @@ func (mc *ModelCatalog) TableExprCompareLayout(dn string, name string, cmp strin
 			CalculateLayout: db.CalculateLayout{
 				Calculate: ex.Name,
 				CalcId:    ex.ExprId,
+				Name:      ex.Name,
 			},
 			IsAggr: false,
 		})
 
-		// append comaprison
+		// append comparison
 		calcLt = append(calcLt, db.CalculateTableLayout{
 			CalculateLayout: db.CalculateLayout{
 				Calculate: fnc(ex.Name),
 				CalcId:    ex.ExprId + db.CALCULATED_ID_OFFSET,
+				Name:      cmp + "_" + ex.Name,
 			},
 			IsAggr: false,
 		})
@@ -653,7 +658,7 @@ func (mc *ModelCatalog) TableToCsvConverter(dn string, isCode bool, name string,
 // Function accept base run digest-or-stamp-or-name and optional list of variant runs digest-or-stamp-or-name.
 // All runs must be completed successfully.
 func (mc *ModelCatalog) TableToCalcCsvConverter(
-	dn string, rdsn string, isCode bool, tableName string, runLst []string,
+	dn string, rdsn string, isCode bool, tableName string, calcLt []db.CalculateTableLayout, runLst []string,
 ) ([]string, func(interface{}, []string) error, int, []int, bool) {
 
 	// if model digest-or-name is empty then return empty results
@@ -681,10 +686,16 @@ func (mc *ModelCatalog) TableToCalcCsvConverter(
 			ModelDef: meta,
 			Name:     tableName,
 		},
-		IsIdCsv:    !isCode,
-		DoubleFmt:  theCfg.doubleFmt,
-		IdToDigest: map[int]string{},
-		DigestToId: map[string]int{},
+		IsIdCsv:      !isCode,
+		DoubleFmt:    theCfg.doubleFmt,
+		IdToDigest:   map[int]string{},
+		DigestToId:   map[string]int{},
+		CalcIdToName: map[int]string{},
+		CalcNameToId: map[string]int{},
+	}
+	if e := ctc.SetCalcIdNameMap(calcLt); e != nil {
+		omppLog.Log("Failed to create output table converter to csv: ", dn, ": ", tableName, ": ", e.Error())
+		return []string{}, nil, 0, nil, false // return empty result: invalid calculation name or id
 	}
 
 	// validate all runs: it must be completed successfully

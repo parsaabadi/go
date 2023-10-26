@@ -20,7 +20,7 @@ type CellTableCalc struct {
 // Dimension(s) items are enum codes, not enum ids.
 type CellCodeTableCalc struct {
 	cellCodeValue        // dimensions as enum codes and value
-	CalcId        int    // calculated expression id
+	CalcName      string // calculated expression name
 	RunDigest     string // model run digest
 }
 
@@ -31,6 +31,25 @@ type CellTableCalcConverter struct {
 	DoubleFmt          string         // if not empty then format string is used to sprintf if value type is float, double, long double
 	IdToDigest         map[int]string // map of run id's to run digests
 	DigestToId         map[string]int // map of run digests to run id's
+	CalcIdToName       map[int]string // map of calculation id to name
+	CalcNameToId       map[string]int // map of calculation name to id
+}
+
+// Set calculation name to Id and Id to name maps
+func (cellCvt *CellTableCalcConverter) SetCalcIdNameMap(calcLt []CalculateTableLayout) error {
+
+	cellCvt.CalcIdToName = map[int]string{}
+	cellCvt.CalcNameToId = map[string]int{}
+
+	for k, c := range calcLt {
+
+		if c.Name == "" {
+			return errors.New("invalid (empty) calculation name at index: [" + strconv.Itoa(k) + "], id: " + strconv.Itoa(c.CalcId) + ": " + cellCvt.Name)
+		}
+		cellCvt.CalcIdToName[c.CalcId] = c.Name
+		cellCvt.CalcNameToId[c.Name] = c.CalcId
+	}
+	return nil
 }
 
 // return true if csv converter is using enum id's for dimensions
@@ -66,10 +85,11 @@ func (cellCvt *CellTableCalcConverter) CsvHeader() ([]string, error) {
 
 	if cellCvt.IsIdCsv {
 		h[0] = "run_id"
+		h[1] = "calc_id"
 	} else {
 		h[0] = "run_digest"
+		h[1] = "calc_name"
 	}
-	h[1] = "calc_id"
 	for k := range table.Dim {
 		h[k+2] = table.Dim[k].Name
 	}
@@ -156,7 +176,7 @@ func (cellCvt *CellTableCalcConverter) ToCsvIdRow() (func(interface{}, []string)
 }
 
 // ToCsvRow return converter from output table calculated cell (run_id, calc_id, dimensions, calc_value)
-// to csv row []string (run digest, calc_id, dimensions, calc_value).
+// to csv row []string (run digest, calc_name, dimensions, calc_value).
 //
 // Converter will return error if len(row) not equal to number of fields in csv record.
 // Converter will return error if run_id not exist in the list of model runs (in run_lst table).
@@ -197,7 +217,10 @@ func (cellCvt *CellTableCalcConverter) ToCsvRow() (func(interface{}, []string) e
 		if row[0] == "" {
 			return errors.New("invalid (missing) run id: " + strconv.Itoa(cell.RunId) + " output table: " + cellCvt.Name)
 		}
-		row[1] = fmt.Sprint(cell.CalcId)
+		row[1] = cellCvt.CalcIdToName[cell.CalcId]
+		if row[1] == "" {
+			return errors.New("invalid (missing) calculation id: " + strconv.Itoa(cell.CalcId) + " output table: " + cellCvt.Name)
+		}
 
 		// convert dimension item id to code
 		for k, e := range cell.DimIds {
@@ -258,12 +281,17 @@ func (cellCvt *CellTableCalcConverter) CsvToCell() (func(row []string) (interfac
 			return nil, errors.New("invalid size of csv row, expected: " + strconv.Itoa(n+3) + ": " + cellCvt.Name)
 		}
 
-		// run id by digest
-		cell.RunId = cellCvt.DigestToId[row[0]]
-		if cell.RunId <= 0 {
+		// run id by digest and calculated expression id by name
+		if id, ok := cellCvt.DigestToId[row[0]]; ok {
+			cell.RunId = id
+		} else {
 			return nil, errors.New("invalid (or empty) run digest: " + row[0] + " output table: " + cellCvt.Name)
 		}
-		cell.CalcId = cellCvt.DigestToId[row[1]]
+		if id, ok := cellCvt.CalcNameToId[row[1]]; ok {
+			cell.CalcId = id
+		} else {
+			return nil, errors.New("invalid (or empty) calculation name: " + row[1] + " output table: " + cellCvt.Name)
+		}
 
 		// convert dimensions: enum code to enum id or integer value for simple type dimension
 		for k := range cell.DimIds {
@@ -331,6 +359,10 @@ func (cellCvt *CellTableCalcConverter) IdToCodeCell(modelDef *ModelMeta, name st
 		if dgst == "" {
 			return nil, errors.New("invalid (missing) run id: " + strconv.Itoa(srcCell.RunId) + " output table: " + name)
 		}
+		cName := cellCvt.CalcIdToName[srcCell.CalcId]
+		if cName == "" {
+			return nil, errors.New("invalid (missing) calculation id: " + strconv.Itoa(srcCell.CalcId) + " output table: " + name)
+		}
 
 		dstCell := CellCodeTableCalc{
 			cellCodeValue: cellCodeValue{
@@ -338,7 +370,7 @@ func (cellCvt *CellTableCalcConverter) IdToCodeCell(modelDef *ModelMeta, name st
 				IsNull: srcCell.IsNull,
 				Value:  srcCell.Value,
 			},
-			CalcId:    srcCell.CalcId,
+			CalcName:  cName,
 			RunDigest: dgst,
 		}
 
