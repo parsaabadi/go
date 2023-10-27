@@ -4,6 +4,7 @@
 package main
 
 import (
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -156,7 +157,7 @@ func resFromRequest(req RunRequest) (RunRes, bool, int, int, bool) {
 		}
 	}
 
-	// number of modelling processes and requested cpu count
+	// number of modelling processes, requested cpu count and memory
 	nProc := req.Mpi.Np
 	if nProc <= 0 {
 		nProc = 1
@@ -168,10 +169,15 @@ func resFromRequest(req RunRequest) (RunRes, bool, int, int, bool) {
 	if nTh <= 0 {
 		nTh = 1
 	}
+	nMem := 0
+	mRes := theRunCatalog.getModelRunRes(req.ModelDigest)
+	if mRes.MemMb > 0 {
+		nMem = int(math.Ceil(float64(mRes.MemMb*np*nTh) / 1024.0))
+	}
 
 	res := RunRes{
 		Cpu: np * nTh,
-		Mem: 0,
+		Mem: nMem,
 	}
 
 	return res, isNotOnRoot, np, nTh, true

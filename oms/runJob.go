@@ -5,6 +5,8 @@ package main
 
 import (
 	"errors"
+	"path"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"time"
@@ -120,7 +122,7 @@ func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, string, []computeUse
 					isUse = name == compUse[k].name
 				}
 				if isUse {
-					continue // this server already selected for tha model run
+					continue // this server already selected for that model run
 				}
 
 				if cUse.Cpu < cs.totalRes.Cpu-cs.usedRes.Cpu {
@@ -704,6 +706,7 @@ func (rsc *RunCatalog) shutdownCompleted(isOkStop bool, name string) {
 func (rsc *RunCatalog) updateRunJobs(
 	jsState JobServiceState,
 	computeState map[string]computeItem,
+	mpRes map[string]modelRunRes,
 	queueJobs map[string]queueJobFile,
 	activeJobs map[string]runJobFile,
 	historyJobs map[string]historyJobFile,
@@ -732,6 +735,23 @@ func (rsc *RunCatalog) updateRunJobs(
 			cs.lastUsedTs = rsc.computeState[name].lastUsedTs
 		}
 		rsc.computeState[name] = cs
+	}
+
+	// copy model resources requirements
+	rsc.modelRes = map[string]modelRunRes{}
+	binRoot, _ := theCatalog.getModelDir()
+	br := filepath.ToSlash(binRoot)
+
+	for dgst, mb := range rsc.models {
+
+		sp := filepath.ToSlash(filepath.Join(mb.binDir, mb.name))
+
+		for _, rs := range mpRes {
+			if sp == path.Join(br, rs.path) {
+				rsc.modelRes[dgst] = rs
+				break
+			}
+		}
 	}
 
 	// update queue jobs and collect all new submission stamps

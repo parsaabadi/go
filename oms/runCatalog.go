@@ -30,6 +30,7 @@ type RunCatalog struct {
 	computeState    map[string]computeItem             // map names of server or cluster the state of computational resources
 	startupNames    []string                           // names of the servers which are starting now
 	shutdownNames   []string                           // names of the servers which are stopping now
+	modelRes        map[string]modelRunRes             // map model digest to required computational resources
 }
 
 var theRunCatalog RunCatalog // list of most recent state of model run for each model.
@@ -106,6 +107,12 @@ type RunJob struct {
 type RunRes struct {
 	Cpu int // cpu cores count
 	Mem int // if not zero then memory size in gigabytes
+}
+
+// computational resources required to run the model
+type modelRunRes struct {
+	path  string // model bin directory and model name joined by / slash
+	MemMb int    // if not zero then memory required for each thread
 }
 
 // run job control file info
@@ -337,6 +344,7 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error
 	rsc.queueJobs = map[string]queueJobFile{}
 	rsc.historyJobs = make(map[string]historyJobFile, 1024) // assume long history of model runs
 	rsc.computeState = map[string]computeItem{}
+	rsc.modelRes = map[string]modelRunRes{}
 	rsc.jobLastPosition = jobPositionDefault + 1
 	rsc.jobFirstPosition = jobPositionDefault - 1
 	if rsc.maxComputeErrors <= 1 {
@@ -392,4 +400,15 @@ func (rsc *RunCatalog) allModels() map[string]modelRunBasic {
 		rbs[key] = val
 	}
 	return rbs
+}
+
+// return computational resources requirements for model run.
+func (rsc *RunCatalog) getModelRunRes(digest string) modelRunRes {
+	rsc.rscLock.Lock()
+	defer rsc.rscLock.Unlock()
+
+	if mr, ok := rsc.modelRes[digest]; ok {
+		return mr
+	}
+	return modelRunRes{}
 }

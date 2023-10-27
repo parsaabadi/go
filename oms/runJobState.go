@@ -58,7 +58,7 @@ func scanStateJobs(doneC <-chan bool) {
 		updateTs := time.Now()
 		nowTs := updateTs.UnixMilli()
 
-		jsState := initJobComputeState(jobIniPath, updateTs, computeState)
+		jsState, mpRes := initJobComputeState(jobIniPath, updateTs, computeState)
 
 		queueFiles := filesByPattern(queuePtrn, "Error at queue job files search")
 		activeFiles := filesByPattern(activePtrn, "Error at active job files search")
@@ -214,7 +214,7 @@ func scanStateJobs(doneC <-chan bool) {
 		jsState.jobLastPosition = maxPos
 		jsState.jobFirstPosition = minPos
 
-		jsc := theRunCatalog.updateRunJobs(jsState, computeState, queueJobs, activeJobs, historyJobs)
+		jsc := theRunCatalog.updateRunJobs(jsState, computeState, mpRes, queueJobs, activeJobs, historyJobs)
 		jobStateWrite(*jsc)
 
 		// update oms heart beat file
@@ -551,7 +551,7 @@ func updateQueueJobs(
 }
 
 // read job service state and computational servers definition from job.ini
-func initJobComputeState(jobIniPath string, updateTs time.Time, computeState map[string]computeItem) JobServiceState {
+func initJobComputeState(jobIniPath string, updateTs time.Time, computeState map[string]computeItem) (JobServiceState, map[string]modelRunRes) {
 
 	jsState := JobServiceState{
 		IsQueuePaused:     isPausedJobQueue(),
@@ -560,16 +560,17 @@ func initJobComputeState(jobIniPath string, updateTs time.Time, computeState map
 		maxStartTime:      serverTimeoutDefault,
 		maxStopTime:       serverTimeoutDefault,
 	}
+	mpRes := map[string]modelRunRes{}
 
 	// read available resources limits and computational servers configuration from job.ini
 	if jobIniPath == "" || !fileExist(jobIniPath) {
-		return jsState
+		return jsState, mpRes
 	}
 
 	opts, err := config.FromIni(jobIniPath, theCfg.codePage)
 	if err != nil {
 		omppLog.Log(err)
-		return jsState
+		return jsState, mpRes
 	}
 	nowTs := updateTs.UnixMilli()
 
@@ -600,7 +601,7 @@ func initJobComputeState(jobIniPath string, updateTs time.Time, computeState map
 	}
 
 	// default settings for compute servers or clusters
-
+	//
 	splitOpts := func(key, sep string) []string {
 		v := strings.Split(opts.String(key), sep)
 		if len(v) <= 0 || len(v) == 1 && v[0] == "" {
@@ -642,7 +643,7 @@ func initJobComputeState(jobIniPath string, updateTs time.Time, computeState map
 		cs.errorCount = 0  // updated as count of comp-start, comp-stop, comp-error files
 
 		cs.totalRes.Cpu = opts.Int(cs.name+".Cpu", 1)    // one cpu core by default
-		cs.totalRes.Mem = opts.Int(cs.name+".Memory", 0) // unlimited memory cores by default
+		cs.totalRes.Mem = opts.Int(cs.name+".Memory", 0) // unlimited memory by default
 
 		cs.startExe = opts.String(cs.name + ".StartExe")
 		if cs.startExe == "" {
@@ -681,7 +682,23 @@ func initJobComputeState(jobIniPath string, updateTs time.Time, computeState map
 		jsState.MpiRes.Mem += cs.totalRes.Mem
 	}
 
-	return jsState
+	// model resources requirements
+	mpLst := splitOpts("Common.Models", ",")
+
+	for k := range mpLst {
+
+		p := strings.TrimSpace(mpLst[k])
+		if p == "" {
+			continue // skip empty path
+		}
+		m := opts.Int(p+".MemoryMb", 0) // unlimited memory by default
+		if m <= 0 {
+			continue
+		}
+		mpRes[p] = modelRunRes{path: p, MemMb: m}
+	}
+
+	return jsState, mpRes
 }
 
 // Update computational serveres or clusters map.
