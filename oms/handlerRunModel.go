@@ -169,11 +169,8 @@ func resFromRequest(req RunRequest) (RunRes, bool, int, int, bool) {
 	if nTh <= 0 {
 		nTh = 1
 	}
-	nMem := 0
 	mRes := theRunCatalog.getModelRunRes(req.ModelDigest)
-	if mRes.MemMb > 0 {
-		nMem = int(math.Ceil(float64(mRes.MemMb*np*nTh) / 1024.0))
-	}
+	nMem := int(math.Ceil(float64(np*(mRes.MemProcessMb+mRes.MemThreadMb*nTh)) / 1024.0))
 
 	res := RunRes{
 		Cpu: np * nTh,

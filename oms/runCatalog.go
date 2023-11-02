@@ -111,8 +111,9 @@ type RunRes struct {
 
 // computational resources required to run the model
 type modelRunRes struct {
-	path  string // model bin directory and model name joined by / slash
-	MemMb int    // if not zero then memory required for each thread
+	path         string // model bin directory and model name joined by / slash
+	MemProcessMb int    // if not zero then memory required per proccess
+	MemThreadMb  int    // if not zero then memory required for each thread
 }
 
 // run job control file info
@@ -249,54 +250,6 @@ const defaultMpiTemplate = "mpi.ModelRun.template.txt"
 // RefreshCatalog reset state of most recent model run for each model.
 func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error {
 
-	// get list of template files
-	rsc.runTemplates = []string{}
-	rsc.mpiTemplates = []string{}
-	if dirExist(etcDir) {
-		if fl, err := filepath.Glob(etcDir + "/" + "run.*.template.txt"); err == nil {
-			for k := range fl {
-				f := filepath.Base(fl[k])
-				if f != "." && f != ".." && f != "/" && f != "\\" {
-					rsc.runTemplates = append(rsc.runTemplates, f)
-				}
-			}
-		}
-		if fl, err := filepath.Glob(etcDir + "/" + "mpi.*.template.txt"); err == nil {
-			for k := range fl {
-				f := filepath.Base(fl[k])
-				if f != "." && f != ".." && f != "/" && f != "\\" {
-					rsc.mpiTemplates = append(rsc.mpiTemplates, f)
-				}
-			}
-		}
-	}
-
-	// read all run options preset files
-	// keep stem of preset file name: run-options.RiskPaths.1-small.json => RiskPaths.1-small
-	// and file content as string
-	rsc.presets = []RunOptionsPreset{}
-	if dirExist(etcDir) {
-		if fl, err := filepath.Glob(etcDir + "/" + "run-options.*.json"); err == nil {
-			for k := range fl {
-
-				f := filepath.Base(fl[k])
-				if len(f) < len("run-options.*.json") { // file name must be at least that size
-					continue
-				}
-				bt, err := os.ReadFile(fl[k]) // read entire file
-				if err != nil {
-					continue // skip on errors
-				}
-
-				rsc.presets = append(rsc.presets,
-					RunOptionsPreset{
-						Name:    f[len("run-options.") : len(f)-(len(".json"))], // stem of the file: skip prefix and suffix
-						Options: string(bt),
-					})
-			}
-		}
-	}
-
 	// make all models basic info: name, digest and files location
 	mbs := theCatalog.allModels()
 	rbs := make(map[string]modelRunBasic, len(mbs))
@@ -310,12 +263,12 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error
 		}
 	}
 
+	// read templates and run presets from etc directory
+	rsc.updateEtcModelConfig(etcDir)
+
 	// lock and update run state catalog
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
-
-	// update etc directory and list of templates
-	rsc.etcDir = etcDir
 
 	// model log history: add new models and delete existing models
 	if rsc.modelRuns == nil {
@@ -368,6 +321,70 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error
 	}
 
 	return nil
+}
+
+// read from etc directory model run template files and  run options preset files
+func (rsc *RunCatalog) updateEtcModelConfig(etcDir string) {
+
+	if !dirExist(etcDir) {
+		return
+	}
+
+	// get list of template files
+	runTmpls := []string{}
+	mpiTmpls := []string{}
+
+	if fl, err := filepath.Glob(etcDir + "/" + "run.*.template.txt"); err == nil {
+		for k := range fl {
+			f := filepath.Base(fl[k])
+			if f != "." && f != ".." && f != "/" && f != "\\" {
+				runTmpls = append(runTmpls, f)
+			}
+		}
+	}
+	if fl, err := filepath.Glob(etcDir + "/" + "mpi.*.template.txt"); err == nil {
+		for k := range fl {
+			f := filepath.Base(fl[k])
+			if f != "." && f != ".." && f != "/" && f != "\\" {
+				mpiTmpls = append(mpiTmpls, f)
+			}
+		}
+	}
+
+	// read all run options preset files
+	// keep stem of preset file name: run-options.RiskPaths.1-small.json => RiskPaths.1-small
+	// and file content as string
+	presets := []RunOptionsPreset{}
+
+	if fl, err := filepath.Glob(etcDir + "/" + "run-options.*.json"); err == nil {
+		for k := range fl {
+
+			f := filepath.Base(fl[k])
+			if len(f) < len("run-options.*.json") { // file name must be at least that size
+				continue
+			}
+			bt, err := os.ReadFile(fl[k]) // read entire file
+			if err != nil {
+				continue // skip on errors
+			}
+
+			presets = append(presets,
+				RunOptionsPreset{
+					Name:    f[len("run-options.") : len(f)-(len(".json"))], // stem of the file: skip prefix and suffix
+					Options: string(bt),
+				})
+		}
+	}
+
+	// lock and update run state catalog
+	rsc.rscLock.Lock()
+	defer rsc.rscLock.Unlock()
+
+	// update etc directory and list of templates
+	rsc.etcDir = etcDir
+	rsc.runTemplates = runTmpls
+	rsc.mpiTemplates = mpiTmpls
+	rsc.presets = presets
 }
 
 // get "public" configuration of model run catalog

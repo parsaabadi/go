@@ -691,11 +691,15 @@ func initJobComputeState(jobIniPath string, updateTs time.Time, computeState map
 		if p == "" {
 			continue // skip empty path
 		}
-		m := opts.Int(p+".MemoryMb", 0) // unlimited memory by default
-		if m <= 0 {
-			continue
+		mp := opts.Int(p+".MemoryProcessMb", 0) // unlimited memory by default
+		if mp < 0 {
+			mp = 0
 		}
-		mpRes[p] = modelRunRes{path: p, MemMb: m}
+		mt := opts.Int(p+".MemoryThreadMb", 0) // unlimited memory by default
+		if mt < 0 {
+			mt = 0
+		}
+		mpRes[p] = modelRunRes{path: p, MemProcessMb: mp, MemThreadMb: mt}
 	}
 
 	return jsState, mpRes

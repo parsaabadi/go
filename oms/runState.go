@@ -227,6 +227,9 @@ func (rsc *RunCatalog) updateRunStateLog(rState *RunState, isFinal bool, msg str
 func scanModelRuns(doneC <-chan bool) {
 
 	for {
+		// update model run config: run templates and run presets
+		theRunCatalog.updateEtcModelConfig(theCfg.etcDir)
+
 		// get current models from run catalog and main catalog
 		rbs := theRunCatalog.allModels()
 		dLst := theCatalog.allModelDigests()
