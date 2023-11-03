@@ -131,7 +131,7 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 			" WHERE NR.base_run_id = MRP.base_run_id AND NR.parameter_hid = MRP.parameter_hid"+
 			" AND NR.run_id <> MRP.base_run_id"+
 			" AND NL.model_id <> "+smId+
-			" AND NL.status IN ("+ToQuoted(DoneRunStatus)+", "+ToQuoted(ProgressRunStatus)+")"+
+			" AND NL.status = "+ToQuoted(DoneRunStatus)+
 			" )"+
 			" FROM run_parameter MRP"+
 			" INNER JOIN run_lst MRL ON (MRL.run_id = MRP.run_id)"+
@@ -216,7 +216,7 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 			" WHERE NR.base_run_id = MRT.base_run_id AND NR.table_hid = MRT.table_hid"+
 			" AND NR.run_id <> MRT.base_run_id"+
 			" AND NL.model_id <> "+smId+
-			" AND NL.status IN ("+ToQuoted(DoneRunStatus)+", "+ToQuoted(ProgressRunStatus)+")"+
+			" AND NL.status = "+ToQuoted(DoneRunStatus)+
 			" )"+
 			" FROM run_table MRT"+
 			" INNER JOIN run_lst MRL ON (MRL.run_id = MRT.run_id)"+
@@ -311,7 +311,7 @@ func doDeleteModel(trx *sql.Tx, modelId int) error {
 			" WHERE NR.base_run_id = MRE.base_run_id AND NR.entity_gen_hid = MRE.entity_gen_hid"+
 			" AND NR.run_id <> MRE.base_run_id"+
 			" AND NL.model_id <> "+smId+
-			" AND NL.status IN ("+ToQuoted(DoneRunStatus)+", "+ToQuoted(ProgressRunStatus)+")"+
+			" AND NL.status = "+ToQuoted(DoneRunStatus)+
 			" )"+
 			" FROM run_entity MRE"+
 			" INNER JOIN run_lst MRL ON (MRL.run_id = MRE.run_id)"+
