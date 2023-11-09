@@ -451,3 +451,23 @@ func ParseCsvLine(src string, comma rune) []string {
 
 	return vLst
 }
+
+// Escape src value for ini-file writing: add 'single' or "double" quotes around if src contains ; semicolon or # hash.
+func QuoteForIni(src string) string {
+
+	if src == "" {
+		return src // source value empty or already 'quoted' or "double" quoted
+	}
+	if (src[0] == '"' || src[0] == '\'') && src[len(src)-1] == src[0] {
+		return src // source value already 'quoted' or "double" quoted
+	}
+	if strings.IndexAny(src, ";#") < 0 {
+		return src // source value does not contain ; semicolon or # hash: "quotes" are not required
+	}
+
+	// use "double" quotes if there are no double quotes inside of the source value else use 'single' quotes
+	if strings.IndexRune(src, '"') < 0 {
+		return "\"" + src + "\""
+	}
+	return "'" + src + "'"
+}

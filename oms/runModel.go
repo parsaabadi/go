@@ -90,8 +90,10 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 
 	importDbLcDot := strings.ToLower("-ImportDb.")
 	microdataLcDot := strings.ToLower("-microdata.")
+	dotRunDescrLc := strings.ToLower(".RunDescription")
 
 	entAttrs := theCatalog.entityAttrsByDigest(rs.ModelDigest)
+	descrNotes := []db.DescrNote{}
 
 	// append model run options from run request
 	for krq, val := range job.Opts {
@@ -135,6 +137,32 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 		}
 		if strings.HasPrefix(strings.ToLower(key), importDbLcDot) {
 			continue // import database connection string not allowed as run option
+		}
+		if strings.HasSuffix(strings.ToLower(key), dotRunDescrLc) {
+
+			if 1+len(dotRunDescrLc) >= len(key) {
+				err = errors.New("Model run error: invalid run description key: " + key)
+				omppLog.Log(err)
+				moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest, rStamp)
+				rs.IsFinal = true
+				return rs, err // exit with error: microdata not allowed
+			}
+			lc := key[1:(len(key) - len(dotRunDescrLc))] // language code
+
+			idx := -1
+			for k := range descrNotes {
+				if descrNotes[k].LangCode == lc {
+					idx = k
+					break
+				}
+			}
+			if idx < 0 {
+				idx = len(descrNotes)
+				descrNotes = append(descrNotes, db.DescrNote{LangCode: lc})
+			}
+			descrNotes[idx].Descr = helper.QuoteForIni(val)
+
+			continue // use ini-file for run description
 		}
 
 		// if this is microdata run option then microdata must be enabled
@@ -279,28 +307,14 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 		}
 	}
 
-	// create ini file and append -ini fileName.ini to model run options
-	if iniContent != "" {
-		p, e := filepath.Abs(filepath.Join(mb.logDir, rStamp+"."+mb.model.Name+".ini"))
-		if e == nil {
-			e = os.WriteFile(p, []byte(iniContent), 0644)
-		}
-		awd := ""
-		if e == nil {
-			if awd, e = filepath.Abs(wDir); e == nil {
-				p, e = filepath.Rel(awd, p)
-			}
-		}
-		if e != nil {
-			omppLog.Log("Model run error: ", e)
-			moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest, rStamp)
-			rs.IsFinal = true
-			return rs, e
-		}
-		mArgs = append(mArgs, "-ini", p) // append ini file path to command line arguments
-	}
+	// if run description or notes specified then use ini-file:
+	//
+	// [EN]
+	// RunDescription = "model run #7 with 50,000 cases"
+	// RunNotesPath   = run_notes-in-english.md
+	//
 
-	// save run notes into the file(s) and append file path(s) to the model run options
+	// save run notes into the file(s) and append that file path to the ini-file content
 	for _, rn := range job.RunNotes {
 		if rn.Note == "" {
 			continue
@@ -330,7 +344,72 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 			return rs, e
 		}
 
-		mArgs = append(mArgs, "-"+rn.LangCode+".RunNotesPath", p) // append run notes file path to command line arguments
+		// store path to notes .md file instead of actual notes
+		dnIdx := -1
+		for k := range descrNotes {
+			if descrNotes[k].LangCode == rn.LangCode {
+				dnIdx = k
+				break
+			}
+		}
+		if dnIdx < 0 {
+			dnIdx = len(descrNotes)
+			descrNotes = append(descrNotes, db.DescrNote{LangCode: rn.LangCode})
+		}
+		descrNotes[dnIdx].Note = p
+	}
+
+	// validate run description and notes language code
+	if len(descrNotes) > 0 {
+
+		langLst, _ := theCatalog.LangListByDigestOrName(rs.ModelDigest)
+
+		for k := range descrNotes {
+
+			isOk := false
+			for j := range langLst {
+				isOk = langLst[j].LangCode == descrNotes[k].LangCode
+				if isOk {
+					break
+				}
+			}
+			if !isOk {
+				err = errors.New("Model run error: invalid language code: " + descrNotes[k].LangCode + ": " + rs.ModelName + ": " + rs.ModelDigest)
+				omppLog.Log(err)
+				moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest, rStamp)
+				rs.IsFinal = true
+				return rs, err // exit with error: language code not found
+			}
+
+			iniContent += "[" + descrNotes[k].LangCode + "]" + "\n"
+			if descrNotes[k].Descr != "" {
+				iniContent += "RunDescription = " + descrNotes[k].Descr + "\n"
+			}
+			if descrNotes[k].Note != "" {
+				iniContent += "RunNotesPath = " + descrNotes[k].Note + "\n" // path to notes .md file
+			}
+		}
+	}
+
+	// create ini file and append -ini fileName.ini to model run options
+	if iniContent != "" {
+		p, e := filepath.Abs(filepath.Join(mb.logDir, rStamp+"."+mb.model.Name+".ini"))
+		if e == nil {
+			e = os.WriteFile(p, []byte(iniContent), 0644)
+		}
+		awd := ""
+		if e == nil {
+			if awd, e = filepath.Abs(wDir); e == nil {
+				p, e = filepath.Rel(awd, p)
+			}
+		}
+		if e != nil {
+			omppLog.Log("Model run error: ", e)
+			moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest, rStamp)
+			rs.IsFinal = true
+			return rs, e
+		}
+		mArgs = append(mArgs, "-ini", p) // append ini file path to command line arguments
 	}
 
 	// cleanup helpers
