@@ -155,7 +155,6 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 	// save runs from model run history
 	var runIdLst []int
 	var isRunNotFound, isRunNotCompleted bool
-	isIdCsv := runOpts.Bool(useIdCsvArgKey)
 
 	for j := range meta.TaskRun {
 	nextRun:
@@ -192,7 +191,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 			}
 
 			// write model run metadata into json, parameters and output result values into csv files
-			if err = toRunText(srcDb, modelDef, rm, outDir, "", fileCreated, isIdCsv, isUseIdNames); err != nil {
+			if err = toRunText(srcDb, modelDef, rm, outDir, "", fileCreated, isUseIdNames); err != nil {
 				return err
 			}
 		}
@@ -232,7 +231,7 @@ func dbToTextTask(modelName string, modelDigest string, runOpts *config.RunOptio
 		}
 
 		// write workset metadata into json and parameter values into csv files
-		if err = toWorksetText(dbConn, modelDef, wm, outDir, fileCreated, isIdCsv, isUseIdNames); err != nil {
+		if err = toWorksetText(dbConn, modelDef, wm, outDir, fileCreated, isUseIdNames); err != nil {
 			return err
 		}
 		return nil

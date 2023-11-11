@@ -34,13 +34,15 @@ type attrValue struct {
 
 // CellMicroConverter is a converter for entity microdata row to implement CsvConverter interface.
 type CellMicroConverter struct {
-	ModelDef  *ModelMeta      // model metadata
-	Name      string          // model entity name
-	EntityGen *EntityGenMeta  // model run entity generation
-	IsIdCsv   bool            // if true then use enum id's else use enum codes
-	DoubleFmt string          // if not empty then format string is used to sprintf if value type is float, double, long double
-	theEntity *EntityMeta     // if not nil then entity found
-	theAttrs  []EntityAttrRow // if not empty then entity generation attributes
+	ModelDef    *ModelMeta      // model metadata
+	Name        string          // model entity name
+	EntityGen   *EntityGenMeta  // model run entity generation
+	IsIdCsv     bool            // if true then use enum id's else use enum codes
+	DoubleFmt   string          // if not empty then format string is used to sprintf if value type is float, double, long double
+	IsNoZeroCsv bool            // if true then do not write zero values into csv output
+	IsNoNullCsv bool            // if true then do not write NULL values into csv output
+	theEntity   *EntityMeta     // if not nil then entity found
+	theAttrs    []EntityAttrRow // if not empty then entity generation attributes
 }
 
 // return true if csv converter is using enum id's for dimensions
@@ -83,9 +85,11 @@ func (cellCvt *CellMicroConverter) CsvHeader() ([]string, error) {
 
 // ToCsvIdRow return converter from microdata cell: (microdata key, attributes as enum id or built-in type value) to csv row []string.
 //
+// Converter return isNotEmpty flag, it return false if IsNoZero or IsNoNull is set and all attributes values are empty or zero,
+// only attributes of type float or integer or string are considered as "value" attributes.
 // Converter simply does Sprint() for key and each attribute value, if value is NULL then empty "" string used.
 // Converter will return error if len(row) not equal to number of fields in csv record.
-func (cellCvt *CellMicroConverter) ToCsvIdRow() (func(interface{}, []string) error, error) {
+func (cellCvt *CellMicroConverter) ToCsvIdRow() (func(interface{}, []string) (bool, error), error) {
 
 	// find entity metadata by entity name and attributes by generation Hid
 	_, attrs, err := cellCvt.entityAttrs()
@@ -108,18 +112,25 @@ func (cellCvt *CellMicroConverter) ToCsvIdRow() (func(interface{}, []string) err
 	}
 
 	// return converter for microdata key and attribute values
-	cvt := func(src interface{}, row []string) error {
+	cvt := func(src interface{}, row []string) (bool, error) {
 
 		cell, ok := src.(CellMicro)
 		if !ok {
-			return errors.New("invalid type, expected: CellMicro (internal error): " + cellCvt.Name)
+			return false, errors.New("invalid type, expected: CellMicro (internal error): " + cellCvt.Name)
 		}
 
 		n := len(cell.Attr)
 		if n != nAttr || len(row) != n+1 {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(nAttr+1) + ": " + cellCvt.Name)
+			return false, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(nAttr+1) + ": " + cellCvt.Name)
 		}
 
+		// check for empty data: if all values are NULLs or zeros and no null or no zero flag is set
+		isAllEmpty, e := cellCvt.isAllEmpty(cell, attrs)
+		if e != nil {
+			return false, e
+		}
+
+		// convert attributes
 		row[0] = fmt.Sprint(cell.Key) // first column is entity microdata key
 
 		for k, a := range cell.Attr {
@@ -131,18 +142,19 @@ func (cellCvt *CellMicroConverter) ToCsvIdRow() (func(interface{}, []string) err
 				row[k+1] = fd[k](a.Value)
 			}
 		}
-		return nil
+		return !isAllEmpty, nil
 	}
 	return cvt, nil
 }
 
 // ToCsvRow return converter from microdata cell: (microdata key, attributes as enum code or built-in type value) to csv row []string.
 //
+// Converter return isNotEmpty flag, it return false if IsNoZero or IsNoNull is set and all values of float or integer or string type are empty or zero.
 // Converter simply does Sprint() for key and each attribute value, if value is NULL then empty "" string used.
 // If attribute type is float and double format is not empty "" string then converter does Sprintf(using double format).
 // If attribute type is enum based then converter return enum code for attribute enum id.
 // Converter will return error if len(row) not equal to number of fields in csv record.
-func (cellCvt *CellMicroConverter) ToCsvRow() (func(interface{}, []string) error, error) {
+func (cellCvt *CellMicroConverter) ToCsvRow() (func(interface{}, []string) (bool, error), error) {
 
 	// find entity metadata by entity name and attributes by generation Hid
 	_, attrs, err := cellCvt.entityAttrs()
@@ -188,18 +200,25 @@ func (cellCvt *CellMicroConverter) ToCsvRow() (func(interface{}, []string) error
 	}
 
 	// return converter for microdata key and attribute values
-	cvt := func(src interface{}, row []string) error {
+	cvt := func(src interface{}, row []string) (bool, error) {
 
 		cell, ok := src.(CellMicro)
 		if !ok {
-			return errors.New("invalid type, expected: CellMicro (internal error): " + cellCvt.Name)
+			return false, errors.New("invalid type, expected: CellMicro (internal error): " + cellCvt.Name)
 		}
 
 		n := len(cell.Attr)
 		if n != nAttr || len(row) != n+1 {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(nAttr+1) + ": " + cellCvt.Name)
+			return false, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(nAttr+1) + ": " + cellCvt.Name)
 		}
 
+		// check for empty data: if all values are NULLs or zeros and no null or no zero flag is set
+		isAllEmpty, e := cellCvt.isAllEmpty(cell, attrs)
+		if e != nil {
+			return false, e
+		}
+
+		// convert attributes
 		row[0] = fmt.Sprint(cell.Key) // first column is entity microdata key
 
 		for k, a := range cell.Attr {
@@ -209,15 +228,58 @@ func (cellCvt *CellMicroConverter) ToCsvRow() (func(interface{}, []string) error
 				row[k+1] = "null"
 			} else {
 				if s, e := fd[k](a.Value); e != nil { // use attribute value converter
-					return e
+					return false, e
 				} else {
 					row[k+1] = s
 				}
 			}
 		}
-		return nil
+		return !isAllEmpty, nil
 	}
 	return cvt, nil
+}
+
+// check for empty data: if all values are NULLs or zeros and no null or no zero flag is set.
+// only attributes of type float or integer or string are considered as "value" attributes.
+func (cellCvt *CellMicroConverter) isAllEmpty(cell CellMicro, attrs []EntityAttrRow) (bool, error) {
+
+	isAll := cellCvt.IsNoZeroCsv || cellCvt.IsNoNullCsv
+
+	for k, a := range cell.Attr {
+
+		if !isAll {
+			break
+		}
+
+		if !attrs[k].typeOf.IsBuiltIn() ||
+			!attrs[k].typeOf.IsFloat() && !attrs[k].typeOf.IsInt() && !attrs[k].typeOf.IsString() {
+			continue // only float or intger or string attributes are considered as values
+		}
+
+		if a.IsNull || a.Value == nil {
+			isAll = cellCvt.IsNoNullCsv
+		} else {
+
+			isAll = cellCvt.IsNoZeroCsv
+
+			if isAll {
+				switch {
+				case attrs[k].typeOf.IsFloat():
+					fv, ok := a.Value.(float64)
+					isAll = ok && fv == 0
+				case attrs[k].typeOf.IsString():
+					sv, ok := a.Value.(string)
+					isAll = ok && sv == ""
+				case attrs[k].typeOf.IsInt():
+					iv, ok := helper.ToIntValue(a.Value)
+					isAll = ok && iv == 0
+				default:
+					return false, errors.New("invalid (not supported) entity attribute type: " + cellCvt.Name + "." + attrs[k].Name)
+				}
+			}
+		}
+	}
+	return isAll, nil
 }
 
 // CsvToCell return closure to convert csv row []string to microdata cell (key, attributes value).

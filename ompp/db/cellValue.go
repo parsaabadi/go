@@ -41,12 +41,15 @@ type CsvConverter interface {
 	CsvHeader() ([]string, error)
 
 	// return converter from cell of parameter, output table or microdata to csv row []string.
-	// it simply sprint() dimension id's and value into []string.
-	ToCsvIdRow() (func(interface{}, []string) error, error)
+	// converter simply sprint() dimension id's and value into []string buffer.
+	// converter return isNotEmpty flag if cell value is not empty.
+	ToCsvIdRow() (func(interface{}, []string) (bool, error), error)
 
 	// return converter from cell of parameter, output table or microdata to csv row []string.
-	// it does convert from enum id to code for all dimensions and enum-based parameter value.
-	ToCsvRow() (func(interface{}, []string) error, error)
+	// it does convert from enum id to code for all dimensions into []string buffer.
+	// if this is a enum-based parameter value then it is also converted to enum code.
+	// converter return isNotEmpty flag if cell value is not empty.
+	ToCsvRow() (func(interface{}, []string) (bool, error), error)
 
 	// return converter from csv row []string to parameter, output table or microdata cell (dimensions and value or microdata key and attributes value)
 	CsvToCell() (func(row []string) (interface{}, error), error)

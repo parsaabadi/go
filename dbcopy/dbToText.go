@@ -71,14 +71,12 @@ func dbToText(modelName string, modelDigest string, runOpts *config.RunOptions) 
 	isIdNames := false
 
 	// write all model run data into csv files: parameters, output expressions and accumulators
-	isIdCsv := runOpts.Bool(useIdCsvArgKey)
-
-	if isIdNames, err = toRunListText(srcDb, modelDef, outDir, fileCreated, isIdCsv, doUseIdNames); err != nil {
+	if isIdNames, err = toRunListText(srcDb, modelDef, outDir, fileCreated, doUseIdNames); err != nil {
 		return err
 	}
 
 	// write all readonly workset data into csv files: input parameters
-	if err = toWorksetListText(srcDb, modelDef, outDir, fileCreated, isIdCsv, isIdNames); err != nil {
+	if err = toWorksetListText(srcDb, modelDef, outDir, fileCreated, isIdNames); err != nil {
 		return err
 	}
 
@@ -159,7 +157,7 @@ func toCellCsvFile(
 	extraFirstValue string) error {
 
 	// converter from db cell to csv row []string
-	var cvtRow func(interface{}, []string) error
+	var cvtRow func(interface{}, []string) (bool, error)
 	var err error
 	if !csvCvt.IsUseEnumId() {
 		cvtRow, err = csvCvt.ToCsvRow()
@@ -220,17 +218,22 @@ func toCellCsvFile(
 
 		// write cell line: dimension(s) and value
 		// if "all-in-one" then prepend first value, e.g.: run id
+		// if converter return empty line then skip it
+		isNotEmpty := true
+		var e2 error = nil
+
 		if extraFirstValue == "" {
-			if err := cvtRow(src, cs); err != nil {
-				return false, err
-			}
+			isNotEmpty, e2 = cvtRow(src, cs)
 		} else {
-			if err := cvtRow(src, cs[1:]); err != nil {
-				return false, err
-			}
+			isNotEmpty, e2 = cvtRow(src, cs[1:])
 		}
-		if err := wr.Write(cs); err != nil {
-			return false, err
+		if e2 != nil {
+			return false, e2
+		}
+		if isNotEmpty {
+			if e2 = wr.Write(cs); e2 != nil {
+				return false, e2
+			}
 		}
 		return true, nil
 	}

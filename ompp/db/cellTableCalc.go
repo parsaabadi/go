@@ -129,9 +129,10 @@ func (cellCvt *CellTableCalcConverter) KeyIds(name string) (func(interface{}, []
 
 // ToCsvIdRow return converter from output table calculated cell (run_id, calc_id, dimensions, calc_value) to csv row []string.
 //
+// Converter return isNotEmpty flag, it is always true if there were no error during conversion.
 // Converter simply does Sprint() for each dimension item id, run id and value.
 // Converter will return error if len(row) not equal to number of fields in csv record.
-func (cellCvt *CellTableCalcConverter) ToCsvIdRow() (func(interface{}, []string) error, error) {
+func (cellCvt *CellTableCalcConverter) ToCsvIdRow() (func(interface{}, []string) (bool, error), error) {
 
 	// find output table by name
 	_, err := cellCvt.tableByName()
@@ -140,16 +141,16 @@ func (cellCvt *CellTableCalcConverter) ToCsvIdRow() (func(interface{}, []string)
 	}
 
 	// return converter from id based cell to csv string array
-	cvt := func(src interface{}, row []string) error {
+	cvt := func(src interface{}, row []string) (bool, error) {
 
 		cell, ok := src.(CellTableCalc)
 		if !ok {
-			return errors.New("invalid type, expected: CellTableCalc (internal error)")
+			return false, errors.New("invalid type, expected: CellTableCalc (internal error)")
 		}
 
 		n := len(cell.DimIds)
 		if len(row) != n+3 {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+3) + ": " + cellCvt.Name)
+			return false, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+3) + ": " + cellCvt.Name)
 		}
 
 		row[0] = fmt.Sprint(cell.RunId)
@@ -169,7 +170,7 @@ func (cellCvt *CellTableCalcConverter) ToCsvIdRow() (func(interface{}, []string)
 				row[n+2] = fmt.Sprint(cell.Value)
 			}
 		}
-		return nil
+		return true, nil
 	}
 
 	return cvt, nil
@@ -178,11 +179,12 @@ func (cellCvt *CellTableCalcConverter) ToCsvIdRow() (func(interface{}, []string)
 // ToCsvRow return converter from output table calculated cell (run_id, calc_id, dimensions, calc_value)
 // to csv row []string (run digest, calc_name, dimensions, calc_value).
 //
+// Converter return isNotEmpty flag, it is always true if there were no error during conversion.
 // Converter will return error if len(row) not equal to number of fields in csv record.
 // Converter will return error if run_id not exist in the list of model runs (in run_lst table).
 // Double format string is used if parameter type is float, double, long double.
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
-func (cellCvt *CellTableCalcConverter) ToCsvRow() (func(interface{}, []string) error, error) {
+func (cellCvt *CellTableCalcConverter) ToCsvRow() (func(interface{}, []string) (bool, error), error) {
 
 	// find output table by name
 	table, err := cellCvt.tableByName()
@@ -201,32 +203,32 @@ func (cellCvt *CellTableCalcConverter) ToCsvRow() (func(interface{}, []string) e
 		fd[k] = f
 	}
 
-	cvt := func(src interface{}, row []string) error {
+	cvt := func(src interface{}, row []string) (bool, error) {
 
 		cell, ok := src.(CellTableCalc)
 		if !ok {
-			return errors.New("invalid type, expected: output table calculated cell (internal error)")
+			return false, errors.New("invalid type, expected: output table calculated cell (internal error)")
 		}
 
 		n := len(cell.DimIds)
 		if len(row) != n+3 {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+3) + ": " + cellCvt.Name)
+			return false, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+3) + ": " + cellCvt.Name)
 		}
 
 		row[0] = cellCvt.IdToDigest[cell.RunId]
 		if row[0] == "" {
-			return errors.New("invalid (missing) run id: " + strconv.Itoa(cell.RunId) + " output table: " + cellCvt.Name)
+			return false, errors.New("invalid (missing) run id: " + strconv.Itoa(cell.RunId) + " output table: " + cellCvt.Name)
 		}
 		row[1] = cellCvt.CalcIdToName[cell.CalcId]
 		if row[1] == "" {
-			return errors.New("invalid (missing) calculation id: " + strconv.Itoa(cell.CalcId) + " output table: " + cellCvt.Name)
+			return false, errors.New("invalid (missing) calculation id: " + strconv.Itoa(cell.CalcId) + " output table: " + cellCvt.Name)
 		}
 
 		// convert dimension item id to code
 		for k, e := range cell.DimIds {
 			v, err := fd[k](e)
 			if err != nil {
-				return err
+				return false, err
 			}
 			row[k+2] = v
 		}
@@ -241,7 +243,7 @@ func (cellCvt *CellTableCalcConverter) ToCsvRow() (func(interface{}, []string) e
 				row[n+2] = fmt.Sprint(cell.Value)
 			}
 		}
-		return nil
+		return true, nil
 	}
 
 	return cvt, nil

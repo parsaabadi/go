@@ -34,6 +34,8 @@ type CellExprConverter struct {
 	CellTableConverter        // model metadata and output table name
 	IsIdCsv            bool   // if true then use enum id's else use enum codes
 	DoubleFmt          string // if not empty then format string is used to sprintf if value type is float, double, long double
+	IsNoZeroCsv        bool   // if true then do not write zero values into csv output
+	IsNoNullCsv        bool   // if true then do not write NULL values into csv output
 }
 
 // return true if csv converter is using enum id's for dimensions
@@ -112,9 +114,10 @@ func (cellCvt *CellExprConverter) KeyIds(name string) (func(interface{}, []int) 
 
 // ToCsvIdRow return converter from output table cell (expr_id, dimensions, value) to csv row []string.
 //
+// Converter return isNotEmpty flag, it return false if IsNoZero or IsNoNull is set and cell value is empty or zero.
 // Converter simply does Sprint() for each dimension item id, expression id and value.
 // Converter will return error if len(row) not equal to number of fields in csv record.
-func (cellCvt *CellExprConverter) ToCsvIdRow() (func(interface{}, []string) error, error) {
+func (cellCvt *CellExprConverter) ToCsvIdRow() (func(interface{}, []string) (bool, error), error) {
 
 	// find output table by name
 	_, err := cellCvt.tableByName()
@@ -123,16 +126,16 @@ func (cellCvt *CellExprConverter) ToCsvIdRow() (func(interface{}, []string) erro
 	}
 
 	// return converter from id based cell to csv string array
-	cvt := func(src interface{}, row []string) error {
+	cvt := func(src interface{}, row []string) (bool, error) {
 
 		cell, ok := src.(CellExpr)
 		if !ok {
-			return errors.New("invalid type, expected: CellExpr (internal error): " + cellCvt.Name)
+			return false, errors.New("invalid type, expected: CellExpr (internal error): " + cellCvt.Name)
 		}
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.Name)
+			return false, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.Name)
 		}
 
 		row[0] = fmt.Sprint(cell.ExprId)
@@ -142,16 +145,25 @@ func (cellCvt *CellExprConverter) ToCsvIdRow() (func(interface{}, []string) erro
 		}
 
 		// use "null" string for db NULL values and format for model float types
+		isNotEmpty := true
+
 		if cell.IsNull {
 			row[n+1] = "null"
+			isNotEmpty = !cellCvt.IsNoNullCsv
 		} else {
+
+			if cellCvt.IsNoZeroCsv {
+				fv, ok := cell.Value.(float64)
+				isNotEmpty = ok && fv != 0
+			}
+
 			if cellCvt.DoubleFmt != "" {
 				row[n+1] = fmt.Sprintf(cellCvt.DoubleFmt, cell.Value)
 			} else {
 				row[n+1] = fmt.Sprint(cell.Value)
 			}
 		}
-		return nil
+		return isNotEmpty, nil
 	}
 
 	return cvt, nil
@@ -160,9 +172,10 @@ func (cellCvt *CellExprConverter) ToCsvIdRow() (func(interface{}, []string) erro
 // ToCsvRow return converter from output table cell (expr_id, dimensions, value)
 // to csv row []string (expr_name, dimensions, value).
 //
-// Converter will return error if len(row) not equal to number of fields in csv record.
+// Converter return isNotEmpty flag, it return false if IsNoZero or IsNoNull is set and cell value is empty or zero.
+// Converter return error if len(row) not equal to number of fields in csv record.
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
-func (cellCvt *CellExprConverter) ToCsvRow() (func(interface{}, []string) error, error) {
+func (cellCvt *CellExprConverter) ToCsvRow() (func(interface{}, []string) (bool, error), error) {
 
 	// find output table by name
 	table, err := cellCvt.tableByName()
@@ -181,16 +194,16 @@ func (cellCvt *CellExprConverter) ToCsvRow() (func(interface{}, []string) error,
 		fd[k] = f
 	}
 
-	cvt := func(src interface{}, row []string) error {
+	cvt := func(src interface{}, row []string) (bool, error) {
 
 		cell, ok := src.(CellExpr)
 		if !ok {
-			return errors.New("invalid type, expected: output table expression cell (internal error): " + cellCvt.Name)
+			return false, errors.New("invalid type, expected: output table expression cell (internal error): " + cellCvt.Name)
 		}
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.Name)
+			return false, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.Name)
 		}
 
 		row[0] = table.Expr[cell.ExprId].Name
@@ -199,22 +212,31 @@ func (cellCvt *CellExprConverter) ToCsvRow() (func(interface{}, []string) error,
 		for k, e := range cell.DimIds {
 			v, err := fd[k](e)
 			if err != nil {
-				return err
+				return false, err
 			}
 			row[k+1] = v
 		}
 
 		// use "null" string for db NULL values and format for model float types
+		isNotEmpty := true
+
 		if cell.IsNull {
 			row[n+1] = "null"
+			isNotEmpty = !cellCvt.IsNoNullCsv
 		} else {
+
+			if cellCvt.IsNoZeroCsv {
+				fv, ok := cell.Value.(float64)
+				isNotEmpty = ok && fv != 0
+			}
+
 			if cellCvt.DoubleFmt != "" {
 				row[n+1] = fmt.Sprintf(cellCvt.DoubleFmt, cell.Value)
 			} else {
 				row[n+1] = fmt.Sprint(cell.Value)
 			}
 		}
-		return nil
+		return isNotEmpty, nil
 	}
 
 	return cvt, nil
@@ -222,7 +244,7 @@ func (cellCvt *CellExprConverter) ToCsvRow() (func(interface{}, []string) error,
 
 // CsvToCell return closure to convert csv row []string to output table expression cell (dimensions and value).
 //
-// It does return error if len(row) not equal to number of fields in cell db-record.
+// Converter return error if len(row) not equal to number of fields in cell db-record.
 // If dimension type is enum based then csv row is enum code and it is converted into cell.DimIds (into dimension type type enum ids).
 func (cellCvt *CellExprConverter) CsvToCell() (func(row []string) (interface{}, error), error) {
 

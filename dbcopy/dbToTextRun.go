@@ -108,9 +108,7 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 	fileCreated := make(map[string]bool)
 
 	// write model run metadata into json, parameters and output result values into csv files
-	isIdCsv := runOpts.Bool(useIdCsvArgKey)
-
-	if err = toRunText(srcDb, modelDef, meta, outDir, csvName, fileCreated, isIdCsv, isUseIdNames); err != nil {
+	if err = toRunText(srcDb, modelDef, meta, outDir, csvName, fileCreated, isUseIdNames); err != nil {
 		return err
 	}
 
@@ -132,7 +130,6 @@ func toRunListText(
 	modelDef *db.ModelMeta,
 	outDir string,
 	fileCreated map[string]bool,
-	isIdCsv bool,
 	doUseIdNames useIdNames,
 ) (bool, error) {
 
@@ -164,7 +161,7 @@ func toRunListText(
 
 	// read all run parameters, output accumulators and expressions and dump it into csv files
 	for k := range rl {
-		err = toRunText(dbConn, modelDef, &rl[k], outDir, "", fileCreated, isIdCsv, isUseIdNames)
+		err = toRunText(dbConn, modelDef, &rl[k], outDir, "", fileCreated, isUseIdNames)
 		if err != nil {
 			return isUseIdNames, err
 		}
@@ -182,7 +179,6 @@ func toRunText(
 	outDir string,
 	csvName string,
 	fileCreated map[string]bool,
-	isIdCsv bool,
 	isUseIdNames bool,
 ) error {
 
@@ -232,7 +228,7 @@ func toRunText(
 		cvtParam := &db.CellParamConverter{
 			ModelDef:  modelDef,
 			Name:      modelDef.Param[j].Name,
-			IsIdCsv:   isIdCsv,
+			IsIdCsv:   theCfg.isIdCsv,
 			DoubleFmt: theCfg.doubleFmt,
 		}
 		paramLt := db.ReadParamLayout{ReadLayout: db.ReadLayout{
@@ -277,9 +273,15 @@ func toRunText(
 			ModelDef: modelDef,
 			Name:     modelDef.Table[j].Name,
 		}
-		cvtExpr := &db.CellExprConverter{CellTableConverter: ctc, IsIdCsv: isIdCsv, DoubleFmt: theCfg.doubleFmt}
-		cvtAcc := &db.CellAccConverter{CellTableConverter: ctc, IsIdCsv: isIdCsv, DoubleFmt: theCfg.doubleFmt}
-		cvtAll := &db.CellAllAccConverter{CellTableConverter: ctc, IsIdCsv: isIdCsv, DoubleFmt: theCfg.doubleFmt, ValueName: ""}
+		cvtExpr := &db.CellExprConverter{
+			CellTableConverter: ctc, IsIdCsv: theCfg.isIdCsv, DoubleFmt: theCfg.doubleFmt, IsNoZeroCsv: theCfg.isNoZeroCsv, IsNoNullCsv: theCfg.isNoNullCsv,
+		}
+		cvtAcc := &db.CellAccConverter{
+			CellTableConverter: ctc, IsIdCsv: theCfg.isIdCsv, DoubleFmt: theCfg.doubleFmt, IsNoZeroCsv: theCfg.isNoZeroCsv, IsNoNullCsv: theCfg.isNoNullCsv,
+		}
+		cvtAll := &db.CellAllAccConverter{
+			CellTableConverter: ctc, IsIdCsv: theCfg.isIdCsv, DoubleFmt: theCfg.doubleFmt, ValueName: "", IsNoZeroCsv: theCfg.isNoZeroCsv, IsNoNullCsv: theCfg.isNoNullCsv,
+		}
 
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name)
 
@@ -328,11 +330,13 @@ func toRunText(
 			}
 
 			cvtMicro := &db.CellMicroConverter{
-				ModelDef:  modelDef,
-				Name:      modelDef.Entity[eIdx].Name,
-				EntityGen: &meta.EntityGen[j],
-				IsIdCsv:   isIdCsv,
-				DoubleFmt: theCfg.doubleFmt,
+				ModelDef:    modelDef,
+				Name:        modelDef.Entity[eIdx].Name,
+				EntityGen:   &meta.EntityGen[j],
+				IsIdCsv:     theCfg.isIdCsv,
+				DoubleFmt:   theCfg.doubleFmt,
+				IsNoZeroCsv: theCfg.isNoZeroCsv,
+				IsNoNullCsv: theCfg.isNoNullCsv,
 			}
 			microLt := db.ReadMicroLayout{
 				ReadLayout: db.ReadLayout{

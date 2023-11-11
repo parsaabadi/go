@@ -255,7 +255,8 @@ func digestIntKeysCellsFrom(hSum hash.Hash, modelDef *ModelMeta, name string, cs
 		}
 
 		// convert to strings
-		if err := cvt(src, cs); err != nil {
+		// ignore is not empty flag return value, digest should include all rows
+		if _, err := cvt(src, cs); err != nil {
 			return err
 		}
 
@@ -317,7 +318,8 @@ func digestMicrodataCellsFrom(hSum hash.Hash, modelDef *ModelMeta, rowCount *int
 	digestNextRow := func(src interface{}) error {
 
 		// convert to strings
-		if err := cvt(src, cs); err != nil {
+		// ignore is not empty flag return value, digest should include all rows
+		if _, err := cvt(src, cs); err != nil {
 			return err
 		}
 

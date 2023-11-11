@@ -169,16 +169,6 @@ You can do it by editing JSON file in text editor or by using NoDigestCheck=true
 	dbcopy -m modelOne -dbcopy.To db -dbcopy.SetName MyData  -dbcopy.NoDigestCheck=true
 	dbcopy -m modelOne -dbcopy.To db -dbcopy.RunName MyResut -dbcopy.NoDigestCheck
 
-Dbcopy do auto detect input files encoding to convert source text into utf-8.
-On Windows you may want to expliciltly specify encoding name:
-
-	dbcopy -m modelOne -dbcopy.To db -dbcopy.CodePage windows-1252
-
-If you want to write utf-8 BOM into output csv file then:
-
-	dbcopy -m modelOne -dbcopy.Utf8BomIntoCsv
-	dbcopy -m modelOne -dbcopy.Utf8BomIntoCsv -dbcopy.To csv
-
 To delete from database entire model, model run results, set of input parameters or modeling task:
 
 	dbcopy -m modelOne -dbcopy.Delete
@@ -205,11 +195,28 @@ To rename model run results, input set of parameters or modeling task:
 	dbcopy -m modelOne -dbcopy.Rename -dbcopy.TaskName taskOne -dbcopy.ToTaskName "New Task Name"
 	dbcopy -m modelOne -dbcopy.Rename -dbcopy.TaskId 1 -dbcopy.ToTaskName "New Task Name"
 
-OpenM++ using hash digest to compare models, input parameters and output values.
-By default float and double values converted into text with "%.15g" format.
-It is possible to specify other format for float values digest calculation:
+By default float and double values converted into csv text with "%.15g" format.
+It is possible to specify other format for float values values:
 
-	dbcopy -m modelOne -dbcopy.DoubleFormat "%.7G" -dbcopy.To db -dbcopy.FromSqlite one.sqlite
+	dbcopy -m modelOne -dbcopy.DoubleFormat "%.7G"
+
+You can suppress zero values and / or NULL (missing) values in output tables or microdata CSV files:
+
+	dbcopy -m modelOne -dbcopy.To csv -dbcopy.NoZeroCsv
+	dbcopy -m modelOne -dbcopy.To csv -dbcopy.NoZeroCsv=true
+	dbcopy -m modelOne -dbcopy.To csv -dbcopy.NoNullCsv
+	dbcopy -m modelOne -dbcopy.To csv -dbcopy.NoNullCsv=true
+	dbcopy -m modelOne -dbcopy.To csv -dbcopy.NoZeroCsv -dbcopy.NoNullCsv
+
+Dbcopy do auto detect input files encoding to convert source text into utf-8.
+On Windows you may want to expliciltly specify encoding name:
+
+	dbcopy -m modelOne -dbcopy.To db -dbcopy.CodePage windows-1252
+
+If you want to write utf-8 BOM into output csv file then:
+
+	dbcopy -m modelOne -dbcopy.Utf8BomIntoCsv
+	dbcopy -m modelOne -dbcopy.Utf8BomIntoCsv -dbcopy.To csv
 
 By default dbcopy using SQLite database connection:
 
@@ -296,12 +303,14 @@ const (
 	paramDirArgKey      = "dbcopy.ParamDir"          // path to workset parameters directory
 	paramDirShortKey    = "p"                        // path to workset parameters directory (short form)
 	zipArgKey           = "dbcopy.Zip"               // create output or use as input model.zip
-	doubleFormatArgKey  = "dbcopy.DoubleFormat"      // convert to string format for float and double
 	useIdCsvArgKey      = "dbcopy.IdCsv"             // if true then create csv files with enum id's default: enum code
+	useIdNamesArgKey    = "dbcopy.IdOutputNames"     // if true then always use id's in output directory and file names, false never use it
+	noDigestCheckArgKey = "dbcopy.NoDigestCheck"     // if true then ignore input model digest, use model name only
 	noAccCsvArgKey      = "dbcopy.NoAccumulatorsCsv" // if true then do not create accumulators .csv files
 	noMicrodataArgKey   = "dbcopy.NoMicrodata"       // if true then suppress microdata output
-	noDigestCheckArgKey = "dbcopy.NoDigestCheck"     // if true then ignore input model digest, use model name only
-	useIdNamesArgKey    = "dbcopy.IdOutputNames"     // if true then always use id's in output directory and file names, false never use it
+	noZeroArgKey        = "dbcopy.NoZeroCsv"         // if true then do not write zero values into output tables or microdata csv
+	noNullArgKey        = "dbcopy.NoNullCsv"         // if true then do not write NULL values into output tables or microdata csv
+	doubleFormatArgKey  = "dbcopy.DoubleFormat"      // convert to string format for float and double
 	encodingArgKey      = "dbcopy.CodePage"          // code page for converting source files, e.g. windows-1252
 	useUtf8CsvArgKey    = "dbcopy.Utf8BomIntoCsv"    // if true then write utf-8 BOM into csv file
 )
@@ -317,21 +326,27 @@ const (
 
 // run options
 var theCfg = struct {
-	doubleFmt       string // format to convert float or double value to string
 	isKeepOutputDir bool   // if true then keep existing output directory
+	isNoDigestCheck bool   // if true then ignore input model digest, use model name only to load values from csv
+	isIdCsv         bool   // if true then create csv files with enum id's default: enum code
 	isNoAccCsv      bool   // if true then do not create accumulators .csv files
 	isNoMicrodata   bool   // if true then suppress microdata output
-	isNoDigestCheck bool   // if true then ignore input model digest, use model name only to load values from csv
+	isNoZeroCsv     bool   // if true then do not write zero values into output tables .csv files
+	isNoNullCsv     bool   // if true then do not write NULL values into output tables .csv files
+	doubleFmt       string // format to convert float or double value to string
 	encodingName    string // code page for converting source files, e.g. windows-1252
 	isWriteUtf8Bom  bool   // if true then write utf-8 BOM into csv file
 }{
-	doubleFmt:       "%.15g",
-	isKeepOutputDir: false, // remove existing out directoris by default
-	isNoAccCsv:      false, // by default do full model dump: create accumulators .csv files
-	isNoMicrodata:   false, // by default do full model dump, including microdata
-	isNoDigestCheck: false, // by default check model digest
-	encodingName:    "",    // by default detect utf-8 encoding or use OS-specific deafult: windows-1252 on Windowds and utf-8 outside
-	isWriteUtf8Bom:  false, // do not write BOM by default
+	isKeepOutputDir: false,   // remove existing out directoris by default
+	isNoDigestCheck: false,   // by default check model digest
+	isIdCsv:         false,   // by default use create enum codes in csv files
+	isNoAccCsv:      false,   // by default do full model dump: create accumulators .csv files
+	isNoMicrodata:   false,   // by default do full model dump, including microdata
+	isNoZeroCsv:     false,   // by default do write zero values into output tables .csv files
+	isNoNullCsv:     false,   // by default dot write NULL values into output tables .csv files
+	doubleFmt:       "%.15g", // default format to convert float or daouble values to string
+	encodingName:    "",      // by default detect utf-8 encoding or use OS-specific deafult: windows-1252 on Windowds and utf-8 outside
+	isWriteUtf8Bom:  false,   // do not write BOM by default
 }
 
 func main() {
@@ -380,12 +395,14 @@ func mainBody(args []string) error {
 	_ = flag.String(paramDirArgKey, "", "path to parameters directory (input parameters set directory)")
 	_ = flag.String(paramDirShortKey, "", "path to parameters directory (short of "+paramDirArgKey+")")
 	_ = flag.Bool(zipArgKey, false, "create output model.zip or use model.zip as input")
-	_ = flag.String(doubleFormatArgKey, theCfg.doubleFmt, "convert to string format for float and double")
+	_ = flag.Bool(useIdNamesArgKey, false, "if true then always use id's in output directory names, false never use. Default for csv: only if name conflict")
 	_ = flag.Bool(useIdCsvArgKey, false, "if true then create csv files with enum id's default: enum code")
+	_ = flag.Bool(noDigestCheckArgKey, theCfg.isNoDigestCheck, "if true then ignore input model digest, use model name only")
 	_ = flag.Bool(noAccCsvArgKey, theCfg.isNoAccCsv, "if true then do not create accumulators .csv files")
 	_ = flag.Bool(noMicrodataArgKey, theCfg.isNoMicrodata, "if true then suppress microdata output")
-	_ = flag.Bool(noDigestCheckArgKey, theCfg.isNoDigestCheck, "if true then ignore input model digest, use model name only")
-	_ = flag.Bool(useIdNamesArgKey, false, "if true then always use id's in output directory names, false never use. Default for csv: only if name conflict")
+	_ = flag.Bool(noZeroArgKey, theCfg.isNoZeroCsv, "if true then do not write zero values into output tables .csv files")
+	_ = flag.Bool(noNullArgKey, theCfg.isNoNullCsv, "if true then do not write NULL values into output tables .csv files")
+	_ = flag.String(doubleFormatArgKey, theCfg.doubleFmt, "convert to string format for float and double")
 	_ = flag.String(encodingArgKey, theCfg.encodingName, "code page to convert source file into utf-8, e.g.: windows-1252")
 	_ = flag.Bool(useUtf8CsvArgKey, theCfg.isWriteUtf8Bom, "if true then write utf-8 BOM into csv file")
 
@@ -423,11 +440,14 @@ func mainBody(args []string) error {
 	omppLog.Log("Model ", modelName, " ", modelDigest)
 
 	// set run options
-	theCfg.doubleFmt = runOpts.String(doubleFormatArgKey)
 	theCfg.isKeepOutputDir = runOpts.Bool(keepOutputDirArgKey)
+	theCfg.isNoDigestCheck = runOpts.Bool(noDigestCheckArgKey)
+	theCfg.isIdCsv = runOpts.Bool(useIdCsvArgKey)
 	theCfg.isNoAccCsv = runOpts.Bool(noAccCsvArgKey)
 	theCfg.isNoMicrodata = runOpts.Bool(noMicrodataArgKey)
-	theCfg.isNoDigestCheck = runOpts.Bool(noDigestCheckArgKey)
+	theCfg.isNoZeroCsv = runOpts.Bool(noZeroArgKey)
+	theCfg.isNoNullCsv = runOpts.Bool(noNullArgKey)
+	theCfg.doubleFmt = runOpts.String(doubleFormatArgKey)
 	theCfg.encodingName = runOpts.String(encodingArgKey)
 	theCfg.isWriteUtf8Bom = runOpts.Bool(useUtf8CsvArgKey)
 
@@ -448,6 +468,10 @@ func mainBody(args []string) error {
 	// id csv is only for output
 	if copyToArg != "text" && copyToArg != "csv" && copyToArg != "csv-all" && runOpts.IsExist(useIdCsvArgKey) {
 		return errors.New("dbcopy invalid arguments: " + useIdCsvArgKey + " can be used only if " + copyToArgKey + "=text or =csv or =csv-all")
+	}
+	// no zero and no null options can be used only for csv output
+	if copyToArg != "csv" && copyToArg != "csv-all" && (runOpts.IsExist(noZeroArgKey) || runOpts.IsExist(noNullArgKey)) {
+		return errors.New("dbcopy invalid arguments: " + noZeroArgKey + " / " + noNullArgKey + " can be used only if " + copyToArgKey + "=text or =csv or =csv-all")
 	}
 	// parameter directory is only for workset copy db-to-text or text-to-db
 	if runOpts.IsExist(paramDirArgKey) &&

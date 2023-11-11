@@ -18,7 +18,6 @@ func toRunListCsv(
 	modelDef *db.ModelMeta,
 	outDir string,
 	fileCreated map[string]bool,
-	isIdCsv bool,
 	doUseIdNames useIdNames,
 	isAllInOne bool,
 ) (bool, error) {
@@ -58,7 +57,7 @@ func toRunListCsv(
 	// read all run parameters, output accumulators and expressions, microdata and dump it into csv files
 	for k := range rl {
 		err = toRunCsv(
-			dbConn, modelDef, &rl[k], outDir, isIdCsv, isUseIdNames, isAllInOne, fileCreated)
+			dbConn, modelDef, &rl[k], outDir, isUseIdNames, isAllInOne, fileCreated)
 		if err != nil {
 			return isUseIdNames, err
 		}

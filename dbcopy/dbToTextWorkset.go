@@ -118,9 +118,7 @@ func dbToTextWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 	isUseIdNames := runOpts.Bool(useIdNamesArgKey)
 
 	// write workset metadata into json and parameter values into csv files
-	isIdCsv := runOpts.Bool(useIdCsvArgKey)
-
-	if err = toWorksetText(srcDb, modelDef, wm, outDir, fileCreated, isIdCsv, isUseIdNames); err != nil {
+	if err = toWorksetText(srcDb, modelDef, wm, outDir, fileCreated, isUseIdNames); err != nil {
 		return err
 	}
 
@@ -142,7 +140,6 @@ func toWorksetListText(
 	modelDef *db.ModelMeta,
 	outDir string,
 	fileCreated map[string]bool,
-	isIdCsv bool,
 	isUseIdNames bool) error {
 
 	// get all readonly worksets
@@ -153,7 +150,7 @@ func toWorksetListText(
 
 	// read all workset parameters and dump it into csv files
 	for k := range wl {
-		err = toWorksetText(dbConn, modelDef, &wl[k], outDir, fileCreated, isIdCsv, isUseIdNames)
+		err = toWorksetText(dbConn, modelDef, &wl[k], outDir, fileCreated, isUseIdNames)
 		if err != nil {
 			return err
 		}
@@ -171,7 +168,6 @@ func toWorksetText(
 	meta *db.WorksetMeta,
 	outDir string,
 	fileCreated map[string]bool,
-	isIdCsv bool,
 	isUseIdNames bool) error {
 
 	// convert db rows into "public" format
@@ -211,7 +207,7 @@ func toWorksetText(
 		cvtParam := &db.CellParamConverter{
 			ModelDef:  modelDef,
 			Name:      pub.Param[j].Name,
-			IsIdCsv:   isIdCsv,
+			IsIdCsv:   theCfg.isIdCsv,
 			DoubleFmt: theCfg.doubleFmt,
 		}
 		paramLt := db.ReadParamLayout{

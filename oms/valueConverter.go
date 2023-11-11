@@ -529,7 +529,7 @@ func (mc *ModelCatalog) MicrodataCellConverter(
 }
 
 // ParameterToCsvConverter return csv header as string array, parameter csv converter and boolean Ok flag.
-func (mc *ModelCatalog) ParameterToCsvConverter(dn string, isCode bool, name string) ([]string, func(interface{}, []string) error, bool) {
+func (mc *ModelCatalog) ParameterToCsvConverter(dn string, isCode bool, name string) ([]string, func(interface{}, []string) (bool, error), bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
@@ -565,7 +565,7 @@ func (mc *ModelCatalog) ParameterToCsvConverter(dn string, isCode bool, name str
 	}
 
 	// create converter from db cell into csv row []string
-	var cvt func(interface{}, []string) error
+	var cvt func(interface{}, []string) (bool, error)
 
 	if isCode {
 		cvt, err = csvCvt.ToCsvRow()
@@ -581,7 +581,7 @@ func (mc *ModelCatalog) ParameterToCsvConverter(dn string, isCode bool, name str
 }
 
 // TableToCsvConverter return csv header as starting array, output table cell to csv converter and and boolean Ok flag.
-func (mc *ModelCatalog) TableToCsvConverter(dn string, isCode bool, name string, isAcc, isAllAcc bool) ([]string, func(interface{}, []string) error, bool) {
+func (mc *ModelCatalog) TableToCsvConverter(dn string, isCode bool, name string, isAcc, isAllAcc bool) ([]string, func(interface{}, []string) (bool, error), bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
@@ -639,7 +639,7 @@ func (mc *ModelCatalog) TableToCsvConverter(dn string, isCode bool, name string,
 	}
 
 	// create converter from db cell into csv row []string
-	var cvt func(interface{}, []string) error
+	var cvt func(interface{}, []string) (bool, error)
 
 	if isCode {
 		cvt, err = csvCvt.ToCsvRow()
@@ -659,7 +659,7 @@ func (mc *ModelCatalog) TableToCsvConverter(dn string, isCode bool, name string,
 // All runs must be completed successfully.
 func (mc *ModelCatalog) TableToCalcCsvConverter(
 	dn string, rdsn string, isCode bool, tableName string, calcLt []db.CalculateTableLayout, runLst []string,
-) ([]string, func(interface{}, []string) error, int, []int, bool) {
+) ([]string, func(interface{}, []string) (bool, error), int, []int, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
@@ -714,7 +714,7 @@ func (mc *ModelCatalog) TableToCalcCsvConverter(
 	}
 
 	// create converter from db cell into csv row []string
-	var cvt func(interface{}, []string) error
+	var cvt func(interface{}, []string) (bool, error)
 
 	if isCode {
 		cvt, err = ctc.ToCsvRow()
@@ -734,7 +734,7 @@ func (mc *ModelCatalog) TableToCalcCsvConverter(
 func (mc *ModelCatalog) MicrodataToCsvConverter(
 	dn string, isCode bool, rdsn, name string,
 ) (
-	int, string, []string, func(interface{}, []string) error, bool,
+	int, string, []string, func(interface{}, []string) (bool, error), bool,
 ) {
 
 	// validate parameters and return empty results on empty input
@@ -790,7 +790,7 @@ func (mc *ModelCatalog) MicrodataToCsvConverter(
 	}
 
 	// create converter from db cell into csv row []string
-	var cvt func(interface{}, []string) error
+	var cvt func(interface{}, []string) (bool, error)
 
 	if isCode {
 		cvt, err = cvtMicro.ToCsvRow()

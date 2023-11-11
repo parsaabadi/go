@@ -214,7 +214,7 @@ func writeTestToCsvIdFile(
 	for c := cellLst.Front(); c != nil; c = c.Next() {
 
 		// write cell line: run id, dimension(s) and value
-		if err := cvt(c.Value, cs); err != nil {
+		if _, err := cvt(c.Value, cs); err != nil {
 			return err
 		}
 		if err := wr.Write(cs); err != nil {

@@ -319,7 +319,7 @@ func (typeRow *TypeDicRow) IsFloat32() bool {
 // IsInt return true if model type is integer (not float, string or boolean).
 // If type is not a built-in then it must be integer enums.
 func (typeRow *TypeDicRow) IsInt() bool {
-	return !typeRow.IsBool() && !typeRow.IsString() && !typeRow.IsFloat()
+	return typeRow.IsBuiltIn() && !typeRow.IsBool() && !typeRow.IsString() && !typeRow.IsFloat()
 }
 
 // IsBuiltIn return true if model type is built-in, ie: int, double, logical.

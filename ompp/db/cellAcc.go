@@ -29,6 +29,8 @@ type CellAccConverter struct {
 	CellTableConverter        // model metadata and output table name
 	IsIdCsv            bool   // if true then use enum id's else use enum codes
 	DoubleFmt          string // if not empty then format string is used to sprintf if value type is float, double, long double
+	IsNoZeroCsv        bool   // if true then do not write zero values into csv output
+	IsNoNullCsv        bool   // if true then do not write NULL values into csv output
 }
 
 // return true if csv converter is using enum id's for dimensions
@@ -110,9 +112,10 @@ func (cellCvt *CellAccConverter) KeyIds(name string) (func(interface{}, []int) e
 
 // ToCsvIdRow return converter from output table cell (acc_id, sub_id, dimensions, value) to csv row []string.
 //
+// Converter return isNotEmpty flag, it return false if IsNoZero or IsNoNull is set and cell value is empty or zero.
 // Converter simply does Sprint() for each dimension item id, accumulator id, subvalue number and value.
 // Converter will return error if len(row) not equal to number of fields in csv record.
-func (cellCvt *CellAccConverter) ToCsvIdRow() (func(interface{}, []string) error, error) {
+func (cellCvt *CellAccConverter) ToCsvIdRow() (func(interface{}, []string) (bool, error), error) {
 
 	// find output table by name
 	_, err := cellCvt.tableByName()
@@ -121,16 +124,16 @@ func (cellCvt *CellAccConverter) ToCsvIdRow() (func(interface{}, []string) error
 	}
 
 	// return converter from id based cell to csv string array
-	cvt := func(src interface{}, row []string) error {
+	cvt := func(src interface{}, row []string) (bool, error) {
 
 		cell, ok := src.(CellAcc)
 		if !ok {
-			return errors.New("invalid type, expected: CellAcc (internal error): " + cellCvt.Name)
+			return false, errors.New("invalid type, expected: CellAcc (internal error): " + cellCvt.Name)
 		}
 
 		n := len(cell.DimIds)
 		if len(row) != n+3 {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+3) + ": " + cellCvt.Name)
+			return false, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+3) + ": " + cellCvt.Name)
 		}
 
 		row[0] = fmt.Sprint(cell.AccId)
@@ -141,16 +144,25 @@ func (cellCvt *CellAccConverter) ToCsvIdRow() (func(interface{}, []string) error
 		}
 
 		// use "null" string for db NULL values and format for model float types
+		isNotEmpty := true
+
 		if cell.IsNull {
 			row[n+2] = "null"
+			isNotEmpty = !cellCvt.IsNoNullCsv
 		} else {
+
+			if cellCvt.IsNoZeroCsv {
+				fv, ok := cell.Value.(float64)
+				isNotEmpty = ok && fv != 0
+			}
+
 			if cellCvt.DoubleFmt != "" {
 				row[n+2] = fmt.Sprintf(cellCvt.DoubleFmt, cell.Value)
 			} else {
 				row[n+2] = fmt.Sprint(cell.Value)
 			}
 		}
-		return nil
+		return isNotEmpty, nil
 	}
 
 	return cvt, nil
@@ -159,9 +171,10 @@ func (cellCvt *CellAccConverter) ToCsvIdRow() (func(interface{}, []string) error
 // ToCsvRow return converter from output table cell (acc_id, sub_id, dimensions, value)
 // to csv row []string (acc_name, sub_id, dimensions, value).
 //
+// Converter return isNotEmpty flag, it return false if IsNoZero or IsNoNull is set and cell value is empty or zero.
 // Converter will return error if len(row) not equal to number of fields in csv record.
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
-func (cellCvt *CellAccConverter) ToCsvRow() (func(interface{}, []string) error, error) {
+func (cellCvt *CellAccConverter) ToCsvRow() (func(interface{}, []string) (bool, error), error) {
 
 	// find output table by name
 	table, err := cellCvt.tableByName()
@@ -180,16 +193,16 @@ func (cellCvt *CellAccConverter) ToCsvRow() (func(interface{}, []string) error, 
 		fd[k] = f
 	}
 
-	cvt := func(src interface{}, row []string) error {
+	cvt := func(src interface{}, row []string) (bool, error) {
 
 		cell, ok := src.(CellAcc)
 		if !ok {
-			return errors.New("invalid type, expected: output table accumulator cell (internal error): " + cellCvt.Name)
+			return false, errors.New("invalid type, expected: output table accumulator cell (internal error): " + cellCvt.Name)
 		}
 
 		n := len(cell.DimIds)
 		if len(row) != n+3 {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+3) + ": " + cellCvt.Name)
+			return false, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+3) + ": " + cellCvt.Name)
 		}
 
 		row[0] = table.Acc[cell.AccId].Name
@@ -199,22 +212,31 @@ func (cellCvt *CellAccConverter) ToCsvRow() (func(interface{}, []string) error, 
 		for k, e := range cell.DimIds {
 			v, err := fd[k](e)
 			if err != nil {
-				return err
+				return false, err
 			}
 			row[k+2] = v
 		}
 
 		// use "null" string for db NULL values and format for model float types
+		isNotEmpty := true
+
 		if cell.IsNull {
 			row[n+2] = "null"
+			isNotEmpty = !cellCvt.IsNoNullCsv
 		} else {
+
+			if cellCvt.IsNoZeroCsv {
+				fv, ok := cell.Value.(float64)
+				isNotEmpty = ok && fv != 0
+			}
+
 			if cellCvt.DoubleFmt != "" {
 				row[n+2] = fmt.Sprintf(cellCvt.DoubleFmt, cell.Value)
 			} else {
 				row[n+2] = fmt.Sprint(cell.Value)
 			}
 		}
-		return nil
+		return isNotEmpty, nil
 	}
 
 	return cvt, nil

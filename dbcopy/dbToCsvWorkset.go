@@ -22,7 +22,6 @@ func toWorksetListCsv(
 	modelDef *db.ModelMeta,
 	outDir string,
 	fileCreated map[string]bool,
-	isIdCsv bool,
 	isUseIdNames bool,
 	isAllInOne bool) error {
 
@@ -36,7 +35,7 @@ func toWorksetListCsv(
 	for k := range wl {
 
 		err := toWorksetCsv(
-			dbConn, modelDef, &wl[k], outDir, fileCreated, isIdCsv, isUseIdNames, isAllInOne)
+			dbConn, modelDef, &wl[k], outDir, fileCreated, isUseIdNames, isAllInOne)
 		if err != nil {
 			return err
 		}
@@ -225,7 +224,6 @@ func toWorksetCsv(
 	meta *db.WorksetMeta,
 	outDir string,
 	fileCreated map[string]bool,
-	isIdCsv bool,
 	isUseIdNames bool,
 	isAllInOne bool) error {
 
@@ -258,7 +256,7 @@ func toWorksetCsv(
 	// if this is "all-in-one" output then first column is set id or set name
 	var firstCol, firstVal string
 	if isAllInOne {
-		if isIdCsv {
+		if theCfg.isIdCsv {
 			firstCol = "set_id"
 			firstVal = strconv.Itoa(setId)
 		} else {
@@ -282,7 +280,7 @@ func toWorksetCsv(
 		cvtParam := &db.CellParamConverter{
 			ModelDef:  modelDef,
 			Name:      modelDef.Param[idx].Name,
-			IsIdCsv:   isIdCsv,
+			IsIdCsv:   theCfg.isIdCsv,
 			DoubleFmt: theCfg.doubleFmt,
 		}
 		paramLt := db.ReadParamLayout{

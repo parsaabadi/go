@@ -116,11 +116,17 @@ func doParameterGetCsvHandler(w http.ResponseWriter, r *http.Request, srcArg str
 
 	cvtWr := func(c interface{}) (bool, error) {
 
-		if err := cvtRow(c, cs); err != nil {
-			return false, err
+		// if converter return empty line then skip it
+		isNotEmpty := true
+		var e2 error = nil
+
+		if isNotEmpty, e2 = cvtRow(c, cs); e2 != nil {
+			return false, e2
 		}
-		if err := csvWr.Write(cs); err != nil {
-			return false, err
+		if isNotEmpty {
+			if e2 = csvWr.Write(cs); e2 != nil {
+				return false, e2
+			}
 		}
 		return true, nil
 	}
@@ -283,14 +289,21 @@ func doTableGetCsvHandler(w http.ResponseWriter, r *http.Request, isAcc, isAllAc
 
 	cvtWr := func(c interface{}) (bool, error) {
 
-		if err := cvtRow(c, cs); err != nil {
-			return false, err
+		// if converter return empty line then skip it
+		isNotEmpty := true
+		var e2 error = nil
+
+		if isNotEmpty, e2 = cvtRow(c, cs); e2 != nil {
+			return false, e2
 		}
-		if err := csvWr.Write(cs); err != nil {
-			return false, err
+		if isNotEmpty {
+			if e2 = csvWr.Write(cs); e2 != nil {
+				return false, e2
+			}
 		}
 		return true, nil
 	}
+
 	_, ok = theCatalog.ReadOutTableTo(dn, rdsn, &layout, cvtWr)
 	if !ok {
 		http.Error(w, "Error at run output table read "+rdsn+": "+name, http.StatusBadRequest)
@@ -392,11 +405,17 @@ func doTableCalcGetCsvHandler(w http.ResponseWriter, r *http.Request, isCode, is
 
 	cvtWr := func(c interface{}) (bool, error) {
 
-		if err := cvtRow(c, cs); err != nil {
-			return false, err
+		// if converter return empty line then skip it
+		isNotEmpty := true
+		var e2 error = nil
+
+		if isNotEmpty, e2 = cvtRow(c, cs); e2 != nil {
+			return false, e2
 		}
-		if err := csvWr.Write(cs); err != nil {
-			return false, err
+		if isNotEmpty {
+			if e2 = csvWr.Write(cs); e2 != nil {
+				return false, e2
+			}
 		}
 		return true, nil
 	}
@@ -533,11 +552,17 @@ func doTableCompareGetCsvHandler(w http.ResponseWriter, r *http.Request, isCode,
 
 	cvtWr := func(c interface{}) (bool, error) {
 
-		if err := cvtRow(c, cs); err != nil {
-			return false, err
+		// if converter return empty line then skip it
+		isNotEmpty := true
+		var e2 error = nil
+
+		if isNotEmpty, e2 = cvtRow(c, cs); e2 != nil {
+			return false, e2
 		}
-		if err := csvWr.Write(cs); err != nil {
-			return false, err
+		if isNotEmpty {
+			if e2 = csvWr.Write(cs); e2 != nil {
+				return false, e2
+			}
 		}
 		return true, nil
 	}
@@ -635,11 +660,17 @@ func doMicrodataGetCsvHandler(w http.ResponseWriter, r *http.Request, isCode, is
 
 	cvtWr := func(c interface{}) (bool, error) {
 
-		if err := cvtRow(c, cs); err != nil {
-			return false, err
+		// if converter return empty line then skip it
+		isNotEmpty := true
+		var e2 error = nil
+
+		if isNotEmpty, e2 = cvtRow(c, cs); e2 != nil {
+			return false, e2
 		}
-		if err := csvWr.Write(cs); err != nil {
-			return false, err
+		if isNotEmpty {
+			if e2 = csvWr.Write(cs); e2 != nil {
+				return false, e2
+			}
 		}
 		return true, nil
 	}

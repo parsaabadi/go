@@ -103,9 +103,10 @@ func (cellCvt *CellParamConverter) KeyIds(name string) (func(interface{}, []int)
 
 // ToCsvIdRow return converter from parameter cell (sub id, dimensions, value) to csv row []string.
 //
+// Converter return isNotEmpty flag, it is always true if there were no error during conversion.
 // Converter simply does Sprint() for each sub-value id, dimension item id and value.
 // Converter will return error if len(row) not equal to number of fields in csv record.
-func (cellCvt *CellParamConverter) ToCsvIdRow() (func(interface{}, []string) error, error) {
+func (cellCvt *CellParamConverter) ToCsvIdRow() (func(interface{}, []string) (bool, error), error) {
 
 	// find parameter by name
 	param, err := cellCvt.paramByName()
@@ -116,16 +117,16 @@ func (cellCvt *CellParamConverter) ToCsvIdRow() (func(interface{}, []string) err
 	// for float model types use format if specified
 	isUseFmt := param.typeOf.IsFloat() && cellCvt.DoubleFmt != ""
 
-	cvt := func(src interface{}, row []string) error {
+	cvt := func(src interface{}, row []string) (bool, error) {
 
 		cell, ok := src.(CellParam)
 		if !ok {
-			return errors.New("invalid type, expected: CellParam (internal error): " + cellCvt.Name)
+			return false, errors.New("invalid type, expected: CellParam (internal error): " + cellCvt.Name)
 		}
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.Name)
+			return false, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.Name)
 		}
 
 		row[0] = fmt.Sprint(cell.SubId)
@@ -144,17 +145,18 @@ func (cellCvt *CellParamConverter) ToCsvIdRow() (func(interface{}, []string) err
 				row[n+1] = fmt.Sprint(cell.Value)
 			}
 		}
-		return nil
+		return true, nil
 	}
 	return cvt, nil
 }
 
 // ToCsvRow return converter from parameter cell (sub id, dimensions, value) to csv row []string.
 //
+// Converter return isNotEmpty flag, it is always true if there were no error during conversion.
 // Converter will return error if len(row) not equal to number of fields in csv record.
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
 // If parameter type is enum based then csv row value is enum code and cell value is enum id.
-func (cellCvt *CellParamConverter) ToCsvRow() (func(interface{}, []string) error, error) {
+func (cellCvt *CellParamConverter) ToCsvRow() (func(interface{}, []string) (bool, error), error) {
 
 	// find parameter by name
 	param, err := cellCvt.paramByName()
@@ -188,16 +190,16 @@ func (cellCvt *CellParamConverter) ToCsvRow() (func(interface{}, []string) error
 		fv = f
 	}
 
-	cvt := func(src interface{}, row []string) error {
+	cvt := func(src interface{}, row []string) (bool, error) {
 
 		cell, ok := src.(CellParam)
 		if !ok {
-			return errors.New("invalid type, expected: parameter cell (internal error): " + cellCvt.Name)
+			return false, errors.New("invalid type, expected: parameter cell (internal error): " + cellCvt.Name)
 		}
 
 		n := len(cell.DimIds)
 		if len(row) != n+2 {
-			return errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.Name)
+			return false, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.Name)
 		}
 
 		row[0] = fmt.Sprint(cell.SubId)
@@ -206,7 +208,7 @@ func (cellCvt *CellParamConverter) ToCsvRow() (func(interface{}, []string) error
 		for k, e := range cell.DimIds {
 			v, err := fd[k](e)
 			if err != nil {
-				return err
+				return false, err
 			}
 			row[k+1] = v
 		}
@@ -225,12 +227,12 @@ func (cellCvt *CellParamConverter) ToCsvRow() (func(interface{}, []string) error
 			// depending on sql + driver it can be different type
 			iv, ok := helper.ToIntValue(cell.Value)
 			if !ok {
-				return errors.New("invalid parameter value type, expected: integer enum: " + cellCvt.Name)
+				return false, errors.New("invalid parameter value type, expected: integer enum: " + cellCvt.Name)
 			}
 
 			v, err := fv(int(iv))
 			if err != nil {
-				return err
+				return false, err
 			}
 			row[n+1] = v
 
@@ -238,7 +240,7 @@ func (cellCvt *CellParamConverter) ToCsvRow() (func(interface{}, []string) error
 			row[n+1] = fmt.Sprint(cell.Value)
 		}
 
-		return nil
+		return true, nil
 	}
 
 	return cvt, nil
