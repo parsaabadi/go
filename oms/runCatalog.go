@@ -30,7 +30,7 @@ type RunCatalog struct {
 	computeState    map[string]computeItem             // map names of server or cluster the state of computational resources
 	startupNames    []string                           // names of the servers which are starting now
 	shutdownNames   []string                           // names of the servers which are stopping now
-	modelRes        map[string]modelRunRes             // map model digest to required computational resources
+	modelCfgRes     map[string]CfgRes                  // map model digest to run resources details
 }
 
 var theRunCatalog RunCatalog // list of most recent state of model run for each model.
@@ -96,8 +96,9 @@ type RunJob struct {
 	Pid         int    // process id
 	CmdPath     string // executable path
 	RunRequest         // model run request: model name, digest and run options
-	Res         RunRes // model run resources: CPU cores and memory
-	IsOverLimit bool   // if true then model run resource(s) exceed limit(s)
+	Res         RunRes // job run resources: CPU cores and memory
+	CfgRes             // run resources details: memory per process and pre thread
+	IsOverLimit bool   // if true then job run resource(s) exceed limit(s)
 	QueuePos    int    // one-based position in global queue
 	LogFileName string // log file name
 	LogPath     string // log file path: log/dir/modelName.RunStamp.console.log
@@ -109,11 +110,16 @@ type RunRes struct {
 	Mem int // if not zero then memory size in gigabytes
 }
 
+// model run resources details: memory
+type CfgRes struct {
+	MemProcessMb int // if not zero then memory required per proccess
+	MemThreadMb  int // if not zero then memory required for each thread
+}
+
 // computational resources required to run the model
-type modelRunRes struct {
-	path         string // model bin directory and model name joined by / slash
-	MemProcessMb int    // if not zero then memory required per proccess
-	MemThreadMb  int    // if not zero then memory required for each thread
+type modelPathRes struct {
+	path string // model bin directory and model name joined by / slash
+	CfgRes
 }
 
 // run job control file info
@@ -126,7 +132,7 @@ type runJobFile struct {
 // run job control file info
 type queueJobFile struct {
 	runJobFile
-	preRes   RunRes // model run resources required for queue jobs before this job
+	preRes   RunRes // run resources required for queue jobs before this job
 	position int    // part of file name: queue position
 }
 
@@ -183,12 +189,13 @@ type JobServiceState struct {
 	IsAllQueuePaused  bool    // all oms instances: if true then jobs queue is paused, jobs are not selected from queue
 	JobUpdateDateTime string  // last date-time jobs list updated
 	MpiRes            RunRes  // MPI total available resources available (CPU cores and memory) as sum of all servers or localhost resources
-	ActiveTotalRes    RunRes  // MPI active model run resources (CPU cores and memory) used by all oms instances
-	ActiveOwnRes      RunRes  // MPI active model run resources (CPU cores and memory) used by this oms instance
-	QueueTotalRes     RunRes  // MPI queue model run resources (CPU cores and memory) requested by all oms instances
-	QueueOwnRes       RunRes  // MPI queue model run resources (CPU cores and memory) requested by this oms instance
+	ActiveTotalRes    RunRes  // MPI active run resources (CPU cores and memory) used by all oms instances
+	ActiveOwnRes      RunRes  // MPI active run resources (CPU cores and memory) used by this oms instance
+	QueueTotalRes     RunRes  // MPI queue run resources (CPU cores and memory) requested by all oms instances
+	QueueOwnRes       RunRes  // MPI queue run resources (CPU cores and memory) requested by this oms instance
 	topQueueRes       RunRes  // resources required for MPI queue first job
 	MpiErrorRes       RunRes  // MPI computational resources on "error" servers
+	MpiMaxThreads     int     // max number of modelling threads per MPI process, zero means unlimited
 	LocalRes          RunRes  // localhost non-MPI jobs total resources limits
 	LocalActiveRes    RunRes  // localhost non-MPI jobs resources used by this instance to run models
 	LocalQueueRes     RunRes  // localhost non-MPI jobs queue resources for this oms instance
@@ -227,13 +234,12 @@ type computeUse struct {
 
 // MPI jobs process, threads and hostfile config from job.ini file
 type hostIni struct {
-	maxThreads int    // max number of modelling threads per MPI process, zero means unlimited
-	isUse      bool   // if true then create and use hostfile to run MPI jobs
-	dir        string // HostFileDir = models/log
-	hostName   string // HostName = @-HOST-@
-	cpuCores   string // CpuCores = @-CORES-@
-	rootLine   string // RootLine = cpm slots=1 max_slots=1
-	hostLine   string // HostLine = @-HOST-@ slots=@-CORES-@
+	isUse    bool   // if true then create and use hostfile to run MPI jobs
+	dir      string // HostFileDir = models/log
+	hostName string // HostName = @-HOST-@
+	cpuCores string // CpuCores = @-CORES-@
+	rootLine string // RootLine = cpm slots=1 max_slots=1
+	hostLine string // HostLine = @-HOST-@ slots=@-CORES-@
 }
 
 // job control state
@@ -297,7 +303,7 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error
 	rsc.queueJobs = map[string]queueJobFile{}
 	rsc.historyJobs = make(map[string]historyJobFile, 1024) // assume long history of model runs
 	rsc.computeState = map[string]computeItem{}
-	rsc.modelRes = map[string]modelRunRes{}
+	rsc.modelCfgRes = map[string]CfgRes{}
 	rsc.jobLastPosition = jobPositionDefault + 1
 	rsc.jobFirstPosition = jobPositionDefault - 1
 	if rsc.maxComputeErrors <= 1 {
@@ -420,12 +426,12 @@ func (rsc *RunCatalog) allModels() map[string]modelRunBasic {
 }
 
 // return computational resources requirements for model run.
-func (rsc *RunCatalog) getModelRunRes(digest string) modelRunRes {
+func (rsc *RunCatalog) getCfgRes(digest string) CfgRes {
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
-	if mr, ok := rsc.modelRes[digest]; ok {
+	if mr, ok := rsc.modelCfgRes[digest]; ok {
 		return mr
 	}
-	return modelRunRes{}
+	return CfgRes{}
 }

@@ -551,7 +551,7 @@ func updateQueueJobs(
 }
 
 // read job service state and computational servers definition from job.ini
-func initJobComputeState(jobIniPath string, updateTs time.Time, computeState map[string]computeItem) (JobServiceState, map[string]modelRunRes) {
+func initJobComputeState(jobIniPath string, updateTs time.Time, computeState map[string]computeItem) (JobServiceState, []modelPathRes) {
 
 	jsState := JobServiceState{
 		IsQueuePaused:     isPausedJobQueue(),
@@ -560,7 +560,7 @@ func initJobComputeState(jobIniPath string, updateTs time.Time, computeState map
 		maxStartTime:      serverTimeoutDefault,
 		maxStopTime:       serverTimeoutDefault,
 	}
-	mpRes := map[string]modelRunRes{}
+	mpRes := []modelPathRes{}
 
 	// read available resources limits and computational servers configuration from job.ini
 	if jobIniPath == "" || !fileExist(jobIniPath) {
@@ -584,7 +584,7 @@ func initJobComputeState(jobIniPath string, updateTs time.Time, computeState map
 	jsState.maxComputeErrors = opts.Int("Common.MaxErrors", maxComputeErrorsDefault)
 
 	// MPI jobs process, threads and hostfile config
-	jsState.hostFile.maxThreads = opts.Int("Common.MpiMaxThreads", 0) // max number of modelling threads per MPI process, zero means unlimited
+	jsState.MpiMaxThreads = opts.Int("Common.MpiMaxThreads", 0) // max number of modelling threads per MPI process, zero means unlimited
 	jsState.hostFile.hostName = opts.String("hostfile.HostName")
 	jsState.hostFile.cpuCores = opts.String("hostfile.CpuCores")
 	jsState.hostFile.rootLine = opts.String("hostfile.RootLine")
@@ -684,6 +684,7 @@ func initJobComputeState(jobIniPath string, updateTs time.Time, computeState map
 
 	// model resources requirements
 	mpLst := splitOpts("Common.Models", ",")
+	mpRes = make([]modelPathRes, 0, len(mpLst))
 
 	for k := range mpLst {
 
@@ -699,7 +700,7 @@ func initJobComputeState(jobIniPath string, updateTs time.Time, computeState map
 		if mt < 0 {
 			mt = 0
 		}
-		mpRes[p] = modelRunRes{path: p, MemProcessMb: mp, MemThreadMb: mt}
+		mpRes = append(mpRes, modelPathRes{path: p, CfgRes: CfgRes{MemProcessMb: mp, MemThreadMb: mt}})
 	}
 
 	return jsState, mpRes

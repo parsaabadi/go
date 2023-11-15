@@ -5,6 +5,7 @@ package main
 
 import (
 	"errors"
+	"math"
 	"path"
 	"path/filepath"
 	"sort"
@@ -26,7 +27,7 @@ func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, string, []computeUse
 		return nil, false, "", []computeUse{}, hostIni{}, nil // queue is paused or empty
 	}
 
-	// resource available to rum MPI jobs from global MPI queue and form localhost queue of this oms instance jobs
+	// resource available to run MPI jobs from global MPI queue or from localhost queue of this oms instance jobs
 	qLocal := RunRes{
 		Cpu: rsc.LocalRes.Cpu - rsc.LocalActiveRes.Cpu,
 		Mem: rsc.LocalRes.Mem - rsc.LocalActiveRes.Mem,
@@ -81,11 +82,11 @@ func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, string, []computeUse
 			}
 		} else { // check resources available for MPI jobs
 
-			if isMpiLimit && qMpi.Cpu < jc.Res.Cpu+jc.preRes.Cpu {
+			if isMpiLimit && jc.Res.Cpu > 0 && qMpi.Cpu < jc.Res.Cpu+jc.preRes.Cpu {
 				continue // job cpu limit set to non zero and MPI cluster available cpu less than required cpu
 			}
-			if qMpi.Mem > 0 && jc.Res.Mem > 0 && qMpi.Mem < jc.Res.Mem+jc.preRes.Mem {
-				continue // MPI cluster memory limited and job memory limit set to non zero and MPI cluster available memory less than required memory
+			if isMpiLimit && qMpi.Mem > 0 && jc.Res.Mem > 0 && qMpi.Mem < jc.Res.Mem+jc.preRes.Mem {
+				continue // MPI cluster memory limited and job memory limit IS set to non zero and MPI cluster available memory less than required memory
 			}
 		}
 
@@ -99,12 +100,30 @@ func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, string, []computeUse
 	// if this is MPI job then
 	// select servers where state is ready and max cpu cores available
 	// until all required cores assigned to the servers
+	// if memory is limited then assign cores and memory at the same time
 	compUse := []computeUse{}
 
 	if qj.IsMpi && len(rsc.computeState) > 0 {
 
 		nCpu := qj.Res.Cpu
-		nMem := qj.Res.Mem
+		isMem := qj.CfgRes.MemProcessMb > 0 || qj.CfgRes.MemThreadMb > 0 // check job memory requirements
+
+		// max threads per process: limited by job.ini MpiMaxThreads value and by Threads value from model run request
+		maxTh := nCpu
+		if rsc.MpiMaxThreads > 0 && maxTh > rsc.MpiMaxThreads {
+			maxTh = rsc.MpiMaxThreads
+		}
+		if qj.Threads > 0 && maxTh > qj.Threads {
+			maxTh = qj.Threads
+		}
+
+		// if run memory resources limited then
+		//   min memory is a single thread process memory size in GBytes
+		//   max memory is a max threads process memory size in GBytes
+		minMem := int(math.Ceil(float64(qj.CfgRes.MemProcessMb+qj.CfgRes.MemThreadMb) / 1024.0))
+		// TODO:
+		nMem := 0
+		// maxMem := int(math.Ceil(float64(qj.CfgRes.MemProcessMb+maxTh*qj.CfgRes.MemThreadMb) / 1024.0))
 
 		for nCpu > 0 {
 
@@ -125,7 +144,8 @@ func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, string, []computeUse
 					continue // this server already selected for that model run
 				}
 
-				if cUse.Cpu < cs.totalRes.Cpu-cs.usedRes.Cpu {
+				// server with max cores available and enough memory to run at least one thread
+				if cUse.Cpu < cs.totalRes.Cpu-cs.usedRes.Cpu && (minMem <= 0 || minMem <= cs.totalRes.Mem-cs.usedRes.Mem) {
 					cUse.name = name
 					cUse.Cpu = cs.totalRes.Cpu - cs.usedRes.Cpu
 					cUse.Mem = cs.totalRes.Mem - cs.usedRes.Mem
@@ -133,19 +153,21 @@ func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, string, []computeUse
 			}
 			if cUse.name == "" {
 
-				if len(compUse) <= 0 {
+				// if no servers found to run the job or memory requirements not satisfied then return error
+				if len(compUse) <= 0 || (isMem && nMem > 0) {
 					qj.isError = true
 					rsc.queueJobs[stamp] = qj
-					e := errors.New("ERROR: resources not found to run the model, CPU: " + strconv.Itoa(qj.Res.Cpu) + ": " + stamp)
+					e := errors.New("ERROR: resources not found to run the model, CPU and memory: " + strconv.Itoa(qj.Res.Cpu) + ": " + strconv.Itoa(qj.Res.Mem) + ": " + stamp)
 					return &qj.RunJob, false, qj.filePath, []computeUse{}, hostIni{}, e
 				}
 				// else assign the rest of the job to the last server
 				compUse[len(compUse)-1].Cpu = compUse[len(compUse)-1].Cpu + nCpu
 
-				omppLog.Log("WARNING: oversubscribe resources run the model, CPU: ", qj.Res.Cpu, ": ", stamp)
+				omppLog.Log("WARNING: oversubscribe resources to run the model, CPU: ", qj.Res.Cpu, ": ", stamp)
 				break // oversubscribe last server
 			}
 
+			// allocate CPUs and memory from that server
 			if cUse.Cpu > nCpu {
 				cUse.Cpu = nCpu
 			}
@@ -706,7 +728,7 @@ func (rsc *RunCatalog) shutdownCompleted(isOkStop bool, name string) {
 func (rsc *RunCatalog) updateRunJobs(
 	jsState JobServiceState,
 	computeState map[string]computeItem,
-	mpRes map[string]modelRunRes,
+	mpRes []modelPathRes,
 	queueJobs map[string]queueJobFile,
 	activeJobs map[string]runJobFile,
 	historyJobs map[string]historyJobFile,
@@ -738,7 +760,7 @@ func (rsc *RunCatalog) updateRunJobs(
 	}
 
 	// copy model resources requirements
-	rsc.modelRes = map[string]modelRunRes{}
+	rsc.modelCfgRes = map[string]CfgRes{}
 	binRoot, _ := theCatalog.getModelDir()
 	br := filepath.ToSlash(binRoot)
 
@@ -748,7 +770,7 @@ func (rsc *RunCatalog) updateRunJobs(
 
 		for _, rs := range mpRes {
 			if sp == path.Join(br, rs.path) {
-				rsc.modelRes[dgst] = rs
+				rsc.modelCfgRes[dgst] = CfgRes{MemProcessMb: rs.MemProcessMb, MemThreadMb: rs.MemThreadMb}
 				break
 			}
 		}

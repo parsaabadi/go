@@ -522,7 +522,7 @@ func jobStateWrite(jsc jobControlState) bool {
 
 // create MPI job hostfile, e.g.: models/log/host-2022_07_08_23_03_27_555-_4040.ini
 // retun path to host file, number of modelling threads per process and error
-func createHostFile(job *RunJob, hfCfg hostIni, compUse []computeUse) (string, int, error) {
+func createHostFile(job *RunJob, maxThreads int, hfCfg hostIni, compUse []computeUse) (string, int, error) {
 
 	if !job.IsMpi || !hfCfg.isUse || len(compUse) <= 0 { // hostfile is not required
 		return "", job.Threads, nil
@@ -538,8 +538,8 @@ func createHostFile(job *RunJob, hfCfg hostIni, compUse []computeUse) (string, i
 	}
 	if !job.Mpi.IsNotByJob {
 
-		if hfCfg.maxThreads > 0 && nTh > hfCfg.maxThreads { // number of threads is limited in job.ini
-			nTh = hfCfg.maxThreads
+		if maxThreads > 0 && nTh > maxThreads { // number of threads is limited in job.ini
+			nTh = maxThreads
 		}
 		for k := range compUse {
 			nTh = helper.Gcd2(nTh, compUse[k].Cpu)

@@ -78,7 +78,7 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 
 	// get number of modelling cpu
 	// for backward compatibility: check if number of threads specified using run options
-	job.Res, job.Mpi.IsNotOnRoot, _, job.Threads, ok = resFromRequest(req)
+	job.Res, job.CfgRes, job.Mpi.IsNotOnRoot, _, job.Threads, ok = resFromRequest(req)
 	if !ok {
 		http.Error(w, "Model start failed: "+dn, http.StatusBadRequest)
 		return
@@ -118,7 +118,7 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // return cpu modelling count, MPI not-on-root flag, number of processes, number of modelling threads per process and error flag
-func resFromRequest(req RunRequest) (RunRes, bool, int, int, bool) {
+func resFromRequest(req RunRequest) (RunRes, CfgRes, bool, int, int, bool) {
 
 	// get number of threads and MPI NotOnRoot flag
 	nTh := req.Threads
@@ -135,7 +135,7 @@ func resFromRequest(req RunRequest) (RunRes, bool, int, int, bool) {
 			nTh, err = strconv.Atoi(val) // must be >= 1
 			if err != nil || nTh < 1 {
 				omppLog.Log(err)
-				return RunRes{}, false, 0, 0, false
+				return RunRes{}, CfgRes{}, false, 0, 0, false
 			}
 		}
 
@@ -151,7 +151,7 @@ func resFromRequest(req RunRequest) (RunRes, bool, int, int, bool) {
 				isNotOnRoot, err = strconv.ParseBool(val)
 				if err != nil {
 					omppLog.Log(err)
-					return RunRes{}, false, 0, 0, false
+					return RunRes{}, CfgRes{}, false, 0, 0, false
 				}
 			}
 		}
@@ -169,15 +169,15 @@ func resFromRequest(req RunRequest) (RunRes, bool, int, int, bool) {
 	if nTh <= 0 {
 		nTh = 1
 	}
-	mRes := theRunCatalog.getModelRunRes(req.ModelDigest)
-	nMem := int(math.Ceil(float64(np*(mRes.MemProcessMb+mRes.MemThreadMb*nTh)) / 1024.0))
+	cfgRes := theRunCatalog.getCfgRes(req.ModelDigest)
+	nMem := int(math.Ceil(float64(np*(cfgRes.MemProcessMb+cfgRes.MemThreadMb*nTh)) / 1024.0))
 
 	res := RunRes{
 		Cpu: np * nTh,
 		Mem: nMem,
 	}
 
-	return res, isNotOnRoot, np, nTh, true
+	return res, cfgRes, isNotOnRoot, np, nTh, true
 }
 
 // stopModelHandler kill model run by model digest-or-name and run stamp or remove model run request from queue by submit stamp.

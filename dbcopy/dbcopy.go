@@ -159,7 +159,7 @@ If you want to create csv files with numeric id's Sex=[0,1] instead then use IdC
 	dbcopy -m modelOne -dbcopy.IdCsv -dbcopy.TaskName taskOne
 
 Dbcopy can transfer the data between differnt versions of the same model or even between different models.
-For example, it is possible create new input set of parameters just form csv file(s) with model data, nothing else is required.
+For example, it is possible create new input set of parameters just from csv file(s) with model data, nothing else is required.
 On the other hand dbcopy package output data with model metadata (e.g. parameter name, model name, model digest, etc.).
 If JSON metadata file(s) are supplied then dbcopy using it for validation to make sure input data match destination model.
 It may be neccessary to disable model digest validation In order to transfer data between diffrent versions of the model.

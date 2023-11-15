@@ -208,7 +208,7 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 	hfPath := ""
 	if job.IsMpi && !job.Mpi.IsNotByJob {
 
-		hfPath, job.Threads, err = createHostFile(job, hfCfg, compUse)
+		hfPath, job.Threads, err = createHostFile(job, rsc.MpiMaxThreads, hfCfg, compUse)
 
 		if err != nil {
 			omppLog.Log("Model run error: ", err)
