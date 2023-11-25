@@ -30,7 +30,8 @@ type RunCatalog struct {
 	computeState    map[string]computeItem             // map names of server or cluster the state of computational resources
 	startupNames    []string                           // names of the servers which are starting now
 	shutdownNames   []string                           // names of the servers which are stopping now
-	modelCfgRes     map[string]CfgRes                  // map model digest to run resources details
+	cfgRes          map[string]modelCfgRes             // map model digest to resources configuration
+	first           jobHostUse                         // first MPI job host usage
 }
 
 var theRunCatalog RunCatalog // list of most recent state of model run for each model.
@@ -97,29 +98,32 @@ type RunJob struct {
 	CmdPath     string // executable path
 	RunRequest         // model run request: model name, digest and run options
 	Res         RunRes // job run resources: CPU cores and memory
-	CfgRes             // run resources details: memory per process and pre thread
 	IsOverLimit bool   // if true then job run resource(s) exceed limit(s)
-	QueuePos    int    // one-based position in global queue
+	QueuePos    int    // one-based position of MPI job in global queue or any (MPI or non-MPI) job in localhost queue
 	LogFileName string // log file name
 	LogPath     string // log file path: log/dir/modelName.RunStamp.console.log
 }
 
 // RunRes is model run computational resources
 type RunRes struct {
+	ComputeRes       // total resources: cpu count and memory size
+	ProcessCount int // computaional proccess count
+	ThreadCount  int // computaional thread count
+	ProcessMemMb int // if not zero then memory required per proccess in megabytes
+	ThreadMemMb  int // if not zero then memory required for each thread in megabytes
+}
+
+// Computational resources
+type ComputeRes struct {
 	Cpu int // cpu cores count
 	Mem int // if not zero then memory size in gigabytes
 }
 
-// model run resources details: memory
-type CfgRes struct {
-	MemProcessMb int // if not zero then memory required per proccess
-	MemThreadMb  int // if not zero then memory required for each thread
-}
-
 // computational resources required to run the model
-type modelPathRes struct {
-	path string // model bin directory and model name joined by / slash
-	CfgRes
+type modelCfgRes struct {
+	Path         string // model bin directory and model name joined by / slash, ex: 1-Rp/RiskPaths
+	ProcessMemMb int    // if not zero then memory required per proccess in megabytes
+	ThreadMemMb  int    // if not zero then memory required for each thread in megabytes
 }
 
 // run job control file info
@@ -129,11 +133,12 @@ type runJobFile struct {
 	RunJob          // job control file content
 }
 
-// run job control file info
+// queue job control file info
 type queueJobFile struct {
 	runJobFile
-	preRes   RunRes // run resources required for queue jobs before this job
-	position int    // part of file name: queue position
+	position int  // part of file name: queue position
+	isPaused bool // if true then queue is paused
+	isFirst  bool // if true then it is the first job in the queue
 }
 
 // job control file info for history job: parts of file name
@@ -183,56 +188,63 @@ type RunStateLogPage struct {
 	Lines     []string // page of log lines
 }
 
-// service state and job control state
+// JobServiceState is a service state and job control state, it should NOT have any reference types members
 type JobServiceState struct {
-	IsQueuePaused     bool    // this oms instance: if true then jobs queue is paused, jobs are not selected from queue
-	IsAllQueuePaused  bool    // all oms instances: if true then jobs queue is paused, jobs are not selected from queue
-	JobUpdateDateTime string  // last date-time jobs list updated
-	MpiRes            RunRes  // MPI total available resources available (CPU cores and memory) as sum of all servers or localhost resources
-	ActiveTotalRes    RunRes  // MPI active run resources (CPU cores and memory) used by all oms instances
-	ActiveOwnRes      RunRes  // MPI active run resources (CPU cores and memory) used by this oms instance
-	QueueTotalRes     RunRes  // MPI queue run resources (CPU cores and memory) requested by all oms instances
-	QueueOwnRes       RunRes  // MPI queue run resources (CPU cores and memory) requested by this oms instance
-	topQueueRes       RunRes  // resources required for MPI queue first job
-	MpiErrorRes       RunRes  // MPI computational resources on "error" servers
-	MpiMaxThreads     int     // max number of modelling threads per MPI process, zero means unlimited
-	LocalRes          RunRes  // localhost non-MPI jobs total resources limits
-	LocalActiveRes    RunRes  // localhost non-MPI jobs resources used by this instance to run models
-	LocalQueueRes     RunRes  // localhost non-MPI jobs queue resources for this oms instance
-	isLeader          bool    // if true then this oms instance is a leader
-	maxStartTime      int64   // max time in milliseconds to start compute server or cluster
-	maxStopTime       int64   // max time in milliseconds to stop compute server or cluster
-	maxIdleTime       int64   // max idle in milliseconds time before stopping server or cluster
-	lastStartStopTs   int64   // last time when start or stop of computational servers done
-	maxComputeErrors  int     // errors threshold for compute server or cluster
-	jobLastPosition   int     // last job position in the queue
-	jobFirstPosition  int     // minimal job position in the queue
-	hostFile          hostIni // MPI jobs hostfile settings
+	IsQueuePaused     bool       // this oms instance: if true then jobs queue is paused, jobs are not selected from queue
+	IsAllQueuePaused  bool       // all oms instances: if true then jobs queue is paused, jobs are not selected from queue
+	JobUpdateDateTime string     // last date-time jobs list updated
+	MpiRes            ComputeRes // MPI total available resources available (CPU cores and memory) as sum of all servers or localhost resources
+	ActiveTotalRes    ComputeRes // MPI active run resources (CPU cores and memory) used by all oms instances
+	ActiveOwnRes      ComputeRes // MPI active run resources (CPU cores and memory) used by this oms instance
+	QueueTotalRes     ComputeRes // MPI queue run resources (CPU cores and memory) requested by all oms instances
+	QueueOwnRes       ComputeRes // MPI queue run resources (CPU cores and memory) requested by this oms instance
+	MpiErrorRes       ComputeRes // MPI computational resources on "error" servers
+	MpiMaxThreads     int        // max number of modelling threads per MPI process, zero means unlimited
+	LocalRes          ComputeRes // localhost non-MPI jobs total resources limits
+	LocalActiveRes    ComputeRes // localhost non-MPI jobs resources used by this instance to run models
+	LocalQueueRes     ComputeRes // localhost non-MPI jobs queue resources for this oms instance
+	isLeader          bool       // if true then this oms instance is a leader
+	maxStartTime      int64      // max time in milliseconds to start compute server or cluster
+	maxStopTime       int64      // max time in milliseconds to stop compute server or cluster
+	maxIdleTime       int64      // max idle in milliseconds time before stopping server or cluster
+	lastStartStopTs   int64      // last time when start or stop of computational servers done
+	maxComputeErrors  int        // errors threshold for compute server or cluster
+	jobLastPosition   int        // last job position in the queue
+	jobFirstPosition  int        // minimal job position in the queue
+	hostFile          hostIni    // MPI jobs hostfile settings
 }
 
 // computational server or cluster state
 type computeItem struct {
-	name       string   // name of server or cluster
-	state      string   // state: start, stop, ready, error, empty "" means power off
-	totalRes   RunRes   // total computational resources (CPU cores and memory)
-	usedRes    RunRes   // resources (CPU cores and memory) used by all oms instances
-	ownRes     RunRes   // resources (CPU cores and memory) used by this instance
-	errorCount int      // number of incomplete starts, stops and errors
-	lastUsedTs int64    // last activity time (unix milliseconds): server start, stop or used
-	startExe   string   // name of executable to start server, e.g.: /bin/sh
-	startArgs  []string // arguments to start server, e.g.: -c start.sh my-server-name
-	stopExe    string   // name of executable to stop server,, e.g.: /bin/sh
-	stopArgs   []string // arguments to stop server, e.g.: -c stop.sh my-server-name
+	name       string     // name of server or cluster
+	state      string     // state: start, stop, ready, error, empty "" means power off
+	totalRes   ComputeRes // total computational resources (CPU cores and memory)
+	usedRes    ComputeRes // resources (CPU cores and memory) used by all oms instances
+	ownRes     ComputeRes // resources (CPU cores and memory) used by this instance
+	errorCount int        // number of incomplete starts, stops and errors
+	lastUsedTs int64      // last activity time (unix milliseconds): server start, stop or used
+	startExe   string     // name of executable to start server, e.g.: /bin/sh
+	startArgs  []string   // arguments to start server, e.g.: -c start.sh my-server-name
+	stopExe    string     // name of executable to stop server,, e.g.: /bin/sh
+	stopArgs   []string   // arguments to stop server, e.g.: -c stop.sh my-server-name
 }
 
 // computational server or cluster usage
 type computeUse struct {
-	name     string // name of server or cluster
-	RunRes          // used computational resources (CPU cores and memory)
-	filePath string // if not empty then compute use file path
+	name       string // name of server or cluster
+	ComputeRes        // used computational resources (CPU cores and memory)
+	filePath   string // if not empty then compute use file path
 }
 
-// MPI jobs process, threads and hostfile config from job.ini file
+// job resources allocation by computational servers or clusters
+type jobHostUse struct {
+	oms     string       // oms instance name
+	stamp   string       // submission timestamp
+	res     RunRes       // actual run resources
+	hostUse []computeUse // MPI job host usage
+}
+
+// Hostfile config from job.ini file: template to create hostfile for MPI model run
 type hostIni struct {
 	isUse    bool   // if true then create and use hostfile to run MPI jobs
 	dir      string // HostFileDir = models/log
@@ -303,12 +315,13 @@ func (rsc *RunCatalog) refreshCatalog(etcDir string, jsc *jobControlState) error
 	rsc.queueJobs = map[string]queueJobFile{}
 	rsc.historyJobs = make(map[string]historyJobFile, 1024) // assume long history of model runs
 	rsc.computeState = map[string]computeItem{}
-	rsc.modelCfgRes = map[string]CfgRes{}
+	rsc.cfgRes = map[string]modelCfgRes{}
 	rsc.jobLastPosition = jobPositionDefault + 1
 	rsc.jobFirstPosition = jobPositionDefault - 1
 	if rsc.maxComputeErrors <= 1 {
 		rsc.maxComputeErrors = maxComputeErrorsDefault
 	}
+	rsc.first = jobHostUse{hostUse: []computeUse{}}
 
 	if rsc.selectedKeys == nil {
 		rsc.selectedKeys = []string{}
@@ -426,12 +439,12 @@ func (rsc *RunCatalog) allModels() map[string]modelRunBasic {
 }
 
 // return computational resources requirements for model run.
-func (rsc *RunCatalog) getCfgRes(digest string) CfgRes {
+func (rsc *RunCatalog) getCfgRes(digest string) modelCfgRes {
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
-	if mr, ok := rsc.modelCfgRes[digest]; ok {
+	if mr, ok := rsc.cfgRes[digest]; ok {
 		return mr
 	}
-	return CfgRes{}
+	return modelCfgRes{}
 }

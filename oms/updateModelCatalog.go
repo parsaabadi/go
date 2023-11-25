@@ -243,8 +243,8 @@ func (mc *ModelCatalog) getNewTimeStamp() (string, time.Time) {
 	return ts, tNow
 }
 
-// setModelTextMeta update model text metadata in catalog:
-// set boolean flag to indicate if text metadata fully loaded from database and ModelTxtMeta itself.
+// Update model text metadata in catalog:
+// Set boolean flag to indicate if text metadata fully loaded from database and ModelTxtMeta itself.
 // Return false if model digest not found in catalog.
 func (mc *ModelCatalog) setModelTextMeta(digest string, isFull bool, txtMeta *db.ModelTxtMeta) bool {
 

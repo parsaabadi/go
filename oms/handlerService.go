@@ -68,13 +68,13 @@ func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
 
 	// service state: model run jobs queue, active jobs, history jobs and compute servers state
 	type cItem struct {
-		Name       string // name of server or cluster
-		State      string // state: start, stop, ready, error, off
-		TotalRes   RunRes // total computational resources (CPU cores and memory)
-		UsedRes    RunRes // resources (CPU cores and memory) used by all oms instances
-		OwnRes     RunRes // resources (CPU cores and memory) used by this instance
-		ErrorCount int    // number of incomplete starts, stops and errors
-		LastUsedTs int64  // last time for model run (unix milliseconds)
+		Name       string     // name of server or cluster
+		State      string     // state: start, stop, ready, error, off
+		TotalRes   ComputeRes // total computational resources (CPU cores and memory)
+		UsedRes    ComputeRes // resources (CPU cores and memory) used by all oms instances
+		OwnRes     ComputeRes // resources (CPU cores and memory) used by this instance
+		ErrorCount int        // number of incomplete starts, stops and errors
+		LastUsedTs int64      // last time for model run (unix milliseconds)
 	}
 	st := struct {
 		IsJobControl    bool             // if true then job control enabled

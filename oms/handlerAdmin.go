@@ -61,7 +61,7 @@ func allModelsCloseHandler(w http.ResponseWriter, r *http.Request) {
 // jobsPauseHandler pause or resume jobs queue processing by this oms instance
 // POST /api/admin/jobs-pause/:pause
 func jobsPauseHandler(w http.ResponseWriter, r *http.Request) {
-	doJobsPause(jobQueuePausedPath(), "/api/admin/jobs-pause/", w, r)
+	doJobsPause(jobQueuePausedPath(theCfg.omsName), "/api/admin/jobs-pause/", w, r)
 }
 
 // jobsAllPauseHandler pause or resume jobs queue processing by all oms instances

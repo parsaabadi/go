@@ -154,9 +154,9 @@ func scanRunJobs(doneC <-chan bool) {
 
 	for {
 		// get job from the queue and run
-		if job, isFound, qPath, compUse, hf, e := theRunCatalog.selectJobFromQueue(); isFound && e == nil {
+		if job, isFound, qPath, hf, compHostUse, e := theRunCatalog.selectJobFromQueue(); isFound && e == nil {
 
-			_, e = theRunCatalog.runModel(job, qPath, hf, compUse)
+			_, e = theRunCatalog.runModel(job, qPath, hf, compHostUse)
 			if e != nil {
 				omppLog.Log(e)
 			}
@@ -174,11 +174,11 @@ func scanRunJobs(doneC <-chan bool) {
 		if lastStartStopTs+computeStartStopInterval < time.Now().UnixMilli() {
 
 			// start computational servers or clusters
-			startNames, maxStatTime, startExes, startArgs := theRunCatalog.selectToStartCompute()
+			startNames, maxStartTime, startExes, startArgs := theRunCatalog.selectToStartCompute()
 
 			for k := range startNames {
 				if startExes[k] != "" {
-					go doStartStopCompute(startNames[k], "start", startExes[k], startArgs[k], maxStatTime)
+					go doStartStopCompute(startNames[k], "start", startExes[k], startArgs[k], maxStartTime)
 				} else {
 					doStartOnceCompute(startNames[k]) // special case: server always ready
 				}

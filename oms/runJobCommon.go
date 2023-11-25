@@ -4,6 +4,7 @@
 package main
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -43,7 +44,7 @@ func jobDirValid(jobDir string) error {
 	return nil
 }
 
-// return job control file path if model is running now.
+// Return job control file path if model is running now.
 // For example: 2022_07_08_23_03_27_555-#-_4040-#-RiskPaths-#-d90e1e9a-#-mpi-#-cpu-#-8-#-mem-#-4-#-8888.json
 func jobActivePath(submitStamp, modelName, modelDigest string, isMpi bool, pid int, cpu int, mem int) string {
 
@@ -57,9 +58,9 @@ func jobActivePath(submitStamp, modelName, modelDigest string, isMpi bool, pid i
 		submitStamp+"-#-"+theCfg.omsName+"-#-"+modelName+"-#-"+modelDigest+"-#-"+ml+"-#-cpu-#-"+strconv.Itoa(cpu)+"-#-mem-#-"+strconv.Itoa(mem)+"-#-"+strconv.Itoa(pid)+".json")
 }
 
-// return path job control file path if model run standing is queue
-// For example: 2022_07_05_19_55_38_111-#-_4040-#-RiskPaths-#-d90e1e9a-#-mpi-cpu-#-8-#-mem-#-4.json
-func jobQueuePath(submitStamp, modelName, modelDigest string, isMpi bool, position int, cpu int, mem int) string {
+// Return path job control file path if model run standing is queue.
+// For example: 2022_07_05_19_55_38_111-#-_4040-#-RiskPaths-#-d90e1e9a-#-mpi-#-cpu-#-2-#-8-#-mem-#-32-#-512-#-20220817.json
+func jobQueuePath(submitStamp, modelName, modelDigest string, isMpi bool, position int, procCpu, threadCpu, procMem, threadMem int) string {
 
 	ml := "local"
 	if isMpi {
@@ -68,10 +69,12 @@ func jobQueuePath(submitStamp, modelName, modelDigest string, isMpi bool, positi
 	return filepath.Join(
 		theCfg.jobDir,
 		"queue",
-		submitStamp+"-#-"+theCfg.omsName+"-#-"+modelName+"-#-"+modelDigest+"-#-"+ml+"-#-cpu-#-"+strconv.Itoa(cpu)+"-#-mem-#-"+strconv.Itoa(mem)+"-#-"+strconv.Itoa(position)+".json")
+		submitStamp+"-#-"+theCfg.omsName+"-#-"+modelName+"-#-"+modelDigest+"-#-"+ml+
+			"-#-cpu-#-"+strconv.Itoa(procCpu)+"-#-"+strconv.Itoa(threadCpu)+"-#-mem-#-"+strconv.Itoa(procMem)+"-#-"+strconv.Itoa(threadMem)+
+			"-#-"+strconv.Itoa(position)+".json")
 }
 
-// return job control file path to completed model with run status suffix.
+// Return job control file path to completed model with run status suffix.
 // For example: 2022_07_04_20_06_10_817-#-_4040-#-RiskPaths-#-d90e1e9a-#-2022_07_04_20_06_10_818-#-success.json
 func jobHistoryPath(status, submitStamp, modelName, modelDigest, runStamp string) string {
 	return filepath.Join(
@@ -80,14 +83,14 @@ func jobHistoryPath(status, submitStamp, modelName, modelDigest, runStamp string
 		submitStamp+"-#-"+theCfg.omsName+"-#-"+modelName+"-#-"+modelDigest+"-#-"+runStamp+"-#-"+db.NameOfRunStatus(status)+".json")
 }
 
-// return job state file path e.g.: job/state/_4040.json
+// Return job state file path e.g.: job/state/_4040.json
 func jobStatePath() string {
 	return filepath.Join(theCfg.jobDir, "state", theCfg.omsName+".json")
 }
 
-// return this oms instance job queue paused file path e.g.: job/state/jobs.queue-#-_4040-#-paused
-func jobQueuePausedPath() string {
-	return filepath.Join(theCfg.jobDir, "state", "jobs.queue-#-"+theCfg.omsName+"-#-paused")
+// Return this oms instance job queue paused file path e.g.: job/state/jobs.queue-#-_4040-#-paused
+func jobQueuePausedPath(oms string) string {
+	return filepath.Join(theCfg.jobDir, "state", "jobs.queue-#-"+oms+"-#-paused")
 }
 
 // return all job queue paused file path e.g.: job/state/jobs.queue.all.paused
@@ -95,12 +98,12 @@ func jobAllQueuePausedPath() string {
 	return filepath.Join(theCfg.jobDir, "state", "jobs.queue.all.paused")
 }
 
-// return compute server or cluster ready file path: job/state/comp-ready-#-name
+// Return compute server or cluster ready file path: job/state/comp-ready-#-name
 func compReadyPath(name string) string {
 	return filepath.Join(theCfg.jobDir, "state", "comp-ready-#-"+name)
 }
 
-// return server used by model run path prefix and file path.
+// Return server used by model run path prefix and file path.
 // For example: job/state/comp-used-#-name-#-2022_07_08_23_03_27_555-#-_4040-#-cpu-#-4-#-mem-#-8
 func compUsedPath(name, submitStamp string, cpu, mem int) string {
 	return filepath.Join(
@@ -110,8 +113,8 @@ func compUsedPath(name, submitStamp string, cpu, mem int) string {
 }
 
 // parse job file path or job file name:
-// remove .json extension and directory prefix
-// return submission stamp, oms instance name, model name, model digest and the rest of the file name
+// remove .json extension and directory prefix.
+// Return submission stamp, oms instance name, model name, model digest and the rest of the file name
 func parseJobPath(srcPath string) (string, string, string, string, string) {
 
 	// remove job directory and extension, file extension must be .json
@@ -133,10 +136,10 @@ func parseJobPath(srcPath string) (string, string, string, string, string) {
 	return sp[0], sp[1], sp[2], sp[3], sp[4]
 }
 
-// parse active job file path or queue file path (or file name)
-// and return submission stamp, oms instance name, model name, digest, MPI or local, cpu count, memory size and active job pid or queue job position.
-// For example: 2022_07_05_19_55_38_111-#-_4040-#-RiskPaths-#-d90e1e9a-#-mpi-#-cpu-#-8-#-mem-#-4-#-8888.json
-func parseJobActPath(srcPath string) (string, string, string, string, bool, int, int, int) {
+// Parse active file path or active file name.
+// Return submission stamp, oms instance name, model name, digest, MPI or local, cpu count, memory size and process id.
+// For example: 2022_07_08_23_03_27_555-#-_4040-#-RiskPaths-#-d90e1e9a-#-mpi-#-cpu-#-8-#-mem-#-4-#-8888.json
+func parseActivePath(srcPath string) (string, string, string, string, bool, int, int, int) {
 
 	// parse common job file part
 	subStamp, oms, mn, dgst, p := parseJobPath(srcPath)
@@ -145,7 +148,7 @@ func parseJobActPath(srcPath string) (string, string, string, string, bool, int,
 		return subStamp, oms, "", "", false, 0, 0, 0 // source file path is not active or queue job file
 	}
 
-	// parse cpu count and memory size, 5 parts expected
+	// parse cpu count and memory size, 6 parts expected
 	sp := strings.Split(p, "-#-")
 	if len(sp) != 6 ||
 		(sp[0] != "mpi" && sp[0] != "local") ||
@@ -156,7 +159,7 @@ func parseJobActPath(srcPath string) (string, string, string, string, bool, int,
 	}
 	isMpi := sp[0] == "mpi"
 
-	// parse and convert cpu count and memory size
+	// parse and convert cpu count, memory size and process pid
 	cpu, err := strconv.Atoi(sp[2])
 	if err != nil || cpu <= 0 {
 		return subStamp, oms, "", "", false, 0, 0, 0 // cpu count must be positive integer
@@ -165,30 +168,66 @@ func parseJobActPath(srcPath string) (string, string, string, string, bool, int,
 	if err != nil || mem < 0 {
 		return subStamp, oms, "", "", false, 0, 0, 0 // memory size must be non-negative integer
 	}
-	pos, err := strconv.Atoi(sp[5])
-	if err != nil || pos < 0 {
-		return subStamp, oms, "", "", false, 0, 0, 0 // position must be non-negative integer
+	pid, err := strconv.Atoi(sp[5])
+	if err != nil || pid <= 0 {
+		return subStamp, oms, "", "", false, 0, 0, 0 // process pid must be positive integer
 	}
 
-	return subStamp, oms, mn, dgst, isMpi, cpu, mem, pos
+	return subStamp, oms, mn, dgst, isMpi, cpu, mem, pid
 }
 
-// parse active file path or active file name
-// and return submission stamp, oms instance name, model name, digest, MPI or local, cpu count, memory size and process id.
-// For example: 2022_07_08_23_03_27_555-#-_4040-#-RiskPaths-#-d90e1e9a-#-mpi-#-cpu-#-8-#-mem-#-4-#-8888.json
-func parseActivePath(srcPath string) (string, string, string, string, bool, int, int, int) {
-	return parseJobActPath(srcPath)
+// Parse queue file path or queue file name.
+// Return submission stamp, oms instance name, model name, digest, MPI or local,
+// process count, thread count, process memory size im MBytes, thread memory size im MBytes,
+// and job position in queue.
+// For example: 2022_07_05_19_55_38_111-#-_4040-#-RiskPaths-#-d90e1e9a-#-mpi-#-cpu-#-2-#-8-#-mem-#-32-#-512-#-20220817.json
+func parseQueuePath(srcPath string) (string, string, string, string, bool, int, int, int, int, int) {
+
+	// parse common job file part
+	subStamp, oms, mn, dgst, p := parseJobPath(srcPath)
+
+	if subStamp == "" || oms == "" || mn == "" || dgst == "" || p == "" {
+		return subStamp, oms, "", "", false, 0, 0, 0, 0, 0 // source file path is not active or queue job file
+	}
+
+	// parse MPI or local flag, cpu count and memory size and queue position, 8 parts expected
+	sp := strings.Split(p, "-#-")
+	if len(sp) != 8 ||
+		(sp[0] != "mpi" && sp[0] != "local") ||
+		sp[1] != "cpu" || sp[2] == "" || sp[3] == "" ||
+		sp[4] != "mem" || sp[5] == "" || sp[6] == "" ||
+		sp[7] == "" {
+		return subStamp, oms, "", "", false, 0, 0, 0, 0, 0 // source file path is not active or queue job file
+	}
+	isMpi := sp[0] == "mpi"
+
+	// parse and convert process count, thread count, process memory size and thread memory size
+	nProc, err := strconv.Atoi(sp[2])
+	if err != nil || nProc <= 0 {
+		return subStamp, oms, "", "", false, 0, 0, 0, 0, 0 // process count must be positive integer
+	}
+	nTh, err := strconv.Atoi(sp[3])
+	if err != nil || nTh <= 0 {
+		return subStamp, oms, "", "", false, 0, 0, 0, 0, 0 // thread count must be positive integer
+	}
+	procMem, err := strconv.Atoi(sp[5])
+	if err != nil || procMem < 0 {
+		return subStamp, oms, "", "", false, 0, 0, 0, 0, 0 // process memory size must be non-negative integer
+	}
+	thMem, err := strconv.Atoi(sp[6])
+	if err != nil || thMem < 0 {
+		return subStamp, oms, "", "", false, 0, 0, 0, 0, 0 // memory size must be non-negative integer
+	}
+	pos, err := strconv.Atoi(sp[7])
+	if err != nil || pos < 0 {
+		return subStamp, oms, "", "", false, 0, 0, 0, 0, 0 // position must be non-negative integer
+	}
+
+	return subStamp, oms, mn, dgst, isMpi, nProc, nTh, procMem, thMem, pos
 }
 
-// parse queue file path or queue file name
-// and return submission stamp, oms instance name, model name, digest, MPI or local, cpu count, memory size and job position in queue.
-// For example: 2022_07_05_19_55_38_111-#-_4040-#-RiskPaths-#-d90e1e9a-#-mpi-#-cpu-#-8-#-mem-#-4-#-20220817.json
-func parseQueuePath(srcPath string) (string, string, string, string, bool, int, int, int) {
-	return parseJobActPath(srcPath)
-}
-
-// parse history file path or history file name and
-// return submission stamp, oms instance name, model name, digest, run stamp and run status.
+// Parse history file path or history file name
+// Return submission stamp, oms instance name, model name, digest, run stamp and run status.
 // For example: 2022_07_04_20_06_10_817-#-_4040-#-RiskPaths-#-d90e1e9a-#-2022_07_04_20_06_10_818-#-success.json
 func parseHistoryPath(srcPath string) (string, string, string, string, string, string) {
 
@@ -208,11 +247,11 @@ func parseHistoryPath(srcPath string) (string, string, string, string, string, s
 	return subStamp, oms, mn, dgst, sp[0], sp[1]
 }
 
-// parse oms heart beat tick file path: job/state/oms-#-_4040-#-2022_07_08_23_45_12_123-#-1257894000000
-// return oms instance name time stamp and clock ticks.
+// Parse oms heart beat tick file path: job/state/oms-#-_4040-#-2022_07_08_23_45_12_123-#-1257894000000
+// Return oms instance name time stamp and clock ticks.
 func parseOmsTickPath(srcPath string) (string, string, int64) {
 
-	p := filepath.Base(srcPath) // remove job directory
+	p := filepath.Base(srcPath) // remove job state directory
 
 	// split file name and check result: it must be 4 non-empty parts with time stamp
 	sp := strings.Split(p, "-#-")
@@ -227,6 +266,21 @@ func parseOmsTickPath(srcPath string) (string, string, int64) {
 	}
 
 	return sp[1], sp[2], tickMs
+}
+
+// Parse oms instance job queue paused file path e.g.: job/state/jobs.queue-#-_4040-#-paused
+// Return oms instance name.
+func parseQueuePausedPath(srcPath string) string {
+
+	p := filepath.Base(srcPath) // remove job state directory
+
+	// split file name and check result: it must be 3 non-empty parts
+	sp := strings.Split(p, "-#-")
+	if len(sp) != 3 || sp[0] != "jobs.queue" || sp[1] == "" || sp[2] != "paused" {
+		return "" // source file path is not job queue paused file
+	}
+
+	return sp[1]
 }
 
 // parse compute server or cluster ready file path and return server name, e.g.: job/state/comp-ready-#-name
@@ -265,8 +319,8 @@ func parseCompStatePath(srcPath, state string) (string, string, int64) {
 	return sp[1], sp[2], tickMs
 }
 
-// parse compute server used by model run file path
-// and return server name, submission stamp, oms instance name, cpu count and memory size.
+// Parse compute server used by model run file path
+// Return server name, submission stamp, oms instance name, cpu count and memory size.
 // For example: job/state/comp-used-#-name-#-2022_07_08_23_03_27_555-#-_4040-#-cpu-#-4-#-mem-#-8
 func parseCompUsedPath(srcPath string) (string, string, string, int, int) {
 
@@ -425,8 +479,8 @@ func getJobRunTitle(filePath string) string {
 	return wsName
 }
 
-// remove all existing oms heart beat tick files and create new oms heart beat tick file with current timestamp.
-// return oms heart beat file path and true is file created successfully.
+// Remove all existing oms heart beat tick files and create new oms heart beat tick file with current timestamp.
+// Return oms heart beat file path and true is file created successfully.
 // For example: job/state/oms-#-_4040-#-2022_07_08_23_45_12_123-#-1257894000000
 func makeOmsTick() (string, bool) {
 
@@ -447,7 +501,7 @@ func makeOmsTick() (string, bool) {
 	return fnow, isOk
 }
 
-// create new compute server file with current timestamp.
+// Create new compute server file with current timestamp.
 // For example: job/state/comp-start-#-name-#-2022_07_08_23_45_12_123-#-1257894000000
 func createCompStateFile(name, state string) string {
 
@@ -463,7 +517,7 @@ func createCompStateFile(name, state string) string {
 	return fp
 }
 
-// remove all existing compute server state files, log delete errors, return true on success or false or errors.
+// Remove all existing compute server state files, log delete errors, return true on success or false or errors.
 // Create error state file if any delete failed.
 // For example: job/state/comp-error-#-name-#-2022_07_08_23_45_12_123-#-1257894000000
 func deleteCompStateFiles(name, state string) bool {
@@ -485,12 +539,12 @@ func deleteCompStateFiles(name, state string) bool {
 	return isNoError
 }
 
-// return true if jobs queue processing is paused for this oms instance
+// Return true if jobs queue processing is paused for this oms instance
 func isPausedJobQueue() bool {
-	return fileExist(jobQueuePausedPath()) || fileExist(jobAllQueuePausedPath())
+	return fileExist(jobQueuePausedPath(theCfg.omsName)) || fileExist(jobAllQueuePausedPath())
 }
 
-// return true if jobs queue processing is paused for all oms instances
+// Return true if jobs queue processing is paused for all oms instances
 func isPausedJobAllQueue() bool {
 	return fileExist(jobAllQueuePausedPath())
 }
@@ -520,30 +574,23 @@ func jobStateWrite(jsc jobControlState) bool {
 	return true
 }
 
-// create MPI job hostfile, e.g.: models/log/host-2022_07_08_23_03_27_555-_4040.ini
-// retun path to host file, number of modelling threads per process and error
-func createHostFile(job *RunJob, maxThreads int, hfCfg hostIni, compUse []computeUse) (string, int, error) {
+// return model run memory size in GB from number of processes, thread count, process memory in MBytes and therad memory in MBytes
+func memoryRunSize(procCount, threadCount, procMem, threadMem int) int {
+	if procCount <= 0 {
+		procCount = 1
+	}
+	if threadCount <= 0 {
+		threadCount = 1
+	}
+	return int(math.Ceil(float64(procCount*(procMem+threadMem*threadCount)) / 1024.0))
+}
+
+// Create MPI job hostfile, e.g.: models/log/host-2022_07_08_23_03_27_555-_4040.ini
+// Return path to host file and or error if file create failed.
+func createHostFile(job *RunJob, hfCfg hostIni, compUse []computeUse) (string, error) {
 
 	if !job.IsMpi || !hfCfg.isUse || len(compUse) <= 0 { // hostfile is not required
-		return "", job.Threads, nil
-	}
-
-	// number of modelling threads:
-	// it must be <= max threads from run request, e.g. if user request max threads == 1 then model is single threaded
-	// number of threads can be limited by job.ini to avoid excessive threads in single model process
-	// number of threads is greatest common divisor to between all avaliable CPU cores on each server
-	nTh := job.Threads
-	if nTh <= 0 {
-		nTh = 1
-	}
-	if !job.Mpi.IsNotByJob {
-
-		if maxThreads > 0 && nTh > maxThreads { // number of threads is limited in job.ini
-			nTh = maxThreads
-		}
-		for k := range compUse {
-			nTh = helper.Gcd2(nTh, compUse[k].Cpu)
-		}
+		return "", nil
 	}
 
 	/*
@@ -581,6 +628,10 @@ func createHostFile(job *RunJob, maxThreads int, hfCfg hostIni, compUse []comput
 	}
 
 	// for each server substitute host name and cores count
+	if job.Res.ThreadCount <= 0 {
+		job.Res.ThreadCount = 1
+	}
+
 	if hfCfg.hostLine != "" {
 		for _, cu := range compUse {
 
@@ -591,7 +642,7 @@ func createHostFile(job *RunJob, maxThreads int, hfCfg hostIni, compUse []comput
 			}
 			if hfCfg.cpuCores != "" {
 				if !job.Mpi.IsNotByJob {
-					ln = strings.ReplaceAll(ln, hfCfg.cpuCores, strconv.Itoa(cu.Cpu/nTh))
+					ln = strings.ReplaceAll(ln, hfCfg.cpuCores, strconv.Itoa(cu.Cpu/job.Res.ThreadCount))
 				} else {
 					ln = strings.ReplaceAll(ln, hfCfg.cpuCores, strconv.Itoa(cu.Cpu))
 				}
@@ -612,7 +663,7 @@ func createHostFile(job *RunJob, maxThreads int, hfCfg hostIni, compUse []comput
 		}
 		if err != nil {
 			omppLog.Log("Error at write into ", fn, ": ", err)
-			return "", job.Threads, err
+			return "", err
 		}
 
 		omppLog.Log("Run job: ", job.SubmitStamp, " ", job.ModelName, " hostfile: ", hfPath)
@@ -621,5 +672,5 @@ func createHostFile(job *RunJob, maxThreads int, hfCfg hostIni, compUse []comput
 		}
 	}
 
-	return hfPath, nTh, nil
+	return hfPath, nil
 }

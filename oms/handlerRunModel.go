@@ -4,7 +4,6 @@
 package main
 
 import (
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -78,11 +77,12 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 
 	// get number of modelling cpu
 	// for backward compatibility: check if number of threads specified using run options
-	job.Res, job.CfgRes, job.Mpi.IsNotOnRoot, _, job.Threads, ok = resFromRequest(req)
+	job.Res, job.Mpi.IsNotOnRoot, ok = resFromRequest(req)
 	if !ok {
 		http.Error(w, "Model start failed: "+dn, http.StatusBadRequest)
 		return
 	}
+	job.Threads = job.Res.ThreadCount
 
 	// if job control disabled then start model run
 	if !theCfg.isJobControl {
@@ -117,8 +117,8 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 		})
 }
 
-// return cpu modelling count, MPI not-on-root flag, number of processes, number of modelling threads per process and error flag
-func resFromRequest(req RunRequest) (RunRes, CfgRes, bool, int, int, bool) {
+// return cpu modelling count, MPI not-on-root flag and error flag
+func resFromRequest(req RunRequest) (RunRes, bool, bool) {
 
 	// get number of threads and MPI NotOnRoot flag
 	nTh := req.Threads
@@ -135,7 +135,7 @@ func resFromRequest(req RunRequest) (RunRes, CfgRes, bool, int, int, bool) {
 			nTh, err = strconv.Atoi(val) // must be >= 1
 			if err != nil || nTh < 1 {
 				omppLog.Log(err)
-				return RunRes{}, CfgRes{}, false, 0, 0, false
+				return RunRes{}, false, false
 			}
 		}
 
@@ -151,7 +151,7 @@ func resFromRequest(req RunRequest) (RunRes, CfgRes, bool, int, int, bool) {
 				isNotOnRoot, err = strconv.ParseBool(val)
 				if err != nil {
 					omppLog.Log(err)
-					return RunRes{}, CfgRes{}, false, 0, 0, false
+					return RunRes{}, false, false
 				}
 			}
 		}
@@ -170,14 +170,20 @@ func resFromRequest(req RunRequest) (RunRes, CfgRes, bool, int, int, bool) {
 		nTh = 1
 	}
 	cfgRes := theRunCatalog.getCfgRes(req.ModelDigest)
-	nMem := int(math.Ceil(float64(np*(cfgRes.MemProcessMb+cfgRes.MemThreadMb*nTh)) / 1024.0))
+	nMem := memoryRunSize(np, nTh, cfgRes.ProcessMemMb, cfgRes.ThreadMemMb)
 
 	res := RunRes{
-		Cpu: np * nTh,
-		Mem: nMem,
+		ComputeRes: ComputeRes{
+			Cpu: np * nTh,
+			Mem: nMem,
+		},
+		ProcessCount: np,
+		ThreadCount:  nTh,
+		ProcessMemMb: cfgRes.ProcessMemMb,
+		ThreadMemMb:  cfgRes.ThreadMemMb,
 	}
 
-	return res, cfgRes, isNotOnRoot, np, nTh, true
+	return res, isNotOnRoot, true
 }
 
 // stopModelHandler kill model run by model digest-or-name and run stamp or remove model run request from queue by submit stamp.

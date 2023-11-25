@@ -1,6 +1,6 @@
 module github.com/openmpp/go
 
-go 1.19
+go 1.21
 
 require (
 	github.com/alexbrainman/odbc v0.0.0-20211220213544-9c9a2e61c5e2

@@ -5,7 +5,6 @@ package main
 
 import (
 	"errors"
-	"math"
 	"path"
 	"path/filepath"
 	"sort"
@@ -16,53 +15,36 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
-// get model run job from the queue
-// return job to run, bool job found flag, queue job file path, list of server names to run the job, list of resources to use on each server
-func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, string, []computeUse, hostIni, error) {
+// Get model run job from the queue.
+// Return job to run, bool job found flag, queue job file path, list of server names to run the job, list of resources to use on each server
+func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, string, hostIni, []computeUse, error) {
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
 	if rsc.IsQueuePaused || len(rsc.queueKeys) <= 0 {
-		return nil, false, "", []computeUse{}, hostIni{}, nil // queue is paused or empty
+		return nil, false, "", hostIni{}, []computeUse{}, nil // queue is paused or empty
 	}
 
 	// resource available to run MPI jobs from global MPI queue or from localhost queue of this oms instance jobs
-	qLocal := RunRes{
+	qLocal := ComputeRes{
 		Cpu: rsc.LocalRes.Cpu - rsc.LocalActiveRes.Cpu,
 		Mem: rsc.LocalRes.Mem - rsc.LocalActiveRes.Mem,
 	}
+	compUse := []computeUse{}
 
-	qMpi := RunRes{}
-	isMpiLimit := false
-
-	if len(rsc.computeState) <= 0 {
-
-		qMpi = qLocal               // no computational servers, use localhost to run MPI jobs
-		isMpiLimit = qLocal.Cpu > 0 // MPI cores limited if locahost CPU is limited
-	} else {
-		isMpiLimit = true // MPI cores are limited by sum of ready to use servers CPU cores
-
-		for _, cs := range rsc.computeState {
-			if cs.state == "ready" {
-				qMpi.Cpu += cs.totalRes.Cpu
-				qMpi.Mem += cs.totalRes.Mem
-			}
-		}
-		qMpi.Cpu = qMpi.Cpu - rsc.ActiveTotalRes.Cpu
-		qMpi.Mem = qMpi.Mem - rsc.ActiveTotalRes.Mem
-	}
-
-	// first job in localhost non-MPI queue or global MPI queue where zero resources required for previous jobs
+	// find first job in localhost non-MPI queue or global MPI queue
 	// check if there are enough available resources to run the job
 	stamp := ""
+
 	for _, qKey := range rsc.queueKeys {
 
 		jc, ok := rsc.queueJobs[qKey]
 
-		if !ok || jc.isError || jc.IsOverLimit || jc.preRes.Cpu > 0 || jc.preRes.Mem > 0 {
-			continue // skip invalid job or if required resources exceeding limits or if it is not a first job in global queue
+		if !ok || jc.isError || jc.IsOverLimit || jc.isPaused || !jc.isFirst {
+			continue // skip invalid job, paused job, job resources exceeding limits or it is npot the first job in queue
 		}
+
 		isSel := false
 		for j := 0; !isSel && j < len(rsc.selectedKeys); j++ {
 			isSel = rsc.selectedKeys[j] == qKey
@@ -74,118 +56,63 @@ func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, string, []computeUse
 		// check avaliable resource: cpu cores and memory
 		if !jc.IsMpi {
 
-			if rsc.LocalRes.Cpu > 0 && jc.Res.Cpu > 0 && qLocal.Cpu < jc.Res.Cpu+jc.preRes.Cpu {
+			if rsc.LocalRes.Cpu > 0 && jc.Res.Cpu > 0 && qLocal.Cpu < jc.Res.Cpu {
 				continue // localhost cpu cores limited and job cpu limit set to non zero and localhost available cpu less than required cpu
 			}
-			if rsc.LocalRes.Mem > 0 && jc.Res.Mem > 0 && qLocal.Mem < jc.Res.Mem+jc.preRes.Mem {
+			if rsc.LocalRes.Mem > 0 && jc.Res.Mem > 0 && qLocal.Mem < jc.Res.Mem {
 				continue // localhost memory limited and job memory limit set to non zero and localhost available memory less than required memory
 			}
-		} else { // check resources available for MPI jobs
 
-			if isMpiLimit && jc.Res.Cpu > 0 && qMpi.Cpu < jc.Res.Cpu+jc.preRes.Cpu {
-				continue // job cpu limit set to non zero and MPI cluster available cpu less than required cpu
+			stamp = qKey // localhost first job and enough resources available to run
+			break
+		}
+		// else: it is MPI first job
+
+		if len(rsc.computeState) <= 0 { // no computational servers, use localhost to run MPI jobs
+
+			isMpiLimit := rsc.LocalRes.Cpu > 0 // MPI cores limited if localhost CPU is limited
+
+			if isMpiLimit && jc.Res.Cpu > 0 && qLocal.Cpu < jc.Res.Cpu {
+				continue // job cpu limit set to non zero and localhost cpu less than required cpu
 			}
-			if isMpiLimit && qMpi.Mem > 0 && jc.Res.Mem > 0 && qMpi.Mem < jc.Res.Mem+jc.preRes.Mem {
-				continue // MPI cluster memory limited and job memory limit IS set to non zero and MPI cluster available memory less than required memory
+			if isMpiLimit && rsc.LocalRes.Mem > 0 && jc.Res.Mem > 0 && qLocal.Mem < jc.Res.Mem {
+				continue // job memory limit is set to non zero and localhost available memory less than required memory
 			}
+
+			stamp = qKey // localhost first MPI job and enough resources available to run
+			break
+		}
+		// else: it is MPI first job to run on cluster
+
+		// check if all servers in host ini are ready
+		if len(rsc.first.hostUse) <= 0 || rsc.first.res.ThreadCount <= 0 || jc.Res.ThreadCount <= 0 {
+
+			jc.isError = true
+			rsc.queueJobs[qKey] = jc
+			e := errors.New("ERROR: computational resources not found to run the model: " +
+				strconv.Itoa(jc.Res.Cpu) + ": " + strconv.Itoa(jc.Res.Mem) + ": " + strconv.Itoa(rsc.first.res.ThreadCount) + ": " + qKey)
+			return &jc.RunJob, false, jc.filePath, hostIni{}, []computeUse{}, e
 		}
 
-		stamp = qKey // first job in queue which not yet selected to run and enough resources available to run
+		for _, hcu := range rsc.first.hostUse {
+
+			cs, ok := rsc.computeState[hcu.name]
+			if !ok || cs.state != "ready" {
+				return nil, false, "", hostIni{}, []computeUse{}, nil // server is not ready, return to wait
+			}
+		}
+		compUse = append([]computeUse{}, rsc.first.hostUse...) // all srevers are ready to use
+
+		stamp = qKey // first MPI job in queue
+
+		jc.Res = rsc.first.res // actual resources
+		rsc.queueJobs[qKey] = jc
+		break
 	}
 	if stamp == "" {
-		return nil, false, "", []computeUse{}, hostIni{}, nil // queue is empty or all jobs already selected to run
+		return nil, false, "", hostIni{}, []computeUse{}, nil // queue is empty or all jobs already selected to run
 	}
 	qj := rsc.queueJobs[stamp] // job found
-
-	// if this is MPI job then
-	// select servers where state is ready and max cpu cores available
-	// until all required cores assigned to the servers
-	// if memory is limited then assign cores and memory at the same time
-	compUse := []computeUse{}
-
-	if qj.IsMpi && len(rsc.computeState) > 0 {
-
-		nCpu := qj.Res.Cpu
-		isMem := qj.CfgRes.MemProcessMb > 0 || qj.CfgRes.MemThreadMb > 0 // check job memory requirements
-
-		// max threads per process: limited by job.ini MpiMaxThreads value and by Threads value from model run request
-		maxTh := nCpu
-		if rsc.MpiMaxThreads > 0 && maxTh > rsc.MpiMaxThreads {
-			maxTh = rsc.MpiMaxThreads
-		}
-		if qj.Threads > 0 && maxTh > qj.Threads {
-			maxTh = qj.Threads
-		}
-
-		// if run memory resources limited then
-		//   min memory is a single thread process memory size in GBytes
-		//   max memory is a max threads process memory size in GBytes
-		minMem := int(math.Ceil(float64(qj.CfgRes.MemProcessMb+qj.CfgRes.MemThreadMb) / 1024.0))
-		// TODO:
-		nMem := 0
-		// maxMem := int(math.Ceil(float64(qj.CfgRes.MemProcessMb+maxTh*qj.CfgRes.MemThreadMb) / 1024.0))
-
-		for nCpu > 0 {
-
-			// find serever with max cpu cores available
-			cUse := computeUse{}
-
-			for name, cs := range rsc.computeState {
-
-				if cs.state != "ready" {
-					continue // this server is not ready
-				}
-
-				isUse := false
-				for k := 0; !isUse && k < len(compUse); k++ {
-					isUse = name == compUse[k].name
-				}
-				if isUse {
-					continue // this server already selected for that model run
-				}
-
-				// server with max cores available and enough memory to run at least one thread
-				if cUse.Cpu < cs.totalRes.Cpu-cs.usedRes.Cpu && (minMem <= 0 || minMem <= cs.totalRes.Mem-cs.usedRes.Mem) {
-					cUse.name = name
-					cUse.Cpu = cs.totalRes.Cpu - cs.usedRes.Cpu
-					cUse.Mem = cs.totalRes.Mem - cs.usedRes.Mem
-				}
-			}
-			if cUse.name == "" {
-
-				// if no servers found to run the job or memory requirements not satisfied then return error
-				if len(compUse) <= 0 || (isMem && nMem > 0) {
-					qj.isError = true
-					rsc.queueJobs[stamp] = qj
-					e := errors.New("ERROR: resources not found to run the model, CPU and memory: " + strconv.Itoa(qj.Res.Cpu) + ": " + strconv.Itoa(qj.Res.Mem) + ": " + stamp)
-					return &qj.RunJob, false, qj.filePath, []computeUse{}, hostIni{}, e
-				}
-				// else assign the rest of the job to the last server
-				compUse[len(compUse)-1].Cpu = compUse[len(compUse)-1].Cpu + nCpu
-
-				omppLog.Log("WARNING: oversubscribe resources to run the model, CPU: ", qj.Res.Cpu, ": ", stamp)
-				break // oversubscribe last server
-			}
-
-			// allocate CPUs and memory from that server
-			if cUse.Cpu > nCpu {
-				cUse.Cpu = nCpu
-			}
-			if cUse.Mem > nMem {
-				cUse.Mem = nMem
-			}
-			if cUse.Mem < 0 {
-				cUse.Mem = 0
-			}
-
-			compUse = append(compUse, cUse)
-
-			nCpu = nCpu - cUse.Cpu
-			if nMem > 0 {
-				nMem = nMem - (rsc.computeState[cUse.name].totalRes.Mem - rsc.computeState[cUse.name].usedRes.Mem)
-			}
-		}
-	}
 
 	// job found: copy run request from the queue
 	rsc.selectedKeys = append(rsc.selectedKeys, stamp)
@@ -213,10 +140,10 @@ func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, string, []computeUse
 		len(qj.RunNotes))
 	copy(job.RunNotes, qj.RunNotes)
 
-	return &job, true, qj.filePath, compUse, rsc.hostFile, nil
+	return &job, true, qj.filePath, rsc.hostFile, compUse, nil
 }
 
-// return copy of submission stamps and job control items for queue, active and history model run jobs
+// Return copy of submission stamps and job control items for queue, active and history model run jobs
 func (rsc *RunCatalog) getRunJobs() (JobServiceState, []string, []RunJob, []string, []RunJob, []string, []historyJobFile, []computeItem) {
 
 	rsc.rscLock.Lock()
@@ -280,7 +207,7 @@ func (rsc *RunCatalog) getRunJobs() (JobServiceState, []string, []RunJob, []stri
 	return rsc.JobServiceState, qKeys, qJobs, aKeys, aJobs, hKeys, hJobs, cState
 }
 
-// return active job control item and is found boolean flag
+// Return active job control item and is found boolean flag
 func (rsc *RunCatalog) getActiveJobItem(submitStamp string) (runJobFile, bool) {
 
 	if submitStamp == "" {
@@ -296,7 +223,7 @@ func (rsc *RunCatalog) getActiveJobItem(submitStamp string) (runJobFile, bool) {
 	return runJobFile{}, false // not found
 }
 
-// return queue job control item and is found boolean flag
+// Return queue job control item and is found boolean flag
 func (rsc *RunCatalog) getQueueJobItem(submitStamp string) (queueJobFile, bool) {
 
 	if submitStamp == "" {
@@ -312,7 +239,7 @@ func (rsc *RunCatalog) getQueueJobItem(submitStamp string) (queueJobFile, bool) 
 	return queueJobFile{}, false // not found
 }
 
-// return history job control item and is found boolean flag
+// Return history job control item and is found boolean flag
 func (rsc *RunCatalog) getHistoryJobItem(submitStamp string) (historyJobFile, bool) {
 
 	if submitStamp == "" {
@@ -334,7 +261,9 @@ func (rsc *RunCatalog) addJobToQueue(job *RunJob) (string, error) {
 		return "", nil // job control disabled
 	}
 
-	fp := jobQueuePath(job.SubmitStamp, job.ModelName, job.ModelDigest, job.IsMpi, rsc.nextJobPosition(), job.Res.Cpu, job.Res.Mem)
+	fp := jobQueuePath(
+		job.SubmitStamp, job.ModelName, job.ModelDigest, job.IsMpi, rsc.nextJobPosition(), job.Res.ProcessCount, job.Res.ThreadCount, job.Res.ProcessMemMb, job.Res.ThreadMemMb,
+	)
 
 	err := helper.ToJsonIndentFile(fp, job)
 	if err != nil {
@@ -346,7 +275,7 @@ func (rsc *RunCatalog) addJobToQueue(job *RunJob) (string, error) {
 	return "", nil
 }
 
-// return next job position in the queue, it is not a queue index but "ticket number" to establish queue jobs order
+// Return next job position in the queue, it is not a queue index but "ticket number" to establish queue jobs order
 func (rsc *RunCatalog) nextJobPosition() int {
 	if !theCfg.isJobControl {
 		return 0 // job control disabled
@@ -428,14 +357,14 @@ func (rsc *RunCatalog) moveJobInQueue(submitStamp string, index int) (bool, [][2
 		if isFrom && isTo {
 			moveLst = append(moveLst, [2]string{
 				fJ.filePath,
-				jobQueuePath(fJ.SubmitStamp, fJ.ModelName, fJ.ModelDigest, fJ.IsMpi, toJ.position, fJ.Res.Cpu, fJ.Res.Mem),
+				jobQueuePath(fJ.SubmitStamp, fJ.ModelName, fJ.ModelDigest, fJ.IsMpi, toJ.position, fJ.Res.ProcessCount, fJ.Res.ThreadCount, fJ.Res.ProcessMemMb, fJ.Res.ThreadMemMb),
 			})
 		}
 	} else { // move source file to the top (before the first position) or to the bottom (after last postion)
 
 		moveLst = append(moveLst, [2]string{
 			fJ.filePath,
-			jobQueuePath(fJ.SubmitStamp, fJ.ModelName, fJ.ModelDigest, fJ.IsMpi, fPos, fJ.Res.Cpu, fJ.Res.Mem),
+			jobQueuePath(fJ.SubmitStamp, fJ.ModelName, fJ.ModelDigest, fJ.IsMpi, fPos, fJ.Res.ProcessCount, fJ.Res.ThreadCount, fJ.Res.ProcessMemMb, fJ.Res.ThreadMemMb),
 		})
 	}
 
@@ -462,7 +391,7 @@ func (rsc *RunCatalog) moveJobInQueue(submitStamp string, index int) (bool, [][2
 				if isFrom && isTo {
 					moveLst = append(moveLst, [2]string{
 						fJ.filePath,
-						jobQueuePath(fJ.SubmitStamp, fJ.ModelName, fJ.ModelDigest, fJ.IsMpi, toJ.position, fJ.Res.Cpu, fJ.Res.Mem),
+						jobQueuePath(fJ.SubmitStamp, fJ.ModelName, fJ.ModelDigest, fJ.IsMpi, toJ.position, fJ.Res.ProcessCount, fJ.Res.ThreadCount, fJ.Res.ProcessMemMb, fJ.Res.ThreadMemMb),
 					})
 				}
 			}
@@ -492,7 +421,7 @@ func (rsc *RunCatalog) moveJobInQueue(submitStamp string, index int) (bool, [][2
 				if isFrom && isTo {
 					moveLst = append(moveLst, [2]string{
 						fJ.filePath,
-						jobQueuePath(fJ.SubmitStamp, fJ.ModelName, fJ.ModelDigest, fJ.IsMpi, toJ.position, fJ.Res.Cpu, fJ.Res.Mem),
+						jobQueuePath(fJ.SubmitStamp, fJ.ModelName, fJ.ModelDigest, fJ.IsMpi, toJ.position, fJ.Res.ProcessCount, fJ.Res.ThreadCount, fJ.Res.ProcessMemMb, fJ.Res.ThreadMemMb),
 					})
 				}
 			}
@@ -505,111 +434,61 @@ func (rsc *RunCatalog) moveJobInQueue(submitStamp string, index int) (bool, [][2
 	return true, moveLst
 }
 
-// select additional computational servers or clusters to start,
-// return server names, startup timeout and for each server startup exe names and startup arguments
+// Select computational servers or clusters to startup.
+// Return server names, startup timeout and for each server startup exe names and startup arguments
 func (rsc *RunCatalog) selectToStartCompute() ([]string, int64, []string, [][]string) {
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
 	// do not start anything if:
-	// this instance is not a leader oms instance or queue is paused or no computational servers or MPI queue is empty
+	// this instance is not a leader oms instance or queue is paused or no computational servers to start
 	nowTs := time.Now().UnixMilli()
 
-	if !rsc.isLeader || rsc.IsQueuePaused || len(rsc.computeState) <= 0 ||
-		rsc.topQueueRes.Cpu <= 0 && rsc.topQueueRes.Mem <= 0 ||
-		rsc.lastStartStopTs+computeStartStopInterval > nowTs {
+	if !rsc.isLeader || rsc.IsAllQueuePaused || rsc.lastStartStopTs+computeStartStopInterval > nowTs {
 		return []string{}, 1, []string{}, [][]string{}
 	}
-	res := rsc.topQueueRes
 
 	// remove from startup list servers which are no longer exist
-	// substract from required resources servers which are starting now
 	n := 0
 	for _, name := range rsc.startupNames {
 
-		if cs, ok := rsc.computeState[name]; ok {
+		if _, ok := rsc.computeState[name]; ok {
 			rsc.startupNames[n] = name // server stil exist
 			n++
-
-			res.Cpu -= cs.totalRes.Cpu // server is starting, reduce cpu and memory required to run the queue
-			res.Mem -= cs.totalRes.Mem
 		}
 	}
 	rsc.startupNames = rsc.startupNames[:n]
 
-	// substract from required resources servers which are ready and not used now
-	readyRes := RunRes{}
-	for _, cs := range rsc.computeState {
-		if cs.state == "ready" {
-			readyRes.Cpu += cs.totalRes.Cpu
-			readyRes.Mem += cs.totalRes.Mem
-		}
-	}
-	res.Cpu = res.Cpu - (readyRes.Cpu - rsc.ActiveTotalRes.Cpu)
-	res.Mem = res.Mem - (readyRes.Mem - rsc.ActiveTotalRes.Mem)
-
-	if res.Cpu <= 0 && res.Mem <= 0 {
-		return []string{}, 1, []string{}, [][]string{} // do not start any additional servers
-	}
-
-	// select servers to start
-	// where state is power off and with min error count and longest unused time
-	// until it is enough cpu and memory to run first MPI job in the queue
+	// append to startup list servers for the first job in global queue
 	srvLst := []string{}
 	exeLst := []string{}
 	argLst := [][]string{}
 
-	for res.Cpu > 0 || res.Mem > 0 { // until not enough servers to run first MPI job in the queue
+	for _, cu := range rsc.first.hostUse {
 
-		name := ""
-		minE := 2 * rsc.maxComputeErrors
-		minTs := nowTs + 100
-
-		for _, cs := range rsc.computeState {
-			if cs.state != "" {
-				continue // server not in power off state
-			}
-
-			isAct := false
-			for k := 0; !isAct && k < len(rsc.startupNames); k++ {
-				isAct = rsc.startupNames[k] == cs.name
-			}
-			for k := 0; !isAct && k < len(srvLst); k++ {
-				isAct = srvLst[k] == cs.name
-			}
-			for k := 0; !isAct && k < len(rsc.shutdownNames); k++ {
-				isAct = rsc.shutdownNames[k] == cs.name
-			}
-			if isAct {
-				continue // this server already in startup or shutdown list
-			}
-
-			if name == "" || cs.errorCount < minE || cs.errorCount == minE && cs.lastUsedTs < minTs {
-				name = cs.name
-				minE = cs.errorCount
-				minTs = cs.lastUsedTs
-			}
-		}
-		if name == "" {
-			break // no servers available
+		if cs, ok := rsc.computeState[cu.name]; !ok || cs.state != "" {
+			continue // server not exists or not in power off state
 		}
 
-		// add server to startup list
-		srvLst = append(srvLst, name)
-		exeLst = append(exeLst, rsc.computeState[name].startExe)
+		isAct := false
+		for k := 0; !isAct && k < len(rsc.startupNames); k++ {
+			isAct = rsc.startupNames[k] == cu.name
+		}
+		for k := 0; !isAct && k < len(rsc.shutdownNames); k++ {
+			isAct = rsc.shutdownNames[k] == cu.name
+		}
+		if isAct {
+			continue // this server already in startup or shutdown list
+		}
 
-		args := make([]string, len(rsc.computeState[name].startArgs))
-		copy(args, rsc.computeState[name].startArgs)
+		// for each server find startup executable and arguments
+		srvLst = append(srvLst, cu.name)
+		exeLst = append(exeLst, rsc.computeState[cu.name].startExe)
+
+		args := make([]string, len(rsc.computeState[cu.name].startArgs))
+		copy(args, rsc.computeState[cu.name].startArgs)
 		argLst = append(argLst, args)
-
-		res.Cpu -= rsc.computeState[name].totalRes.Cpu
-		res.Mem -= rsc.computeState[name].totalRes.Mem
-	}
-
-	// check results: if not enough servers to run first MPI job in the queue then return empty result
-	if res.Cpu > 0 || res.Mem > 0 {
-		return []string{}, 1, []string{}, [][]string{}
 	}
 
 	// append to servers starup list and return list of servers to start
@@ -618,8 +497,8 @@ func (rsc *RunCatalog) selectToStartCompute() ([]string, int64, []string, [][]st
 	return srvLst, rsc.maxStartTime, exeLst, argLst
 }
 
-// select computational servers or clusters to shutdown,
-// return server names, shutdown timeout and for each server shutdown exe names and shutdown arguments
+// Select computational servers or clusters to shutdown.
+// Return server names, shutdown timeout and for each server shutdown exe names and shutdown arguments
 func (rsc *RunCatalog) selectToStopCompute() ([]string, int64, []string, [][]string) {
 
 	rsc.rscLock.Lock()
@@ -728,7 +607,8 @@ func (rsc *RunCatalog) shutdownCompleted(isOkStop bool, name string) {
 func (rsc *RunCatalog) updateRunJobs(
 	jsState JobServiceState,
 	computeState map[string]computeItem,
-	mpRes []modelPathRes,
+	firstHostUse jobHostUse,
+	cfgRes []modelCfgRes,
 	queueJobs map[string]queueJobFile,
 	activeJobs map[string]runJobFile,
 	historyJobs map[string]historyJobFile,
@@ -759,8 +639,30 @@ func (rsc *RunCatalog) updateRunJobs(
 		rsc.computeState[name] = cs
 	}
 
+	// if first job changed or if there is a new host allocation then update computational host usage
+	if rsc.first.oms != firstHostUse.oms || rsc.first.stamp != firstHostUse.stamp {
+		rsc.first = firstHostUse
+		rsc.first.hostUse = rsc.first.hostUse[:0]
+		rsc.first.hostUse = append(rsc.first.hostUse, firstHostUse.hostUse...)
+	} else { // this job already first, check if old host allocation still valid
+
+		isOk := len(rsc.first.hostUse) == 0 && len(firstHostUse.hostUse) == 0 ||
+			len(rsc.first.hostUse) != 0 && len(firstHostUse.hostUse) != 0
+
+		// check if all hosts allocated before still have enough resources to run the job
+		for k := 0; isOk && k < len(rsc.first.hostUse); k++ {
+
+			cs, ok := rsc.computeState[rsc.first.hostUse[k].name]
+			isOk = ok && cs.state != "error" && cs.totalRes.Cpu >= rsc.first.hostUse[k].Cpu && cs.totalRes.Mem >= rsc.first.hostUse[k].Mem
+		}
+		if !isOk {
+			rsc.first.hostUse = rsc.first.hostUse[:0]
+			rsc.first.hostUse = append(rsc.first.hostUse, firstHostUse.hostUse...)
+		}
+	}
+
 	// copy model resources requirements
-	rsc.modelCfgRes = map[string]CfgRes{}
+	clear(rsc.cfgRes)
 	binRoot, _ := theCatalog.getModelDir()
 	br := filepath.ToSlash(binRoot)
 
@@ -768,9 +670,9 @@ func (rsc *RunCatalog) updateRunJobs(
 
 		sp := filepath.ToSlash(filepath.Join(mb.binDir, mb.name))
 
-		for _, rs := range mpRes {
-			if sp == path.Join(br, rs.path) {
-				rsc.modelCfgRes[dgst] = CfgRes{MemProcessMb: rs.MemProcessMb, MemThreadMb: rs.MemThreadMb}
+		for _, rs := range cfgRes {
+			if sp == path.Join(br, rs.Path) {
+				rsc.cfgRes[dgst] = rs
 				break
 			}
 		}
