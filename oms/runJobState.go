@@ -56,7 +56,8 @@ func scanStateJobs(doneC <-chan bool) {
 	omsActive := map[string]int64{}
 	omsPaused := map[string]bool{}
 	computeState := map[string]computeItem{}
-	computeHost := []string{} // names of computational servers or clusters
+	hostByCpu := []string{} // names of computational servers or clusters sorted by available CPU cores
+	hostByMem := []string{} // names of computational servers or clusters sorted by available memory
 
 	for {
 		// get jobs service state and computational resources state: servers or clustres definition
@@ -127,42 +128,56 @@ func scanStateJobs(doneC <-chan bool) {
 			compReadyFiles, compStartFiles, compStopFiles, compErrorFiles, compUsedFiles)
 
 		jsState.MpiErrorRes = ComputeRes{}
-		computeHost = computeHost[:0]
+		hostByCpu = hostByCpu[:0]
+		hostByMem = hostByMem[:0]
 
 		for _, cs := range computeState {
 			if cs.state == "error" {
 				jsState.MpiErrorRes.Cpu += cs.totalRes.Cpu
 				jsState.MpiErrorRes.Mem += cs.totalRes.Mem
 			} else {
-				computeHost = append(computeHost, cs.name)
+				hostByCpu = append(hostByCpu, cs.name)
+				hostByMem = append(hostByMem, cs.name)
 			}
 		}
 
 		// sort computational servers:
 		//   if ready then use where more cpu and memory
 		//   if not ready then use where less errors and longest unused time
-		sort.SliceStable(computeHost, func(i, j int) bool {
-			ics := computeState[computeHost[i]]
-			iCpu := ics.totalRes.Cpu - ics.usedRes.Cpu
-			iMem := ics.totalRes.Mem - ics.usedRes.Mem
-			jcs := computeState[computeHost[j]]
-			jCpu := jcs.totalRes.Cpu - jcs.usedRes.Cpu
-			jMem := jcs.totalRes.Mem - jcs.usedRes.Mem
+		cmpHost := func(isByMem bool, nameLst []string) func(i, j int) bool {
 
-			switch {
-			case ics.state == "ready" && jcs.state == "ready":
-				return iCpu > jCpu || iCpu == jCpu && iMem > jMem
-			case ics.state == "ready" && jcs.state != "ready":
-				return true
-			case ics.state != "ready" && jcs.state == "ready":
-				return false
+			return func(i, j int) bool {
+				ics := computeState[nameLst[i]]
+				iCpu := ics.totalRes.Cpu - ics.usedRes.Cpu
+				iMem := ics.totalRes.Mem - ics.usedRes.Mem
+				jcs := computeState[nameLst[j]]
+				jCpu := jcs.totalRes.Cpu - jcs.usedRes.Cpu
+				jMem := jcs.totalRes.Mem - jcs.usedRes.Mem
+
+				switch {
+				case ics.state == "ready" && jcs.state == "ready":
+					if !isByMem {
+						return iCpu > jCpu || iCpu == jCpu && iMem > jMem
+					}
+					return iMem > jMem || iMem == jMem && iCpu > jCpu
+				case ics.state == "ready" && jcs.state != "ready":
+					return true
+				case ics.state != "ready" && jcs.state == "ready":
+					return false
+				}
+				if iCpu != jCpu || iMem != jMem {
+					if !isByMem {
+						return iCpu > jCpu || iCpu == jCpu && iMem > jMem
+					}
+					return iMem > jMem || iMem == jMem && iCpu > jCpu
+				}
+				return ics.errorCount < jcs.errorCount ||
+					ics.errorCount == jcs.errorCount && ics.lastUsedTs < jcs.lastUsedTs ||
+					ics.errorCount == jcs.errorCount && ics.lastUsedTs == jcs.lastUsedTs && ics.name < jcs.name
 			}
-			return iCpu > jCpu ||
-				iCpu == jCpu && iMem > jMem ||
-				iCpu == jCpu && iMem == jMem && ics.errorCount < jcs.errorCount ||
-				iCpu == jCpu && iMem == jMem && ics.errorCount == jcs.errorCount && ics.lastUsedTs < jcs.lastUsedTs ||
-				iCpu == jCpu && iMem == jMem && ics.errorCount == jcs.errorCount && ics.lastUsedTs == jcs.lastUsedTs && ics.name < jcs.name
-		})
+		}
+		sort.SliceStable(hostByCpu, cmpHost(false, hostByCpu))
+		sort.SliceStable(hostByMem, cmpHost(true, hostByMem))
 
 		mpiRes := ComputeRes{}
 		isMpiLimit := false
@@ -192,7 +207,8 @@ func scanStateJobs(doneC <-chan bool) {
 			isMpiLimit,
 			jsState.MpiMaxThreads,
 			jsState.LocalRes,
-			computeHost,
+			hostByCpu,
+			hostByMem,
 			computeState,
 			omsActive,
 			jsState.IsAllQueuePaused,
@@ -358,7 +374,8 @@ func updateQueueJobs(
 	isMpiLimit bool,
 	mpiMaxTh int,
 	localRes ComputeRes,
-	computeHost []string,
+	hostByCpu []string,
+	hostByMem []string,
 	computeState map[string]computeItem,
 	omsActive map[string]int64,
 	isAllPaused bool,
@@ -510,12 +527,22 @@ func updateQueueJobs(
 			// check if there are any server(s) exists to run the job
 			srcJhu := jobHostUse{oms: topOms, stamp: topStamp, res: qOms.q[qOms.top].res, hostUse: []computeUse{}}
 
-			qOms.q[qOms.top].isOver, _ = findComputeRes(srcJhu, false, mpiMaxTh, computeHost, computeState)
+			if qOms.q[qOms.top].res.Mem > 0 {
+				qOms.q[qOms.top].isOver, _ = findComputeRes(srcJhu, false, mpiMaxTh, hostByMem, computeState)
+			} else {
+				qOms.q[qOms.top].isOver, _ = findComputeRes(srcJhu, false, mpiMaxTh, hostByCpu, computeState)
+			}
 
 			// if job queue not paused then allocate job to the servers and add servers to startup list
 			if !qOms.q[qOms.top].isOver && !qOms.q[qOms.top].isPaused {
 
-				isOver, dst := findComputeRes(srcJhu, true, mpiMaxTh, computeHost, computeState)
+				isOver := false
+				var dst jobHostUse
+				if qOms.q[qOms.top].res.Mem > 0 {
+					isOver, dst = findComputeRes(srcJhu, true, mpiMaxTh, hostByMem, computeState)
+				} else {
+					isOver, dst = findComputeRes(srcJhu, true, mpiMaxTh, hostByCpu, computeState)
+				}
 
 				// if this is the first job in global queue then save host ini servers
 				if !isOver && isFirstJob {
