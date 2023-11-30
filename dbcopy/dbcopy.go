@@ -345,7 +345,7 @@ var theCfg = struct {
 	isNoZeroCsv:     false,   // by default do write zero values into output tables .csv files
 	isNoNullCsv:     false,   // by default dot write NULL values into output tables .csv files
 	doubleFmt:       "%.15g", // default format to convert float or daouble values to string
-	encodingName:    "",      // by default detect utf-8 encoding or use OS-specific deafult: windows-1252 on Windowds and utf-8 outside
+	encodingName:    "",      // by default detect utf-8 encoding or use OS-specific default: windows-1252 on Windowds and utf-8 outside
 	isWriteUtf8Bom:  false,   // do not write BOM by default
 }
 

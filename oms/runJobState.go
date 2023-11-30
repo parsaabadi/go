@@ -855,7 +855,7 @@ func initJobComputeState(jobIniPath string, updateTs time.Time, computeState map
 	jsState.LocalRes.Cpu = opts.Int("Common.LocalCpu", 0)    // localhost unlimited cpu cores by default
 	jsState.LocalRes.Mem = opts.Int("Common.LocalMemory", 0) // localhost unlimited memory by default
 
-	jsState.maxIdleTime = 1000 * opts.Int64("Common.IdleTimeout", 0) // zero deafult timeout: never stop servers by default
+	jsState.maxIdleTime = 1000 * opts.Int64("Common.IdleTimeout", 0) // zero default timeout: never stop servers by default
 	jsState.maxStartTime = 1000 * opts.Int64("Common.StartTimeout", serverTimeoutDefault)
 	jsState.maxStopTime = 1000 * opts.Int64("Common.StopTimeout", serverTimeoutDefault)
 	jsState.maxComputeErrors = opts.Int("Common.MaxErrors", maxComputeErrorsDefault)
@@ -1097,7 +1097,7 @@ func updateComputeState(
 		}
 	}
 
-	// servers or clusters used for model runs: sum up resoureces used by current oms instance and all oms inatances
+	// servers or clusters used for model runs: sum up resources used by current oms instance and all oms inatances
 	for _, f := range compUsedFiles {
 
 		// get server name and time stamp

@@ -349,7 +349,7 @@ func parseCompUsedPath(srcPath string) (string, string, string, int, int) {
 }
 
 // move run job to active state from queue
-func moveJobToActive(queueJobPath string, rState RunState, res RunRes, runStamp string) (string, bool) {
+func moveJobToActive(queueJobPath string, rState *RunState, res RunRes, runStamp string) (string, bool) {
 	if !theCfg.isJobControl {
 		return "", true // job control disabled
 	}

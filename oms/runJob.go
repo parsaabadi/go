@@ -535,8 +535,13 @@ func (rsc *RunCatalog) selectToStopCompute() ([]string, int64, []string, [][]str
 		for k := 0; !isAct && k < len(rsc.startupNames); k++ {
 			isAct = rsc.startupNames[k] == cs.name
 		}
+		for k := 0; !isAct && k < len(rsc.first.hostUse); k++ {
+			isAct = rsc.first.hostUse[k].name == cs.name
+		}
 		if isAct {
-			continue // this server already in shutdown or startup list
+			// this server already in shutdown or startup list
+			// or in the list of servers for the first job
+			continue
 		}
 
 		// if no model runs for more than idle time in milliseconds and server started more than idle time in milliseconds
@@ -566,10 +571,10 @@ func (rsc *RunCatalog) startupCompleted(isOkStart bool, name string) {
 	rsc.lastStartStopTs = time.Now().UnixMilli()
 
 	if cs, ok := rsc.computeState[name]; ok {
-		if isOkStart {
+		if isOkStart && cs.lastUsedTs < rsc.lastStartStopTs {
 			cs.lastUsedTs = rsc.lastStartStopTs
+			rsc.computeState[name] = cs
 		}
-		rsc.computeState[name] = cs
 	}
 
 	// remove server from startup list
@@ -591,6 +596,13 @@ func (rsc *RunCatalog) shutdownCompleted(isOkStop bool, name string) {
 
 	// update server state
 	rsc.lastStartStopTs = time.Now().UnixMilli()
+
+	if cs, ok := rsc.computeState[name]; ok {
+		if isOkStop && cs.lastUsedTs < rsc.lastStartStopTs {
+			cs.lastUsedTs = rsc.lastStartStopTs
+			rsc.computeState[name] = cs
+		}
+	}
 
 	// remove server from shutdown list
 	n := 0
@@ -641,9 +653,13 @@ func (rsc *RunCatalog) updateRunJobs(
 
 	// if first job changed or if there is a new host allocation then update computational host usage
 	if rsc.first.oms != firstHostUse.oms || rsc.first.stamp != firstHostUse.stamp {
-		rsc.first = firstHostUse
+
+		rsc.first.oms = firstHostUse.oms
+		rsc.first.stamp = firstHostUse.stamp
+		rsc.first.res = firstHostUse.res
 		rsc.first.hostUse = rsc.first.hostUse[:0]
 		rsc.first.hostUse = append(rsc.first.hostUse, firstHostUse.hostUse...)
+
 	} else { // this job already first, check if old host allocation still valid
 
 		isOk := len(rsc.first.hostUse) == 0 && len(firstHostUse.hostUse) == 0 ||
