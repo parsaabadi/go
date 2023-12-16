@@ -109,7 +109,7 @@ type ReadTableLayout struct {
 
 // ReadMicroLayout describes source and size of data page to read entity microdata.
 //
-// Entity generation digest expected to be unique for each run id + entity name, but there is no such constarint in db schema.
+// Only one entity generation digest expected for each run id + entity name, but there is no such constarint in db schema.
 type ReadMicroLayout struct {
 	ReadLayout        // entity name, run id, page size, where filters and order by
 	GenDigest  string // entity generation digest
@@ -129,12 +129,6 @@ type ReadPageLayout struct {
 	IsFullPage bool  // input last page flag: if true then adjust offset to return full last page
 }
 
-// ReadCalculteTableLayout describe table read layout and additional measures to calculte.
-type ReadCalculteTableLayout struct {
-	ReadLayout                         // output table name, run id, page size, where filters and order by
-	Calculation []CalculateTableLayout // additional measures to calculate
-}
-
 // ReadCompareTableLayout to compare output table runs with base run using multiple comparison expressions and/or calculation measures.
 //
 // Comparison expression(s) must contain [base] and [variant] expression(s), ex.: Expr0[base] - Expr0[variant].
@@ -145,7 +139,20 @@ type ReadCompareTableLayout struct {
 	Runs                    []string // runs to compare: list of digest, stamp or name
 }
 
-// CalculateLayout describes calculation to parameters or output table values.
+// ReadCalculteTableLayout describe table read layout and additional measures to calculte.
+type ReadCalculteTableLayout struct {
+	ReadLayout                         // output table name, run id, page size, where filters and order by
+	Calculation []CalculateTableLayout // additional measures to calculate
+}
+
+// CalculateLayout describes calculation of output table values.
+// It can be comparison calculation for multiple model runs, ex.: Expr0[base] - Expr0[variant].
+type CalculateTableLayout struct {
+	CalculateLayout      // expression to calculate and layout
+	IsAggr          bool // if true then select output table accumulator else expression
+}
+
+// CalculateLayout describes calculation expression for parameters, output table values or microdata entity.
 // It can be comparison calculation for multiple model runs, ex.: Expr0[base] - Expr0[variant].
 type CalculateLayout struct {
 	Calculate string // expression to calculate, ex.: Expr0[base] - Expr0[variant]
@@ -153,11 +160,29 @@ type CalculateLayout struct {
 	Name      string // calculated expression name, calc_name column in csv, ex.: Expr0, AVG_Expr0, RATIO_Expro0
 }
 
-// CalculateLayout describes calculation to output table values.
-// It can be comparison calculation for multiple model runs, ex.: Expr0[base] - Expr0[variant].
-type CalculateTableLayout struct {
-	CalculateLayout      // expression to calculate and layout
-	IsAggr          bool // if true then select output table accumulator else expression
+// ReadCompareMicroLayout to compare microdata runs with base run using multiple comparison aggregations and/or calculation aggregations.
+//
+// Comparison aggregation must contain [base] and [variant] attribute(s), ex.: OM_AVG(Income[base] - Income[variant]).
+// Calculation aggregation is attribute(s) aggregation expression, ex.: OM_MAX(Income) / OM_MIN(Salary).
+type ReadCompareMicroLayout struct {
+	ReadCalculteMicroLayout          // aggregation measures and group by attributes
+	Runs                    []string // runs to compare: list of digest, stamp or name
+}
+
+// ReadCalculteMicroLayout describe microdata generation read layout, aggregation measures and group by attributes.
+type ReadCalculteMicroLayout struct {
+	ReadLayout           // entity name, run id, page size, where filters and order by
+	CalculateMicroLayout // microdata aggregations
+}
+
+// CalculateMicroLayout describes aggreagtions of microdata.
+//
+// It can be comparison aggregations and/or calculation aggregations.
+// Comparison aggregation must contain [base] and [variant] attribute(s), ex.: OM_AVG(Income[base] - Income[variant]).
+// Calculation aggregation is attribute(s) aggregation expression, ex.: OM_MAX(Income) / OM_MIN(Salary).
+type CalculateMicroLayout struct {
+	Calculation []CalculateLayout // aggregation measures, ex.: OM_MIN(Salary), OM_AVG(Income[base] - Income[variant])
+	GroupBy     []string          // attributes to group by
 }
 
 // FilterOp is enum type for filter operators in select where conditions
@@ -198,8 +223,7 @@ type OrderByColumn struct {
 
 // makeOrderBy return ORDER BY clause either from explicitly specified column list
 // or by default: 1,...,rank
-// or empty if rank zero
-// if prefixIdColumns > 0 then before order by 1,..., prefixIdColumns,..., prefixIdColumns+rank+1
+// or if prefixIdColumns > 0 then order by 1,..., prefixIdColumns,..., prefixIdColumns+rank+1
 func makeOrderBy(rank int, orderBy []OrderByColumn, prefixIdColumns int) string {
 
 	if len(orderBy) > 0 { // if order by excplicitly specified

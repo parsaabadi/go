@@ -173,3 +173,75 @@ func translateTableCalcToSql(table *TableMeta, readLt *ReadLayout, calcLt []Calc
 
 	return sql, nil
 }
+
+// Translate all microdata aggregations to sql query, apply group by, dimension filters, selected run id's and order by.
+// It can be a multiple runs comparison and base run id is layout.FromId.
+// Or simple aggreagtion inside of single run, in that case layout.FromId and runIds[] are merged.
+func translateMicroToSql(entity *EntityMeta, entityGen *EntityGenMeta, readLt *ReadLayout, calcLt *CalculateMicroLayout, runIds []int) (string, error) {
+
+	// translate each calculation to sql: CTE and main sql query
+	mainSql := []string{}
+	isRunCompare := false
+
+	aggrCols, err := makeMicroAggrCols(entity, entityGen, calcLt.GroupBy)
+	if err != nil {
+		return "", err
+	}
+
+	for k := range calcLt.Calculation {
+
+		mSql := ""
+		isCmp := false
+
+		mSql, isCmp, err = partialTranslateToMicroSql(entity, entityGen, aggrCols, readLt, &calcLt.Calculation[k], runIds)
+		if err != nil {
+			return "", err
+		}
+		if k == 0 {
+			isRunCompare = isCmp
+		} else {
+			if isCmp != isRunCompare {
+				return "", errors.New("Error at " + entity.Name + " " + calcLt.Calculation[k].Calculate + ": " + "invalid (or mixed forms) of attribute names used")
+			}
+		}
+
+		// merge main body SQL, expected to be unique, skip duplicates
+		isFound := false
+		for j := 0; !isFound && j < len(mainSql); j++ {
+			isFound = mSql == mainSql[j]
+		}
+		if isFound {
+			continue // skip duplicate SQL, it is the same source expression
+		}
+		mainSql = append(mainSql, mSql)
+	}
+
+	cteSql, err := makeMicroCteAggrSql(entity, entityGen, aggrCols, readLt.FromId, runIds, isRunCompare)
+	if err != nil {
+		return "", errors.New("Error at making CTE for aggregation of " + entity.Name + ": " + err.Error())
+	}
+
+	// make sql:
+	// WITH cte array
+	// SELECT main sql for aggregation 1
+	// WHERE attribute filters
+	// UNION ALL
+	// SELECT main sql for aggregation 2
+	// WHERE attribute filters
+	// ORDER BY 1, 2,....
+
+	sql := cteSql
+
+	for k := range mainSql {
+		if k > 0 {
+			sql = sql + " UNION ALL " + mainSql[k]
+		} else {
+			sql = sql + " " + mainSql[k]
+		}
+	}
+
+	// append ORDER BY, default order by: run_id, calculation id, group by attributes
+	sql += makeOrderBy(len(calcLt.GroupBy), readLt.OrderBy, 2)
+
+	return sql, nil
+}

@@ -8,30 +8,6 @@ import (
 	"strconv"
 )
 
-type aggregationColumnExpr struct {
-	colName string // column name, ie: ex2
-	srcExpr string // source expression, ie: OM_AVG(acc0)
-	sqlExpr string // sql expresiion, ie: AVG(M2.acc0)
-}
-
-// Parsed aggregation expressions for each nesting level
-type levelDef struct {
-	level          int                     // nesting level
-	fromAlias      string                  // from table alias
-	innerAlias     string                  // inner join table alias
-	nextInnerAlias string                  // next level inner join table alias
-	exprArr        []aggregationColumnExpr // column names and expressions
-	firstAccIdx    int                     // first used accumulator index
-	accUsageArr    []bool                  // contains true if accumulator used at current level
-}
-
-// level parse state
-type levelParseState struct {
-	*levelDef                              // current level
-	nextExprNumber int                     // number of aggregation epxpressions
-	nextExprArr    []aggregationColumnExpr // aggregation expressions for the next level
-}
-
 // Translate output table accumulators calculation into sql query.
 func translateToAccSql(table *TableMeta, readLt *ReadLayout, calcLt *CalculateLayout, runIds []int) (string, error) {
 
@@ -55,7 +31,7 @@ func translateToAccSql(table *TableMeta, readLt *ReadLayout, calcLt *CalculateLa
 	return sql, nil
 }
 
-// Translate all output table accumulators aggregation calculations to sql query, apply dimension filters and selected run id's.
+// Translate output table accumulators aggregation to sql query, apply dimension filters and selected run id's.
 // Return list of CTE sql's and main sql's.
 func partialTranslateToAccSql(table *TableMeta, readLt *ReadLayout, calcLt *CalculateLayout, runIds []int) (string, string, error) {
 
@@ -83,7 +59,6 @@ func partialTranslateToAccSql(table *TableMeta, readLt *ReadLayout, calcLt *Calc
 	// AND A.dim0 = .....
 	// ORDER BY 1, 2, 3, 4
 	//
-
 	cteSql, mainSql, err := transalteAccAggrToSql(table, calcLt.CalcId, calcLt.Calculate)
 	if err != nil {
 		return "", "", errors.New("Error at " + table.Name + " " + calcLt.Calculate + ": " + err.Error())
@@ -208,14 +183,36 @@ func transalteAccAggrToSql(table *TableMeta, calcId int, calculateExpr string) (
 		return "", "", err
 	}
 
+	// aggregation expression columns: only native (not a derived) accumulators can be aggregated
+	aggrCols := make([]aggrColulumn, len(table.Acc))
+
+	for k := range table.Acc {
+		aggrCols[k] = aggrColulumn{
+			name:    table.Acc[k].Name,
+			colName: table.Acc[k].colName,
+			isAggr:  !table.Acc[k].IsDerived, // only native accumulators can be aggregated
+		}
+	}
+
+	// produce accumulator column name: acc0 => M1.acc_value or acc4 => L1A4.acc4
+	makeAccColName := func(
+		name string, nameIdx int, isSimple, isVar bool, firstAlias string, levelAccAlias string, isFirstAcc bool,
+	) string {
+
+		if isFirstAcc {
+			return firstAlias + "." + "acc_value" // first accumulator: acc0 => acc_value
+		}
+		return levelAccAlias + "." + name // any other accumulator: acc4 => acc4
+	}
+
 	// parse aggregation expression
-	levelArr, err := parseAggrCalculation(table, startExpr)
+	levelArr, err := parseAggrCalculation(aggrCols, startExpr, makeAccColName)
 	if err != nil {
 		return "", "", err
 	}
 
 	// build output sql from parser state: CTE and main sql query
-	cteSql, mainSql, err := makeAggrSql(table, calcId, levelArr)
+	cteSql, mainSql, err := makeAccAggrSql(table, calcId, levelArr)
 	if err != nil {
 		return "", "", err
 	}
@@ -224,7 +221,7 @@ func transalteAccAggrToSql(table *TableMeta, calcId int, calculateExpr string) (
 }
 
 // Build aggregation sql from parser state.
-func makeAggrSql(table *TableMeta, calcId int, levelArr []levelDef) (string, string, error) {
+func makeAccAggrSql(table *TableMeta, calcId int, levelArr []levelDef) (string, string, error) {
 
 	// build output sql for expression:
 	//
@@ -268,7 +265,7 @@ func makeAggrSql(table *TableMeta, calcId int, levelArr []levelDef) (string, str
 	//           SELECT run_id, dim0, dim1, sub_id, acc_value AS acc1 FROM asrc WHERE acc_id = 1
 	//         ) L3A1
 	//         ON (L3A1.run_id = M3.run_id AND L3A1.dim0 = M3.dim0 AND L3A1.dim1 = M3.dim1 AND L3A1.sub_id = M3.sub_id)
-	//           WHERE M3.acc_id = 0
+	//         WHERE M3.acc_id = 0
 	//         GROUP BY M3.run_id, M3.dim0, M3.dim1
 	//       ) T3
 	//       ON (T3.run_id = M2.run_id AND T3.dim0 = M2.dim0 AND T3.dim1 = M2.dim1)
@@ -328,7 +325,7 @@ func makeAggrSql(table *TableMeta, calcId int, levelArr []levelDef) (string, str
 		// INNER JON accumulator table for all other accumulators ON run_id, dim0,...,sub_id
 		for nAcc, acc := range table.Acc {
 
-			if !lv.accUsageArr[nAcc] || nAcc == lv.firstAccIdx { // skip first accumulator and unused accumulators
+			if !lv.agcUsageArr[nAcc] || nAcc == lv.firstAgcIdx { // skip first accumulator and unused accumulators
 				continue
 			}
 			accAlias := "L" + strconv.Itoa(lv.level) + "A" + strconv.Itoa(nAcc)
@@ -365,8 +362,8 @@ func makeAggrSql(table *TableMeta, calcId int, levelArr []levelDef) (string, str
 	for nLev := len(levelArr) - 1; nLev >= 0; nLev-- {
 
 		firstId := 0
-		if levelArr[nLev].firstAccIdx >= 0 && levelArr[nLev].firstAccIdx < len(table.Acc) {
-			firstId = table.Acc[levelArr[nLev].firstAccIdx].AccId
+		if levelArr[nLev].firstAgcIdx >= 0 && levelArr[nLev].firstAgcIdx < len(table.Acc) {
+			firstId = table.Acc[levelArr[nLev].firstAgcIdx].AccId
 		}
 
 		mainSql += " WHERE " + levelArr[nLev].fromAlias + ".acc_id = " + strconv.Itoa(firstId)
@@ -392,210 +389,4 @@ func makeAggrSql(table *TableMeta, calcId int, levelArr []levelDef) (string, str
 	mainSql += " ) A"
 
 	return cteSql, mainSql, nil
-}
-
-// Parse output table accumulators calculation.
-func parseAggrCalculation(table *TableMeta, calculateExpr string) ([]levelDef, error) {
-
-	// start with source expression and column name
-	nLevel := 1
-
-	levelArr := []levelDef{
-		levelDef{
-			level:          nLevel,
-			fromAlias:      "M" + strconv.Itoa(nLevel),
-			innerAlias:     "T" + strconv.Itoa(nLevel),
-			nextInnerAlias: "T" + strconv.Itoa(nLevel+1),
-			exprArr: []aggregationColumnExpr{{
-				colName: "calc_value",
-				srcExpr: calculateExpr,
-			}},
-			accUsageArr: make([]bool, len(table.Acc)),
-		}}
-	lps := &levelParseState{
-		levelDef:       &levelArr[len(levelArr)-1],
-		nextExprNumber: 1,
-		nextExprArr:    []aggregationColumnExpr{},
-	}
-
-	// until any function expressions exist on current level repeat translation:
-	//
-	//	OM_SUM(acc0 - 0.5 * OM_AVG(acc0))
-	//  =>
-	//  SUM(acc0 - 0.5 * T2.ex2)
-	//	  => function: SUM(argument)
-	//	  => argument: acc0 - 0.5 * OM_AVG(acc0)
-	//	     => push OM_* functions as expression to the next level:
-	//	        => current level sql column: OM_AVG(acc0) => T2.ex2
-	//	        => next level expression:    OM_AVG(acc0)
-	for {
-
-		for nL := range lps.exprArr {
-
-			// parse until source expression not completed
-			sqlExpr := lps.exprArr[nL].srcExpr
-
-			for {
-				// find most left (top level) aggregation function
-				fncName, namePos, arg, nAfter, err := findFirstFnc(sqlExpr, aggrFncLst)
-				if err != nil {
-					return []levelDef{}, err
-				}
-				if fncName == "" { // all done: no any functions found
-					break
-				}
-
-				// translate (substitute) aggreagtion function by sql fragment
-				t, err := lps.translateAggregationFnc(fncName, arg, sqlExpr)
-				if err != nil {
-					return []levelDef{}, err
-				}
-
-				// replace source
-				if nAfter >= len(sqlExpr) {
-					sqlExpr = sqlExpr[:namePos] + t
-				} else {
-					sqlExpr = sqlExpr[:namePos] + t + sqlExpr[nAfter:]
-				}
-			}
-			lps.exprArr[nL].sqlExpr = sqlExpr
-
-			// accumultors first pass: collect accumulators usage is current sql expression
-			var err error = nil
-
-			nStart := 0
-			for nEnd := 0; nStart >= 0 && nEnd >= 0; {
-
-				nStart, nEnd, err = nextUnquoted(sqlExpr, nStart)
-				if err != nil {
-					return []levelDef{}, err
-				}
-				if nStart < 0 || nEnd < 0 { // end of source formula
-					break
-				}
-
-				//  for each accumulator name check if name exist in that unquoted part of sql
-				for k := 0; k < len(table.Acc); k++ {
-
-					if findNamePos(sqlExpr[nStart:nEnd], table.Acc[k].Name) >= 0 {
-						lps.accUsageArr[k] = true
-					}
-				}
-
-				nStart = nEnd // to the next 'unquoted part' of calculation string
-			}
-		}
-
-		// accumulators second pass: translate accumulators for all sql expressions
-		// replace accumulators names by column name in joined accumulator table:
-		//   acc0 => M1.acc_value
-		//   acc2 => L1A2.acc2
-		for ne := range lps.exprArr {
-
-			var e error
-			if lps.exprArr[ne].sqlExpr, e = lps.processAccumulators(lps.exprArr[ne].sqlExpr, table.Acc); e != nil {
-				return []levelDef{}, e
-			}
-		}
-
-		// if any expressions pushed to the next level then continue parsing
-		if len(lps.nextExprArr) <= 0 {
-			break
-		}
-		// else push aggregation expressions to the next level
-
-		nLevel++
-		levelArr = append(levelArr,
-			levelDef{
-				level:          nLevel,
-				fromAlias:      "M" + strconv.Itoa(nLevel),
-				innerAlias:     "T" + strconv.Itoa(nLevel),
-				nextInnerAlias: "T" + strconv.Itoa(nLevel+1),
-				exprArr:        append([]aggregationColumnExpr{}, lps.nextExprArr...),
-				accUsageArr:    make([]bool, len(table.Acc)),
-			})
-
-		lps.levelDef = &levelArr[len(levelArr)-1]
-		lps.nextExprArr = []aggregationColumnExpr{}
-	}
-
-	return levelArr, nil
-}
-
-// push OM_ function to next aggregation level and return column name
-func (lps *levelParseState) pushToNextLevel(fncExpr string) string {
-
-	colName := "ex" + strconv.Itoa(lps.nextExprNumber)
-	lps.nextExprNumber++
-
-	lps.nextExprArr = append(lps.nextExprArr,
-		aggregationColumnExpr{
-			colName: colName,
-			srcExpr: fncExpr,
-		})
-	return colName
-}
-
-// Translate accumulator names by inserting table alias.
-// If this is the first accumulator at this level then do: acc1 => M2.acc_value
-// else use joined accumulator table: L1A4.acc4
-func (lps *levelParseState) processAccumulators(expr string, accRows []TableAccRow) (string, error) {
-
-	// find index of first used native (not a derived) accumulator
-	lps.firstAccIdx = -1
-	for k, isUsed := range lps.accUsageArr {
-		if isUsed && !accRows[k].IsDerived {
-			lps.firstAccIdx = k
-			break
-		}
-	}
-	if lps.firstAccIdx < 0 {
-		return expr, nil // return source expression as is: no accumulators used in that expression
-	}
-
-	// for each 'unquoted' part of expression check if there is any table accumulator name
-	// substitute each accumulator name with corresponding sql column name
-	var err error = nil
-	nStart := 0
-
-	for nEnd := 0; nStart >= 0 && nEnd >= 0; {
-
-		nStart, nEnd, err = nextUnquoted(expr, nStart)
-		if err != nil {
-			return "", err
-		}
-		if nStart < 0 || nEnd < 0 { // end of source expression
-			break
-		}
-
-		// substitute first occurence of accumulator name with sql column name
-		// for example: acc0 => M1.acc_value or acc4 => L1A4.acc4
-		isFound := false
-
-		for k := 0; !isFound && k < len(accRows); k++ {
-
-			if !lps.accUsageArr[k] || accRows[k].IsDerived { // only native accumulators can be aggregated
-				continue
-			}
-
-			n := findNamePos(expr[nStart:nEnd], accRows[k].Name)
-			if n >= 0 {
-				isFound = true
-
-				col := ""
-				if k == lps.firstAccIdx {
-					col = lps.fromAlias + "." + "acc_value"
-				} else {
-					col = "L" + strconv.Itoa(lps.level) + "A" + strconv.Itoa(k) + "." + accRows[k].Name
-				}
-				expr = expr[:nStart+n] + col + expr[nStart+n+len(accRows[k].Name):]
-			}
-		}
-
-		if !isFound {
-			nStart = nEnd // to the next 'unquoted part' of calculation string
-		}
-	}
-
-	return expr, nil
 }

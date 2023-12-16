@@ -274,7 +274,7 @@ func (entity *EntityMeta) AttrByName(name string) (int, bool) {
 }
 
 // EntityGenByEntityId return index of entity generation by model entity id.
-// As it is today model do not insert more than one run for each entity into model run, but there is no such costraint in db schema.
+// As it is today model do not insert more than one generation for each entity into model run, but there is no such costraint in db schema.
 func (run *RunMeta) EntityGenByEntityId(entityId int) (int, bool) {
 
 	for k := range run.EntityGen {

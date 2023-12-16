@@ -175,7 +175,7 @@ func (mc *ModelCatalog) WordListByDigestOrName(dn string, preferredLang []langua
 	return &mlw, true
 }
 
-// EntityGenByName select entity_get and entity_gen_attr db row by entity name, run id and model digest or name.
+// EntityGenByName select entity_gen and entity_gen_attr db row by entity name, run id and model digest or name.
 func (mc *ModelCatalog) EntityGenByName(dn string, runId int, entityName string) (*db.EntityGenMeta, bool) {
 
 	if dn == "" {
