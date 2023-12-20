@@ -130,6 +130,7 @@ type modelCfgRes struct {
 type runJobFile struct {
 	filePath string // job control file path
 	isError  bool   // if true then ignore that file due to error
+	oms      string // oms instance name
 	RunJob          // job control file content
 }
 
@@ -194,6 +195,7 @@ type JobServiceState struct {
 	IsAllQueuePaused  bool       // all oms instances: if true then jobs queue is paused, jobs are not selected from queue
 	JobUpdateDateTime string     // last date-time jobs list updated
 	MpiRes            ComputeRes // MPI total available resources available (CPU cores and memory) as sum of all servers or localhost resources
+	MaxOwnMpiRes      ComputeRes // resources limit (CPU cores and memory) for each oms instance
 	ActiveTotalRes    ComputeRes // MPI active run resources (CPU cores and memory) used by all oms instances
 	ActiveOwnRes      ComputeRes // MPI active run resources (CPU cores and memory) used by this oms instance
 	QueueTotalRes     ComputeRes // MPI queue run resources (CPU cores and memory) requested by all oms instances

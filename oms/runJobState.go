@@ -99,7 +99,7 @@ func scanStateJobs(doneC <-chan bool) {
 					leaderName = oms
 				}
 			} else {
-				delete(omsActive, oms) // oms instance not active
+				delete(omsActive, oms) // oms instance if no longer active
 			}
 		}
 		jsState.isLeader = theCfg.omsName == leaderName // this oms instance is a leader instance
@@ -179,18 +179,18 @@ func scanStateJobs(doneC <-chan bool) {
 		sort.SliceStable(hostByCpu, cmpHost(false, hostByCpu))
 		sort.SliceStable(hostByMem, cmpHost(true, hostByMem))
 
-		mpiRes := ComputeRes{}
+		mpiTotalRes := ComputeRes{}
 		isMpiLimit := false
 
 		if len(computeState) <= 0 {
 
-			mpiRes = jsState.LocalRes
+			mpiTotalRes = jsState.LocalRes
 			isMpiLimit = jsState.LocalRes.Cpu > 0
 		} else {
 
 			isMpiLimit = true
-			mpiRes.Cpu = jsState.MpiRes.Cpu - jsState.MpiErrorRes.Cpu
-			mpiRes.Mem = jsState.MpiRes.Mem - jsState.MpiErrorRes.Mem
+			mpiTotalRes.Cpu = jsState.MpiRes.Cpu - jsState.MpiErrorRes.Cpu
+			mpiTotalRes.Mem = jsState.MpiRes.Mem - jsState.MpiErrorRes.Mem
 		}
 
 		// model runs
@@ -203,10 +203,12 @@ func scanStateJobs(doneC <-chan bool) {
 		qKeys, maxPos, minPos, qTotal, qOwn, qLocal, firstHostUse := updateQueueJobs(
 			queueFiles,
 			queueJobs,
-			mpiRes,
+			activeJobs,
+			mpiTotalRes,
 			isMpiLimit,
 			jsState.MpiMaxThreads,
 			jsState.LocalRes,
+			jsState.MaxOwnMpiRes,
 			hostByCpu,
 			hostByMem,
 			computeState,
@@ -355,25 +357,28 @@ func updateActiveJobs(fLst []string, jobMap map[string]runJobFile, omsActive map
 		isOk, err := helper.FromJsonFile(f, &jc)
 		if err != nil {
 			omppLog.Log(err)
-			jobMap[stamp] = runJobFile{filePath: f, isError: true}
+			jobMap[stamp] = runJobFile{filePath: f, isError: true, oms: oms}
 		}
 		if !isOk || err != nil {
 			continue // file not exist or invalid
 		}
 
-		jobMap[stamp] = runJobFile{RunJob: jc, filePath: f} // add job into jobs list
+		jobMap[stamp] = runJobFile{RunJob: jc, filePath: f, oms: oms} // add job into jobs list
 	}
+
 	return subStamps, totalRes, ownRes, localOwnRes
 }
 
 // insert run job into queue job map: map job file submission stamp to file content (run job)
 func updateQueueJobs(
 	fLst []string,
-	jobMap map[string]queueJobFile,
-	mpiRes ComputeRes,
+	queueJobs map[string]queueJobFile,
+	activeJobs map[string]runJobFile,
+	mpiTotalRes ComputeRes,
 	isMpiLimit bool,
 	mpiMaxTh int,
 	localRes ComputeRes,
+	maxMpiOwnRes ComputeRes,
 	hostByCpu []string,
 	hostByMem []string,
 	computeState map[string]computeItem,
@@ -428,6 +433,24 @@ func updateQueueJobs(
 		cpu := procCount * thCount
 		mem := memoryRunSize(procCount, thCount, procMem, thMem)
 
+		// check resources quota: MPI cpu and memory available
+		isOver := (isMpiLimit && cpu > mpiTotalRes.Cpu) || (mpiTotalRes.Mem > 0 && mem > mpiTotalRes.Mem)
+
+		// check resources quota: max cpu memory allowed for each oms instance
+		if !isOver && maxMpiOwnRes.Cpu > 0 || maxMpiOwnRes.Mem > 0 {
+			omsCpu := 0
+			omsMem := 0
+			for stamp := range activeJobs {
+				omsCpu += activeJobs[stamp].Res.Cpu
+				omsMem += activeJobs[stamp].Res.Mem
+
+				isOver = omsCpu > maxMpiOwnRes.Cpu || maxMpiOwnRes.Mem > 0 && omsMem > mpiTotalRes.Mem
+				if isOver {
+					break
+				}
+			}
+		}
+
 		// append to the instance queue
 		qOms, ok := qAll[oms]
 		if !ok {
@@ -449,7 +472,7 @@ func updateQueueJobs(
 				ThreadMemMb:  thMem,
 			},
 			isPaused: isAllPaused || omsPaused[oms],
-			isOver:   (isMpiLimit && cpu > mpiRes.Cpu) || (mpiRes.Mem > 0 && mem > mpiRes.Mem),
+			isOver:   isOver,
 		})
 		qAll[oms] = qOms
 	}
@@ -593,7 +616,7 @@ func updateQueueJobs(
 		qKeys = append(qKeys, stamp)
 
 		// if this file already in the queue jobs map then update resources
-		if jc, ok := jobMap[stamp]; ok {
+		if jc, ok := queueJobs[stamp]; ok {
 
 			jc.filePath = f
 			jc.position = pos
@@ -601,7 +624,7 @@ func updateQueueJobs(
 			jc.isPaused = isOmsPaused
 			jc.IsOverLimit = isOver
 			jc.isFirst = !isOver && !isOmsPaused && isFirstJob
-			jobMap[stamp] = jc // update exsiting job in the queue with current resources info
+			queueJobs[stamp] = jc // update existing job in the queue with current resources info
 
 			if jc.isFirst {
 				isFirstJob = false
@@ -614,7 +637,7 @@ func updateQueueJobs(
 		isOk, err := helper.FromJsonFile(f, &jc)
 		if err != nil {
 			omppLog.Log(err)
-			jobMap[stamp] = queueJobFile{runJobFile: runJobFile{filePath: f, isError: true}}
+			queueJobs[stamp] = queueJobFile{runJobFile: runJobFile{filePath: f, isError: true, oms: oms}}
 		}
 		if !isOk || err != nil {
 			continue // file does not exist or invalid
@@ -625,8 +648,8 @@ func updateQueueJobs(
 		// add new job into queue jobs map
 		isFirst := !isOver && !isOmsPaused && isFirstJob
 
-		jobMap[stamp] = queueJobFile{
-			runJobFile: runJobFile{RunJob: jc, filePath: f},
+		queueJobs[stamp] = queueJobFile{
+			runJobFile: runJobFile{RunJob: jc, filePath: f, oms: oms},
 			position:   pos,
 			isPaused:   isOmsPaused,
 			isFirst:    isFirst,
@@ -653,7 +676,7 @@ func updateQueueJobs(
 		qKeys = append(qKeys, f.stamp)
 
 		// if this file already in the queue jobs map then update resources
-		if jc, ok := jobMap[f.stamp]; ok {
+		if jc, ok := queueJobs[f.stamp]; ok {
 
 			jc.filePath = fLst[f.fileIdx]
 			jc.position = f.position
@@ -662,7 +685,7 @@ func updateQueueJobs(
 			jc.isFirst = f.isFirst
 			jc.QueuePos = f.allQPos
 			jc.Res = f.res
-			jobMap[f.stamp] = jc // update exsiting job in the queue with current resources info
+			queueJobs[f.stamp] = jc // update existing job in the queue with current resources info
 			continue
 		}
 		// else create run state from job file and insert into the queue map
@@ -671,7 +694,7 @@ func updateQueueJobs(
 		isOk, err := helper.FromJsonFile(fLst[f.fileIdx], &jc)
 		if err != nil {
 			omppLog.Log(err)
-			jobMap[f.stamp] = queueJobFile{runJobFile: runJobFile{filePath: fLst[f.fileIdx], isError: true}}
+			queueJobs[f.stamp] = queueJobFile{runJobFile: runJobFile{filePath: fLst[f.fileIdx], isError: true, oms: f.oms}}
 		}
 		if !isOk || err != nil {
 			continue // file does not exist or invalid
@@ -681,8 +704,8 @@ func updateQueueJobs(
 		jc.Res = f.res
 
 		// add new job into queue jobs map
-		jobMap[f.stamp] = queueJobFile{
-			runJobFile: runJobFile{RunJob: jc, filePath: fLst[f.fileIdx]},
+		queueJobs[f.stamp] = queueJobFile{
+			runJobFile: runJobFile{RunJob: jc, filePath: fLst[f.fileIdx], oms: f.oms},
 			position:   f.position,
 			isPaused:   isOmsPaused,
 			isFirst:    f.isFirst,
@@ -852,8 +875,10 @@ func initJobComputeState(jobIniPath string, updateTs time.Time, computeState map
 	nowTs := updateTs.UnixMilli()
 
 	// total available resources limits and timeouts
-	jsState.LocalRes.Cpu = opts.Int("Common.LocalCpu", 0)    // localhost unlimited cpu cores by default
-	jsState.LocalRes.Mem = opts.Int("Common.LocalMemory", 0) // localhost unlimited memory by default
+	jsState.LocalRes.Cpu = opts.Int("Common.LocalCpu", 0)      // localhost unlimited cpu cores by default
+	jsState.LocalRes.Mem = opts.Int("Common.LocalMemory", 0)   // localhost unlimited memory by default
+	jsState.MaxOwnMpiRes.Cpu = opts.Int("Common.MpiCpu", 0)    // max MPI cpu cores available for each oms instance, unlimited cpu cores by default
+	jsState.MaxOwnMpiRes.Mem = opts.Int("Common.MpiMemory", 0) // max MPI memory cores available for each oms instance, by default
 
 	jsState.maxIdleTime = 1000 * opts.Int64("Common.IdleTimeout", 0) // zero default timeout: never stop servers by default
 	jsState.maxStartTime = 1000 * opts.Int64("Common.StartTimeout", serverTimeoutDefault)
