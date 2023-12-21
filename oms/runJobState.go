@@ -437,14 +437,15 @@ func updateQueueJobs(
 		isOver := (isMpiLimit && cpu > mpiTotalRes.Cpu) || (mpiTotalRes.Mem > 0 && mem > mpiTotalRes.Mem)
 
 		// check resources quota: max cpu memory allowed for each oms instance
-		if !isOver && maxMpiOwnRes.Cpu > 0 || maxMpiOwnRes.Mem > 0 {
+		if !isOver && (maxMpiOwnRes.Cpu > 0 || maxMpiOwnRes.Mem > 0) {
+
 			omsCpu := 0
 			omsMem := 0
 			for stamp := range activeJobs {
 				omsCpu += activeJobs[stamp].Res.Cpu
 				omsMem += activeJobs[stamp].Res.Mem
 
-				isOver = omsCpu > maxMpiOwnRes.Cpu || maxMpiOwnRes.Mem > 0 && omsMem > mpiTotalRes.Mem
+				isOver = maxMpiOwnRes.Cpu > 0 && omsCpu >= maxMpiOwnRes.Cpu || maxMpiOwnRes.Mem > 0 && omsMem >= mpiTotalRes.Mem
 				if isOver {
 					break
 				}
