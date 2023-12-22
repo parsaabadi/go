@@ -308,7 +308,7 @@ func mainBody(args []string) error {
 	}
 
 	// set UI languages to find model text in browser language
-	ll := strings.Split(runOpts.String(uiLangsArgKey), ",")
+	ll := helper.ParseCsvLine(runOpts.String(uiLangsArgKey), ',')
 	var lt []language.Tag
 	for _, ls := range ll {
 		if ls != "" {

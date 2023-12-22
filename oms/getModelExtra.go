@@ -207,7 +207,7 @@ func (mc *ModelCatalog) EntityGenByName(dn string, runId int, entityName string)
 		return nil, false
 	}
 
-	// find entity generation by entity name
+	// find entity generation by entity id, as it is today model run has only one entity generation for each entity
 	gIdx := -1
 	for k := range egLst {
 

@@ -18,6 +18,24 @@ type cellCodeValue struct {
 	Value  interface{} // value: int64, bool, float64 or string
 }
 
+// map between runs digest and id and calculations name and id
+type CalcMaps struct {
+	IdToDigest   map[int]string // map of run id's to run digests
+	DigestToId   map[string]int // map of run digests to run id's
+	CalcIdToName map[int]string // map of calculation id to name
+	CalcNameToId map[string]int // map of calculation name to id
+}
+
+// return empty value of calculation maps
+func EmptyCalcMaps() CalcMaps {
+	return CalcMaps{
+		IdToDigest:   map[int]string{},
+		DigestToId:   map[string]int{},
+		CalcIdToName: map[int]string{},
+		CalcNameToId: map[string]int{},
+	}
+}
+
 // CsvConverter provide methods to convert parameters or output table data from or to row []string for csv file.
 type CsvIntKeysConverter interface {
 	CsvConverter // convert parameter row or output table row from or to row []string for csv file

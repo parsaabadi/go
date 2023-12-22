@@ -26,13 +26,8 @@ type CellCodeTableCalc struct {
 
 // CellTableCalcConverter is a converter for output table calculated cell to implement CsvConverter interface.
 type CellTableCalcConverter struct {
-	CellTableConverter                // model metadata and output table name
-	IsIdCsv            bool           // if true then use enum id's else use enum codes
-	DoubleFmt          string         // if not empty then format string is used to sprintf if value type is float, double, long double
-	IdToDigest         map[int]string // map of run id's to run digests
-	DigestToId         map[string]int // map of run digests to run id's
-	CalcIdToName       map[int]string // map of calculation id to name
-	CalcNameToId       map[string]int // map of calculation name to id
+	CellTableConverter // model metadata and output table name
+	CalcMaps           // map between runs digest and id and calculations name and id
 }
 
 // Set calculation name to Id and Id to name maps
@@ -251,8 +246,8 @@ func (cellCvt *CellTableCalcConverter) ToCsvRow() (func(interface{}, []string) (
 
 // CsvToCell return closure to convert csv row []string to output table calculated cell (run id, calc_id, dimensions and calc_value).
 //
-// It does return error if len(row) not equal to number of fields in cell db-record.
 // If dimension type is enum based then csv row is enum code and it is converted into cell.DimIds (into dimension type type enum ids).
+// It does return error if len(row) not equal to number of fields in cell db-record.
 func (cellCvt *CellTableCalcConverter) CsvToCell() (func(row []string) (interface{}, error), error) {
 
 	// find output table by name
@@ -323,7 +318,7 @@ func (cellCvt *CellTableCalcConverter) CsvToCell() (func(row []string) (interfac
 }
 
 // IdToCodeCell return converter from output table calculated cell of ids: (run_id, calc_id, dimensions enum ids, calc_value)
-// to cell of codes: (run_digest, dimensions as enum codes, calc_value).
+// to cell of codes: (run_digest, CalcName, dimensions as enum codes, calc_value).
 //
 // If dimension type is enum based then dimensions enum ids can be converted to enum code.
 // If dimension type is simple (bool or int) then dimension value converted to string.

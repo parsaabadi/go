@@ -24,18 +24,18 @@ type CellCodeExpr struct {
 
 // CellTableConverter is a parent for for output table converters.
 type CellTableConverter struct {
-	ModelDef *ModelMeta // model metadata
-	Name     string     // output table name
-	theTable *TableMeta // if not nil then output table already found
+	ModelDef    *ModelMeta // model metadata
+	Name        string     // output table name
+	theTable    *TableMeta // if not nil then output table already found
+	IsIdCsv     bool       // if true then use enum id's else use enum codes
+	DoubleFmt   string     // if not empty then format string is used to sprintf if value type is float, double, long double
+	IsNoZeroCsv bool       // if true then do not write zero values into csv output
+	IsNoNullCsv bool       // if true then do not write NULL values into csv output
 }
 
 // CellExprConverter is a converter for output table expression to implement CsvConverter interface.
 type CellExprConverter struct {
-	CellTableConverter        // model metadata and output table name
-	IsIdCsv            bool   // if true then use enum id's else use enum codes
-	DoubleFmt          string // if not empty then format string is used to sprintf if value type is float, double, long double
-	IsNoZeroCsv        bool   // if true then do not write zero values into csv output
-	IsNoNullCsv        bool   // if true then do not write NULL values into csv output
+	CellTableConverter // model metadata and output table name
 }
 
 // return true if csv converter is using enum id's for dimensions

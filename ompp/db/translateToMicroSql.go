@@ -191,8 +191,10 @@ func partialTranslateToMicroSql(
 		}
 	}
 
-	// append WHERE to main sql query and return result
-	mainSql += " WHERE " + where
+	// append WHERE to main sql query if where filters not empty
+	if where != "" {
+		mainSql += " WHERE " + where
+	}
 
 	return mainSql, isRunCompare, nil
 }

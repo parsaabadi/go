@@ -497,13 +497,13 @@ func digestMicrodataFrom(modelDef *ModelMeta, entityName string, entityGen *Enti
 	}
 
 	// create microdata row digester append digest of microdata cells
-	cvtMicro := &CellMicroConverter{
+	cvtMicro := &CellMicroConverter{CellEntityConverter: CellEntityConverter{
 		ModelDef:  modelDef,
 		Name:      entityName,
 		EntityGen: entityGen,
 		IsIdCsv:   true,
 		DoubleFmt: doubleFmt,
-	}
+	}}
 
 	digestRow, err := digestMicrodataCellsFrom(hMd5, modelDef, rowCount, cvtMicro)
 	if err != nil {

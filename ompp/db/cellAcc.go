@@ -26,11 +26,7 @@ type CellCodeAcc struct {
 
 // CellAccConverter is a converter for output table accumulator to implement CsvConverter interface.
 type CellAccConverter struct {
-	CellTableConverter        // model metadata and output table name
-	IsIdCsv            bool   // if true then use enum id's else use enum codes
-	DoubleFmt          string // if not empty then format string is used to sprintf if value type is float, double, long double
-	IsNoZeroCsv        bool   // if true then do not write zero values into csv output
-	IsNoNullCsv        bool   // if true then do not write NULL values into csv output
+	CellTableConverter // model metadata and output table name
 }
 
 // return true if csv converter is using enum id's for dimensions

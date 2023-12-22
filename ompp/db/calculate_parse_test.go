@@ -222,7 +222,7 @@ func TestTranslateToExprSql(t *testing.T) {
 		runIds := []int{}
 		if sVal := kvIni["TranslateToExprSql.RunIds_"+strconv.Itoa(k+1)]; sVal != "" {
 
-			sArr := strings.Split(sVal, ",")
+			sArr := helper.ParseCsvLine(sVal, ',')
 			for j := range sArr {
 				if id, err := strconv.Atoi(sArr[j]); err != nil {
 					t.Fatal(err)

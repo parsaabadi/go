@@ -65,10 +65,9 @@ func TestCompareOutputTable(t *testing.T) {
 		CellTableConverter: CellTableConverter{
 			ModelDef: modelDef,
 			Name:     tableName,
+			IsIdCsv:  true,
 		},
-		IsIdCsv:    true,
-		IdToDigest: map[int]string{},
-		DigestToId: map[string]int{},
+		CalcMaps: EmptyCalcMaps(),
 	}
 	for _, r := range rLst {
 		csvCvt.IdToDigest[r.RunId] = r.RunDigest
@@ -81,7 +80,7 @@ func TestCompareOutputTable(t *testing.T) {
 
 		appendToCalc := func(src string, isAggr bool, idOffset int) {
 
-			ce := strings.Split(src, ",")
+			ce := helper.ParseCsvLine(src, ',')
 			for j := range ce {
 
 				c := strings.TrimSpace(ce[j])
@@ -125,7 +124,7 @@ func TestCompareOutputTable(t *testing.T) {
 		runIds := []int{}
 		if sVal := kvIni["CompareOutputTable.RunIds_"+strconv.Itoa(k+1)]; sVal != "" {
 
-			sArr := strings.Split(sVal, ",")
+			sArr := helper.ParseCsvLine(sVal, ',')
 			for j := range sArr {
 				if id, err := strconv.Atoi(sArr[j]); err != nil {
 					t.Fatal(err)
@@ -139,15 +138,16 @@ func TestCompareOutputTable(t *testing.T) {
 		}
 		t.Log("run id's:", runIds)
 
-		tableLt := &ReadTableLayout{
+		tableLt := &ReadCalculteTableLayout{
 			ReadLayout: ReadLayout{
 				Name:   tableName,
 				FromId: baseRunId,
 			},
+			Calculation: calcLt,
 		}
 
 		// read table
-		cLst, rdLt, err := CalculateOutputTable(srcDb, modelDef, tableLt, calcLt, runIds)
+		cLst, rdLt, err := CalculateOutputTable(srcDb, modelDef, tableLt, runIds)
 		if err != nil {
 			t.Fatal(err)
 		}

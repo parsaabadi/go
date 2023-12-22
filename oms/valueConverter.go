@@ -84,8 +84,10 @@ func (mc *ModelCatalog) TableToCodeCellConverter(dn string, name string, isAcc, 
 
 	// create converter
 	ctc := db.CellTableConverter{
-		ModelDef: meta,
-		Name:     name,
+		ModelDef:  meta,
+		Name:      name,
+		IsIdCsv:   false,
+		DoubleFmt: theCfg.doubleFmt,
 	}
 	var cvt func(interface{}) (interface{}, error)
 	var err error
@@ -94,23 +96,17 @@ func (mc *ModelCatalog) TableToCodeCellConverter(dn string, name string, isAcc, 
 	case isAcc && isAllAcc:
 		csvCvt := db.CellAllAccConverter{
 			CellTableConverter: ctc,
-			IsIdCsv:            false,
-			DoubleFmt:          theCfg.doubleFmt,
 			ValueName:          "",
 		}
 		cvt, err = csvCvt.IdToCodeCell(meta, name)
 	case isAcc:
 		csvCvt := db.CellAccConverter{
 			CellTableConverter: ctc,
-			IsIdCsv:            false,
-			DoubleFmt:          theCfg.doubleFmt,
 		}
 		cvt, err = csvCvt.IdToCodeCell(meta, name)
 	default:
 		csvCvt := db.CellExprConverter{
 			CellTableConverter: ctc,
-			IsIdCsv:            false,
-			DoubleFmt:          theCfg.doubleFmt,
 		}
 		cvt, err = csvCvt.IdToCodeCell(meta, name)
 	}
@@ -151,15 +147,12 @@ func (mc *ModelCatalog) TableToCodeCalcCellConverter(
 	// create converter
 	ctc := db.CellTableCalcConverter{
 		CellTableConverter: db.CellTableConverter{
-			ModelDef: meta,
-			Name:     tableName,
+			ModelDef:  meta,
+			Name:      tableName,
+			IsIdCsv:   false,
+			DoubleFmt: theCfg.doubleFmt,
 		},
-		IsIdCsv:      false,
-		DoubleFmt:    theCfg.doubleFmt,
-		IdToDigest:   map[int]string{},
-		DigestToId:   map[string]int{},
-		CalcIdToName: map[int]string{},
-		CalcNameToId: map[string]int{},
+		CalcMaps: db.EmptyCalcMaps(),
 	}
 	if e := ctc.SetCalcIdNameMap(calcLt); e != nil {
 		omppLog.Log("Failed to create output table cell id's to code converter: ", tableName, ": ", e.Error())
@@ -174,7 +167,7 @@ func (mc *ModelCatalog) TableToCodeCalcCellConverter(
 
 	// validate all runs: it must be completed successfully
 	// set run digests and run id's maps in the convereter
-	baseRunId, runIds, ok := mc.setRunDigestIdMap(meta.Model.Digest, rdsn, runLst, ctc)
+	baseRunId, runIds, ok := mc.setTableRunDigestIdMap(meta.Model.Digest, rdsn, runLst, ctc)
 
 	return cvt, baseRunId, runIds, ok
 }
@@ -400,7 +393,7 @@ func (mc *ModelCatalog) TableExprCompareLayout(dn string, name string, cmp strin
 // Function accept base run digest-or-stamp-or-name and optional list of variant runs digest-or-stamp-or-name.
 // All runs must be completed successfully.
 // Return base run id and optional list of run id's and Ok boolen flag.
-func (mc *ModelCatalog) setRunDigestIdMap(digest string, rdsn string, runLst []string, ctc db.CellTableCalcConverter) (int, []int, bool) {
+func (mc *ModelCatalog) setTableRunDigestIdMap(digest string, rdsn string, runLst []string, ctc db.CellTableCalcConverter) (int, []int, bool) {
 
 	// find model run id by digest-or-stamp-or-name
 	r, ok := mc.CompletedRunByDigestOrStampOrName(digest, rdsn)
@@ -505,13 +498,13 @@ func (mc *ModelCatalog) MicrodataCellConverter(
 	}
 
 	// create converter
-	cvtMicro := &db.CellMicroConverter{
+	cvtMicro := &db.CellMicroConverter{CellEntityConverter: db.CellEntityConverter{
 		ModelDef:  meta,
 		Name:      name,
 		EntityGen: entGen,
 		IsIdCsv:   isToId,
 		DoubleFmt: theCfg.doubleFmt,
-	}
+	}}
 	var cvt func(interface{}) (interface{}, error)
 	var err error
 
@@ -604,8 +597,10 @@ func (mc *ModelCatalog) TableToCsvConverter(dn string, isCode bool, name string,
 
 	// set cell conveter to csv
 	ctc := db.CellTableConverter{
-		ModelDef: meta,
-		Name:     name,
+		ModelDef:  meta,
+		Name:      name,
+		IsIdCsv:   !isCode,
+		DoubleFmt: theCfg.doubleFmt,
 	}
 	var csvCvt db.CsvConverter
 
@@ -613,21 +608,15 @@ func (mc *ModelCatalog) TableToCsvConverter(dn string, isCode bool, name string,
 	case isAcc && isAllAcc:
 		csvCvt = &db.CellAllAccConverter{
 			CellTableConverter: ctc,
-			IsIdCsv:            !isCode,
-			DoubleFmt:          theCfg.doubleFmt,
 			ValueName:          "",
 		}
 	case isAcc:
 		csvCvt = &db.CellAccConverter{
 			CellTableConverter: ctc,
-			IsIdCsv:            !isCode,
-			DoubleFmt:          theCfg.doubleFmt,
 		}
 	default:
 		csvCvt = &db.CellExprConverter{
 			CellTableConverter: ctc,
-			IsIdCsv:            !isCode,
-			DoubleFmt:          theCfg.doubleFmt,
 		}
 	}
 
@@ -683,15 +672,12 @@ func (mc *ModelCatalog) TableToCalcCsvConverter(
 	// create cell conveter to csv
 	ctc := db.CellTableCalcConverter{
 		CellTableConverter: db.CellTableConverter{
-			ModelDef: meta,
-			Name:     tableName,
+			ModelDef:  meta,
+			Name:      tableName,
+			IsIdCsv:   !isCode,
+			DoubleFmt: theCfg.doubleFmt,
 		},
-		IsIdCsv:      !isCode,
-		DoubleFmt:    theCfg.doubleFmt,
-		IdToDigest:   map[int]string{},
-		DigestToId:   map[string]int{},
-		CalcIdToName: map[int]string{},
-		CalcNameToId: map[string]int{},
+		CalcMaps: db.EmptyCalcMaps(),
 	}
 	if e := ctc.SetCalcIdNameMap(calcLt); e != nil {
 		omppLog.Log("Failed to create output table converter to csv: ", dn, ": ", tableName, ": ", e.Error())
@@ -700,7 +686,7 @@ func (mc *ModelCatalog) TableToCalcCsvConverter(
 
 	// validate all runs: it must be completed successfully
 	// set run digests and run id's maps in the convereter
-	baseRunId, runIds, ok := mc.setRunDigestIdMap(meta.Model.Digest, rdsn, runLst, ctc)
+	baseRunId, runIds, ok := mc.setTableRunDigestIdMap(meta.Model.Digest, rdsn, runLst, ctc)
 	if !ok {
 		omppLog.Log("Failed to create output table converter to csv, invalid run digest or model run not completed: ", dn, ": ", tableName)
 		return []string{}, nil, 0, nil, false // return empty result: output table not found or error
@@ -775,13 +761,13 @@ func (mc *ModelCatalog) MicrodataToCsvConverter(
 	}
 
 	// make csv header
-	cvtMicro := &db.CellMicroConverter{
+	cvtMicro := &db.CellMicroConverter{CellEntityConverter: db.CellEntityConverter{
 		ModelDef:  meta,
 		Name:      name,
 		EntityGen: entGen,
 		IsIdCsv:   !isCode,
 		DoubleFmt: theCfg.doubleFmt,
-	}
+	}}
 
 	hdr, err := cvtMicro.CsvHeader()
 	if err != nil {

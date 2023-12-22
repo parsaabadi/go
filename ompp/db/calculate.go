@@ -7,6 +7,7 @@ import (
 	"container/list"
 	"database/sql"
 	"errors"
+	"strconv"
 )
 
 const CALCULATED_ID_OFFSET = 1200 // calculated exprssion id offset, for example for Expr1 calculated expression id is 1201
@@ -14,7 +15,7 @@ const CALCULATED_ID_OFFSET = 1200 // calculated exprssion id offset, for example
 // CalculateOutputTable read output table page (dimensions and values) and calculate extra measure(s).
 //
 // If calcLt.IsAggr true then do accumulator(s) aggregation else calculate expression value(s), ex: Expr1[variant] - Expr1[base].
-func CalculateOutputTable(dbConn *sql.DB, modelDef *ModelMeta, tableLt *ReadTableLayout, calcLt []CalculateTableLayout, runIds []int) (*list.List, *ReadPageLayout, error) {
+func CalculateOutputTable(dbConn *sql.DB, modelDef *ModelMeta, tableLt *ReadCalculteTableLayout, runIds []int) (*list.List, *ReadPageLayout, error) {
 
 	// validate parameters
 	if modelDef == nil {
@@ -26,7 +27,7 @@ func CalculateOutputTable(dbConn *sql.DB, modelDef *ModelMeta, tableLt *ReadTabl
 	if tableLt.Name == "" {
 		return nil, nil, errors.New("invalid (empty) output table name")
 	}
-	if len(calcLt) <= 0 {
+	if len(tableLt.Calculation) <= 0 {
 		return nil, nil, errors.New("invalid (empty) calculation expression(s)")
 	}
 
@@ -39,7 +40,7 @@ func CalculateOutputTable(dbConn *sql.DB, modelDef *ModelMeta, tableLt *ReadTabl
 	}
 
 	// translate calculation to sql
-	q, err := translateTableCalcToSql(table, &tableLt.ReadLayout, calcLt, runIds)
+	q, err := translateTableCalcToSql(table, &tableLt.ReadLayout, tableLt.Calculation, runIds)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -60,7 +61,7 @@ func CalculateOutputTable(dbConn *sql.DB, modelDef *ModelMeta, tableLt *ReadTabl
 	scanBuf = append(scanBuf, &vf)
 
 	// select cells:
-	// run_id, dimension(s) enum ids, value null status
+	// run_id, calculation id, dimension(s) enum ids, value null status
 	cLst, lt, err := SelectToList(dbConn, q, tableLt.ReadPageLayout,
 		func(rows *sql.Rows) (interface{}, error) {
 
@@ -174,6 +175,115 @@ func translateTableCalcToSql(table *TableMeta, readLt *ReadLayout, calcLt []Calc
 	return sql, nil
 }
 
+// CalculateMicrodata aggregates microdata using group by attributes as dimensions and calculate aggregated measure(s).
+func CalculateMicrodata(dbConn *sql.DB, modelDef *ModelMeta, microLt *ReadCalculteMicroLayout, runIds []int) (*list.List, *ReadPageLayout, error) {
+
+	// validate parameters
+	if modelDef == nil {
+		return nil, nil, errors.New("invalid (empty) model metadata, look like model not found")
+	}
+	if microLt == nil {
+		return nil, nil, errors.New("invalid (empty) microdata calculate layout")
+	}
+	if microLt.Name == "" {
+		return nil, nil, errors.New("invalid (empty) microdata entity name")
+	}
+	if len(microLt.Calculation) <= 0 {
+		return nil, nil, errors.New("invalid (empty) calculation expression(s)")
+	}
+
+	// find entity by name
+	var entity *EntityMeta
+
+	if k, ok := modelDef.EntityByName(microLt.Name); ok {
+		entity = &modelDef.Entity[k]
+	} else {
+		return nil, nil, errors.New("entity not found: " + microLt.Name)
+	}
+
+	// find entity generation by entity id, as it is today model run has only one entity generation for each entity
+	egLst, err := GetEntityGenList(dbConn, microLt.FromId)
+	if err != nil {
+		return nil, nil, errors.New("entity generation not found: " + microLt.Name + ": " + strconv.Itoa(microLt.FromId))
+	}
+	var entityGen *EntityGenMeta
+
+	for k := range egLst {
+
+		if egLst[k].EntityId == entity.EntityId {
+			entityGen = &egLst[k]
+			break
+		}
+	}
+	if entityGen == nil {
+		return nil, nil, errors.New("Error: entity generation not found: " + microLt.Name + ": " + strconv.Itoa(microLt.FromId))
+	}
+
+	// find group by microdata attributes by name
+	aGroupBy := make([]EntityAttrRow, len(microLt.GroupBy))
+
+	for _, ga := range entityGen.GenAttr {
+
+		aIdx, ok := entity.AttrByKey(ga.AttrId)
+		if !ok {
+			return nil, nil, errors.New("entity attribute not found by id: " + strconv.Itoa(ga.AttrId) + " " + microLt.Name)
+		}
+		for j := range microLt.GroupBy {
+			if microLt.GroupBy[j] == entity.Attr[aIdx].Name {
+				aGroupBy[j] = entity.Attr[aIdx]
+				break
+			}
+		}
+	}
+
+	// check: all group by attributes must be found and it must boolean or not built-in
+	for k := range aGroupBy {
+		if aGroupBy[k].ModelId <= 0 || aGroupBy[k].Name == "" || aGroupBy[k].colName == "" || aGroupBy[k].typeOf == nil {
+			return nil, nil, errors.New("entity group by attribute not found by: " + microLt.Name + "." + microLt.GroupBy[k])
+		}
+		if aGroupBy[k].typeOf.IsBuiltIn() && !aGroupBy[k].typeOf.IsBool() {
+			return nil, nil, errors.New("invalid type of entity group by attribute not found by: " + microLt.Name + "." + microLt.GroupBy[k] + " : " + aGroupBy[k].typeOf.Name)
+		}
+	}
+
+	// translate calculation to sql
+	q, err := translateMicroToSql(entity, entityGen, &microLt.ReadLayout, &microLt.CalculateMicroLayout, runIds)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// prepare db-row scan conversion buffer: run_id, calculation id, group by attributes, value
+	// and define conversion function to make new cell from scan buffer
+	scanBuf, fc, err := scanSqlRowToCellMicroCalc(entity, aGroupBy)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// select cells:
+	// run_id, calculation id, group by attributes, value and null status
+	cLst, lt, err := SelectToList(dbConn, q, microLt.ReadPageLayout,
+		func(rows *sql.Rows) (interface{}, error) {
+
+			if e := rows.Scan(scanBuf...); e != nil {
+				return nil, e
+			}
+
+			// make new cell from conversion buffer
+			c := CellMicroCalc{Attr: make([]attrValue, len(aGroupBy)+1)}
+
+			if e := fc(&c); e != nil {
+				return nil, e
+			}
+
+			return c, nil
+		})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return cLst, lt, nil
+}
+
 // Translate all microdata aggregations to sql query, apply group by, dimension filters, selected run id's and order by.
 // It can be a multiple runs comparison and base run id is layout.FromId.
 // Or simple aggreagtion inside of single run, in that case layout.FromId and runIds[] are merged.
@@ -244,4 +354,119 @@ func translateMicroToSql(entity *EntityMeta, entityGen *EntityGenMeta, readLt *R
 	sql += makeOrderBy(len(calcLt.GroupBy), readLt.OrderBy, 2)
 
 	return sql, nil
+}
+
+// prepare to scan sql rows and convert each row to CellMicroCalc
+// retun scan buffer to be popualted by rows.Scan() and closure to that buffer into CellMicroCalc
+func scanSqlRowToCellMicroCalc(entity *EntityMeta, aGroupBy []EntityAttrRow) ([]interface{}, func(*CellMicroCalc) error, error) {
+
+	nGrp := len(aGroupBy)
+	scanBuf := make([]interface{}, 3+nGrp) // run id, calculation id, group by attributes, calculated value
+
+	var runId, calcId int
+	scanBuf[0] = &runId
+	scanBuf[1] = &calcId
+
+	fd := make([]func(interface{}) (attrValue, error), nGrp+1) // conversion functions for group by attributes
+
+	// for each attribute create conversion function by type
+	for na, ga := range aGroupBy {
+
+		switch {
+		case ga.typeOf.IsBool(): // logical attribute
+
+			var v interface{}
+			scanBuf[2+na] = &v
+
+			fd[na] = func(src interface{}) (attrValue, error) {
+
+				av := attrValue{}
+				av.IsNull = false // logical attribute expected to be NOT NULL
+
+				is := false
+				switch vn := v.(type) {
+				case nil: // 2018: unexpected today, may be in the future
+					is = false
+					av.IsNull = true
+				case bool:
+					is = vn
+				case int64:
+					is = vn != 0
+				case uint64:
+					is = vn != 0
+				case int32:
+					is = vn != 0
+				case uint32:
+					is = vn != 0
+				case int16:
+					is = vn != 0
+				case uint16:
+					is = vn != 0
+				case int8:
+					is = vn != 0
+				case uint8:
+					is = vn != 0
+				case uint:
+					is = vn != 0
+				case float32: // oracle (very unlikely)
+					is = vn != 0.0
+				case float64: // oracle (often)
+					is = vn != 0.0
+				case int:
+					is = vn != 0
+				default:
+					return av, errors.New("invalid attribute value type, integer expected: " + entity.Name + "." + ga.Name)
+				}
+				av.Value = is
+
+				return av, nil
+			}
+
+		case ga.typeOf.IsString(): // string attribute, as it is today strings are not microdata dimenions
+
+			return nil, nil, errors.New("invalid group by attribute type: " + ga.typeOf.Name + " : " + entity.Name + "." + ga.Name)
+
+		case ga.typeOf.IsFloat(): // float attribute, can be NULL, as it is today floats cannot are not microdata dimenions
+
+			return nil, nil, errors.New("invalid group by attribute type: " + ga.typeOf.Name + " : " + entity.Name + "." + ga.Name)
+
+		default:
+			var v interface{}
+			scanBuf[2+na] = &v
+
+			fd[na] = func(src interface{}) (attrValue, error) { return attrValue{IsNull: src == nil, Value: v}, nil }
+		}
+	}
+
+	// calculated value expected to be float
+	var vf sql.NullFloat64
+	scanBuf[2+nGrp] = &vf
+
+	fd[nGrp] = func(src interface{}) (attrValue, error) {
+
+		if src == nil {
+			return attrValue{IsNull: true}, nil
+		}
+		if vf.Valid {
+			return attrValue{IsNull: false, Value: vf.Float64}, nil
+		}
+		return attrValue{IsNull: true, Value: 0.0}, nil
+	}
+
+	// sql row conevrsion function: convert (run_id, calc_id, group by attributes, calc_value) from scan buffer to cell
+	cvt := func(c *CellMicroCalc) error {
+
+		c.RunId = runId
+
+		for k := 0; k < nGrp+1; k++ {
+			v, e := fd[k](scanBuf[2+k])
+			if e != nil {
+				return e
+			}
+			c.Attr[k] = v
+		}
+		return nil
+	}
+
+	return scanBuf, cvt, nil
 }

@@ -242,11 +242,11 @@ func digestAccumulatorsFrom(
 	// create accumulator(s) row digester append digest of accumulator(s) cells
 	cvtAcc := &CellAccConverter{
 		CellTableConverter: CellTableConverter{
-			ModelDef: modelDef,
-			Name:     meta.Name,
+			ModelDef:  modelDef,
+			Name:      meta.Name,
+			IsIdCsv:   true,
+			DoubleFmt: doubleFmt,
 		},
-		IsIdCsv:   true,
-		DoubleFmt: doubleFmt,
 	}
 
 	digestRow, isOrderBy, err := digestIntKeysCellsFrom(hMd5, modelDef, meta.Name, cvtAcc)
@@ -266,11 +266,11 @@ func digestExpressionsFrom(
 	// append digest of expression(s) cells
 	cvtExpr := &CellExprConverter{
 		CellTableConverter: CellTableConverter{
-			ModelDef: modelDef,
-			Name:     meta.Name,
+			ModelDef:  modelDef,
+			Name:      meta.Name,
+			IsIdCsv:   true,
+			DoubleFmt: doubleFmt,
 		},
-		IsIdCsv:   true,
-		DoubleFmt: doubleFmt,
 	}
 
 	digestRow, isOrderBy, err := digestIntKeysCellsFrom(hSum, modelDef, meta.Name, cvtExpr)

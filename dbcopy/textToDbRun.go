@@ -337,11 +337,13 @@ func fromRunTextToDb(
 			DoubleFmt: theCfg.doubleFmt,
 		}
 		ctc := db.CellTableConverter{
-			ModelDef: modelDef,
-			Name:     modelDef.Table[j].Name,
+			ModelDef:  modelDef,
+			Name:      modelDef.Table[j].Name,
+			IsIdCsv:   false,
+			DoubleFmt: theCfg.doubleFmt,
 		}
-		cvtExpr := db.CellExprConverter{CellTableConverter: ctc, IsIdCsv: false, DoubleFmt: theCfg.doubleFmt}
-		cvtAcc := db.CellAccConverter{CellTableConverter: ctc, IsIdCsv: false, DoubleFmt: theCfg.doubleFmt}
+		cvtExpr := db.CellExprConverter{CellTableConverter: ctc}
+		cvtAcc := db.CellAccConverter{CellTableConverter: ctc}
 
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name)
 
@@ -386,13 +388,13 @@ func fromRunTextToDb(
 				},
 				DoubleFmt: theCfg.doubleFmt,
 			}
-			cvtMicro := db.CellMicroConverter{
+			cvtMicro := db.CellMicroConverter{CellEntityConverter: db.CellEntityConverter{
 				ModelDef:  modelDef,
 				Name:      pub.Entity[j].Name,
 				EntityGen: &meta.EntityGen[j], // entity generation converted from "public" and has the same item order
 				IsIdCsv:   false,
 				DoubleFmt: theCfg.doubleFmt,
-			}
+			}}
 
 			logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nMd, ": ", microLt.Name)
 

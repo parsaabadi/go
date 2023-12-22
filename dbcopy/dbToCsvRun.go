@@ -162,18 +162,16 @@ func toRunCsv(
 			},
 		}
 		ctc := db.CellTableConverter{
-			ModelDef: modelDef,
-			Name:     modelDef.Table[j].Name,
+			ModelDef:    modelDef,
+			Name:        modelDef.Table[j].Name,
+			IsIdCsv:     theCfg.isIdCsv,
+			DoubleFmt:   theCfg.doubleFmt,
+			IsNoZeroCsv: theCfg.isNoZeroCsv,
+			IsNoNullCsv: theCfg.isNoNullCsv,
 		}
-		cvtExpr := &db.CellExprConverter{
-			CellTableConverter: ctc, IsIdCsv: theCfg.isIdCsv, DoubleFmt: theCfg.doubleFmt, IsNoZeroCsv: theCfg.isNoZeroCsv, IsNoNullCsv: theCfg.isNoNullCsv,
-		}
-		cvtAcc := &db.CellAccConverter{
-			CellTableConverter: ctc, IsIdCsv: theCfg.isIdCsv, DoubleFmt: theCfg.doubleFmt, IsNoZeroCsv: theCfg.isNoZeroCsv, IsNoNullCsv: theCfg.isNoNullCsv,
-		}
-		cvtAll := &db.CellAllAccConverter{
-			CellTableConverter: ctc, IsIdCsv: theCfg.isIdCsv, DoubleFmt: theCfg.doubleFmt, ValueName: "", IsNoZeroCsv: theCfg.isNoZeroCsv, IsNoNullCsv: theCfg.isNoNullCsv,
-		}
+		cvtExpr := &db.CellExprConverter{CellTableConverter: ctc}
+		cvtAcc := &db.CellAccConverter{CellTableConverter: ctc}
+		cvtAll := &db.CellAllAccConverter{CellTableConverter: ctc}
 
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", tblLt.Name)
 
@@ -221,7 +219,7 @@ func toRunCsv(
 				return errors.New("error: entity not found by Id: " + strconv.Itoa(eId) + " " + meta.EntityGen[j].GenDigest)
 			}
 
-			cvtMicro := &db.CellMicroConverter{
+			cvtMicro := &db.CellMicroConverter{CellEntityConverter: db.CellEntityConverter{
 				ModelDef:    modelDef,
 				Name:        modelDef.Entity[eIdx].Name,
 				EntityGen:   &meta.EntityGen[j],
@@ -229,7 +227,7 @@ func toRunCsv(
 				DoubleFmt:   theCfg.doubleFmt,
 				IsNoZeroCsv: theCfg.isNoZeroCsv,
 				IsNoNullCsv: theCfg.isNoNullCsv,
-			}
+			}}
 			microLt := db.ReadMicroLayout{
 				ReadLayout: db.ReadLayout{
 					Name:   modelDef.Entity[eIdx].Name,
