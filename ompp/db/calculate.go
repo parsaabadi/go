@@ -457,6 +457,7 @@ func scanSqlRowToCellMicroCalc(entity *EntityMeta, aGroupBy []EntityAttrRow) ([]
 	cvt := func(c *CellMicroCalc) error {
 
 		c.RunId = runId
+		c.CalcId = calcId
 
 		for k := 0; k < nGrp+1; k++ {
 			v, e := fd[k](scanBuf[2+k])

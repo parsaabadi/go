@@ -181,7 +181,14 @@ func writeTestToCsvIdFile(
 	cellLst *list.List) error {
 
 	// converter from db cell to csv id row []string
-	cvt, err := csvCvt.ToCsvIdRow()
+	var cvt func(interface{}, []string) (bool, error)
+	var err error
+
+	if csvCvt.IsUseEnumId() {
+		cvt, err = csvCvt.ToCsvIdRow()
+	} else {
+		cvt, err = csvCvt.ToCsvRow()
+	}
 	if err != nil {
 		return err
 	}

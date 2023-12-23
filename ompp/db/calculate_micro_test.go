@@ -173,6 +173,11 @@ func TestCalculateMicrodata(t *testing.T) {
 	modelSqliteDbPath := kvIni["CalculateMicrodata.DbPath"]
 	entityName := kvIni["CalculateMicrodata.EntityName"]
 
+	isIdCsv, err := strconv.ParseBool(kvIni["CalculateMicrodata.IdCsv"])
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	baseRunId := 0
 	if sVal := kvIni["CalculateMicrodata.BaseRunId"]; sVal != "" {
 		baseRunId, err = strconv.Atoi(sVal)
@@ -277,7 +282,7 @@ func TestCalculateMicrodata(t *testing.T) {
 				ModelDef:  modelDef,
 				Name:      entityName,
 				EntityGen: entityGen,
-				IsIdCsv:   true,
+				IsIdCsv:   isIdCsv,
 			},
 			GroupBy:  groupBy,
 			CalcMaps: EmptyCalcMaps(),
