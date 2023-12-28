@@ -4,6 +4,7 @@
 package main
 
 import (
+	"errors"
 	"strconv"
 
 	"github.com/openmpp/go/ompp/db"
@@ -167,7 +168,7 @@ func (mc *ModelCatalog) TableToCodeCalcCellConverter(
 
 	// validate all runs: it must be completed successfully
 	// set run digests and run id's maps in the convereter
-	baseRunId, runIds, ok := mc.setTableRunDigestIdMap(meta.Model.Digest, rdsn, runLst, ctc)
+	baseRunId, runIds, ok := mc.setRunDigestIdMap(meta.Model.Digest, rdsn, runLst, &ctc.CalcMaps)
 
 	return cvt, baseRunId, runIds, ok
 }
@@ -389,11 +390,11 @@ func (mc *ModelCatalog) TableExprCompareLayout(dn string, name string, cmp strin
 	return calcLt, true
 }
 
-// set run digest to id and id to digest maps for ctc CellTableCalcConverter.
+// set run digest to id and id to digest maps for calculated cell converter.
 // Function accept base run digest-or-stamp-or-name and optional list of variant runs digest-or-stamp-or-name.
 // All runs must be completed successfully.
 // Return base run id and optional list of run id's and Ok boolen flag.
-func (mc *ModelCatalog) setTableRunDigestIdMap(digest string, rdsn string, runLst []string, ctc db.CellTableCalcConverter) (int, []int, bool) {
+func (mc *ModelCatalog) setRunDigestIdMap(digest string, rdsn string, runLst []string, cm *db.CalcMaps) (int, []int, bool) {
 
 	// find model run id by digest-or-stamp-or-name
 	r, ok := mc.CompletedRunByDigestOrStampOrName(digest, rdsn)
@@ -401,13 +402,13 @@ func (mc *ModelCatalog) setTableRunDigestIdMap(digest string, rdsn string, runLs
 		return 0, nil, false // return empty result: run select error
 	}
 	if r.Status != db.DoneRunStatus {
-		omppLog.Log("Warning: model run not completed successfully: ", rdsn, ": ", r.Status)
+		omppLog.Log("Error: model run not completed successfully: ", rdsn, ": ", r.Status)
 		return 0, nil, false
 	}
 	baseRunId := r.RunId // source run id
 
-	ctc.IdToDigest[r.RunId] = r.RunDigest // add base run digest to converter
-	ctc.DigestToId[r.RunDigest] = r.RunId
+	cm.IdToDigest[r.RunId] = r.RunDigest // add base run digest to converter
+	cm.DigestToId[r.RunDigest] = r.RunId
 
 	// check if all additional model runs completed successfully
 	runIds := []int{}
@@ -425,11 +426,11 @@ func (mc *ModelCatalog) setTableRunDigestIdMap(digest string, rdsn string, runLs
 				}
 				if rId > 0 {
 					if rLst[k].Status != db.DoneRunStatus {
-						omppLog.Log("Warning: model run not completed successfully: ", rLst[k].RunDigest, ": ", rLst[k].Status)
+						omppLog.Log("Error: model run not completed successfully: ", rLst[k].RunDigest, ": ", rLst[k].Status)
 						return 0, nil, false
 					}
-					ctc.IdToDigest[rLst[k].RunId] = rLst[k].RunDigest // add run digest to converter
-					ctc.DigestToId[rLst[k].RunDigest] = rLst[k].RunId
+					cm.IdToDigest[rLst[k].RunId] = rLst[k].RunDigest // add run digest to converter
+					cm.DigestToId[rLst[k].RunDigest] = rLst[k].RunId
 				}
 			}
 			if rId <= 0 {
@@ -492,7 +493,7 @@ func (mc *ModelCatalog) MicrodataCellConverter(
 	}
 
 	// find entity generation by entity name
-	entGen, ok := mc.EntityGenByName(dn, r.RunId, name)
+	_, entGen, ok := mc.EntityGenByName(dn, r.RunId, name)
 	if !ok {
 		return r.RunId, "", nil, false // entity generation not found
 	}
@@ -686,7 +687,7 @@ func (mc *ModelCatalog) TableToCalcCsvConverter(
 
 	// validate all runs: it must be completed successfully
 	// set run digests and run id's maps in the convereter
-	baseRunId, runIds, ok := mc.setTableRunDigestIdMap(meta.Model.Digest, rdsn, runLst, ctc)
+	baseRunId, runIds, ok := mc.setRunDigestIdMap(meta.Model.Digest, rdsn, runLst, &ctc.CalcMaps)
 	if !ok {
 		omppLog.Log("Failed to create output table converter to csv, invalid run digest or model run not completed: ", dn, ": ", tableName)
 		return []string{}, nil, 0, nil, false // return empty result: output table not found or error
@@ -755,7 +756,7 @@ func (mc *ModelCatalog) MicrodataToCsvConverter(
 	}
 
 	// find entity generation by entity name
-	entGen, ok := mc.EntityGenByName(dn, r.RunId, name)
+	_, entGen, ok := mc.EntityGenByName(dn, r.RunId, name)
 	if !ok {
 		return 0, "", []string{}, nil, false // entity generation not found
 	}
@@ -789,4 +790,87 @@ func (mc *ModelCatalog) MicrodataToCsvConverter(
 	}
 
 	return r.RunId, entGen.GenDigest, hdr, cvt, true
+}
+
+// MicrodataCalcToCsvConverter validate group by attributes return model run id, run id variants, entity generation digest
+// csv header as starting array, microdata cell to csv converter or error.
+func (mc *ModelCatalog) MicrodataCalcToCsvConverter(
+	dn string, isCode bool, rdsn string, runLst []string, entityName string, calcLt *db.CalculateMicroLayout,
+) (
+	int, []int, string, *db.CellMicroCalcConverter, error,
+) {
+
+	// validate parameters and return empty results on empty input
+	if dn == "" {
+		return 0, []int{}, "", nil, errors.New("Error: invalid (empty) model digest and name")
+	}
+	if rdsn == "" {
+		return 0, []int{}, "", nil, errors.New("Error: invalid (empty) model run digest, stamp and name")
+	}
+	if entityName == "" {
+		return 0, []int{}, "", nil, errors.New("Error: invalid (empty) model entity name")
+	}
+
+	// get model metadata and database connection
+	meta, _, ok := mc.modelMeta(dn)
+	if !ok {
+		return 0, []int{}, "", nil,
+			errors.New("Error: model digest or name not found: " + dn) // return empty result: model not found or error
+	}
+
+	// create cell conveter to csv
+	cvtMicro := db.CellMicroCalcConverter{
+		CellEntityConverter: db.CellEntityConverter{
+			ModelDef:  meta,
+			Name:      entityName,
+			IsIdCsv:   !isCode,
+			DoubleFmt: theCfg.doubleFmt,
+		},
+		CalcMaps: db.EmptyCalcMaps(),
+		GroupBy:  calcLt.GroupBy,
+	}
+	if e := cvtMicro.SetCalcIdNameMap(calcLt.Calculation); e != nil {
+		return 0, []int{}, "", nil,
+			errors.New("Failed to create microdata aggregation converter to csv: " + dn + ": " + entityName + ": " + e.Error()) // return empty result: invalid calculation name or id
+	}
+
+	// validate all runs: it must be completed successfully
+	// set run digests and run id's maps in the convereter
+	baseRunId, runIds, ok := mc.setRunDigestIdMap(meta.Model.Digest, rdsn, runLst, &cvtMicro.CalcMaps)
+	if !ok {
+		return 0, []int{}, "", nil,
+			errors.New("Failed to create microdata aggregation converter to csv, invalid run digest or model run not completed: " + dn + ": " + entityName) // return empty result: model run not found or not susscessful
+	}
+
+	// find entity generation by entity name and validate entity generation: it must exist for base run and all variant runs
+	_, entGen, attrs, reLst, err := mc.EntityGenAttrsRunList(dn, baseRunId, entityName)
+	if err != nil {
+		return 0, []int{}, "", nil, err // entity generation not found
+	}
+	cvtMicro.EntityGen = entGen
+
+	for k := 0; k < len(runIds); k++ {
+		isFound := false
+		for j := 0; !isFound && j < len(reLst); j++ {
+			isFound = reLst[j].RunId == runIds[k]
+		}
+		if !isFound {
+			return 0, []int{}, "", nil,
+				errors.New("Failed to create microdata aggregation converter to csv, invalid run id: " + strconv.Itoa(runIds[k]) + ": " + dn + ": " + entityName) // return empty result: model run does not have this entity generation
+		}
+	}
+
+	// validate group by attributes
+	for k := 0; k < len(calcLt.GroupBy); k++ {
+
+		isFound := false
+		for j := 0; !isFound && j < len(attrs); j++ {
+			isFound = attrs[j].Name == calcLt.GroupBy[k]
+		}
+		if !isFound {
+			return 0, []int{}, "", nil, errors.New("Invalid group by attribute: " + entityName + "." + calcLt.GroupBy[k])
+		}
+	}
+
+	return baseRunId, runIds, entGen.GenDigest, &cvtMicro, nil
 }

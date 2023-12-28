@@ -219,7 +219,7 @@ func (mc *ModelCatalog) ReadMicrodataTo(dn, rdsn string, layout *db.ReadMicroLay
 	// if generation digest undefined then find entity generation by entity name and run id
 	if layout.GenDigest == "" {
 
-		entGen, ok := mc.EntityGenByName(dn, layout.FromId, layout.Name)
+		_, entGen, ok := mc.EntityGenByName(dn, layout.FromId, layout.Name)
 		if !ok {
 			return nil, false // entity generation not found
 		}
@@ -228,6 +228,73 @@ func (mc *ModelCatalog) ReadMicrodataTo(dn, rdsn string, layout *db.ReadMicroLay
 
 	// read microdata values page
 	lt, err := db.ReadMicrodataTo(dbConn, meta, layout, cvtWr)
+	if err != nil {
+		omppLog.Log("Error at read microdata: ", dn, ": ", layout.Name, ": ", layout.GenDigest, ": ", err.Error())
+		return nil, false // return empty result: values select error
+	}
+
+	return lt, true
+}
+
+// ReadMicrodataCalculateTo select "page" of aggreagted microdata values from model run(s) and pass each row into cvtWr().
+//
+// It can calculate multiple values based on the list of aggregations. All aggregated values group by the same attributes.
+// Optional list of run id's can be supplied to read more than one run from output table.
+// Page started at zero based offset row and up to max page size rows, if page size <= 0 then all values returned.
+// Rows can be filtered and ordered (see db.ReadLayout for details).
+func (mc *ModelCatalog) ReadMicrodataCalculateTo(
+	dn, rdsn string, layout *db.ReadMicroLayout, calcLt *db.CalculateMicroLayout, runIds []int, cvtWr func(src interface{}) (bool, error),
+) (*db.ReadPageLayout, bool) {
+
+	// validate parameters and return empty results on empty input
+	if dn == "" {
+		omppLog.Log("Warning: invalid (empty) model digest and name")
+		return nil, false
+	}
+	if layout.Name == "" {
+		omppLog.Log("Warning: invalid (empty) model entity name")
+		return nil, false
+	}
+
+	// get model metadata and database connection
+	meta, dbConn, ok := mc.modelMeta(dn)
+	if !ok {
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return nil, false
+	}
+
+	// find entity generation by entity name
+	if _, ok := meta.EntityByName(layout.Name); !ok {
+		omppLog.Log("Warning: model entity not found: ", layout.Name)
+		return nil, false
+	}
+
+	// if run id not defiened then find model run id by digest-or-stamp-or-name
+	if layout.FromId <= 0 {
+
+		r, ok := mc.CompletedRunByDigestOrStampOrName(dn, rdsn)
+		if !ok {
+			return nil, false // return empty result: run select error
+		}
+		if r.Status != db.DoneRunStatus {
+			omppLog.Log("Warning: model run not completed successfully: ", rdsn, ": ", r.Status)
+			return nil, false
+		}
+		layout.FromId = r.RunId // source run id
+	}
+
+	// if generation digest undefined then find entity generation by entity name and run id
+	if layout.GenDigest == "" {
+
+		_, entGen, ok := mc.EntityGenByName(dn, layout.FromId, layout.Name)
+		if !ok {
+			return nil, false // entity generation not found
+		}
+		layout.GenDigest = entGen.GenDigest
+	}
+
+	// read microdata values page
+	lt, err := db.ReadMicrodataCalculateTo(dbConn, meta, layout, calcLt, runIds, cvtWr)
 	if err != nil {
 		omppLog.Log("Error at read microdata: ", dn, ": ", layout.Name, ": ", layout.GenDigest, ": ", err.Error())
 		return nil, false // return empty result: values select error

@@ -536,9 +536,40 @@ func getRunEntity(dbConn *sql.DB, runId int) ([]RunEntityRow, error) {
 	err := SelectRows(dbConn, q,
 		func(rows *sql.Rows) error {
 			var r RunEntityRow
-			var nId int
 			var svd sql.NullString
-			if err := rows.Scan(&nId, &r.GenHid, &r.RowCount, &svd); err != nil {
+			if err := rows.Scan(&r.RunId, &r.GenHid, &r.RowCount, &svd); err != nil {
+				return err
+			}
+			if svd.Valid {
+				r.ValueDigest = svd.String
+			}
+			reLst = append(reLst, r)
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	return reLst, nil
+}
+
+// GetRunEntityGenList return run entity rows by model id: run_entity table rows.
+func GetRunEntityGenByModel(dbConn *sql.DB, modelId int) ([]RunEntityRow, error) {
+
+	reLst := []RunEntityRow{}
+
+	// append run_entity rows: generation Hid and value digest
+	q := "SELECT RE.run_id, RE.entity_gen_hid, RE.row_count, RE.value_digest" +
+		" FROM run_lst H" +
+		" INNER JOIN run_entity RE ON (RE.run_id = H.run_id)" +
+		" WHERE H.model_id = " + strconv.Itoa(modelId) +
+		" ORDER BY 1, 2"
+
+	err := SelectRows(dbConn, q,
+		func(rows *sql.Rows) error {
+			var r RunEntityRow
+			var svd sql.NullString
+			if err := rows.Scan(&r.RunId, &r.GenHid, &r.RowCount, &svd); err != nil {
 				return err
 			}
 			if svd.Valid {
@@ -1110,16 +1141,15 @@ func GetRunFullTextList(dbConn *sql.DB, modelId int, isSuccess bool, langCode st
 	err = SelectRows(dbConn, q,
 		func(rows *sql.Rows) error {
 			var r RunEntityRow
-			var nId int
 			var svd sql.NullString
-			if err := rows.Scan(&nId, &r.GenHid, &r.RowCount, &svd); err != nil {
+			if err := rows.Scan(&r.RunId, &r.GenHid, &r.RowCount, &svd); err != nil {
 				return err
 			}
 			if svd.Valid {
 				r.ValueDigest = svd.String
 			}
 
-			idx, ok := m[nId] // find run id index
+			idx, ok := m[r.RunId] // find run id index
 			if !ok {
 				return nil // skip run if not in previous run list
 			}

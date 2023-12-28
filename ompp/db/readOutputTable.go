@@ -413,7 +413,7 @@ func ReadOutputTableTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLay
 // ReadOutputTableCalculteTo read calculated output table page (run id, expression(s) id, dimensions and values) and process each row by cvtTo().
 //
 // It can calculate multiple values based on expressions and/or accumulators aggregation.
-// Optional runLst list of run digest-or-stamp-or-name can be supplied to read more than one run from output table.
+// Optional runIds list of run id's can be supplied to read more than one run from output table.
 func ReadOutputTableCalculteTo(
 	dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLayout, calcLt []CalculateTableLayout, runIds []int, cvtTo func(src interface{}) (bool, error),
 ) (*ReadPageLayout, error) {

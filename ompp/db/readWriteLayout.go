@@ -175,7 +175,7 @@ type ReadCalculteMicroLayout struct {
 	CalculateMicroLayout // microdata aggregations
 }
 
-// CalculateMicroLayout describes aggreagtions of microdata.
+// CalculateMicroLayout describes aggregations of microdata.
 //
 // It can be comparison aggregations and/or calculation aggregations.
 // Comparison aggregation must contain [base] and [variant] attribute(s), ex.: OM_AVG(Income[base] - Income[variant]).

@@ -6,6 +6,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/openmpp/go/ompp/db"
 	"github.com/openmpp/go/ompp/helper"
@@ -633,7 +634,7 @@ func runTableCalcPageGetHandler(w http.ResponseWriter, r *http.Request) {
 // For example, RATIO is: expr0[variant] / expr0[base], expr1[variant] / expr1[base],....
 // Or arbitrary comma separated expression(s): expr0 , expr1[variant] + expr2[base] , ....
 // Variant runs can be a comma separated list of run digests or run stamps or run names.
-// If run name conations comma then name must be "double quoted" or 'single quoted'.
+// If run name contains comma then name must be "double quoted" or 'single quoted'.
 // For example: "Year 1995, 1996", 'Age [30, 40]'
 //
 // GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant
@@ -793,12 +794,12 @@ func doReadMicrodataPageHandler(w http.ResponseWriter, r *http.Request, isCode b
 	w.Write([]byte("}")) // end of data page and end of json
 }
 
-// runMicrodatarPageGetHandler read a "page" of microdata values from model run results.
+// runMicrodataPageGetHandler read a "page" of microdata values from model run results.
 // GET /api/model/:model/run/:run/microdata/:name/value
 // GET /api/model/:model/run/:run/microdata/:name/value/start/:start
 // GET /api/model/:model/run/:run/microdata/:name/value/start/:start/count/:count
 // Enum-based microdata attributes returned as enum codes.
-func runMicrodatarPageGetHandler(w http.ResponseWriter, r *http.Request) {
+func runMicrodataPageGetHandler(w http.ResponseWriter, r *http.Request) {
 	doMicrodataGetPageHandler(w, r, true)
 }
 
@@ -865,6 +866,309 @@ func doMicrodataGetPageHandler(w http.ResponseWriter, r *http.Request, isCode bo
 	_, ok = theCatalog.ReadMicrodataTo(dn, rdsn, &layout, cvtWr)
 	if !ok {
 		http.Error(w, "Error at run microdata read "+rdsn+": "+layout.Name, http.StatusBadRequest)
+		return
+	}
+	w.Write([]byte{']'}) // end of json output array
+}
+
+// runMicrodataCalcPageReadHandler read a "page" of microdata values from model run.
+// POST /api/model/:model/run/:run/microdata/calc
+// It can be multiple aggregations of value attributes (float of integer type), group by dimension attributes (enum-based or bool type).
+// For example: GroupBy: [AgeGroup, Sex] and Calculation: [OM_AVG(Income), OM_MAX(Salary+Pension)]
+// Enum-based microdata attributes returned as enum codes.
+func runMicrodataCalcPageReadHandler(w http.ResponseWriter, r *http.Request) {
+
+	// url parameters
+	dn := getRequestParam(r, "model") // model digest-or-name
+	rdsn := getRequestParam(r, "run") // run digest-or-stamp-or-name
+
+	// return error if microdata disabled
+	if !theCfg.isMicrodata {
+		http.Error(w, "Error: microdata not allowed: "+dn+" "+rdsn, http.StatusBadRequest)
+		return
+	}
+
+	// decode json request body
+	var layout db.ReadCalculteMicroLayout
+	if !jsonRequestDecode(w, r, true, &layout) {
+		return // error at json decode, response done with http error
+	}
+
+	doReadMicrodataCalcPageHandler(w, r, dn, rdsn, &layout, []string{}, true)
+}
+
+// runMicrodataIdPageReadHandler read a "page" of microdata values from model run.
+// POST /api/model/:model/run/:run/microdata/calc-id
+// It can be multiple aggregations of value attributes (float of integer type), group by dimension attributes (enum-based or bool type).
+// For example: GroupBy: [AgeGroup, Sex] and Calculation: [OM_AVG(Income), OM_MAX(Salary+Pension)]
+// Enum-based microdata attributes returned as enum id, not enum codes.
+func runMicrodataCalcIdPageReadHandler(w http.ResponseWriter, r *http.Request) {
+
+	// url parameters
+	dn := getRequestParam(r, "model") // model digest-or-name
+	rdsn := getRequestParam(r, "run") // run digest-or-stamp-or-name
+
+	// return error if microdata disabled
+	if !theCfg.isMicrodata {
+		http.Error(w, "Error: microdata not allowed: "+dn+" "+rdsn, http.StatusBadRequest)
+		return
+	}
+
+	// decode json request body
+	var layout db.ReadCalculteMicroLayout
+	if !jsonRequestDecode(w, r, true, &layout) {
+		return // error at json decode, response done with http error
+	}
+
+	doReadMicrodataCalcPageHandler(w, r, dn, rdsn, &layout, []string{}, false)
+}
+
+// doReadMicrodataCalcPageHandler read a "page" of microdata values from model run.
+// Json is posted to specify entity name, "page" size and other read arguments,
+// see db.ReadCalculteMicroLayout for more details.
+// If generation digest not specified in ReadCalculteMicroLayout then it found by entity name and run digest.
+// Page of values is a rows from microdata value table started at zero based offset row
+// and up to max page size rows, if page size <= 0 then all values returned.
+// Enum-based microdata attributes returned as enum codes or enum id's.
+func doReadMicrodataCalcPageHandler(w http.ResponseWriter, r *http.Request, dn string, rdsn string, layout *db.ReadCalculteMicroLayout, varLst []string, isCode bool) {
+
+	// get base run id, run variants, entity generation digest and microdata cell converter
+	baseRunId, runIds, genDigest, cvtMicro, err := theCatalog.MicrodataCalcToCsvConverter(dn, isCode, rdsn, varLst, layout.Name, &layout.CalculateMicroLayout)
+	if err != nil {
+		omppLog.Log("Failed to create microdata csv converter: ", rdsn, ": ", layout.Name, ": ", err.Error())
+		http.Error(w, "Failed to create microdata csv converter: "+rdsn+": "+layout.Name, http.StatusBadRequest)
+		return
+	}
+	layout.FromId = baseRunId
+
+	// get converter from id's cell into code cell
+	var cvtCell func(interface{}) (interface{}, error)
+	if isCode {
+
+		cvtCell, err = cvtMicro.IdToCodeCell(cvtMicro.ModelDef, layout.Name)
+		if err != nil {
+			omppLog.Log("Failed to create microdata cell value converter: ", dn, ": ", layout.Name, ": ", err.Error())
+			http.Error(w, "Failed to create microdata cell value converter: "+rdsn+": "+layout.Name, http.StatusBadRequest)
+		}
+	}
+
+	// read microdata values, page size =0: read all values
+	microLt := db.ReadMicroLayout{
+		ReadLayout: layout.ReadLayout,
+		GenDigest:  genDigest,
+	}
+
+	// write to response: page layout and page data
+	jsonSetHeaders(w, r) // start response with set json headers, i.e. content type
+
+	w.Write([]byte("{\"Page\":[")) // start of data page and start of json output array
+
+	enc := json.NewEncoder(w)
+	cvtWr := jsonCellWriter(w, enc, cvtCell)
+
+	// read microdata page into json array response, convert enum id's to code if requested
+	lt, ok := theCatalog.ReadMicrodataCalculateTo(dn, rdsn, &microLt, &layout.CalculateMicroLayout, runIds, cvtWr)
+	if !ok {
+		http.Error(w, "Error at run microdata read "+rdsn+": "+layout.Name, http.StatusBadRequest)
+		return
+	}
+	w.Write([]byte{']'}) // end of data page array
+
+	// continue response with output page layout: offset, size, last page flag
+	w.Write([]byte(",\"Layout\":"))
+
+	err = json.NewEncoder(w).Encode(lt)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	w.Write([]byte("}")) // end of data page and end of json
+}
+
+// runMicrodataComparePageReadHandler read a "page" of microdata comparison between base and variant(s) model runs.
+// POST /api/model/:model/run/:run/microdata/compare
+// It can be multiple comparison of value attributes (float of integer type) and / or aggregation of value attributes.
+// All comparisons and aggregations grouped by dimension attributes (enum-based or bool type).
+// It can be multiple aggregations of value attributes (float of integer type), group by dimension attributes (enum-based or bool type).
+// For example: GroupBy: [AgeGroup, Sex] and Calculation: [OM_AVG(Income[variant]-Income[base]) , OM_MAX(Salary+Pension)]
+// Enum-based microdata attributes returned as enum codes.
+func runMicrodataComparePageReadHandler(w http.ResponseWriter, r *http.Request) {
+
+	// url parameters
+	dn := getRequestParam(r, "model") // model digest-or-name
+	rdsn := getRequestParam(r, "run") // run digest-or-stamp-or-name
+
+	// return error if microdata disabled
+	if !theCfg.isMicrodata {
+		http.Error(w, "Error: microdata not allowed: "+dn+" "+rdsn, http.StatusBadRequest)
+		return
+	}
+
+	// decode json request body
+	var layout db.ReadCompareMicroLayout
+	if !jsonRequestDecode(w, r, true, &layout) {
+		return // error at json decode, response done with http error
+	}
+
+	doReadMicrodataCalcPageHandler(w, r, dn, rdsn, &layout.ReadCalculteMicroLayout, layout.Runs, true)
+}
+
+// runMicrodataCompareIdPageReadHandler read a "page" of microdata comparison between base and variant(s) model runs.
+// POST /api/model/:model/run/:run/microdata/compare-id
+// It can be multiple comparison of value attributes (float of integer type) and / or aggregation of value attributes.
+// All comparisons and aggregations grouped by dimension attributes (enum-based or bool type).
+// It can be multiple aggregations of value attributes (float of integer type), group by dimension attributes (enum-based or bool type).
+// For example: GroupBy: [AgeGroup, Sex] and Calculation: [OM_AVG(Income[variant]-Income[base]) , OM_MAX(Salary+Pension)]
+// Enum-based microdata attributes returned as enum id, not enum codes.
+func runMicrodataCompareIdPageReadHandler(w http.ResponseWriter, r *http.Request) {
+
+	// url parameters
+	dn := getRequestParam(r, "model") // model digest-or-name
+	rdsn := getRequestParam(r, "run") // run digest-or-stamp-or-name
+
+	// return error if microdata disabled
+	if !theCfg.isMicrodata {
+		http.Error(w, "Error: microdata not allowed: "+dn+" "+rdsn, http.StatusBadRequest)
+		return
+	}
+
+	// decode json request body
+	var layout db.ReadCompareMicroLayout
+	if !jsonRequestDecode(w, r, true, &layout) {
+		return // error at json decode, response done with http error
+	}
+
+	doReadMicrodataCalcPageHandler(w, r, dn, rdsn, &layout.ReadCalculteMicroLayout, layout.Runs, false)
+}
+
+// runMicrodataCalcPageGetHandler aggregate a "page" of microdata values from model run results.
+// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/calc/:calc
+// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/calc/:calc/start/:start
+// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/calc/:calc/start/:start/count/:count
+// It can be multiple aggregations of value attributes (float of integer type), group by dimension attributes (enum-based or bool type).
+// For example: microdata/Person/group-by/AgeGroup,Sex/calc/OM_AVG(Income),OM_MAX(Salary+Pension)/csv
+// If run name contains comma then name must be "double quoted" or 'single quoted'.
+// For example: "Year 1995, 1996" or: 'Age [30, 40]'
+// Enum-based microdata attributes returned as enum codes.
+func runMicrodataCalcPageGetHandler(w http.ResponseWriter, r *http.Request) {
+	doMicrodataCalcGetPageHandler(w, r, true, "calc", false)
+}
+
+// runMicrodataComparePageGetHandler microdata comparison "page" from model run results.
+// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/compare/:compare/variant/:variant
+// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/compare/:compare/variant/:variant/start/:start
+// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/compare/:compare/variant/:variant/start/:start/count/:count
+// It can be multiple comparison of value attributes (float of integer type) and / or aggregation of value attributes.
+// All comparisons and aggregations grouped by dimension attributes (enum-based or bool type).
+// For example: microdata/Person/group-by/AgeGroup,Sex/compare/OM_AVG(Income[variant]-Income[base]),OM_MAX(Salary+Pension)
+// If run name contains comma then name must be "double quoted" or 'single quoted'.
+// For example: "Year 1995, 1996" or: 'Age [30, 40]'
+// Enum-based microdata attributes returned as enum codes.
+func runMicrodataComparePageGetHandler(w http.ResponseWriter, r *http.Request) {
+	doMicrodataCalcGetPageHandler(w, r, true, "compare", true)
+}
+
+// doMicrodataCalcGetPageHandler aggreagte a "page" of microdata values from model run.
+// Page of values is a rows from microdata value table started at zero based offset row
+// and up to max page size rows, if page size <= 0 then all values returned.
+// Enum-based microdata attributes returned as enum codes or enum id's.
+func doMicrodataCalcGetPageHandler(w http.ResponseWriter, r *http.Request, isCode bool, calcKey string, isVar bool) {
+
+	// url or query parameters
+	dn := getRequestParam(r, "model")                                 // model digest-or-name
+	rdsn := getRequestParam(r, "run")                                 // run digest-or-stamp-or-name
+	name := getRequestParam(r, "name")                                // entity name
+	groupBy := helper.ParseCsvLine(getRequestParam(r, "group-by"), 0) // group by list of attributes, comma-separated
+	cLst := helper.ParseCsvLine(getRequestParam(r, calcKey), 0)       // list of aggregations of value attribute(s), comma-separated
+
+	// url or query parameters: page offset and page size
+	start, ok := getInt64RequestParam(r, "start", 0)
+	if !ok {
+		http.Error(w, "Invalid value of start row number to read "+name, http.StatusBadRequest)
+		return
+	}
+	count, ok := getInt64RequestParam(r, "count", 0)
+	if !ok {
+		http.Error(w, "Invalid value of max row count to read "+name, http.StatusBadRequest)
+		return
+	}
+
+	// return error if microdata disabled
+	if !theCfg.isMicrodata {
+		http.Error(w, "Error: microdata not allowed: "+dn+" "+rdsn, http.StatusBadRequest)
+		return
+	}
+
+	if len(groupBy) <= 0 {
+		http.Error(w, "Invalid (empty) microdata group by attributes "+name, http.StatusBadRequest)
+		return
+	}
+	if len(cLst) <= 0 {
+		http.Error(w, "Invalid (empty) microdata aggregation(s) "+name, http.StatusBadRequest)
+		return
+	}
+	varLst := []string{}
+	if isVar {
+		varLst = helper.ParseCsvLine(getRequestParam(r, "variant"), 0) // list of aggregations or comparisons, comma-separated
+	}
+
+	// set aggregation expressions
+	calcLt := db.CalculateMicroLayout{
+		Calculation: []db.CalculateLayout{},
+		GroupBy:     groupBy,
+	}
+
+	for j := range cLst {
+
+		if cLst[j] != "" {
+			calcLt.Calculation = append(calcLt.Calculation, db.CalculateLayout{
+				Calculate: cLst[j],
+				CalcId:    j + db.CALCULATED_ID_OFFSET,
+				Name:      "ex_" + strconv.Itoa(j+db.CALCULATED_ID_OFFSET),
+			})
+		}
+	}
+
+	// get base run id, run variants, entity generation digest and microdata cell converter
+	baseRunId, runIds, genDigest, cvtMicro, err := theCatalog.MicrodataCalcToCsvConverter(dn, isCode, rdsn, varLst, name, &calcLt)
+	if err != nil {
+		omppLog.Log("Failed to create microdata csv converter: ", rdsn, ": ", name, ": ", err.Error())
+		http.Error(w, "Failed to create microdata csv converter: "+rdsn+": "+name, http.StatusBadRequest)
+		return
+	}
+
+	// read microdata values, page size =0: read all values
+	microLt := db.ReadMicroLayout{
+		ReadLayout: db.ReadLayout{
+			Name:           name,
+			FromId:         baseRunId,
+			ReadPageLayout: db.ReadPageLayout{Offset: start, Size: count},
+		},
+		GenDigest: genDigest,
+	}
+
+	// get converter from id's cell into code cell
+	var cvtCell func(interface{}) (interface{}, error)
+	if isCode {
+
+		cvtCell, err = cvtMicro.IdToCodeCell(cvtMicro.ModelDef, name)
+		if err != nil {
+			omppLog.Log("Failed to create microdata cell value converter: ", dn, ": ", name, ": ", err.Error())
+			http.Error(w, "Failed to create microdata cell value converter: "+rdsn+": "+name, http.StatusBadRequest)
+		}
+	}
+
+	// write to response
+	jsonSetHeaders(w, r) // start response with set json headers, i.e. content type
+
+	w.Write([]byte{'['}) // start of json output array
+
+	enc := json.NewEncoder(w)
+	cvtWr := jsonCellWriter(w, enc, cvtCell)
+
+	// read microdata page into json array response, convert enum id's to code if requested
+	_, ok = theCatalog.ReadMicrodataCalculateTo(dn, rdsn, &microLt, &calcLt, runIds, cvtWr)
+	if !ok {
+		http.Error(w, "Error at run microdata read "+rdsn+": "+microLt.Name, http.StatusBadRequest)
 		return
 	}
 	w.Write([]byte{']'}) // end of json output array

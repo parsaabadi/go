@@ -346,10 +346,10 @@ func TestParseAggrCalculation(t *testing.T) {
 	}
 
 	// aggregation expression columns: only native (not a derived) accumulators can be aggregated
-	accAggrCols := make([]aggrColulumn, len(table.Acc))
+	accAggrCols := make([]aggrColumn, len(table.Acc))
 
 	for k := range table.Acc {
-		accAggrCols[k] = aggrColulumn{
+		accAggrCols[k] = aggrColumn{
 			name:    table.Acc[k].Name,
 			colName: table.Acc[k].colName,
 			isAggr:  !table.Acc[k].IsDerived, // only native accumulators can be aggregated
@@ -449,7 +449,7 @@ func TestParseAggrCalculation(t *testing.T) {
 				}
 				// else: isSimple name, not a name[base] or name[variant]
 				isAnySimple = true
-				attrAggrCols[nameIdx].isBase = true
+				attrAggrCols[nameIdx].isSimple = true
 				return firstAlias + "." + attrAggrCols[nameIdx].colName // not a run comparison: attr2 => L1A4.attr2
 			}
 

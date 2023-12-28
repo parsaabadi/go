@@ -17,13 +17,14 @@ type aggrExprColumn struct {
 }
 
 // accumulator or attribute column used for aggregation calculation or group by attribute
-type aggrColulumn struct {
-	name    string // accumulator or attribute name VARCHAR(255) NOT NULL
-	colName string // db column name: acc1 or attr1
-	isGroup bool   // if true then it is group by column of microdata attributes
-	isAggr  bool   // if true then it can be aggregated: accumulator is native (not a derived) or attribute has native type
-	isBase  bool   // if true then attribute is used for the base run or in aggregation without comparison
-	isVar   bool   // if true then attribute is used for variant run
+type aggrColumn struct {
+	name     string // accumulator or attribute name VARCHAR(255) NOT NULL
+	colName  string // db column name: acc1 or attr1
+	isGroup  bool   // if true then it is group by column of microdata attributes
+	isAggr   bool   // if true then it can be aggregated: accumulator is native (not a derived) or attribute has native type
+	isBase   bool   // if true then attribute is used for the base run in comparison
+	isVar    bool   // if true then attribute is used for the variant run in comparison
+	isSimple bool   // if true then attribute is used in aggregation without comparison
 }
 
 // Parsed aggregation expressions for each nesting level
@@ -46,7 +47,7 @@ type levelParseState struct {
 
 // Parse output table accumulators calculation.
 func parseAggrCalculation(
-	aggrCols []aggrColulumn, calculateExpr string, makeColName func(string, int, bool, bool, string, string, bool) string,
+	aggrCols []aggrColumn, calculateExpr string, makeColName func(string, int, bool, bool, string, string, bool) string,
 ) (
 	[]levelDef, error,
 ) {
@@ -194,7 +195,7 @@ func (lps *levelParseState) pushToNextLevel(fncExpr string) string {
 // If this is the first accumulator at this level then do: acc1 => M2.acc_value
 // else use joined accumulator table: L1A4.acc4
 func (lps *levelParseState) processAggrColumns(
-	expr string, aggrCols []aggrColulumn, makeColName func(string, int, bool, bool, string, string, bool) string,
+	expr string, aggrCols []aggrColumn, makeColName func(string, int, bool, bool, string, string, bool) string,
 ) (
 	string, error,
 ) {

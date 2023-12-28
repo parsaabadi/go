@@ -232,6 +232,16 @@ func apiReadRoutes(router *vestigo.Router) {
 		// POST /api/model/:model/run/:run/microdata/value-id
 		router.Post("/api/model/:model/run/:run/microdata/value", runMicrodataPageReadHandler, logRequest)
 		router.Post("/api/model/:model/run/:run/microdata/value-id", runMicrodataIdPageReadHandler, logRequest)
+
+		// POST /api/model/:model/run/:run/microdata/calc
+		// POST /api/model/:model/run/:run/microdata/calc-id
+		router.Post("/api/model/:model/run/:run/microdata/calc", runMicrodataCalcPageReadHandler, logRequest)
+		router.Post("/api/model/:model/run/:run/microdata/calc-id", runMicrodataCalcIdPageReadHandler, logRequest)
+
+		// POST /api/model/:model/run/:run/microdata/compare
+		// POST /api/model/:model/run/:run/microdata/compare-id
+		router.Post("/api/model/:model/run/:run/microdata/compare", runMicrodataComparePageReadHandler, logRequest)
+		router.Post("/api/model/:model/run/:run/microdata/compare-id", runMicrodataCompareIdPageReadHandler, logRequest)
 	}
 
 	// GET /api/model/:model/workset/:set/parameter/:name/value
@@ -312,6 +322,7 @@ func apiReadRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/start/:start/count/:count", runTableComparePageGetHandler, logRequest)
 	// reject if request ill-formed
 	router.Get("/api/model/:model/run/:run/table/:name/compare/:compare/variant/", http.NotFound)
+	router.Get("/api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/", http.NotFound)
 	router.Get("/api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/start/", http.NotFound)
 	router.Get("/api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/start/:start/count/", http.NotFound)
 
@@ -320,14 +331,38 @@ func apiReadRoutes(router *vestigo.Router) {
 		// GET /api/model/:model/run/:run/microdata/:name/value
 		// GET /api/model/:model/run/:run/microdata/:name/value/start/:start
 		// GET /api/model/:model/run/:run/microdata/:name/value/start/:start/count/:count
-		router.Get("/api/model/:model/run/:run/microdata/:name/value", runMicrodatarPageGetHandler, logRequest)
-		router.Get("/api/model/:model/run/:run/microdata/:name/value/start/:start", runMicrodatarPageGetHandler, logRequest)
-		router.Get("/api/model/:model/run/:run/microdata/:name/value/start/:start/count/:count", runMicrodatarPageGetHandler, logRequest)
+		router.Get("/api/model/:model/run/:run/microdata/:name/value", runMicrodataPageGetHandler, logRequest)
+		router.Get("/api/model/:model/run/:run/microdata/:name/value/start/:start", runMicrodataPageGetHandler, logRequest)
+		router.Get("/api/model/:model/run/:run/microdata/:name/value/start/:start/count/:count", runMicrodataPageGetHandler, logRequest)
 		// reject if request ill-formed
 		router.Get("/api/model/:model/run/:run/microdata/:name/", http.NotFound)
 		router.Get("/api/model/:model/run/:run/microdata/:name/value/", http.NotFound)
 		router.Get("/api/model/:model/run/:run/microdata/:name/value/start/", http.NotFound)
 		router.Get("/api/model/:model/run/:run/microdata/:name/value/start/:start/count/", http.NotFound)
+
+		// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/calc/:calc
+		// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/calc/:calc/start/:start
+		// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/calc/:calc/start/:start/count/:count
+		router.Get("/api/model/:model/run/:run/microdata/:name/group-by/:group-by/calc/:calc", runMicrodataCalcPageGetHandler, logRequest)
+		router.Get("/api/model/:model/run/:run/microdata/:name/group-by/:group-by/calc/:calc/start/:start", runMicrodataCalcPageGetHandler, logRequest)
+		router.Get("/api/model/:model/run/:run/microdata/:name/group-by/:group-by/calc/:calc/start/:start/count/:count", runMicrodataCalcPageGetHandler, logRequest)
+		// reject if request ill-formed
+		router.Get("/api/model/:model/run/:run/microdata/:name/group-by/:group-by/calc/", http.NotFound)
+		router.Get("/api/model/:model/run/:run/microdata/:name/group-by/:group-by/calc/:calc/", http.NotFound)
+		router.Get("/api/model/:model/run/:run/microdata/:name/group-by/:group-by/calc/:calc/start/", http.NotFound)
+		router.Get("/api/model/:model/run/:run/microdata/:name/group-by/:group-by/calc/:calc/start/:start/count/", http.NotFound)
+
+		// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/compare/:compare/variant/:variant
+		// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/compare/:compare/variant/:variant/start/:start
+		// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/compare/:compare/variant/:variant/start/:start/count/:count
+		router.Get("/api/model/:model/run/:run/microdata/:name/group-by/:group-by/compare/:compare/variant/:variant", runMicrodataComparePageGetHandler, logRequest)
+		router.Get("/api/model/:model/run/:run/microdata/:name/group-by/:group-by/compare/:compare/variant/:variant/start/:start", runMicrodataComparePageGetHandler, logRequest)
+		router.Get("/api/model/:model/run/:run/microdata/:name/group-by/:group-by/compare/:compare/variant/:variant/start/:start/count/:count", runMicrodataComparePageGetHandler, logRequest)
+		// reject if request ill-formed
+		router.Get("/api/model/:model/run/:run/microdata/:name/group-by/:group-by/compare/:compare/variant/", http.NotFound)
+		router.Get("/api/model/:model/run/:run/microdata/:name/group-by/:group-by/compare/:compare/variant/:variant/", http.NotFound)
+		router.Get("/api/model/:model/run/:run/microdata/:name/group-by/:group-by/compare/:compare/variant/:variant/start/", http.NotFound)
+		router.Get("/api/model/:model/run/:run/microdata/:name/group-by/:group-by/compare/:compare/variant/:variant/start/:start/count/", http.NotFound)
 	}
 }
 
@@ -351,18 +386,6 @@ func apiReadCsvRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/parameter/:name/csv-bom", runParameterCsvBomGetHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/parameter/:name/csv-id", runParameterIdCsvGetHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/parameter/:name/csv-id-bom", runParameterIdCsvBomGetHandler, logRequest)
-
-	if theCfg.isMicrodata {
-
-		// GET /api/model/:model/run/:run/microdata/:name/csv
-		// GET /api/model/:model/run/:run/microdata/:name/csv-bom
-		// GET /api/model/:model/run/:run/microdata/:name/csv-id
-		// GET /api/model/:model/run/:run/microdata/:name/csv-id-bom
-		router.Get("/api/model/:model/run/:run/microdata/:name/csv", runMicrodataCsvGetHandler, logRequest)
-		router.Get("/api/model/:model/run/:run/microdata/:name/csv-bom", runMicrodataCsvBomGetHandler, logRequest)
-		router.Get("/api/model/:model/run/:run/microdata/:name/csv-id", runMicrodataIdCsvGetHandler, logRequest)
-		router.Get("/api/model/:model/run/:run/microdata/:name/csv-id-bom", runMicrodataIdCsvBomGetHandler, logRequest)
-	}
 
 	// GET /api/model/:model/run/:run/table/:name/expr/csv
 	// GET /api/model/:model/run/:run/table/:name/expr/csv-bom
@@ -408,6 +431,36 @@ func apiReadCsvRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/csv-bom", runTableCompareCsvBomGetHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/csv-id", runTableCompareIdCsvGetHandler, logRequest)
 	router.Get("/api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/csv-id-bom", runTableCompareIdCsvBomGetHandler, logRequest)
+
+	if theCfg.isMicrodata {
+
+		// GET /api/model/:model/run/:run/microdata/:name/csv
+		// GET /api/model/:model/run/:run/microdata/:name/csv-bom
+		// GET /api/model/:model/run/:run/microdata/:name/csv-id
+		// GET /api/model/:model/run/:run/microdata/:name/csv-id-bom
+		router.Get("/api/model/:model/run/:run/microdata/:name/csv", runMicrodataCsvGetHandler, logRequest)
+		router.Get("/api/model/:model/run/:run/microdata/:name/csv-bom", runMicrodataCsvBomGetHandler, logRequest)
+		router.Get("/api/model/:model/run/:run/microdata/:name/csv-id", runMicrodataIdCsvGetHandler, logRequest)
+		router.Get("/api/model/:model/run/:run/microdata/:name/csv-id-bom", runMicrodataIdCsvBomGetHandler, logRequest)
+
+		// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/calc/:calc/csv
+		// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/calc/:calc/csv-bom
+		// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/calc/:calc/csv-id
+		// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/calc/:calc/csv-id-bom
+		router.Get("/api/model/:model/run/:run/microdata/:name/group-by/:group-by/calc/:calc/csv", runMicrodataCalcCsvGetHandler, logRequest)
+		router.Get("/api/model/:model/run/:run/microdata/:name/group-by/:group-by/calc/:calc/csv-bom", runMicrodataCalcCsvBomGetHandler, logRequest)
+		router.Get("/api/model/:model/run/:run/microdata/:name/group-by/:group-by/calc/:calc/csv-id", runMicrodataCalcIdCsvGetHandler, logRequest)
+		router.Get("/api/model/:model/run/:run/microdata/:name/group-by/:group-by/calc/:calc/csv-id-bom", runMicrodataCalcIdCsvBomGetHandler, logRequest)
+
+		// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/compare/:compare/variant/:variant/csv
+		// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/compare/:compare/variant/:variant/csv-bom
+		// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/compare/:compare/variant/:variant/csv-id
+		// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/compare/:compare/variant/:variant/csv-id-bom
+		router.Get("/api/model/:model/run/:run/microdata/:name/group-by/:group-by/compare/:compare/variant/:variant/csv", runMicrodataCompareCsvGetHandler, logRequest)
+		router.Get("/api/model/:model/run/:run/microdata/:name/group-by/:group-by/compare/:compare/variant/:variant/csv-bom", runMicrodataCompareCsvBomGetHandler, logRequest)
+		router.Get("/api/model/:model/run/:run/microdata/:name/group-by/:group-by/compare/:compare/variant/:variant/csv-id", runMicrodataCompareIdCsvGetHandler, logRequest)
+		router.Get("/api/model/:model/run/:run/microdata/:name/group-by/:group-by/compare/:compare/variant/:variant/csv-id-bom", runMicrodataCompareIdCsvBomGetHandler, logRequest)
+	}
 }
 
 // add web-service /api routes to update metadata

@@ -26,11 +26,11 @@ func translateToMicroSql(
 		return "", err
 	}
 
-	mainSql, isRunCompare, err := partialTranslateToMicroSql(entity, entityGen, aggrCols, readLt, calcLt, runIds)
+	mainSql, _, err := partialTranslateToMicroSql(entity, entityGen, aggrCols, readLt, calcLt, runIds)
 	if err != nil {
 		return "", err
 	}
-	cteSql, err := makeMicroCteAggrSql(entity, entityGen, aggrCols, readLt.FromId, runIds, isRunCompare)
+	cteSql, err := makeMicroCteAggrSql(entity, entityGen, aggrCols, readLt.FromId, runIds)
 	if err != nil {
 		return "", errors.New("Error at " + entity.Name + " " + calcLt.Calculate + ": " + err.Error())
 	}
@@ -39,17 +39,17 @@ func translateToMicroSql(
 }
 
 // create list of microdata columns, set column names, group by flag and aggregatable flag for float and int attributes
-func makeMicroAggrCols(entity *EntityMeta, entityGen *EntityGenMeta, groupBy []string) ([]aggrColulumn, error) {
+func makeMicroAggrCols(entity *EntityMeta, entityGen *EntityGenMeta, groupBy []string) ([]aggrColumn, error) {
 
 	// aggregation expression columns: only native numeric attributes can be aggregated
-	aggrCols := make([]aggrColulumn, len(entityGen.GenAttr))
+	aggrCols := make([]aggrColumn, len(entityGen.GenAttr))
 
 	for k := range entityGen.GenAttr {
 
 		// find entity attribute
 		aIdx, ok := entity.AttrByKey(entityGen.GenAttr[k].AttrId)
 		if !ok {
-			return []aggrColulumn{}, errors.New("model entity attribute not found by id: " + entity.Name + ": " + strconv.Itoa(entityGen.GenAttr[k].AttrId))
+			return []aggrColumn{}, errors.New("model entity attribute not found by id: " + entity.Name + ": " + strconv.Itoa(entityGen.GenAttr[k].AttrId))
 		}
 
 		isGroup := false
@@ -57,7 +57,7 @@ func makeMicroAggrCols(entity *EntityMeta, entityGen *EntityGenMeta, groupBy []s
 			isGroup = groupBy[j] == entity.Attr[aIdx].Name
 		}
 
-		aggrCols[k] = aggrColulumn{
+		aggrCols[k] = aggrColumn{
 			name:    entity.Attr[aIdx].Name,
 			colName: entity.Attr[aIdx].colName,
 			isGroup: isGroup,
@@ -73,7 +73,7 @@ func makeMicroAggrCols(entity *EntityMeta, entityGen *EntityGenMeta, groupBy []s
 			isOk = groupBy[k] == aggrCols[j].name
 		}
 		if !isOk {
-			return []aggrColulumn{}, errors.New("Entity " + entity.Name + " does not have attribute " + groupBy[k])
+			return []aggrColumn{}, errors.New("Entity " + entity.Name + " does not have attribute " + groupBy[k])
 		}
 	}
 
@@ -87,7 +87,7 @@ func makeMicroAggrCols(entity *EntityMeta, entityGen *EntityGenMeta, groupBy []s
 // Or simple expression calculation inside of single run, in that case layout.FromId and runIds[] are merged.
 // Only simple functions allowed in expression calculation.
 func partialTranslateToMicroSql(
-	entity *EntityMeta, entityGen *EntityGenMeta, aggrCols []aggrColulumn, readLt *ReadLayout, calcLt *CalculateLayout, runIds []int,
+	entity *EntityMeta, entityGen *EntityGenMeta, aggrCols []aggrColumn, readLt *ReadLayout, calcLt *CalculateLayout, runIds []int,
 ) (
 	string, bool, error,
 ) {
@@ -96,7 +96,7 @@ func partialTranslateToMicroSql(
 	//
 	// no comparison, aggregation for each run: OM_SUM(Income - 0.5 * OM_AVG(Pension))
 	//
-	// WITH abase (run_id, entity_key, attr1, attr2, attr3, attr8) AS (.... WHERE RE.run_id IN (219, 221, 222))
+	// WITH atts (run_id, entity_key, attr1, attr2, attr3, attr8) AS (.... WHERE RE.run_id IN (219, 221, 222))
 	// SELECT
 	//   A.run_id, CalcId AS calc_id, A.attr1, A.attr2, A.calc_value
 	// FROM
@@ -104,7 +104,7 @@ func partialTranslateToMicroSql(
 	//   SELECT
 	//     M1.run_id, M1.attr1, M1.attr2,
 	//     SUM(M1.attr3 - 0.5 * L1E1.ex1) AS calc_value
-	//   FROM abase M1
+	//   FROM atts M1
 	//   INNER JOIN ( .... ) ON (run_id, attr1, attr2)
 	//   GROUP BY M1.run_id, M1.attr1, M1.attr2
 	// ) A
@@ -207,7 +207,7 @@ func partialTranslateToMicroSql(
 //
 // It aggregation for one or multiple runs: OM_SUM(Income - 0.5 * OM_AVG(Pension))
 //
-//	WITH abase (run_id, entity_key, attr1, attr2, attr3, attr8) AS (.... WHERE RE.run_id IN (219, 221, 222))
+//	WITH atts (run_id, entity_key, attr1, attr2, attr3, attr8) AS (.... WHERE RE.run_id IN (219, 221, 222))
 //	SELECT
 //	  A.run_id, CalcId AS calc_id, A.attr1, A.attr2, A.calc_value
 //	FROM
@@ -228,7 +228,7 @@ func partialTranslateToMicroSql(
 //	  GROUP BY M1.run_id, M1.attr1, M1.attr2
 //	) A
 func translateMicroCalcToSql(
-	entity *EntityMeta, entityGen *EntityGenMeta, aggrCols []aggrColulumn, calcId int, calculateExpr string,
+	entity *EntityMeta, entityGen *EntityGenMeta, aggrCols []aggrColumn, calcId int, calculateExpr string,
 ) (
 	string, bool, error,
 ) {
@@ -273,7 +273,7 @@ func translateMicroCalcToSql(
 		}
 		// else: isSimple name, not a name[base] or name[variant]
 		isAnySimple = true
-		aggrCols[nameIdx].isBase = true
+		aggrCols[nameIdx].isSimple = true
 		return firstAlias + "." + aggrCols[nameIdx].colName // not a run comparison: attr2 => L1A4.attr2
 	}
 
@@ -307,14 +307,14 @@ func translateMicroCalcToSql(
 
 // Build main part of aggregation sql from parser state.
 func makeMicroMainAggrSql(
-	entity *EntityMeta, entityGen *EntityGenMeta, aggrCols []aggrColulumn, calcId int, levelArr []levelDef, isRunCompare bool,
+	entity *EntityMeta, entityGen *EntityGenMeta, aggrCols []aggrColumn, calcId int, levelArr []levelDef, isRunCompare bool,
 ) (
 	string, error,
 ) {
 
 	// no comparison, microdata aggregation for each run: OM_SUM(Income - 0.5 * OM_AVG(Pension))
 	//
-	// -- WITH abase (run_id, entity_key, attr1, attr2, attr3, attr8) AS (....)
+	// -- WITH atts (run_id, entity_key, attr1, attr2, attr3, attr8) AS (....)
 	//
 	// SELECT
 	//   A.run_id, CalcId AS calc_id, A.attr1, A.attr2, A.calc_value
@@ -323,13 +323,13 @@ func makeMicroMainAggrSql(
 	//   SELECT
 	//     M1.run_id, M1.attr1, M1.attr2,
 	//     SUM(M1.attr3 - 0.5 * L1E1.ex1) AS calc_value
-	//   FROM abase M1
+	//   FROM atts M1
 	//   INNER JOIN
 	//   (
 	//     SELECT
 	//       M2.run_id, M2.attr1, M2.attr2,
 	//       AVG(M2.attr8) AS ex1
-	//     FROM abase M2
+	//     FROM atts M2
 	//     GROUP BY M2.run_id, M2.attr1, M2.attr2
 	//   ) L1A1
 	//   ON (L1A1.run_id = M1.run_id AND L1A1.attr1 = M1.attr1 AND L1A1.attr2 = M1.attr2)
@@ -353,7 +353,7 @@ func makeMicroMainAggrSql(
 	//   GROUP BY M1.run_id, M1.attr1, M1.attr2
 	// ) A
 	//
-	vSrc := "abase"
+	vSrc := "atts"
 	if isRunCompare {
 		vSrc = "abv"
 	}
@@ -375,7 +375,7 @@ func makeMicroMainAggrSql(
 		//   SELECT
 		//     M1.run_id, M1.attr1, M1.attr2,
 		//     SUM(M1.attr3 - 0.5 * L1E1.ex1) AS calc_value
-		//   FROM abase M1
+		//   FROM atts M1
 		//   INNER JOIN
 		//   (
 		mainSql += "SELECT " + lv.fromAlias + ".run_id"
@@ -436,7 +436,7 @@ func makeMicroMainAggrSql(
 
 // Build CTE part of aggregation sql from the list of aggregated attributes.
 func makeMicroCteAggrSql(
-	entity *EntityMeta, entityGen *EntityGenMeta, aggrCols []aggrColulumn, fromId int, runIds []int, isRunCompare bool,
+	entity *EntityMeta, entityGen *EntityGenMeta, aggrCols []aggrColumn, fromId int, runIds []int,
 ) (
 	string, error,
 ) {
@@ -444,6 +444,7 @@ func makeMicroCteAggrSql(
 	// list of column names for CTE header and CTE body, add group by attributes in the order of attributes
 	cHdr := "run_id, entity_key"
 	cBody := "RE.run_id, C.entity_key"
+	isAnySimple := false
 	isAnyBase := false
 	isAnyVar := false
 
@@ -452,6 +453,9 @@ func makeMicroCteAggrSql(
 			cHdr += ", " + c.colName
 			cBody += ", C." + c.colName
 		}
+		if c.isSimple {
+			isAnySimple = true
+		}
 		if c.isBase {
 			isAnyBase = true
 		}
@@ -459,16 +463,16 @@ func makeMicroCteAggrSql(
 			isAnyVar = true
 		}
 	}
-	if !isAnyBase || isRunCompare && !isAnyVar {
-		return "", errors.New("invalid (or mixed forms) of attribute names used for aggregation of: " + entity.Name)
+	if isAnyBase != isAnyVar {
+		return "", errors.New("invalid (or mixed forms) of attribute names used for microdata comparison of: " + entity.Name)
 	}
 
-	// CTE: run comparison or attributes aggreagtion without comparison
+	// CTE: run comparison attributes and / or aggreagtion without comparison
 	cteSql := ""
 
-	if !isRunCompare { // no comparison, select attributes from the list of model runs
+	if isAnySimple { // no comparison, select attributes from the list of model runs
 
-		// WITH abase (run_id, entity_key, attr1, attr2, attr3, attr8)
+		// WITH atts (run_id, entity_key, attr1, attr2, attr3, attr8)
 		// AS
 		// (
 		//   SELECT
@@ -478,10 +482,10 @@ func makeMicroCteAggrSql(
 		//   WHERE RE.run_id IN (219, 221, 222)
 		// )
 		//
-		cteSql = "WITH abase (" + cHdr
+		cteSql = "WITH atts (" + cHdr
 
 		for k := range aggrCols {
-			if aggrCols[k].isBase {
+			if aggrCols[k].isSimple {
 				cteSql += ", " + aggrCols[k].colName
 			}
 		}
@@ -489,7 +493,7 @@ func makeMicroCteAggrSql(
 		cteSql += ") AS (SELECT " + cBody
 
 		for k := range aggrCols {
-			if aggrCols[k].isBase {
+			if aggrCols[k].isSimple {
 				cteSql += ", C." + aggrCols[k].colName
 			}
 		}
@@ -511,135 +515,139 @@ func makeMicroCteAggrSql(
 			cteSql += ")"
 		}
 		cteSql += ")"
-
-		return cteSql, nil
 	}
-	// else run comparison: select from variant runs join to base run
 
-	// microdata run comparison: OM_AVG( Income[varinat] - (Pension[base] + Salary[base]) )
-	//
-	// WITH abase (run_id, entity_key, attr1, attr2, attr4, attr8)
-	// AS
-	// (
-	//   SELECT
-	// 	   RE.run_id, C.entity_key, C.attr1, C.attr2, C.attr4, C.attr8
-	//   FROM Person_gfa43c687 C
-	//   INNER JOIN run_entity RE ON (RE.base_run_id = C.run_id AND RE.entity_gen_hid = 201)
-	//   WHERE RE.run_id = 219
-	// ),
-	// avar (run_id, entity_key, attr1, attr2, attr3)
-	// AS
-	// (
-	//   SELECT
-	// 	   RE.run_id, C.entity_key, C.attr1, C.attr2, C.attr3
-	//   FROM Person_gfa43c687 C
-	//   INNER JOIN run_entity RE ON (RE.base_run_id = C.run_id AND RE.entity_gen_hid = 201)
-	//   WHERE RE.run_id IN (221, 222)
-	// ),
-	// abv (run_id, attr1, attr2, attr4_base, attr8_base, attr3_var)
-	// AS
-	// (
-	//   SELECT
-	// 	   V.run_id, V.attr1, V.attr2, B.attr4 AS attr4_base, B.attr8 AS attr8_base, V.attr3 AS attr3_var
-	//   FROM abase B
-	//   INNER JOIN avar V ON (V.entity_key = B.entity_key)
-	// )
-	//
-	cteSql = "WITH abase (" + cHdr
+	if isAnyBase && isAnyVar { // run comparison: select from variant runs join to base run
 
-	for k := range aggrCols {
-		if aggrCols[k].isBase {
-			cteSql += ", " + aggrCols[k].colName
+		// microdata run comparison: OM_AVG( Income[varinat] - (Pension[base] + Salary[base]) )
+		//
+		// WITH abase (run_id, entity_key, attr1, attr2, attr4, attr8)
+		// AS
+		// (
+		//   SELECT
+		// 	   RE.run_id, C.entity_key, C.attr1, C.attr2, C.attr4, C.attr8
+		//   FROM Person_gfa43c687 C
+		//   INNER JOIN run_entity RE ON (RE.base_run_id = C.run_id AND RE.entity_gen_hid = 201)
+		//   WHERE RE.run_id = 219
+		// ),
+		// avar (run_id, entity_key, attr1, attr2, attr3)
+		// AS
+		// (
+		//   SELECT
+		// 	   RE.run_id, C.entity_key, C.attr1, C.attr2, C.attr3
+		//   FROM Person_gfa43c687 C
+		//   INNER JOIN run_entity RE ON (RE.base_run_id = C.run_id AND RE.entity_gen_hid = 201)
+		//   WHERE RE.run_id IN (221, 222)
+		// ),
+		// abv (run_id, attr1, attr2, attr4_base, attr8_base, attr3_var)
+		// AS
+		// (
+		//   SELECT
+		// 	   V.run_id, V.attr1, V.attr2, B.attr4 AS attr4_base, B.attr8 AS attr8_base, V.attr3 AS attr3_var
+		//   FROM abase B
+		//   INNER JOIN avar V ON (V.entity_key = B.entity_key)
+		// )
+		//
+		if cteSql == "" {
+			cteSql = "WITH abase (" + cHdr
+		} else {
+			cteSql += ", abase (" + cHdr
 		}
-	}
 
-	cteSql += ") AS (SELECT " + cBody
-
-	for k := range aggrCols {
-		if aggrCols[k].isBase {
-			cteSql += ", C." + aggrCols[k].colName
-		}
-	}
-
-	cteSql += " FROM " + entityGen.DbEntityTable + " C" +
-		" INNER JOIN run_entity RE ON (RE.base_run_id = C.run_id AND RE.entity_gen_hid = " + strconv.Itoa(entityGen.GenHid) + ")" +
-		" WHERE RE.run_id = " + strconv.Itoa(fromId) +
-		")"
-
-	// variant runs
-	cteSql += ", avar (" + cHdr
-
-	for k := range aggrCols {
-		if aggrCols[k].isVar {
-			cteSql += ", " + aggrCols[k].colName
-		}
-	}
-
-	cteSql += ") AS (SELECT " + cBody
-
-	for k := range aggrCols {
-		if aggrCols[k].isVar {
-			cteSql += ", C." + aggrCols[k].colName
-		}
-	}
-
-	cteSql += " FROM " + entityGen.DbEntityTable + " C" +
-		" INNER JOIN run_entity RE ON (RE.base_run_id = C.run_id AND RE.entity_gen_hid = " + strconv.Itoa(entityGen.GenHid) + ")" +
-		" WHERE RE.run_id IN ("
-
-	isF := true
-	for _, rId := range runIds {
-		if rId != fromId {
-			if isF {
-				isF = false
-				cteSql += strconv.Itoa(rId)
-			} else {
-				cteSql += ", " + strconv.Itoa(rId)
+		for k := range aggrCols {
+			if aggrCols[k].isBase {
+				cteSql += ", " + aggrCols[k].colName
 			}
 		}
-	}
-	cteSql += "))"
 
-	// inner join of base and variant runs by entity_key
-	cteSql += ", abv (run_id"
+		cteSql += ") AS (SELECT " + cBody
 
-	for _, c := range aggrCols {
-		if c.isGroup {
-			cteSql += ", " + c.colName
+		for k := range aggrCols {
+			if aggrCols[k].isBase {
+				cteSql += ", C." + aggrCols[k].colName
+			}
 		}
-	}
-	for k := range aggrCols {
-		if aggrCols[k].isBase {
-			cteSql += ", " + aggrCols[k].colName + "_base"
-		}
-	}
-	for k := range aggrCols {
-		if aggrCols[k].isVar {
-			cteSql += ", " + aggrCols[k].colName + "_var"
-		}
-	}
 
-	cteSql += ") AS (SELECT V.run_id"
+		cteSql += " FROM " + entityGen.DbEntityTable + " C" +
+			" INNER JOIN run_entity RE ON (RE.base_run_id = C.run_id AND RE.entity_gen_hid = " + strconv.Itoa(entityGen.GenHid) + ")" +
+			" WHERE RE.run_id = " + strconv.Itoa(fromId) +
+			")"
 
-	for _, c := range aggrCols {
-		if c.isGroup {
-			cteSql += ", V." + c.colName
-		}
-	}
-	for k := range aggrCols {
-		if aggrCols[k].isBase {
-			cteSql += ", B." + aggrCols[k].colName + " AS " + aggrCols[k].colName + "_base"
-		}
-	}
-	for k := range aggrCols {
-		if aggrCols[k].isVar {
-			cteSql += ", V." + aggrCols[k].colName + " AS " + aggrCols[k].colName + "_var"
-		}
-	}
+		// variant runs
+		cteSql += ", avar (" + cHdr
 
-	cteSql += " FROM abase B" +
-		" INNER JOIN avar V ON (V.entity_key = B.entity_key)" +
-		")"
+		for k := range aggrCols {
+			if aggrCols[k].isVar {
+				cteSql += ", " + aggrCols[k].colName
+			}
+		}
+
+		cteSql += ") AS (SELECT " + cBody
+
+		for k := range aggrCols {
+			if aggrCols[k].isVar {
+				cteSql += ", C." + aggrCols[k].colName
+			}
+		}
+
+		cteSql += " FROM " + entityGen.DbEntityTable + " C" +
+			" INNER JOIN run_entity RE ON (RE.base_run_id = C.run_id AND RE.entity_gen_hid = " + strconv.Itoa(entityGen.GenHid) + ")" +
+			" WHERE RE.run_id IN ("
+
+		isF := true
+		for _, rId := range runIds {
+			if rId != fromId {
+				if isF {
+					isF = false
+					cteSql += strconv.Itoa(rId)
+				} else {
+					cteSql += ", " + strconv.Itoa(rId)
+				}
+			}
+		}
+		cteSql += "))"
+
+		// inner join of base and variant runs by entity_key
+		cteSql += ", abv (run_id"
+
+		for _, c := range aggrCols {
+			if c.isGroup {
+				cteSql += ", " + c.colName
+			}
+		}
+		for k := range aggrCols {
+			if aggrCols[k].isBase {
+				cteSql += ", " + aggrCols[k].colName + "_base"
+			}
+		}
+		for k := range aggrCols {
+			if aggrCols[k].isVar {
+				cteSql += ", " + aggrCols[k].colName + "_var"
+			}
+		}
+
+		cteSql += ") AS (SELECT V.run_id"
+
+		for _, c := range aggrCols {
+			if c.isGroup {
+				cteSql += ", V." + c.colName
+			}
+		}
+		for k := range aggrCols {
+			if aggrCols[k].isBase {
+				cteSql += ", B." + aggrCols[k].colName + " AS " + aggrCols[k].colName + "_base"
+			}
+		}
+		for k := range aggrCols {
+			if aggrCols[k].isVar {
+				cteSql += ", V." + aggrCols[k].colName + " AS " + aggrCols[k].colName + "_var"
+			}
+		}
+
+		cteSql += " FROM abase B" +
+			" INNER JOIN avar V ON (V.entity_key = B.entity_key)" +
+			")"
+	}
 
 	return cteSql, nil
 }

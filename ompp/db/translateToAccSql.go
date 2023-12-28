@@ -184,10 +184,10 @@ func transalteAccAggrToSql(table *TableMeta, calcId int, calculateExpr string) (
 	}
 
 	// aggregation expression columns: only native (not a derived) accumulators can be aggregated
-	aggrCols := make([]aggrColulumn, len(table.Acc))
+	aggrCols := make([]aggrColumn, len(table.Acc))
 
 	for k := range table.Acc {
-		aggrCols[k] = aggrColulumn{
+		aggrCols[k] = aggrColumn{
 			name:    table.Acc[k].Name,
 			colName: table.Acc[k].colName,
 			isAggr:  !table.Acc[k].IsDerived, // only native accumulators can be aggregated

@@ -188,6 +188,7 @@ type entityGenAttrRow struct {
 
 // RunEntityRow is db row of run_entity join to entity_gen table
 type RunEntityRow struct {
+	RunId       int    // run_id         INT         NOT NULL
 	GenHid      int    // entity_gen_hid INT NOT NULL
 	RowCount    int    // row_count    INT NOT NULL, -- if not zero then entity microdata row count
 	ValueDigest string // value_digest VARCHAR(32),  -- if not NULL then digest of table value for the run

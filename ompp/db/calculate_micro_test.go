@@ -139,7 +139,7 @@ func TestTranslateMicroCalcToSql(t *testing.T) {
 		t.Log("isCompare:", isCompare)
 
 		// Build CTE part of aggregation sql from the list of aggregated attributes.
-		cteSql, e := makeMicroCteAggrSql(entity, entityGen, aggrCols, baseRunId, runIds, isCompare)
+		cteSql, e := makeMicroCteAggrSql(entity, entityGen, aggrCols, baseRunId, runIds)
 		if e != nil {
 			t.Fatal(e)
 		}

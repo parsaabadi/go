@@ -6,9 +6,11 @@ package main
 import (
 	"encoding/csv"
 	"net/http"
+	"strconv"
 
 	"github.com/openmpp/go/ompp/db"
 	"github.com/openmpp/go/ompp/helper"
+	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // worksetParameterCsvGetHandler read a parameter values from workset and write it as csv response.
@@ -433,7 +435,7 @@ func doTableCalcGetCsvHandler(w http.ResponseWriter, r *http.Request, isCode, is
 // For example, RATIO is: expr0[variant] / expr0[base], expr1[variant] / expr1[base],....
 // Or arbitrary comma separated expression(s): expr0 , expr1[variant] + expr2[base] , ....
 // Variant runs can be a comma separated list of run digests or run stamps or run names.
-// If run name conations comma then name must be "double quoted" or 'single quoted'.
+// If run name contains comma then name must be "double quoted" or 'single quoted'.
 // For example: "Year 1995, 1996", 'Age [30, 40]'
 // GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/csv
 // Dimension(s) returned as enum codes.
@@ -446,7 +448,7 @@ func runTableCompareCsvGetHandler(w http.ResponseWriter, r *http.Request) {
 // For example, RATIO is: expr0[variant] / expr0[base], expr1[variant] / expr1[base],....
 // Or arbitrary comma separated expression(s): expr0 , expr1[variant] + expr2[base] , ....
 // Variant runs can be a comma separated list of run digests or run stamps or run names.
-// If run name conations comma then name must be "double quoted" or 'single quoted'.
+// If run name contains comma then name must be "double quoted" or 'single quoted'.
 // For example: "Year 1995, 1996", 'Age [30, 40]'
 // GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/csv-bom
 // Dimension(s) returned as enum codes.
@@ -460,7 +462,7 @@ func runTableCompareCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
 // For example, RATIO is: expr0[variant] / expr0[base], expr1[variant] / expr1[base],....
 // Or arbitrary comma separated expression(s): expr0 , expr1[variant] + expr2[base] , ....
 // Variant runs can be a comma separated list of run digests or run stamps or run names.
-// If run name conations comma then name must be "double quoted" or 'single quoted'.
+// If run name contains comma then name must be "double quoted" or 'single quoted'.
 // For example: "Year 1995, 1996", 'Age [30, 40]'
 // GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/csv/csv-id
 // Dimension(s) returned as enum id's.
@@ -473,7 +475,7 @@ func runTableCompareIdCsvGetHandler(w http.ResponseWriter, r *http.Request) {
 // For example, RATIO is: expr0[variant] / expr0[base], expr1[variant] / expr1[base],....
 // Or arbitrary comma separated expression(s): expr0 , expr1[variant] + expr2[base] , ....
 // Variant runs can be a comma separated list of run digests or run stamps or run names.
-// If run name conations comma then name must be "double quoted" or 'single quoted'.
+// If run name contains comma then name must be "double quoted" or 'single quoted'.
 // For example: "Year 1995, 1996", 'Age [30, 40]'
 // GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/csv/csv-id-bom
 // Dimension(s) returned as enum id's.
@@ -487,10 +489,10 @@ func runTableCompareIdCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
 // For example, RATIO is: expr0[variant] / expr0[base], expr1[variant] / expr1[base],....
 // Or arbitrary comma separated expression(s): expr0 , 7 + expr1[variant] + expr2[base] , ....
 // Variant runs can be a comma separated list of run digests or run stamps or run names.
-// If run name conations comma then name must be "double quoted" or 'single quoted'.
+// If run name contains comma then name must be "double quoted" or 'single quoted'.
 // For example: "Year 1995, 1996", 'Age [30, 40]'
 // It does read all output table values, not a "page" of values.
-// Dimension(s) and enum-based parameters returned as enum codes or enum id's.
+// Dimension(s) and enum-based parameters returned as enum codes if isCode is true or enum id's.
 func doTableCompareGetCsvHandler(w http.ResponseWriter, r *http.Request, isCode, isBom bool) {
 
 	// url or query parameters
@@ -681,4 +683,237 @@ func doMicrodataGetCsvHandler(w http.ResponseWriter, r *http.Request, isCode, is
 		return
 	}
 	csvWr.Flush() // flush csv to response
+}
+
+// runMicrodataCalcCsvGetHandler aggregate microdata values and write it into csv response.
+// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/calc/:calc/csv
+// It can be multiple aggregations of value attributes (float of integer type), group by dimension attributes (enum-based or bool type).
+// For example: microdata/Person/group-by/AgeGroup,Sex/calc/OM_AVG(Income),OM_MAX(Salary+Pension)/csv
+// If run name contains comma then name must be "double quoted" or 'single quoted'.
+// For example: "Year 1995, 1996" or: 'Age [30, 40]'
+// Enum-based microdata attributes returned as enum codes.
+func runMicrodataCalcCsvGetHandler(w http.ResponseWriter, r *http.Request) {
+	doMicrodataCalcGetCsvHandler(w, r, true, false, "calc", false)
+}
+
+// runMicrodataCalcCsvBomGetHandler aggregate microdata values and write it into csv response.
+// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/calc/:calc/csv-bom
+// It can be multiple aggregations of value attributes (float of integer type), group by dimension attributes (enum-based or bool type).
+// For example: microdata/Person/group-by/AgeGroup,Sex/calc/OM_AVG(Income),OM_MAX(Salary+Pension)/csv
+// If run name contains comma then name must be "double quoted" or 'single quoted'.
+// For example: "Year 1995, 1996" or: 'Age [30, 40]'
+// Enum-based microdata attributes returned as enum codes.
+// Response starts from utf-8 BOM bytes.
+func runMicrodataCalcCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
+	doMicrodataCalcGetCsvHandler(w, r, true, true, "calc", false)
+}
+
+// runMicrodataCalcIdCsvGetHandler aggregate microdata values and write it into csv response.
+// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/calc/:calc/csv-id
+// It can be multiple aggregations of value attributes (float of integer type), group by dimension attributes (enum-based or bool type).
+// For example: microdata/Person/group-by/AgeGroup,Sex/calc/OM_AVG(Income),OM_MAX(Salary+Pension)/csv
+// If run name contains comma then name must be "double quoted" or 'single quoted'.
+// For example: "Year 1995, 1996" or: 'Age [30, 40]'
+// Enum-based microdata attributes returned as enum id's.
+func runMicrodataCalcIdCsvGetHandler(w http.ResponseWriter, r *http.Request) {
+	doMicrodataCalcGetCsvHandler(w, r, false, false, "calc", false)
+}
+
+// runMicrodataCalcIdCsvBomGetHandler aggregate microdata values and write it into csv response.
+// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/calc/:calc/csv-id-bom
+// It can be multiple aggregations of value attributes (float of integer type), group by dimension attributes (enum-based or bool type).
+// For example: microdata/Person/group-by/AgeGroup,Sex/calc/OM_AVG(Income),OM_MAX(Salary+Pension)/csv
+// If run name contains comma then name must be "double quoted" or 'single quoted'.
+// For example: "Year 1995, 1996" or: 'Age [30, 40]'
+// Enum-based microdata attributes returned as enum id's.
+// Response starts from utf-8 BOM bytes.
+func runMicrodataCalcIdCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
+	doMicrodataCalcGetCsvHandler(w, r, false, true, "calc", false)
+}
+
+// doMicrodataCalcGetCsvHandler aggregate microdata values and write it into csv response.
+// It can be multiple aggregations of value attributes (float of integer type), group by dimension attributes (enum-based or bool type).
+// For example: microdata/Person/group-by/AgeGroup,Sex/calc/OM_AVG(Income),OM_MAX(Salary+Pension)/csv
+// If run name contains comma then name must be "double quoted" or 'single quoted'.
+// For example: "Year 1995, 1996" or: 'Age [30, 40]'
+// Enum-based attributes returned as enum codes or enum id's.
+func doMicrodataCalcGetCsvHandler(w http.ResponseWriter, r *http.Request, isCode, isBom bool, calcKey string, isVar bool) {
+
+	// url or query parameters
+	dn := getRequestParam(r, "model")                                 // model digest-or-name
+	rdsn := getRequestParam(r, "run")                                 // run digest-or-stamp-or-name
+	name := getRequestParam(r, "name")                                // entity name
+	groupBy := helper.ParseCsvLine(getRequestParam(r, "group-by"), 0) // group by list of attributes, comma-separated
+	cLst := helper.ParseCsvLine(getRequestParam(r, calcKey), 0)       // list of aggregations or comparisons, comma-separated
+
+	// return error if microdata disabled
+	if !theCfg.isMicrodata {
+		http.Error(w, "Error: microdata not allowed: "+dn+" "+rdsn, http.StatusBadRequest)
+		return
+	}
+
+	if len(groupBy) <= 0 {
+		http.Error(w, "Invalid (empty) microdata group by attributes "+name, http.StatusBadRequest)
+		return
+	}
+	if len(cLst) <= 0 {
+		http.Error(w, "Invalid (empty) microdata aggregation(s) and comparison(s) "+name, http.StatusBadRequest)
+		return
+	}
+
+	varLst := []string{}
+	if isVar {
+		varLst = helper.ParseCsvLine(getRequestParam(r, "variant"), 0) // list of aggregations or comparisons, comma-separated
+	}
+
+	// set aggregation expressions
+	calcLt := db.CalculateMicroLayout{
+		Calculation: []db.CalculateLayout{},
+		GroupBy:     groupBy,
+	}
+
+	for j := range cLst {
+
+		if cLst[j] != "" {
+			calcLt.Calculation = append(calcLt.Calculation, db.CalculateLayout{
+				Calculate: cLst[j],
+				CalcId:    j + db.CALCULATED_ID_OFFSET,
+				Name:      "ex_" + strconv.Itoa(j+db.CALCULATED_ID_OFFSET),
+			})
+		}
+	}
+
+	// get base run id, run variants, entity generation digest and microdata cell converter
+	baseRunId, runIds, genDigest, cvtMicro, err := theCatalog.MicrodataCalcToCsvConverter(dn, isCode, rdsn, varLst, name, &calcLt)
+	if err != nil {
+		omppLog.Log("Failed to create microdata csv converter: ", rdsn, ": ", name, ": ", err.Error())
+		http.Error(w, "Failed to create microdata csv converter: "+rdsn+": "+name, http.StatusBadRequest)
+		return
+	}
+
+	// read microdata values, page size =0: read all values
+	microLt := db.ReadMicroLayout{
+		ReadLayout: db.ReadLayout{
+			Name:   name,
+			FromId: baseRunId,
+		},
+		GenDigest: genDigest,
+	}
+
+	// make csv header
+	hdr, err := cvtMicro.CsvHeader()
+	if err != nil {
+		omppLog.Log("Failed to make microdata csv header: ", dn, ": ", name, ": ", err.Error())
+		http.Error(w, "Failed to create microdata csv converter: "+rdsn+": "+name, http.StatusBadRequest)
+		return
+	}
+
+	// create converter from db cell into csv row []string
+	var cvtRow func(interface{}, []string) (bool, error)
+
+	if isCode {
+		cvtRow, err = cvtMicro.ToCsvRow()
+	} else {
+		cvtRow, err = cvtMicro.ToCsvIdRow()
+	}
+	if err != nil {
+		omppLog.Log("Failed to create microdata converter to csv: ", dn, ": ", name, ": ", err.Error())
+		http.Error(w, "Failed to create microdata csv converter: "+rdsn+": "+name, http.StatusBadRequest)
+		return
+	}
+
+	// set response headers: Content-Disposition: attachment; filename=name.csv
+	csvSetHeaders(w, name)
+
+	// write csv body
+	if isBom {
+		if _, err := w.Write(helper.Utf8bom); err != nil {
+			omppLog.Log("Error at csv write: ", dn, ": ", name, ": ", err.Error())
+			http.Error(w, "Error at csv write: "+rdsn+": "+name, http.StatusBadRequest)
+			return
+		}
+	}
+
+	csvWr := csv.NewWriter(w)
+
+	if err := csvWr.Write(hdr); err != nil {
+		omppLog.Log("Error at csv write: ", dn, ": ", name, ": ", err.Error())
+		http.Error(w, "Error at csv write: "+rdsn+": "+name, http.StatusBadRequest)
+		return
+	}
+
+	// convert output table cell into []string and write line into csv file
+	cs := make([]string, len(hdr))
+
+	cvtWr := func(c interface{}) (bool, error) {
+
+		// if converter return empty line then skip it
+		isNotEmpty := true
+		var e2 error = nil
+
+		if isNotEmpty, e2 = cvtRow(c, cs); e2 != nil {
+			return false, e2
+		}
+		if isNotEmpty {
+			if e2 = csvWr.Write(cs); e2 != nil {
+				return false, e2
+			}
+		}
+		return true, nil
+	}
+
+	_, ok := theCatalog.ReadMicrodataCalculateTo(dn, rdsn, &microLt, &calcLt, runIds, cvtWr)
+	if !ok {
+		http.Error(w, "Error at microdata aggregation read "+rdsn+": "+name, http.StatusBadRequest)
+		return
+	}
+	csvWr.Flush() // flush csv to response
+}
+
+// runMicrodataCompareCsvGetHandler write into CSV response microdata comparison between base and variant(s) model runs.
+// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/compare/:compare/variant/:variant/csv
+// It can be multiple comparison of value attributes (float of integer type) and / or aggregation of value attributes.
+// All comparisons and aggregations grouped by dimension attributes (enum-based or bool type).
+// For example: microdata/Person/group-by/AgeGroup,Sex/compare/OM_AVG(Income[variant]-Income[base]),OM_MAX(Salary+Pension)
+// If run name contains comma then name must be "double quoted" or 'single quoted'.
+// For example: "Year 1995, 1996" or: 'Age [30, 40]'
+// Enum-based microdata attributes returned as enum id's.
+func runMicrodataCompareCsvGetHandler(w http.ResponseWriter, r *http.Request) {
+	doMicrodataCalcGetCsvHandler(w, r, true, false, "compare", true)
+}
+
+// runMicrodataCompareCsvGetHandler write into CSV response microdata comparison between base and variant(s) model runs.
+// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/compare/:compare/variant/:variant/csv-bom
+// It can be multiple comparison of value attributes (float of integer type) and / or aggregation of value attributes.
+// All comparisons and aggregations grouped by dimension attributes (enum-based or bool type).
+// For example: microdata/Person/group-by/AgeGroup,Sex/compare/OM_AVG(Income[variant]-Income[base]),OM_MAX(Salary+Pension)
+// If run name contains comma then name must be "double quoted" or 'single quoted'.
+// For example: "Year 1995, 1996" or: 'Age [30, 40]'
+// Enum-based microdata attributes returned as enum id's.
+func runMicrodataCompareCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
+	doMicrodataCalcGetCsvHandler(w, r, true, true, "compare", true)
+}
+
+// runMicrodataCompareCsvGetHandler write into CSV response microdata comparison between base and variant(s) model runs.
+// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/compare/:compare/variant/:variant/csv-id
+// It can be multiple comparison of value attributes (float of integer type) and / or aggregation of value attributes.
+// All comparisons and aggregations grouped by dimension attributes (enum-based or bool type).
+// For example: microdata/Person/group-by/AgeGroup,Sex/compare/OM_AVG(Income[variant]-Income[base]),OM_MAX(Salary+Pension)
+// If run name contains comma then name must be "double quoted" or 'single quoted'.
+// For example: "Year 1995, 1996" or: 'Age [30, 40]'
+// Enum-based microdata attributes returned as enum id's.
+func runMicrodataCompareIdCsvGetHandler(w http.ResponseWriter, r *http.Request) {
+	doMicrodataCalcGetCsvHandler(w, r, false, false, "compare", true)
+}
+
+// runMicrodataCompareCsvGetHandler write into CSV response microdata comparison between base and variant(s) model runs.
+// GET /api/model/:model/run/:run/microdata/:name/group-by/:group-by/compare/:compare/variant/:variant/csv-id-bom
+// It can be multiple comparison of value attributes (float of integer type) and / or aggregation of value attributes.
+// All comparisons and aggregations grouped by dimension attributes (enum-based or bool type).
+// For example: microdata/Person/group-by/AgeGroup,Sex/compare/OM_AVG(Income[variant]-Income[base]),OM_MAX(Salary+Pension)
+// If run name contains comma then name must be "double quoted" or 'single quoted'.
+// For example: "Year 1995, 1996" or: 'Age [30, 40]'
+// Enum-based microdata attributes returned as enum id's.
+func runMicrodataCompareIdCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
+	doMicrodataCalcGetCsvHandler(w, r, false, true, "compare", true)
 }

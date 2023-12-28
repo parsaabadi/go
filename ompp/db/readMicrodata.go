@@ -238,7 +238,7 @@ func ReadMicrodataTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadMicroLayou
 	return &lt, nil
 }
 
-// trxReadMicrodataTo read entity microdata rows (microdata key, attributes) from workset or model run results and process each row by cvtTo().
+// trxReadMicrodataTo read entity microdata rows (microdata key, attributes) from model run results and process each row by cvtTo().
 func trxReadMicrodataTo(trx *sql.Tx, entity *EntityMeta, entityAttrs []EntityAttrRow, query string, cvtTo func(src interface{}) error) error {
 
 	// select microdata cells: (microdata key, attributes)
@@ -383,4 +383,320 @@ func scanSqlRowToCellMicro(entity *EntityMeta, entityAttrs []EntityAttrRow) ([]i
 	}
 
 	return scanBuf, cvt
+}
+
+// ReadMicrodataCalculateTo read aggregated microdata rows (run_id, calc_id, group by attributes, calc_value) and process each row by cvtTo().
+//
+// It can calculate multiple measure values using simple aggregation of attributes, ex.: OM_AVG(Income)
+// or on aggregate for run comparison, ex.: OM_AVG(Income[variant] - Income[base]).
+// Optional list of run id's can be supplied to read more than one run from microdata table.
+func ReadMicrodataCalculateTo(
+	dbConn *sql.DB, modelDef *ModelMeta, layout *ReadMicroLayout, calcLt *CalculateMicroLayout, runIds []int, cvtTo func(src interface{}) (bool, error),
+) (*ReadPageLayout, error) {
+
+	// validate parameters
+	if modelDef == nil {
+		return nil, errors.New("invalid (empty) model metadata, look like model not found")
+	}
+	if layout == nil {
+		return nil, errors.New("invalid (empty) page layout")
+	}
+	if layout.Name == "" {
+		return nil, errors.New("invalid (empty) parameter name")
+	}
+	if calcLt == nil {
+		return nil, errors.New("invalid (empty) microdata calculation expression(s): " + layout.Name)
+	}
+
+	// find entity by name
+	eIdx, ok := modelDef.EntityByName(layout.Name)
+	if !ok {
+		return nil, errors.New("entity not found: " + layout.Name)
+	}
+	entity := &modelDef.Entity[eIdx]
+
+	// check if model run exist and model run completed
+	runRow, err := GetRun(dbConn, layout.FromId)
+	if err != nil {
+		return nil, err
+	}
+	if runRow == nil {
+		return nil, errors.New("model run not found, id: " + strconv.Itoa(layout.FromId))
+	}
+	if runRow.Status != DoneRunStatus {
+		return nil, errors.New("model run not completed successfully, id: " + strconv.Itoa(layout.FromId))
+	}
+
+	// find entity generation and generation attributes
+	egLst, err := GetEntityGenList(dbConn, layout.FromId)
+	if err != nil {
+		return nil, err
+	}
+	var entityGen *EntityGenMeta
+
+	for k := range egLst {
+		if egLst[k].GenDigest == layout.GenDigest {
+			entityGen = &egLst[k]
+			break
+		}
+	}
+	if entityGen == nil {
+		return nil, errors.New("model run does not contain entity generation: " + layout.GenDigest + " " + entity.Name + " in run, id: " + strconv.Itoa(layout.FromId))
+	}
+
+	// find group by microdata attributes by name
+	aGroupBy := []EntityAttrRow{}
+
+	for _, ga := range entityGen.GenAttr {
+
+		aIdx, ok := entity.AttrByKey(ga.AttrId)
+		if !ok {
+			return nil, errors.New("entity attribute not found by id: " + strconv.Itoa(ga.AttrId) + " " + entity.Name)
+		}
+
+		isFound := false
+		for j := 0; !isFound && j < len(calcLt.GroupBy); j++ {
+
+			if calcLt.GroupBy[j] != entity.Attr[aIdx].Name {
+				continue
+			}
+			aGroupBy = append(aGroupBy, entity.Attr[aIdx])
+
+			// group by attributes must boolean or not built-in
+			if entity.Attr[aIdx].typeOf.IsBuiltIn() && !entity.Attr[aIdx].typeOf.IsBool() {
+				return nil, errors.New("invalid type of entity group by attribute not found by: " + entity.Name + "." + calcLt.GroupBy[j] + " : " + entity.Attr[aIdx].typeOf.Name)
+			}
+		}
+	}
+
+	// check: all group by attributes must be found
+	for _, name := range calcLt.GroupBy {
+
+		isFound := false
+		for k := 0; !isFound && k < len(aGroupBy); k++ {
+			isFound = aGroupBy[k].Name == name
+		}
+		if !isFound {
+			return nil, errors.New("entity group by attribute not found by: " + entity.Name + "." + name)
+		}
+	}
+
+	// translate calculation to sql
+	q, err := translateMicroToSql(entity, entityGen, &layout.ReadLayout, calcLt, runIds)
+	if err != nil {
+		return nil, err
+	}
+
+	// prepare db-row scan conversion buffer: run_id, calculation id, group by attributes, value
+	// and define conversion function to make new cell from scan buffer
+	scanBuf, fc, err := scanSqlRowToCellMicroCalc(entity, aGroupBy)
+	if err != nil {
+		return nil, err
+	}
+
+	// if full page requested:
+	// select rows into the list buffer and write rows from the list into output stream
+	if layout.IsFullPage {
+
+		// make a list of output cells: run_id, calculation id, group by attributes, value and null status
+		cLst, lt, err := SelectToList(dbConn, q, layout.ReadPageLayout,
+			func(rows *sql.Rows) (interface{}, error) {
+
+				if e := rows.Scan(scanBuf...); e != nil {
+					return nil, e
+				}
+				c := CellMicroCalc{Attr: make([]attrValue, len(aGroupBy)+1)}
+
+				if e := fc(&c); e != nil { // conversion from scan bubbfer into cell
+					return nil, e
+				}
+				return c, nil
+			})
+		if err != nil {
+			return nil, err
+		}
+
+		// write page into output stream
+		for c := cLst.Front(); c != nil; c = c.Next() {
+
+			if _, e := cvtTo(c.Value); e != nil {
+				return nil, e
+			}
+		}
+
+		return lt, nil // done: return output page layout
+	}
+	// else: select rows and write it into output stream without buffering
+
+	// adjust page layout: starting offset and page size
+	nStart := layout.Offset
+	if nStart < 0 {
+		nStart = 0
+	}
+	nSize := layout.Size
+	if nSize < 0 {
+		nSize = 0
+	}
+	var nRow int64
+
+	lt := ReadPageLayout{
+		Offset:     nStart,
+		Size:       0,
+		IsLastPage: false,
+	}
+
+	// select microdata cells: (entity key, attributes value)
+	err = SelectRowsTo(dbConn, q,
+		func(rows *sql.Rows) (bool, error) {
+
+			// if page size is limited then select only a page of rows
+			nRow++
+			if nSize > 0 && nRow > nStart+nSize {
+				return false, nil
+			}
+			if nRow <= nStart {
+				return true, nil
+			}
+
+			// select next row
+			if e := rows.Scan(scanBuf...); e != nil {
+				return false, e
+			}
+			lt.Size++
+
+			c := CellMicroCalc{Attr: make([]attrValue, len(aGroupBy)+1)}
+
+			if e := fc(&c); e != nil {
+				return false, e
+			}
+
+			return cvtTo(c) // process cell
+		})
+	if err != nil && err != sql.ErrNoRows { // microdata not found is not an error
+		return nil, err
+	}
+
+	// check for the empty result page or last page
+	if lt.Size <= 0 {
+		lt.Offset = nRow
+	}
+	lt.IsLastPage = nSize <= 0 || nSize > 0 && nRow <= nStart+nSize
+
+	return &lt, nil
+}
+
+// prepare to scan sql rows and convert each row to CellMicroCalc
+// retun scan buffer to be popualted by rows.Scan() and closure to that buffer into CellMicroCalc
+func scanSqlRowToCellMicroCalc(entity *EntityMeta, aGroupBy []EntityAttrRow) ([]interface{}, func(*CellMicroCalc) error, error) {
+
+	nGrp := len(aGroupBy)
+	scanBuf := make([]interface{}, 3+nGrp) // run id, calculation id, group by attributes, calculated value
+
+	var runId, calcId int
+	scanBuf[0] = &runId
+	scanBuf[1] = &calcId
+
+	fd := make([]func(interface{}) (attrValue, error), nGrp+1) // conversion functions for group by attributes
+
+	// for each attribute create conversion function by type
+	for na, ga := range aGroupBy {
+
+		switch {
+		case ga.typeOf.IsBool(): // logical attribute
+
+			var v interface{}
+			scanBuf[2+na] = &v
+
+			fd[na] = func(src interface{}) (attrValue, error) {
+
+				av := attrValue{}
+				av.IsNull = false // logical attribute expected to be NOT NULL
+
+				is := false
+				switch vn := v.(type) {
+				case nil: // 2018: unexpected today, may be in the future
+					is = false
+					av.IsNull = true
+				case bool:
+					is = vn
+				case int64:
+					is = vn != 0
+				case uint64:
+					is = vn != 0
+				case int32:
+					is = vn != 0
+				case uint32:
+					is = vn != 0
+				case int16:
+					is = vn != 0
+				case uint16:
+					is = vn != 0
+				case int8:
+					is = vn != 0
+				case uint8:
+					is = vn != 0
+				case uint:
+					is = vn != 0
+				case float32: // oracle (very unlikely)
+					is = vn != 0.0
+				case float64: // oracle (often)
+					is = vn != 0.0
+				case int:
+					is = vn != 0
+				default:
+					return av, errors.New("invalid attribute value type, integer expected: " + entity.Name + "." + ga.Name)
+				}
+				av.Value = is
+
+				return av, nil
+			}
+
+		case ga.typeOf.IsString(): // string attribute, as it is today strings are not microdata dimenions
+
+			return nil, nil, errors.New("invalid group by attribute type: " + ga.typeOf.Name + " : " + entity.Name + "." + ga.Name)
+
+		case ga.typeOf.IsFloat(): // float attribute, can be NULL, as it is today floats cannot are not microdata dimenions
+
+			return nil, nil, errors.New("invalid group by attribute type: " + ga.typeOf.Name + " : " + entity.Name + "." + ga.Name)
+
+		default:
+			var v interface{}
+			scanBuf[2+na] = &v
+
+			fd[na] = func(src interface{}) (attrValue, error) { return attrValue{IsNull: src == nil, Value: v}, nil }
+		}
+	}
+
+	// calculated value expected to be float
+	var vf sql.NullFloat64
+	scanBuf[2+nGrp] = &vf
+
+	fd[nGrp] = func(src interface{}) (attrValue, error) {
+
+		if src == nil {
+			return attrValue{IsNull: true}, nil
+		}
+		if vf.Valid {
+			return attrValue{IsNull: false, Value: vf.Float64}, nil
+		}
+		return attrValue{IsNull: true, Value: 0.0}, nil
+	}
+
+	// sql row conevrsion function: convert (run_id, calc_id, group by attributes, calc_value) from scan buffer to cell
+	cvt := func(c *CellMicroCalc) error {
+
+		c.RunId = runId
+		c.CalcId = calcId
+
+		for k := 0; k < nGrp+1; k++ {
+			v, e := fd[k](scanBuf[2+k])
+			if e != nil {
+				return e
+			}
+			c.Attr[k] = v
+		}
+		return nil
+	}
+
+	return scanBuf, cvt, nil
 }
