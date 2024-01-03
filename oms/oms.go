@@ -196,6 +196,7 @@ var theCfg = struct {
 	isMicrodata  bool              // if true then allow model run microdata
 	isAdminAll   bool              // if true then admin-all routes are enabled
 	isJobControl bool              // if true then do job control: model run queue and resource allocation
+	isJobPast    bool              // if true then do job history shadow copy
 	jobDir       string            // job control directory
 	omsName      string            // oms instance name, if empty then derived from address to listen
 	dbcopyPath   string            // if download or upload allowed then it is path to dbcopy.exe
@@ -437,7 +438,7 @@ func mainBody(args []string) error {
 
 	// check if job control is required:
 	theCfg.jobDir = runOpts.String(jobDirArgKey)
-	if err := jobDirValid(theCfg.jobDir); err != nil {
+	if theCfg.isJobPast, err = jobDirValid(theCfg.jobDir); err != nil {
 		return errors.New("Error: invalid job control directory: " + err.Error())
 	}
 	theCfg.isJobControl = theCfg.jobDir != ""

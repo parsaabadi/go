@@ -419,6 +419,42 @@ func fileCreateEmpty(isLog bool, path string) bool {
 	return true
 }
 
+// Copy file and log path if isLog is true, return false on error of if source file not exists
+func fileCopy(isLog bool, src, dst string) bool {
+	if src == "" || dst == "" || src == dst {
+		return false
+	}
+	if isLog {
+		omppLog.Log("Copy: ", src, " -> ", dst)
+	}
+
+	inp, err := os.Open(src)
+	if err != nil {
+		if os.IsNotExist(err) {
+			if isLog {
+				omppLog.Log("File not found: ", src)
+			}
+		} else {
+			omppLog.Log(err)
+		}
+		return false
+	}
+	defer inp.Close()
+
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	if err != nil {
+		omppLog.Log(err)
+		return false
+	}
+	defer out.Close()
+
+	if _, err = io.Copy(out, inp); err != nil {
+		omppLog.Log(err)
+		return false
+	}
+	return true
+}
+
 // dbcopyPath return path to dbcopy.exe, it is expected to be in the same directory as oms.exe.
 // argument omsAbsPath expected to be /absolute/path/to/oms.exe
 func dbcopyPath(omsAbsPath string) string {

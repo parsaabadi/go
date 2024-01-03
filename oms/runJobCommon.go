@@ -16,32 +16,36 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
-// jobDirValid checking job control configuration.
+// jobDirValid checking job control configuration, return bool flag to indicate if past sub-directory exists.
 // if job control directory is empty then job control disabled.
 // if job control directory not empty then it must have active, queue, history and state subdirectories.
 // if state.json exists then it must be a valid configuration file.
-func jobDirValid(jobDir string) error {
+func jobDirValid(jobDir string) (bool, error) {
 
 	if jobDir == "" {
-		return nil // job control disabled
+		return false, nil // job control disabled
 	}
 
 	if _, err := dirStat(jobDir); err != nil {
-		return err
+		return false, err
 	}
 	if _, err := dirStat(filepath.Join(jobDir, "active")); err != nil {
-		return err
+		return false, err
 	}
 	if _, err := dirStat(filepath.Join(jobDir, "queue")); err != nil {
-		return err
-	}
-	if _, err := dirStat(filepath.Join(jobDir, "history")); err != nil {
-		return err
+		return false, err
 	}
 	if _, err := dirStat(filepath.Join(jobDir, "state")); err != nil {
-		return err
+		return false, err
 	}
-	return nil
+	if _, err := dirStat(filepath.Join(jobDir, "history")); err != nil {
+		return false, err
+	}
+	isPast := false
+	if _, err := dirStat(filepath.Join(jobDir, "past")); err == nil {
+		isPast = true
+	}
+	return isPast, nil
 }
 
 // Return job control file path if model is running now.
@@ -75,11 +79,20 @@ func jobQueuePath(submitStamp, modelName, modelDigest string, isMpi bool, positi
 }
 
 // Return job control file path to completed model with run status suffix.
-// For example: 2022_07_04_20_06_10_817-#-_4040-#-RiskPaths-#-d90e1e9a-#-2022_07_04_20_06_10_818-#-success.json
+// For example: job/history/2022_07_04_20_06_10_817-#-_4040-#-RiskPaths-#-d90e1e9a-#-2022_07_04_20_06_10_818-#-success.json
 func jobHistoryPath(status, submitStamp, modelName, modelDigest, runStamp string) string {
 	return filepath.Join(
 		theCfg.jobDir,
 		"history",
+		submitStamp+"-#-"+theCfg.omsName+"-#-"+modelName+"-#-"+modelDigest+"-#-"+runStamp+"-#-"+db.NameOfRunStatus(status)+".json")
+}
+
+// Return job control file path to shadow copy of model with run history.
+// For example: job/past/2022_07_04_20_06_10_817-#-_4040-#-RiskPaths-#-d90e1e9a-#-2022_07_04_20_06_10_818-#-success.json
+func jobPastPath(status, submitStamp, modelName, modelDigest, runStamp string) string {
+	return filepath.Join(
+		theCfg.jobDir,
+		"past",
 		submitStamp+"-#-"+theCfg.omsName+"-#-"+modelName+"-#-"+modelDigest+"-#-"+runStamp+"-#-"+db.NameOfRunStatus(status)+".json")
 }
 
@@ -394,11 +407,16 @@ func moveActiveJobToHistory(activePath, status string, submitStamp, modelName, m
 	}
 
 	// move active job file to history
-	dst := jobHistoryPath(status, submitStamp, modelName, modelDigest, runStamp)
+	hst := jobHistoryPath(status, submitStamp, modelName, modelDigest, runStamp)
 
-	isOk := fileMoveAndLog(false, activePath, dst)
+	isOk := fileMoveAndLog(false, activePath, hst)
 	if !isOk {
 		fileDeleteAndLog(true, activePath) // if move failed then delete job control file from active list
+	} else {
+		if theCfg.isJobPast {
+			past := jobPastPath(status, submitStamp, modelName, modelDigest, runStamp)
+			fileCopy(false, hst, past)
+		}
 	}
 
 	// remove all compute server usage files
@@ -422,11 +440,16 @@ func moveJobQueueToFailed(queuePath string, submitStamp, modelName, modelDigest,
 		runStamp = submitStamp
 	}
 
-	dst := jobHistoryPath(db.ErrorRunStatus, submitStamp, modelName, modelDigest, runStamp)
+	hst := jobHistoryPath(db.ErrorRunStatus, submitStamp, modelName, modelDigest, runStamp)
 
-	if !fileMoveAndLog(true, queuePath, dst) {
+	if !fileMoveAndLog(true, queuePath, hst) {
 		fileDeleteAndLog(true, queuePath) // if move failed then delete job control file from queue
 		return false
+	} else {
+		if theCfg.isJobPast {
+			past := jobPastPath(db.ErrorRunStatus, submitStamp, modelName, modelDigest, runStamp)
+			fileCopy(false, hst, past)
+		}
 	}
 	return true
 }
