@@ -20,7 +20,7 @@ const rightDelims = ")+-*/%^|&~!=<>["
 var simpleFncLst = []string{"OM_IF", "OM_DIV_BY"}
 
 // aggregation functions
-var aggrFncLst = []string{"OM_AVG", "OM_SUM", "OM_COUNT", "OM_AVG", "OM_MIN", "OM_MAX", "OM_VAR", "OM_SD", "OM_SE", "OM_CV"}
+var aggrFncLst = []string{"OM_AVG", "OM_SUM", "OM_COUNT", "OM_COUNT_IF", "OM_AVG", "OM_MIN", "OM_MAX", "OM_VAR", "OM_SD", "OM_SE", "OM_CV"}
 
 // translate (substitute) all non-aggregation functions: OM_DIV_BY OM_IF...
 func translateAllSimpleFnc(expr string) (string, error) {
@@ -195,13 +195,11 @@ func findFirstNameFnc(src string, fncNameLst []string) (int, int, error) {
 
 // translate (substitute) non-aggregation function:
 //
-// OM_DIV_BY(acc1)
-//
+//	OM_DIV_BY(acc1)
 //	=>
 //	CASE WHEN ABS(acc1) > 1.0e-37 THEN acc1 ELSE NULL END
 //
-// OM_IF(acc1 > 1.5 THEN acc1 ELSE 1.5)
-//
+//	OM_IF(acc1 > 1.5 THEN acc1 ELSE 1.5)
 //	=>
 //	CASE WHEN acc1 > 1.5 THEN acc1 ELSE 1.5 END
 func translateSimpleFnc(name, arg string, src string) (string, error) {

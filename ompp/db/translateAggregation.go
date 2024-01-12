@@ -381,11 +381,7 @@ func (lps *levelParseState) processParamColumns(
 //
 //	OM_AVG(acc0) => AVG(acc0)
 //
-// or:
-//
 //	OM_SUM(acc0 - 0.5 * OM_AVG(acc0)) => SUM(acc0 - 0.5 * T2.ex2)
-//
-// or:
 //
 //	OM_VAR(acc0)
 //	=>
@@ -422,6 +418,9 @@ func (lps *levelParseState) translateAggregationFnc(name, arg string, src string
 
 	case "OM_MAX":
 		return "MAX(" + sqlArg + ")", nil
+
+	case "OM_COUNT_IF":
+		return "COUNT(CASE WHEN " + sqlArg + " THEN 1 ELSE NULL END)", nil
 
 	case "OM_VAR":
 		// SUM((arg - T2.ex2) * (arg - T2.ex2)) / (COUNT(arg) - 1)
