@@ -66,7 +66,7 @@ func TestTransalteAccAggrToSql(t *testing.T) {
 		src   string
 		valid string
 	}{}
-	for k := 0; k < 100; k++ {
+	for k := 0; k < 400; k++ {
 		s := kvIni["TransalteAccAggrToSql.Src_"+strconv.Itoa(k+1)]
 		if s == "" {
 			continue
@@ -86,7 +86,9 @@ func TestTransalteAccAggrToSql(t *testing.T) {
 
 		t.Log(v.src)
 
-		cteSql, mainSql, e := transalteAccAggrToSql(table, 0, v.src)
+		paramCols := makeParamCols(modelDef.Param)
+
+		cteSql, mainSql, e := transalteAccAggrToSql(table, paramCols, 0, v.src)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -156,7 +158,7 @@ func TestTranslateTableCalcToSql(t *testing.T) {
 	}
 
 	t.Log("Check calculation SQL")
-	for k := 0; k < 100; k++ {
+	for k := 0; k < 400; k++ {
 
 		calcLt := []CalculateTableLayout{}
 
@@ -229,7 +231,7 @@ func TestTranslateTableCalcToSql(t *testing.T) {
 			tableLt.FromId = baseRunId
 		}
 
-		sql, e := translateTableCalcToSql(table, &tableLt.ReadLayout, calcLt, runIds)
+		sql, e := translateTableCalcToSql(table, modelDef.Param, &tableLt.ReadLayout, calcLt, runIds)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -302,7 +304,7 @@ func TestCalculateOutputTable(t *testing.T) {
 		csvCvt.DigestToId[r.RunDigest] = r.RunId
 	}
 
-	for k := 0; k < 100; k++ {
+	for k := 0; k < 400; k++ {
 
 		calcLt := []CalculateTableLayout{}
 

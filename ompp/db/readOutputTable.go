@@ -441,7 +441,7 @@ func ReadOutputTableCalculteTo(
 	}
 
 	// make sql to select calculated output table expression(s) from model run(s)
-	q, err := translateTableCalcToSql(table, &layout.ReadLayout, calcLt, runIds)
+	q, err := translateTableCalcToSql(table, modelDef.Param, &layout.ReadLayout, calcLt, runIds)
 	if err != nil {
 		return nil, err
 	}

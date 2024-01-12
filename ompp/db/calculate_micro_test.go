@@ -96,7 +96,7 @@ func TestTranslateMicroCalcToSql(t *testing.T) {
 
 	t.Log("Check microdata aggregation SQL")
 
-	for k := 0; k < 100; k++ {
+	for k := 0; k < 400; k++ {
 		srcCalc := kvIni["TranslateMicroCalcToSql.Src_"+strconv.Itoa(k+1)]
 		if srcCalc == "" {
 			continue
@@ -131,8 +131,11 @@ func TestTranslateMicroCalcToSql(t *testing.T) {
 			t.Fatal("Fail to makeMicroAggrCols:", entityName, ":", groupBy)
 		}
 
+		// parameter columns
+		paramCols := makeParamCols(modelDef.Param)
+
 		// Translate microdata aggregation into main sql query.
-		mainSql, isCompare, e := translateMicroCalcToSql(entity, entityGen, aggrCols, 2*CALCULATED_ID_OFFSET, srcCalc)
+		mainSql, isCompare, e := translateMicroCalcToSql(entity, entityGen, aggrCols, paramCols, 2*CALCULATED_ID_OFFSET, srcCalc)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -143,6 +146,15 @@ func TestTranslateMicroCalcToSql(t *testing.T) {
 		if e != nil {
 			t.Fatal(e)
 		}
+		pCteSql, e := makeParamCteSql(paramCols, baseRunId, runIds)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if pCteSql != "" {
+			cteSql += ", " + pCteSql
+		}
+
+		cteSql = "WITH " + cteSql
 
 		if cteSql != cteValid {
 			t.Error("Expected:", cteValid)
@@ -250,7 +262,7 @@ func TestCalculateMicrodata(t *testing.T) {
 
 	t.Log("Check microdata aggregation SQL")
 
-	for k := 0; k < 100; k++ {
+	for k := 0; k < 400; k++ {
 		srcCalc := kvIni["CalculateMicrodata.Calculate_"+strconv.Itoa(k+1)]
 		if srcCalc == "" {
 			continue

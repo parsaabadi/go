@@ -482,7 +482,7 @@ func ReadMicrodataCalculateTo(
 	}
 
 	// translate calculation to sql
-	q, err := translateMicroToSql(entity, entityGen, &layout.ReadLayout, calcLt, runIds)
+	q, err := translateMicroToSql(entity, entityGen, modelDef.Param, &layout.ReadLayout, calcLt, runIds)
 	if err != nil {
 		return nil, err
 	}

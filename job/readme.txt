@@ -1,6 +1,6 @@
 This directory is an example of models run job directories structure:
 
-job/        : this folder must be shared bteween all oms instances
+job/        : this folder must be shared between all oms instances
     active/   : active model runs state
     history/  : completed (success or fail) model runs
     past/     : (optinal) shadow copy of history folder, invisible to end user

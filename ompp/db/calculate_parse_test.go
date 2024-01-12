@@ -4,6 +4,7 @@
 package db
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"testing"
@@ -78,7 +79,7 @@ func TestErrorIfUnsafeSqlOrComment(t *testing.T) {
 	}
 
 	srcLst := []string{}
-	for k := 0; k < 100; k++ {
+	for k := 0; k < 400; k++ {
 		s := kvIni["UnsafeSql.Src_"+strconv.Itoa(k+1)]
 		if s != "" {
 			srcLst = append(srcLst, s)
@@ -123,7 +124,7 @@ func TestTranslateAllSimpleFnc(t *testing.T) {
 		src   string
 		valid string
 	}{}
-	for k := 0; k < 100; k++ {
+	for k := 0; k < 400; k++ {
 		s := kvIni["TranslateSimpleFnc.Src_"+strconv.Itoa(k+1)]
 		if s == "" {
 			continue
@@ -203,7 +204,7 @@ func TestTranslateToExprSql(t *testing.T) {
 	}
 
 	t.Log("Check non-aggregation SQL")
-	for k := 0; k < 100; k++ {
+	for k := 0; k < 400; k++ {
 
 		cmpExpr := kvIni["TranslateToExprSql.Calculate_"+strconv.Itoa(k+1)]
 		if cmpExpr == "" {
@@ -241,7 +242,7 @@ func TestTranslateToExprSql(t *testing.T) {
 		}
 		cmpLt := CalculateLayout{Calculate: cmpExpr}
 
-		sql, err := translateToExprSql(table, readLt, &cmpLt, runIds)
+		sql, err := translateToExprSql(table, modelDef.Param, readLt, &cmpLt, runIds)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -345,35 +346,13 @@ func TestParseAggrCalculation(t *testing.T) {
 		entityGen = &egLst[gIdx]
 	}
 
-	// aggregation expression columns: only native (not a derived) accumulators can be aggregated
-	accAggrCols := make([]aggrColumn, len(table.Acc))
-
-	for k := range table.Acc {
-		accAggrCols[k] = aggrColumn{
-			name:    table.Acc[k].Name,
-			colName: table.Acc[k].colName,
-			isAggr:  !table.Acc[k].IsDerived, // only native accumulators can be aggregated
-		}
-	}
-
-	// produce accumulator column name: acc0 => M1.acc_value or acc4 => L1A4.acc4
-	makeAccColName := func(
-		name string, nameIdx int, isSimple, isVar bool, firstAlias string, levelAccAlias string, isFirstAcc bool,
-	) string {
-
-		if isFirstAcc {
-			return firstAlias + "." + "acc_value" // first accumulator: acc0 => acc_value
-		}
-		return levelAccAlias + "." + name // any other accumulator: acc4 => acc4
-	}
-
 	validLst := []struct {
 		kind    string
 		src     string
 		groupBy string
 		valid   string
 	}{}
-	for k := 0; k < 100; k++ {
+	for k := 0; k < 400; k++ {
 		s := kvIni["ParseAggrCalculation.Src_"+strconv.Itoa(k+1)]
 		if s == "" {
 			continue
@@ -401,9 +380,63 @@ func TestParseAggrCalculation(t *testing.T) {
 		var r []levelDef
 		var e error
 
+		// aggregation expression columns: only native (not a derived) accumulators can be aggregated
+		accAggrCols := make([]aggrColumn, len(table.Acc))
+
+		for k := range table.Acc {
+			accAggrCols[k] = aggrColumn{
+				name:    table.Acc[k].Name,
+				colName: table.Acc[k].colName,
+				isAggr:  !table.Acc[k].IsDerived, // only native accumulators can be aggregated
+			}
+		}
+
+		// parameter columns
+		paramCols := makeParamCols(modelDef.Param)
+
 		if v.kind == "table" {
 
-			r, e = parseAggrCalculation(accAggrCols, v.src, makeAccColName)
+			// produce accumulator column name: acc0 => M1.acc_value or acc4 => L1A4.acc4
+			makeAccColName := func(
+				name string, nameIdx int, isSimple, isVar bool, firstAlias string, levelAccAlias string, isFirstAcc bool,
+			) string {
+
+				if isFirstAcc {
+					return firstAlias + "." + "acc_value" // first accumulator: acc0 => acc_value
+				}
+				return levelAccAlias + "." + name // any other accumulator: acc4 => acc4
+			}
+
+			// translate parameter names by replacing it with CTE alias and CTE parameter value name:
+			//	param.Name          => M1P103.param_value
+			// also retrun INNER JOIN between parameter CTE view and main table:
+			//  INNER JOIN par_103   M1P103 ON (M1P103.run_id = M1.run_id)
+			// it cannot be run comparison
+			makeParamColName := func(colKey string, isSimple, isVar bool, alias string) (string, string, error) {
+
+				pCol, ok := paramCols[colKey]
+				if !ok {
+					return "", "", errors.New("Error: parameter not found: " + colKey)
+				}
+				if !pCol.isNumber || pCol.paramRow == nil {
+					return "", "", errors.New("Error: parameter must a be numeric scalar: " + colKey)
+				}
+				if !isSimple || isVar {
+					return "", "", errors.New("Error: parameter cannot be a run comparison parameter[base] or parameter[variant]: " + colKey)
+				}
+				sHid := strconv.Itoa(pCol.paramRow.ParamHid)
+
+				pCol.isSimple = true
+				pa := alias + "P" + sHid
+				sqlName := pa + ".param_value" // not a run comparison: param.Name => M1P103.param_value
+				innerJoin := "INNER JOIN par_" + sHid + " " + pa + " ON (" + pa + ".run_id = " + alias + ".run_id)"
+
+				paramCols[colKey] = pCol
+
+				return sqlName, innerJoin, nil
+			}
+
+			r, e = parseAggrCalculation(accAggrCols, paramCols, v.src, makeAccColName, makeParamColName)
 			if e != nil {
 				t.Fatal(e)
 			}
@@ -428,10 +461,9 @@ func TestParseAggrCalculation(t *testing.T) {
 			// produce attribute column name:
 			// if it is not a run comparison:      attr3 => L1A4.attr3
 			// or for base and variant attributes: L1A4.attr3_var, L1A4.attr4_base, L1A4.attr8_base
-			// length of
-			isAnySimple := false
-			isAnyBase := false
-			isAnyVar := false
+			isAttrSimple := false
+			isAttrBase := false
+			isAttrVar := false
 
 			makeAttrColName := func(
 				name string, nameIdx int, isSimple, isVar bool, firstAlias string, levelAlias string, isFirst bool,
@@ -439,30 +471,86 @@ func TestParseAggrCalculation(t *testing.T) {
 
 				if !isSimple {
 					if isVar {
-						isAnyVar = true
+						isAttrVar = true
 						attrAggrCols[nameIdx].isVar = true
 						return firstAlias + "." + attrAggrCols[nameIdx].colName + "_var" // variant run attribute: attr1[variant] => L1A4.attr1_var
 					}
-					isAnyBase = true
+					isAttrBase = true
 					attrAggrCols[nameIdx].isBase = true
 					return firstAlias + "." + attrAggrCols[nameIdx].colName + "_base" // base run attribute: attr1[base] => L1A4.attr1_base
 				}
 				// else: isSimple name, not a name[base] or name[variant]
-				isAnySimple = true
+				isAttrSimple = true
 				attrAggrCols[nameIdx].isSimple = true
 				return firstAlias + "." + attrAggrCols[nameIdx].colName // not a run comparison: attr2 => L1A4.attr2
 			}
 
+			// translate parameter names by replacing it with CTE alias and CTE parameter value name:
+			//	param.Name          => M1P103.param_value
+			//	param.Name[base]    => M1PB103.param_base
+			//	param.Name[variant] => M1PV103.param_var
+			// also retrun INNER JOIN between parameter CTE view and main table:
+			//  INNER JOIN par_103   M1P103 ON (M1P103.run_id = M1.run_id)
+			//  INNER JOIN pbase_103 M1PB103
+			//  INNER JOIN pvar_103  M1PV103 ON (M1P103.run_id = M1.run_id)
+			isParamSimple := false
+			isParamBase := false
+			isParamVar := false
+
+			makeParamColName := func(colKey string, isSimple, isVar bool, alias string) (string, string, error) {
+
+				pCol, ok := paramCols[colKey]
+				if !ok {
+					return "", "", errors.New("Error: parameter not found: " + colKey)
+				}
+				if !pCol.isNumber || pCol.paramRow == nil {
+					return "", "", errors.New("Error: parameter must a be numeric scalar: " + colKey)
+				}
+
+				sqlName := ""
+				innerJoin := ""
+				sHid := strconv.Itoa(pCol.paramRow.ParamHid)
+				if isSimple {
+					isParamSimple = true
+					pCol.isSimple = true
+					pa := alias + "P" + sHid
+					sqlName = pa + ".param_value" // not a run comparison: param.Name => M1P103.param_value
+					innerJoin = "INNER JOIN par_" + sHid + " " + pa + " ON (" + pa + ".run_id = " + alias + ".run_id)"
+				} else {
+					if isVar {
+						isParamVar = true
+						pCol.isVar = true
+						pa := alias + "PV" + strconv.Itoa(pCol.paramRow.ParamHid)
+						sqlName = pa + ".param_var" // variant run parameter: param.Name[variant] => M1PV103.param_var
+						innerJoin = "INNER JOIN pvar_" + sHid + " " + pa + " ON (" + pa + ".run_id = " + alias + ".run_id)"
+					} else {
+						isParamBase = true
+						pCol.isBase = true
+						pa := alias + "PB" + strconv.Itoa(pCol.paramRow.ParamHid)
+						sqlName = pa + ".param_base" // base run parameter: param.Name[base] => M1PB103.param_base
+						innerJoin = "INNER JOIN pbase_" + sHid + " " + pa
+					}
+				}
+				paramCols[colKey] = pCol
+
+				return sqlName, innerJoin, nil
+			}
+
 			// parse aggregation expression
-			r, e = parseAggrCalculation(attrAggrCols, v.src, makeAttrColName)
+			r, e = parseAggrCalculation(attrAggrCols, paramCols, v.src, makeAttrColName, makeParamColName)
 			if e != nil {
 				t.Fatal(e)
 			}
 
-			t.Log("isAnySimple: ", isAnySimple)
-			t.Log("isAnyBase:   ", isAnyBase)
-			t.Log("isAnyVar:    ", isAnyVar)
-			t.Log("attrAggrCols:", attrAggrCols)
+			t.Log("isAttrSimple: ", isAttrSimple)
+			t.Log("isAttrBase:   ", isAttrBase)
+			t.Log("isAttrVar:    ", isAttrVar)
+			t.Log("attrAggrCols: ", attrAggrCols)
+
+			t.Log("isParamSimple: ", isParamSimple)
+			t.Log("isParamBase:   ", isParamBase)
+			t.Log("isParamVar:    ", isParamVar)
+			t.Log("paramCols:     ", paramCols)
 		}
 
 		s := "" // join sql expressions for all levels
@@ -475,7 +563,8 @@ func TestParseAggrCalculation(t *testing.T) {
 			t.Log("  innerAlias:    ", lv.innerAlias)
 			t.Log("  nextInnerAlias:", lv.nextInnerAlias)
 			t.Log("  firstAccIdx:   ", lv.firstAgcIdx)
-			t.Log("  accUsageArr:", lv.agcUsageArr)
+			t.Log("  accUsageArr:   ", lv.agcUsageArr)
+			t.Log("  paramJoinArr:  ", lv.paramJoinArr)
 
 			for j, ex := range lv.exprArr {
 				t.Log("  [ ", j, " ]")

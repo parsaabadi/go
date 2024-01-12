@@ -7,6 +7,7 @@ import (
 	"container/list"
 	"database/sql"
 	"errors"
+	"sort"
 	"strconv"
 )
 
@@ -40,7 +41,7 @@ func CalculateOutputTable(dbConn *sql.DB, modelDef *ModelMeta, tableLt *ReadCalc
 	}
 
 	// translate calculation to sql
-	q, err := translateTableCalcToSql(table, &tableLt.ReadLayout, tableLt.Calculation, runIds)
+	q, err := translateTableCalcToSql(table, modelDef.Param, &tableLt.ReadLayout, tableLt.Calculation, runIds)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -94,11 +95,12 @@ func CalculateOutputTable(dbConn *sql.DB, modelDef *ModelMeta, tableLt *ReadCalc
 // It can be a multiple runs comparison and base run id is layout.FromId.
 // Or simple expression calculation inside of single run or accumulators aggregation inside of single run,
 // in that case layout.FromId and runIds[] are merged.
-func translateTableCalcToSql(table *TableMeta, readLt *ReadLayout, calcLt []CalculateTableLayout, runIds []int) (string, error) {
+func translateTableCalcToSql(table *TableMeta, paramMeta []ParamMeta, readLt *ReadLayout, calcLt []CalculateTableLayout, runIds []int) (string, error) {
 
 	// translate each calculation to sql: CTE and main sql query
 	cteSql := []string{}
 	mainSql := []string{}
+	paramCols := makeParamCols(paramMeta)
 
 	for k := range calcLt {
 
@@ -108,9 +110,9 @@ func translateTableCalcToSql(table *TableMeta, readLt *ReadLayout, calcLt []Calc
 		var err error
 
 		if !calcLt[k].IsAggr {
-			cte, mSql, _, err = partialTranslateToExprSql(table, readLt, &calcLt[k].CalculateLayout, runIds)
+			cte, mSql, _, err = partialTranslateToExprSql(table, paramCols, readLt, &calcLt[k].CalculateLayout, runIds)
 		} else {
-			cteAcc, mSql, err = partialTranslateToAccSql(table, readLt, &calcLt[k].CalculateLayout, runIds)
+			cteAcc, mSql, err = partialTranslateToAccSql(table, paramCols, readLt, &calcLt[k].CalculateLayout, runIds)
 			if err == nil {
 				cte = []string{cteAcc}
 			}
@@ -153,14 +155,22 @@ func translateTableCalcToSql(table *TableMeta, readLt *ReadLayout, calcLt []Calc
 	// AND dimension filters
 	// ORDER BY 1, 2,....
 
-	sql := ""
+	sql := "WITH "
 	for k := range cteSql {
 		if k > 0 {
-			sql += ", " + cteSql[k]
-		} else {
-			sql += "WITH " + cteSql[k]
+			sql += ", "
 		}
+		sql += cteSql[k]
 	}
+
+	pCteSql, err := makeParamCteSql(paramCols, readLt.FromId, runIds)
+	if err != nil {
+		return "", err
+	}
+	if pCteSql != "" {
+		sql += ", " + pCteSql
+	}
+
 	for k := range mainSql {
 		if k > 0 {
 			sql = sql + " UNION ALL " + mainSql[k]
@@ -258,7 +268,7 @@ func CalculateMicrodata(dbConn *sql.DB, modelDef *ModelMeta, microLt *ReadCalcul
 	}
 
 	// translate calculation to sql
-	q, err := translateMicroToSql(entity, entityGen, &microLt.ReadLayout, &microLt.CalculateMicroLayout, runIds)
+	q, err := translateMicroToSql(entity, entityGen, modelDef.Param, &microLt.ReadLayout, &microLt.CalculateMicroLayout, runIds)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -298,7 +308,7 @@ func CalculateMicrodata(dbConn *sql.DB, modelDef *ModelMeta, microLt *ReadCalcul
 // Translate all microdata aggregations to sql query, apply group by, dimension filters, selected run id's and order by.
 // It can be a multiple runs comparison and base run id is layout.FromId.
 // Or simple aggreagtion inside of single run, in that case layout.FromId and runIds[] are merged.
-func translateMicroToSql(entity *EntityMeta, entityGen *EntityGenMeta, readLt *ReadLayout, calcLt *CalculateMicroLayout, runIds []int) (string, error) {
+func translateMicroToSql(entity *EntityMeta, entityGen *EntityGenMeta, paramMeta []ParamMeta, readLt *ReadLayout, calcLt *CalculateMicroLayout, runIds []int) (string, error) {
 
 	// translate each calculation to sql: CTE and main sql query
 	mainSql := []string{}
@@ -307,12 +317,11 @@ func translateMicroToSql(entity *EntityMeta, entityGen *EntityGenMeta, readLt *R
 	if err != nil {
 		return "", err
 	}
+	paramCols := makeParamCols(paramMeta)
 
 	for k := range calcLt.Calculation {
 
-		mSql := ""
-
-		mSql, _, err = partialTranslateToMicroSql(entity, entityGen, aggrCols, readLt, &calcLt.Calculation[k], runIds)
+		mSql, _, err := partialTranslateToMicroSql(entity, entityGen, aggrCols, paramCols, readLt, &calcLt.Calculation[k], runIds)
 		if err != nil {
 			return "", err
 		}
@@ -332,6 +341,13 @@ func translateMicroToSql(entity *EntityMeta, entityGen *EntityGenMeta, readLt *R
 	if err != nil {
 		return "", errors.New("Error at making CTE for aggregation of " + entity.Name + ": " + err.Error())
 	}
+	pCteSql, err := makeParamCteSql(paramCols, readLt.FromId, runIds)
+	if err != nil {
+		return "", errors.New("Error at making CTE for parameters of " + entity.Name + ": " + err.Error())
+	}
+	if pCteSql != "" {
+		cteSql += ", " + pCteSql
+	}
 
 	// make sql:
 	// WITH cte array
@@ -342,7 +358,7 @@ func translateMicroToSql(entity *EntityMeta, entityGen *EntityGenMeta, readLt *R
 	// WHERE attribute filters
 	// ORDER BY 1, 2,....
 
-	sql := cteSql
+	sql := "WITH " + cteSql
 
 	for k := range mainSql {
 		if k > 0 {
@@ -356,4 +372,170 @@ func translateMicroToSql(entity *EntityMeta, entityGen *EntityGenMeta, readLt *R
 	sql += makeOrderBy(len(calcLt.GroupBy), readLt.OrderBy, 2)
 
 	return sql, nil
+}
+
+// make parameter columns: map of ["param.Name"] to parameter metadata and is number flag, which is true if parameter is a float or integer scalar
+func makeParamCols(paramMeta []ParamMeta) map[string]paramColumn {
+
+	pc := make(map[string]paramColumn, len(paramMeta))
+
+	for k := 0; k < len(paramMeta); k++ {
+
+		pc["param."+paramMeta[k].Name] = paramColumn{
+			paramRow: &paramMeta[k].ParamDicRow,
+			isNumber: paramMeta[k].ParamDicRow.Rank == 0 && (paramMeta[k].typeOf.IsFloat() || paramMeta[k].typeOf.IsInt()),
+		}
+	}
+	return pc
+}
+
+// Build CTE part of calculation sql from the list of parameter columns.
+//
+// No comparison, simple use of parameter scalar value:
+//
+//	par_103 (run_id, param_value) AS  (.... AVG(param_value) FROM Extra.... WHERE RP.run_id IN (219, 221, 222) GROUP BY RP.run_id)
+//
+// run comparison:
+//
+//	pbase_103 (param_base)        AS  (SELECT AVG(param_value) ....WHERE RP.run_id = 219),
+//	pvar_103  (run_id, param_var) AS  (.... WHERE RP..run_id IN (221, 222) GROUP BY RP.run_id)
+func makeParamCteSql(paramCols map[string]paramColumn, fromId int, runIds []int) (string, error) {
+
+	if fromId <= 0 {
+		if len(runIds) <= 0 {
+			return "", errors.New("Error: unable to make paramters CTE, run list is empty")
+		}
+		fromId = runIds[0]
+	}
+
+	extraIds := make([]int, 0, len(runIds)) // list of additional run Id's, different from base run id
+	for _, rId := range runIds {
+		if rId != fromId {
+			extraIds = append(extraIds, rId)
+		}
+	}
+	sort.Ints(extraIds)
+
+	extraLst := ""
+	for _, rId := range extraIds {
+		if extraLst != "" {
+			extraLst += ", "
+		}
+		extraLst += strconv.Itoa(rId)
+	}
+
+	// for each parameter make CTE for simple, [base] and [variant] use of parameter scalar
+	lastId := -1
+	cte := ""
+
+	for {
+
+		// walk through parameters in the order of parameter id's
+		minId := -1
+		minKey := ""
+		for pKey, pCol := range paramCols {
+
+			if !pCol.isSimple && !pCol.isBase && !pCol.isVar {
+				continue // skip: parameter not used
+			}
+			if pCol.paramRow.ParamId > lastId && (minId < 0 || pCol.paramRow.ParamId < minId) {
+				minId = pCol.paramRow.ParamId
+				minKey = pKey
+			}
+		}
+		if minKey == "" {
+			break // done with all parameters
+		}
+		lastId = minId
+
+		pCol := paramCols[minKey]
+		if !pCol.isNumber || pCol.paramRow == nil {
+			return "", errors.New("Error: parameter must a be numeric scalar: " + minKey)
+		}
+		sHid := strconv.Itoa(pCol.paramRow.ParamHid)
+
+		// simple use of sacalr parameter, no run comparison:
+		//
+		// par_103 (run_id, param_value) AS
+		// (
+		//   SELECT
+		//     RP.run_id, AVG(C.param_value)
+		//   FROM StartingSeed_p_2012819 C
+		//   INNER JOIN run_parameter RP ON (RP.base_run_id = C.run_id AND RP.parameter_hid = 103)
+		//   WHERE RP.run_id = 219
+		//   GROUP BY RP.run_id
+		// )
+		if pCol.isSimple {
+			if cte != "" {
+				cte += ", "
+			}
+			cte += "par_" + sHid + " (run_id, param_value) AS" +
+				" (" +
+				"SELECT RP.run_id, AVG(C.param_value)" +
+				" FROM " + pCol.paramRow.DbRunTable + " C" +
+				" INNER JOIN run_parameter RP ON (RP.base_run_id = C.run_id AND RP.parameter_hid = " + sHid + ")" +
+				" WHERE RP.run_id"
+
+			if extraLst == "" {
+				cte += " = " + strconv.Itoa(fromId)
+			} else {
+				cte += " IN (" + strconv.Itoa(fromId) + ", " + extraLst + ")"
+			}
+			cte += " GROUP BY RP.run_id" +
+				")"
+		}
+
+		// run comparison [base] run parameter
+		//
+		// pbase_103 (param_base) AS
+		// (
+		//   SELECT
+		//     AVG(C.param_value)
+		//   FROM StartingSeed_p_2012819 C
+		//   INNER JOIN run_parameter RP ON (RP.base_run_id = C.run_id AND RP.parameter_hid = 103)
+		//   WHERE RP.run_id = 219
+		// )
+		if pCol.isBase {
+			if cte != "" {
+				cte += ", "
+			}
+			cte += "pbase_" + sHid + " (param_base) AS" +
+				" (" +
+				"SELECT AVG(C.param_value)" +
+				" FROM " + pCol.paramRow.DbRunTable + " C" +
+				" INNER JOIN run_parameter RP ON (RP.base_run_id = C.run_id AND RP.parameter_hid = " + sHid + ")" +
+				" WHERE RP.run_id = " + strconv.Itoa(fromId) +
+				")"
+		}
+
+		// run comparison [variant] value of scalar parameter
+		//
+		// pvar_103 (run_id, param_var) AS
+		// (
+		//   SELECT
+		//     RP.run_id, AVG(C.param_value)
+		//   FROM StartingSeed_p_2012819 C
+		//   INNER JOIN run_parameter RP ON (RP.base_run_id = C.run_id AND RP.parameter_hid = 103)
+		//   WHERE RP.run_id IN (221, 222)
+		//   GROUP BY RP.run_id
+		// )
+		if pCol.isVar {
+			if cte != "" {
+				cte += ", "
+			}
+			if extraLst == "" {
+				return "", errors.New("Invalid (empty) list of variant runs to get a parameter: " + minKey)
+			}
+			cte += "pvar_" + sHid + " (run_id, param_var) AS" +
+				" (" +
+				"SELECT RP.run_id, AVG(C.param_value)" +
+				" FROM " + pCol.paramRow.DbRunTable + " C" +
+				" INNER JOIN run_parameter RP ON (RP.base_run_id = C.run_id AND RP.parameter_hid = " + sHid + ")" +
+				" WHERE RP.run_id IN (" + extraLst + ")" +
+				" GROUP BY RP.run_id" +
+				")"
+		}
+	}
+
+	return cte, nil
 }

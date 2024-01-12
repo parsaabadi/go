@@ -5,11 +5,12 @@ package db
 
 import (
 	"errors"
+	"slices"
 	"strconv"
 )
 
 // Translate output table accumulators calculation into sql query.
-func translateToAccSql(table *TableMeta, readLt *ReadLayout, calcLt *CalculateLayout, runIds []int) (string, error) {
+func translateToAccSql(table *TableMeta, paramMeta []ParamMeta, readLt *ReadLayout, calcLt *CalculateLayout, runIds []int) (string, error) {
 
 	// make sql:
 	// WITH cte
@@ -17,10 +18,18 @@ func translateToAccSql(table *TableMeta, readLt *ReadLayout, calcLt *CalculateLa
 	// WHERE run id IN (....)
 	// AND dimension filters
 	// ORDER BY 1, 2,....
+	paramCols := makeParamCols(paramMeta)
 
-	cteSql, mainSql, err := partialTranslateToAccSql(table, readLt, calcLt, runIds)
+	cteSql, mainSql, err := partialTranslateToAccSql(table, paramCols, readLt, calcLt, runIds)
 	if err != nil {
 		return "", err
+	}
+	pCteSql, err := makeParamCteSql(paramCols, readLt.FromId, runIds)
+	if err != nil {
+		return "", err
+	}
+	if pCteSql != "" {
+		cteSql += ", " + pCteSql
 	}
 
 	sql := "WITH " + cteSql + " " + mainSql
@@ -33,7 +42,7 @@ func translateToAccSql(table *TableMeta, readLt *ReadLayout, calcLt *CalculateLa
 
 // Translate output table accumulators aggregation to sql query, apply dimension filters and selected run id's.
 // Return list of CTE sql's and main sql's.
-func partialTranslateToAccSql(table *TableMeta, readLt *ReadLayout, calcLt *CalculateLayout, runIds []int) (string, string, error) {
+func partialTranslateToAccSql(table *TableMeta, paramCols map[string]paramColumn, readLt *ReadLayout, calcLt *CalculateLayout, runIds []int) (string, string, error) {
 
 	// translate output table aggregation expression into sql query:
 	//   WITH asrc (run_id, acc_id, sub_id, dim0, dim1, acc_value ) AS
@@ -59,7 +68,7 @@ func partialTranslateToAccSql(table *TableMeta, readLt *ReadLayout, calcLt *Calc
 	// AND A.dim0 = .....
 	// ORDER BY 1, 2, 3, 4
 	//
-	cteSql, mainSql, err := transalteAccAggrToSql(table, calcLt.CalcId, calcLt.Calculate)
+	cteSql, mainSql, err := transalteAccAggrToSql(table, paramCols, calcLt.CalcId, calcLt.Calculate)
 	if err != nil {
 		return "", "", errors.New("Error at " + table.Name + " " + calcLt.Calculate + ": " + err.Error())
 	}
@@ -167,7 +176,7 @@ func partialTranslateToAccSql(table *TableMeta, readLt *ReadLayout, calcLt *Calc
 //	  WHERE M1.acc_id = 0
 //	  GROUP BY M1.run_id, M1.dim0, M1.dim1
 //	) A
-func transalteAccAggrToSql(table *TableMeta, calcId int, calculateExpr string) (string, string, error) {
+func transalteAccAggrToSql(table *TableMeta, paramCols map[string]paramColumn, calcId int, calculateExpr string) (string, string, error) {
 
 	// clean source calculation from cr lf and unsafe sql quotes
 	// return error if unsafe sql or comment found outside of 'quotes', ex.: -- ; DELETE INSERT UPDATE...
@@ -205,8 +214,37 @@ func transalteAccAggrToSql(table *TableMeta, calcId int, calculateExpr string) (
 		return levelAccAlias + "." + name // any other accumulator: acc4 => acc4
 	}
 
+	// translate parameter names by replacing it with CTE alias and CTE parameter value name:
+	//	param.Name          => M1P103.param_value
+	// also retrun INNER JOIN between parameter CTE view and main table:
+	//  INNER JOIN par_103   M1P103 ON (M1P103.run_id = M1.run_id)
+	// it cannot be run comparison
+	makeParamColName := func(colKey string, isSimple, isVar bool, alias string) (string, string, error) {
+
+		pCol, ok := paramCols[colKey]
+		if !ok {
+			return "", "", errors.New("Error: parameter not found: " + colKey)
+		}
+		if !pCol.isNumber || pCol.paramRow == nil {
+			return "", "", errors.New("Error: parameter must a be numeric scalar: " + colKey)
+		}
+		if !isSimple || isVar {
+			return "", "", errors.New("Error: parameter cannot be a run comparison parameter[base] or parameter[variant]: " + colKey)
+		}
+		sHid := strconv.Itoa(pCol.paramRow.ParamHid)
+
+		pCol.isSimple = true
+		pa := alias + "P" + sHid
+		sqlName := pa + ".param_value" // not a run comparison: param.Name => M1P103.param_value
+		innerJoin := "INNER JOIN par_" + sHid + " " + pa + " ON (" + pa + ".run_id = " + alias + ".run_id)"
+
+		paramCols[colKey] = pCol
+
+		return sqlName, innerJoin, nil
+	}
+
 	// parse aggregation expression
-	levelArr, err := parseAggrCalculation(aggrCols, startExpr, makeAccColName)
+	levelArr, err := parseAggrCalculation(aggrCols, paramCols, startExpr, makeAccColName, makeParamColName)
 	if err != nil {
 		return "", "", err
 	}
@@ -225,7 +263,7 @@ func makeAccAggrSql(table *TableMeta, calcId int, levelArr []levelDef) (string, 
 
 	// build output sql for expression:
 	//
-	// OM_SUM(acc0 + 0.5 * OM_AVG(acc1 + acc4 + 0.1 * (OM_MAX(acc0) - OM_MIN(acc1)) ))
+	// OM_SUM(acc0 + 0.5 * OM_AVG(acc1 + param.Extra + acc4 + 0.1 * (OM_MAX(acc0) - OM_MIN(acc1)) ))
 	// =>
 	//   WITH asrc (run_id, acc_id, sub_id, dim0, dim1, acc_value ) AS
 	//   (
@@ -233,7 +271,9 @@ func makeAccAggrSql(table *TableMeta, calcId int, levelArr []levelDef) (string, 
 	//       BR.run_id, C.acc_id, C.sub_id, C.dim0, C.dim1, C.acc_value
 	//     FROM age_acc C
 	//     INNER JOIN run_table BR ON (BR.base_run_id = C.run_id AND BR.table_hid = 101)
-	//   )
+	//   ),
+	//   par_103 (run_id, param_value) AS
+	//     (.... AVG(param_value) FROM Extra.... WHERE RP.run_id IN (219, 221, 222) GROUP BY RP.run_id)
 	//   SELECT
 	//     A.run_id, CalcId AS calc_id, A.dim0, A.dim1, A.calc_value
 	//   FROM
@@ -248,6 +288,7 @@ func makeAccAggrSql(table *TableMeta, calcId int, levelArr []levelDef) (string, 
 	//         M2.run_id, M2.dim0, M2.dim1,
 	//         AVG(M2.acc_value + L2A4.acc4 + 0.1 * (T3.ex31 - T3.ex32)) AS ex2
 	//       FROM asrc M2
+	//       INNER JOIN par_103 M1P103 ON (M1P103.run_id = M2.run_id)
 	//       INNER JOIN
 	//       (
 	//         SELECT run_id, dim0, dim1, sub_id, acc_value AS acc4 FROM asrc WHERE acc_id = 4
@@ -322,7 +363,14 @@ func makeAccAggrSql(table *TableMeta, calcId int, levelArr []levelDef) (string, 
 
 		mainSql += " FROM asrc " + lv.fromAlias
 
-		// INNER JON accumulator table for all other accumulators ON run_id, dim0,...,sub_id
+		// INNER JOIN parameters CTE ON run_id
+		slices.Sort(lv.paramJoinArr)
+
+		for _, pj := range lv.paramJoinArr {
+			mainSql += " " + pj
+		}
+
+		// INNER JOIN accumulator table for all other accumulators ON run_id, dim0,...,sub_id
 		for nAcc, acc := range table.Acc {
 
 			if !lv.agcUsageArr[nAcc] || nAcc == lv.firstAgcIdx { // skip first accumulator and unused accumulators

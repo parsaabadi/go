@@ -5,12 +5,13 @@ package db
 
 import (
 	"errors"
+	"slices"
 	"strconv"
 )
 
 // Translate microdata aggregation into sql query.
-func translateToMicroSql(
-	entity *EntityMeta, entityGen *EntityGenMeta, readLt *ReadLayout, calcLt *CalculateLayout, groupBy []string, runIds []int,
+func translateToMicroAggrSql(
+	entity *EntityMeta, entityGen *EntityGenMeta, paramMeta []ParamMeta, readLt *ReadLayout, calcLt *CalculateLayout, groupBy []string, runIds []int,
 ) (string, error) {
 
 	// make sql:
@@ -25,17 +26,26 @@ func translateToMicroSql(
 	if err != nil {
 		return "", err
 	}
+	paramCols := makeParamCols(paramMeta)
 
-	mainSql, _, err := partialTranslateToMicroSql(entity, entityGen, aggrCols, readLt, calcLt, runIds)
+	mainSql, _, err := partialTranslateToMicroSql(entity, entityGen, aggrCols, paramCols, readLt, calcLt, runIds)
 	if err != nil {
 		return "", err
 	}
+
 	cteSql, err := makeMicroCteAggrSql(entity, entityGen, aggrCols, readLt.FromId, runIds)
 	if err != nil {
 		return "", errors.New("Error at " + entity.Name + " " + calcLt.Calculate + ": " + err.Error())
 	}
+	pCteSql, err := makeParamCteSql(paramCols, readLt.FromId, runIds)
+	if err != nil {
+		return "", errors.New("Error at " + entity.Name + " " + calcLt.Calculate + ": " + err.Error())
+	}
+	if pCteSql != "" {
+		cteSql += ", " + pCteSql
+	}
 
-	return cteSql + " " + mainSql + makeOrderBy(len(groupBy), readLt.OrderBy, 2), nil
+	return "WITH " + cteSql + mainSql + makeOrderBy(len(groupBy), readLt.OrderBy, 2), nil
 }
 
 // create list of microdata columns, set column names, group by flag and aggregatable flag for float and int attributes
@@ -87,34 +97,38 @@ func makeMicroAggrCols(entity *EntityMeta, entityGen *EntityGenMeta, groupBy []s
 // Or simple expression calculation inside of single run, in that case layout.FromId and runIds[] are merged.
 // Only simple functions allowed in expression calculation.
 func partialTranslateToMicroSql(
-	entity *EntityMeta, entityGen *EntityGenMeta, aggrCols []aggrColumn, readLt *ReadLayout, calcLt *CalculateLayout, runIds []int,
+	entity *EntityMeta, entityGen *EntityGenMeta, aggrCols []aggrColumn, paramCols map[string]paramColumn, readLt *ReadLayout, calcLt *CalculateLayout, runIds []int,
 ) (
 	string, bool, error,
 ) {
 
 	// translate microdata aggregation expression into sql query
 	//
-	// no comparison, aggregation for each run: OM_SUM(Income - 0.5 * OM_AVG(Pension))
+	// no comparison, aggregation for each run: OM_SUM(Income - 0.5 * OM_AVG(Pension) * param.Extra)
 	//
-	// WITH atts (run_id, entity_key, attr1, attr2, attr3, attr8) AS (.... WHERE RE.run_id IN (219, 221, 222))
+	// WITH atts  (run_id, entity_key, attr1, attr2, attr3, attr8) AS (.... WHERE RE.run_id IN (219, 221, 222)),
+	//      par_103 (run_id, param_value) AS  (.... AVG(param_value) FROM Extra.... WHERE RP.run_id IN (219, 221, 222) GROUP BY RP.run_id)
 	// SELECT
 	//   A.run_id, CalcId AS calc_id, A.attr1, A.attr2, A.calc_value
 	// FROM
 	// (
 	//   SELECT
 	//     M1.run_id, M1.attr1, M1.attr2,
-	//     SUM(M1.attr3 - 0.5 * L1E1.ex1) AS calc_value
+	//     SUM(M1.attr3 - 0.5 * L1E1.ex1 * M1P103.param_value) AS calc_value
 	//   FROM atts M1
+	//   INNER JOIN par_103 M1P103 ON (M1P103.run_id = M1.run_id)
 	//   INNER JOIN ( .... ) ON (run_id, attr1, attr2)
 	//   GROUP BY M1.run_id, M1.attr1, M1.attr2
 	// ) A
 	// WHERE A.attr1 = .....
 	//
-	// microdata run comparison: OM_AVG( Income[varinat] - (Pension[base] + Salary[base]) )
+	// microdata run comparison: OM_AVG( Income[variant] - (Pension[base] + Salary[base]) )
 	//
-	// WITH abase (run_id, entity_key, attr1, attr2, attr4, attr8)   AS (.... WHERE RE.run_id = 219),
-	//      avar  (run_id, entity_key, attr1, attr2, attr3)          AS (.... WHERE RE.run_id IN (221, 222)),
-	// abv (run_id, attr1, attr2, attr4_base, attr8_base, attr3_var) AS (....  FROM abase B INNER JOIN avar V ON (V.entity_key = B.entity_key) )
+	// WITH abase   (run_id, entity_key, attr1, attr2, attr4, attr8)   AS (.... WHERE RE.run_id = 219),
+	//      avar    (run_id, entity_key, attr1, attr2, attr3)          AS (.... WHERE RE.run_id IN (221, 222)),
+	//      abv (run_id, attr1, attr2, attr4_base, attr8_base, attr3_var) AS (....  FROM abase B INNER JOIN avar V ON (V.entity_key = B.entity_key) ),
+	//      pbase_103 (param_value)         AS  (SELECT AVG(param_value) ....WHERE RP.run_id = 219),
+	//      pvar_103  (run_id, param_value) AS  (.... WHERE RP..run_id IN (221, 222) GROUP BY RP.run_id)
 	// SELECT
 	//   A.run_id, CalcId AS calc_id, A.attr1, A.attr2, A.calc_value
 	// FROM
@@ -122,13 +136,15 @@ func partialTranslateToMicroSql(
 	//   SELECT
 	//     M1.run_id, M1.attr1, M1.attr2,
 	//     AVG(M1.attr3_var - (M1.attr8_base + M1.attr4_base)) AS calc_value
-	//   INNER JOIN ( .... ) ON (run_id, attr1, attr2)
 	//   FROM abv M1
+	//   INNER JOIN pbase_103 M1PB103
+	//   INNER JOIN pvar_103  M1PV103 ON (M1PV103.run_id = M1.run_id)
+	//   INNER JOIN ( .... ) ON (run_id, attr1, attr2)
 	//   GROUP BY M1.run_id, M1.attr1, M1.attr2
 	// ) A
 	// WHERE A.attr1 = .....
 	//
-	mainSql, isRunCompare, err := translateMicroCalcToSql(entity, entityGen, aggrCols, calcLt.CalcId, calcLt.Calculate)
+	mainSql, isRunCompare, err := translateMicroCalcToSql(entity, entityGen, aggrCols, paramCols, calcLt.CalcId, calcLt.Calculate)
 	if err != nil {
 		return "", false, errors.New("Error at " + entity.Name + " " + calcLt.Calculate + ": " + err.Error())
 	}
@@ -205,30 +221,35 @@ func partialTranslateToMicroSql(
 // Return sql SELECT for value calculation and run comparison flag:
 // if true then it is multiple runs comparison else expression calculation inside of a single run(s).
 //
-// It aggregation for one or multiple runs: OM_SUM(Income - 0.5 * OM_AVG(Pension))
+// It aggregation for one or multiple runs: OM_SUM(Income - 0.5 * OM_AVG(Pension) * param.Extra)
 //
-//	WITH atts (run_id, entity_key, attr1, attr2, attr3, attr8) AS (.... WHERE RE.run_id IN (219, 221, 222))
-//	SELECT
-//	  A.run_id, CalcId AS calc_id, A.attr1, A.attr2, A.calc_value
-//	FROM
-//	(...., SUM(M1.attr3 - 0.5 * L1E1.ex1) AS calc_value
-//	  GROUP BY M1.run_id, M1.attr1, M1.attr2
-//	) A
+//		WITH atts (run_id, entity_key, attr1, attr2, attr3, attr8) AS (.... WHERE RE.run_id IN (219, 221, 222))
+//	         par_103 (run_id, param_value) AS  (.... AVG(param_value) FROM Extra.... WHERE RP.run_id IN (219, 221, 222) GROUP BY RP.run_id)
+//		SELECT
+//		  A.run_id, CalcId AS calc_id, A.attr1, A.attr2, A.calc_value
+//		FROM
+//		(...., SUM(M1.attr3 - 0.5 * L1E1.ex1 * M1P103.param_value) AS calc_value
+//		  GROUP BY M1.run_id, M1.attr1, M1.attr2
+//		) A
 //
-// microdata run comparison: OM_AVG( Income[varinat] - (Pension[base] + Salary[base]) )
+// microdata run comparison: OM_AVG( Income[variant] - (Pension[base] + Salary[base]) + (param.Extra[variant] - param.Extra[base]) )
 //
-//	WITH abase (run_id, entity_key, attr1, attr2, attr4, attr8)   AS (.... WHERE RE.run_id = 219),
-//	     avar  (run_id, entity_key, attr1, attr2, attr3)          AS (.... WHERE RE.run_id IN (221, 222)),
-//	abv (run_id, attr1, attr2, attr4_base, attr8_base, attr3_var) AS (....  FROM abase B INNER JOIN avar V ON (V.entity_key = B.entity_key) )
-//	SELECT
-//	  A.run_id, CalcId AS calc_id, A.attr1, A.attr2, A.calc_value
-//	FROM
-//	(...., AVG(M1.attr3_var - (M1.attr8_base + M1.attr4_base)) AS calc_value
-//	  FROM abv M1
-//	  GROUP BY M1.run_id, M1.attr1, M1.attr2
-//	) A
+//			WITH abase (run_id, entity_key, attr1, attr2, attr4, attr8)   AS (.... WHERE RE.run_id = 219),
+//			     avar  (run_id, entity_key, attr1, attr2, attr3)          AS (.... WHERE RE.run_id IN (221, 222)),
+//			     abv (run_id, attr1, attr2, attr4_base, attr8_base, attr3_var) AS (....  FROM abase B INNER JOIN avar V ON (V.entity_key = B.entity_key) ),
+//		      pbase_103 (param_base)        AS  (SELECT AVG(param_value) ....WHERE RP.run_id = 219),
+//		      pvar_103  (run_id, param_var) AS  (.... WHERE RP..run_id IN (221, 222) GROUP BY RP.run_id)
+//			SELECT
+//			  A.run_id, CalcId AS calc_id, A.attr1, A.attr2, A.calc_value
+//			FROM
+//			(...., AVG(M1.attr3_var - (M1.attr8_base + M1.attr4_base) + (M1PV103.param_var - M1PB103.param_base)) AS calc_value
+//			  FROM abv M1
+//	          INNER JOIN pbase_103 M1PB103
+//	          INNER JOIN pvar_103  M1PV103 ON (M1PV103.run_id = M1.run_id)
+//			  GROUP BY M1.run_id, M1.attr1, M1.attr2
+//			) A
 func translateMicroCalcToSql(
-	entity *EntityMeta, entityGen *EntityGenMeta, aggrCols []aggrColumn, calcId int, calculateExpr string,
+	entity *EntityMeta, entityGen *EntityGenMeta, aggrCols []aggrColumn, paramCols map[string]paramColumn, calcId int, calculateExpr string,
 ) (
 	string, bool, error,
 ) {
@@ -252,10 +273,9 @@ func translateMicroCalcToSql(
 	// produce attribute column name:
 	// if it is not a run comparison:      attr3 => L1A4.attr3
 	// or for base and variant attributes: L1A4.attr3_var, L1A4.attr4_base, L1A4.attr8_base
-	// length of
-	isAnySimple := false
-	isAnyBase := false
-	isAnyVar := false
+	isAttrSimple := false
+	isAttrBase := false
+	isAttrVar := false
 
 	makeAttrColName := func(
 		name string, nameIdx int, isSimple, isVar bool, firstAlias string, levelAlias string, isFirst bool,
@@ -263,22 +283,73 @@ func translateMicroCalcToSql(
 
 		if !isSimple {
 			if isVar {
-				isAnyVar = true
+				isAttrVar = true
 				aggrCols[nameIdx].isVar = true
 				return firstAlias + "." + aggrCols[nameIdx].colName + "_var" // variant run attribute: attr1[variant] => L1A4.attr1_var
 			}
-			isAnyBase = true
+			isAttrBase = true
 			aggrCols[nameIdx].isBase = true
 			return firstAlias + "." + aggrCols[nameIdx].colName + "_base" // base run attribute: attr1[base] => L1A4.attr1_base
 		}
 		// else: isSimple name, not a name[base] or name[variant]
-		isAnySimple = true
+		isAttrSimple = true
 		aggrCols[nameIdx].isSimple = true
 		return firstAlias + "." + aggrCols[nameIdx].colName // not a run comparison: attr2 => L1A4.attr2
 	}
 
+	// translate parameter names by replacing it with CTE alias and CTE parameter value name:
+	//	param.Name          => M1P103.param_value
+	//	param.Name[base]    => M1PB103.param_base
+	//	param.Name[variant] => M1PV103.param_var
+	// also retrun INNER JOIN between parameter CTE view and main table:
+	//  INNER JOIN par_103   M1P103 ON (M1P103.run_id = M1.run_id)
+	//  INNER JOIN pbase_103 M1PB103
+	//  INNER JOIN pvar_103  M1PV103 ON (M1P103.run_id = M1.run_id)
+	isParamSimple := false
+	isParamBase := false
+	isParamVar := false
+
+	makeParamColName := func(colKey string, isSimple, isVar bool, alias string) (string, string, error) {
+
+		pCol, ok := paramCols[colKey]
+		if !ok {
+			return "", "", errors.New("Error: parameter not found: " + colKey)
+		}
+		if !pCol.isNumber || pCol.paramRow == nil {
+			return "", "", errors.New("Error: parameter must a be numeric scalar: " + colKey)
+		}
+
+		sqlName := ""
+		innerJoin := ""
+		sHid := strconv.Itoa(pCol.paramRow.ParamHid)
+		if isSimple {
+			isParamSimple = true
+			pCol.isSimple = true
+			pa := alias + "P" + sHid
+			sqlName = pa + ".param_value" // not a run comparison: param.Name => M1P103.param_value
+			innerJoin = "INNER JOIN par_" + sHid + " " + pa + " ON (" + pa + ".run_id = " + alias + ".run_id)"
+		} else {
+			if isVar {
+				isParamVar = true
+				pCol.isVar = true
+				pa := alias + "PV" + strconv.Itoa(pCol.paramRow.ParamHid)
+				sqlName = pa + ".param_var" // variant run parameter: param.Name[variant] => M1PV103.param_var
+				innerJoin = "INNER JOIN pvar_" + sHid + " " + pa + " ON (" + pa + ".run_id = " + alias + ".run_id)"
+			} else {
+				isParamBase = true
+				pCol.isBase = true
+				pa := alias + "PB" + strconv.Itoa(pCol.paramRow.ParamHid)
+				sqlName = pa + ".param_base" // base run parameter: param.Name[base] => M1PB103.param_base
+				innerJoin = "INNER JOIN pbase_" + sHid + " " + pa
+			}
+		}
+		paramCols[colKey] = pCol
+
+		return sqlName, innerJoin, nil
+	}
+
 	// parse aggregation expression
-	levelArr, err := parseAggrCalculation(aggrCols, startExpr, makeAttrColName)
+	levelArr, err := parseAggrCalculation(aggrCols, paramCols, startExpr, makeAttrColName, makeParamColName)
 	if err != nil {
 		return "", false, err
 	}
@@ -287,17 +358,26 @@ func translateMicroCalcToSql(
 	// all names must be either with suffixes: attr3[base], attr4[variant] or in simple form: attr3, attr4
 	// if it is run comparison then both [base] and [variant] forms must be used, it cannot be only [base] or only [variant]
 
-	if isAnySimple && (isAnyBase || isAnyVar) ||
-		!isAnySimple && (isAnyBase && !isAnyVar || !isAnyBase && isAnyVar) {
+	if isAttrSimple && (isAttrBase || isAttrVar) ||
+		!isAttrSimple && (isAttrBase && !isAttrVar || !isAttrBase && isAttrVar) {
 		return "", false, errors.New("invalid (or mixed forms) of attribute names used for aggregation of: " + entity.Name + ": " + calculateExpr)
 	}
-	if !isAnySimple && !isAnyBase && !isAnyVar {
+	if !isAttrSimple && !isAttrBase && !isAttrVar {
 		return "", false, errors.New("error: there are no attribute names found for aggregation of: " + entity.Name + ": " + calculateExpr)
 	}
-	isCompare := isAnyBase && isAnyVar
+	isCompare := isAttrBase && isAttrVar
+
+	// validate parameter names:
+	// if it is run comparison then parameter name cannot be simple else parameter name cannot be [base] or [variant]
+	if isCompare && isParamSimple {
+		return "", false, errors.New("invalid use of parameter name in microdata run comparison: " + entity.Name + ": " + calculateExpr)
+	}
+	if !isCompare && (isParamBase || isParamVar) {
+		return "", false, errors.New("invalid use of parameter run comparison name in microdata aggregation: " + entity.Name + ": " + calculateExpr)
+	}
 
 	// build main part of aggregation sql from parser state
-	mainSql, err := makeMicroMainAggrSql(entity, entityGen, aggrCols, calcId, levelArr, isCompare)
+	mainSql, err := makeMicroMainAggrSql(entity, entityGen, aggrCols, paramCols, calcId, levelArr, isCompare)
 	if err != nil {
 		return "", false, err
 	}
@@ -307,7 +387,7 @@ func translateMicroCalcToSql(
 
 // Build main part of aggregation sql from parser state.
 func makeMicroMainAggrSql(
-	entity *EntityMeta, entityGen *EntityGenMeta, aggrCols []aggrColumn, calcId int, levelArr []levelDef, isRunCompare bool,
+	entity *EntityMeta, entityGen *EntityGenMeta, aggrCols []aggrColumn, paramCols map[string]paramColumn, calcId int, levelArr []levelDef, isRunCompare bool,
 ) (
 	string, error,
 ) {
@@ -315,6 +395,7 @@ func makeMicroMainAggrSql(
 	// no comparison, microdata aggregation for each run: OM_SUM(Income - 0.5 * OM_AVG(Pension))
 	//
 	// -- WITH atts (run_id, entity_key, attr1, attr2, attr3, attr8) AS (....)
+	// -- par_103 (run_id, param_value) AS  (.... AVG(param_value) FROM Extra.... WHERE RP.run_id IN (219, 221, 222) GROUP BY RP.run_id)
 	//
 	// SELECT
 	//   A.run_id, CalcId AS calc_id, A.attr1, A.attr2, A.calc_value
@@ -322,8 +403,9 @@ func makeMicroMainAggrSql(
 	// (
 	//   SELECT
 	//     M1.run_id, M1.attr1, M1.attr2,
-	//     SUM(M1.attr3 - 0.5 * L1E1.ex1) AS calc_value
+	//     SUM(M1.attr3 - 0.5 * L1E1.ex1 * M1P103.param_value) AS calc_value
 	//   FROM atts M1
+	//   INNER JOIN par_103 M1P103 ON (M1P103.run_id = M1.run_id)
 	//   INNER JOIN
 	//   (
 	//     SELECT
@@ -336,11 +418,13 @@ func makeMicroMainAggrSql(
 	//   GROUP BY M1.run_id, M1.attr1, M1.attr2
 	// ) A
 	//
-	// microdata run comparison: OM_AVG( Income[varinat] - (Pension[base] + Salary[base]) )
+	// microdata run comparison: OM_AVG( Income[variant] - (Pension[base] + Salary[base]) + (param.Extra[variant] - param.Extra[base]) )
 	//
 	// -- WITH abase (run_id, entity_key, attr1, attr2, attr4, attr8) AS (....),
 	// -- avar (run_id, entity_key, attr1, attr2, attr3) AS (....),
-	// -- abv (run_id, attr1, attr2, attr3_var, attr4_base, attr8_base) AS (....)
+	// -- abv (run_id, attr1, attr2, attr3_var, attr4_base, attr8_base) AS (....),
+	// -- pbase_103 (param_base)        AS  (SELECT AVG(param_value) ....WHERE RP.run_id = 219),
+	// -- pvar_103  (run_id, param_var) AS  (.... WHERE RP..run_id IN (221, 222) GROUP BY RP.run_id)
 	//
 	// SELECT
 	//   A.run_id, CalcId AS calc_id, A.attr1, A.attr2, A.calc_value
@@ -348,8 +432,10 @@ func makeMicroMainAggrSql(
 	// (
 	//   SELECT
 	//     M1.run_id, M1.attr1, M1.attr2,
-	//     AVG(M1.attr3_var - (M1.attr8_base + M1.attr4_base)) AS calc_value
+	//     AVG(M1.attr3_var - (M1.attr8_base + M1.attr4_base) + (M1PV103.param_var - M1PB103.param_base)) AS calc_value
 	//   FROM abv M1
+	//   INNER JOIN pbase_103 M1PB103
+	//   INNER JOIN pvar_103  M1PV103 ON (M1PV103.run_id = M1.run_id)
 	//   GROUP BY M1.run_id, M1.attr1, M1.attr2
 	// ) A
 	//
@@ -374,8 +460,9 @@ func makeMicroMainAggrSql(
 
 		//   SELECT
 		//     M1.run_id, M1.attr1, M1.attr2,
-		//     SUM(M1.attr3 - 0.5 * L1E1.ex1) AS calc_value
+		//     SUM(M1.attr3 - 0.5 * L1E1.ex1 * M1P103.param_value) AS calc_value
 		//   FROM atts M1
+		//   INNER JOIN par_103 M1P103 ON (M1P103.run_id = M1.run_id)
 		//   INNER JOIN
 		//   (
 		mainSql += "SELECT " + lv.fromAlias + ".run_id"
@@ -394,6 +481,12 @@ func makeMicroMainAggrSql(
 		}
 
 		mainSql += " FROM " + vSrc + " " + lv.fromAlias
+
+		slices.Sort(lv.paramJoinArr)
+
+		for _, pj := range lv.paramJoinArr {
+			mainSql += " " + pj
+		}
 
 		if nLev < len(levelArr)-1 { // if not lowest level then continue INNER JOIN down to the next level
 			mainSql += " INNER JOIN ("
@@ -472,8 +565,7 @@ func makeMicroCteAggrSql(
 
 	if isAnySimple { // no comparison, select attributes from the list of model runs
 
-		// WITH atts (run_id, entity_key, attr1, attr2, attr3, attr8)
-		// AS
+		// atts (run_id, entity_key, attr1, attr2, attr3, attr8) AS
 		// (
 		//   SELECT
 		//     RE.run_id, C.entity_key, C.attr1, C.attr2, C.attr4, C.attr8
@@ -482,7 +574,7 @@ func makeMicroCteAggrSql(
 		//   WHERE RE.run_id IN (219, 221, 222)
 		// )
 		//
-		cteSql = "WITH atts (" + cHdr
+		cteSql = "atts (" + cHdr
 
 		for k := range aggrCols {
 			if aggrCols[k].isSimple {
@@ -519,10 +611,9 @@ func makeMicroCteAggrSql(
 
 	if isAnyBase && isAnyVar { // run comparison: select from variant runs join to base run
 
-		// microdata run comparison: OM_AVG( Income[varinat] - (Pension[base] + Salary[base]) )
+		// microdata run comparison: OM_AVG( Income[variant] - (Pension[base] + Salary[base]) )
 		//
-		// WITH abase (run_id, entity_key, attr1, attr2, attr4, attr8)
-		// AS
+		// abase (run_id, entity_key, attr1, attr2, attr4, attr8) AS
 		// (
 		//   SELECT
 		// 	   RE.run_id, C.entity_key, C.attr1, C.attr2, C.attr4, C.attr8
@@ -530,8 +621,7 @@ func makeMicroCteAggrSql(
 		//   INNER JOIN run_entity RE ON (RE.base_run_id = C.run_id AND RE.entity_gen_hid = 201)
 		//   WHERE RE.run_id = 219
 		// ),
-		// avar (run_id, entity_key, attr1, attr2, attr3)
-		// AS
+		// avar (run_id, entity_key, attr1, attr2, attr3) AS
 		// (
 		//   SELECT
 		// 	   RE.run_id, C.entity_key, C.attr1, C.attr2, C.attr3
@@ -549,7 +639,7 @@ func makeMicroCteAggrSql(
 		// )
 		//
 		if cteSql == "" {
-			cteSql = "WITH abase (" + cHdr
+			cteSql = "abase (" + cHdr
 		} else {
 			cteSql += ", abase (" + cHdr
 		}

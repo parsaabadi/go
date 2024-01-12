@@ -5,15 +5,18 @@ package db
 
 import (
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // Translate all output table expression calculation to sql query, apply dimension filters, selected run id's and order by.
 // It can be a multiple runs comparison and base run id is layout.FromId
 // Or simple expression calculation inside of single run, in that case layout.FromId and runIds[] are merged.
 // Only simple functions allowed in expression calculation.
-func translateToExprSql(table *TableMeta, readLt *ReadLayout, calcLt *CalculateLayout, runIds []int) (string, error) {
+func translateToExprSql(table *TableMeta, paramMeta []ParamMeta, readLt *ReadLayout, calcLt *CalculateLayout, runIds []int) (string, error) {
 
 	// make sql:
 	// WITH cte array
@@ -21,8 +24,9 @@ func translateToExprSql(table *TableMeta, readLt *ReadLayout, calcLt *CalculateL
 	// WHERE run id IN (....)
 	// AND dimension filters
 	// ORDER BY 1, 2,....
+	paramCols := makeParamCols(paramMeta)
 
-	cteSql, mainSql, _, err := partialTranslateToExprSql(table, readLt, calcLt, runIds)
+	cteSql, mainSql, _, err := partialTranslateToExprSql(table, paramCols, readLt, calcLt, runIds)
 	if err != nil {
 		return "", err
 	}
@@ -35,6 +39,15 @@ func translateToExprSql(table *TableMeta, readLt *ReadLayout, calcLt *CalculateL
 			sql += "WITH " + cteSql[k]
 		}
 	}
+
+	pCteSql, err := makeParamCteSql(paramCols, readLt.FromId, runIds)
+	if err != nil {
+		return "", err
+	}
+	if pCteSql != "" {
+		sql += ", " + pCteSql
+	}
+
 	sql += " " + mainSql
 
 	// append ORDER BY, default order by: run_id, expression id, dimensions
@@ -48,7 +61,7 @@ func translateToExprSql(table *TableMeta, readLt *ReadLayout, calcLt *CalculateL
 // It can be a multiple runs comparison and base run id is layout.FromId
 // Or simple expression calculation inside of single run, in that case layout.FromId and runIds[] are merged.
 // Only simple functions allowed in expression calculation.
-func partialTranslateToExprSql(table *TableMeta, readLt *ReadLayout, calcLt *CalculateLayout, runIds []int) ([]string, string, bool, error) {
+func partialTranslateToExprSql(table *TableMeta, paramCols map[string]paramColumn, readLt *ReadLayout, calcLt *CalculateLayout, runIds []int) ([]string, string, bool, error) {
 
 	// translate output table expression calculation to sql:
 	// if it is run comparison then
@@ -62,7 +75,7 @@ func partialTranslateToExprSql(table *TableMeta, readLt *ReadLayout, calcLt *Cal
 	//  SELECT B.run_id, CalcId AS calc_id, B.dim0, B.dim1, (B.src0 + B.src1) AS calc_value
 	//  FROM B
 	//
-	cteSql, mainSql, isRunCompare, err := translateExprCalcToSql(table, calcLt.CalcId, calcLt.Calculate)
+	cteSql, mainSql, isRunCompare, err := translateExprCalcToSql(table, paramCols, calcLt.CalcId, calcLt.Calculate)
 	if err != nil {
 		return []string{}, "", false, errors.New("Error at " + table.Name + " " + calcLt.Calculate + ": " + err.Error())
 	}
@@ -170,7 +183,7 @@ func partialTranslateToExprSql(table *TableMeta, readLt *ReadLayout, calcLt *Cal
 //
 // SELECT B.run_id, CalcId AS calc_id, B.dim0, B.dim1, (B.src0 + B.src1) AS calc_value
 // FROM B
-func translateExprCalcToSql(table *TableMeta, calcId int, calculateExpr string) ([]string, string, bool, error) {
+func translateExprCalcToSql(table *TableMeta, paramCols map[string]paramColumn, calcId int, calculateExpr string) ([]string, string, bool, error) {
 
 	// clean source calculation from cr lf and unsafe sql quotes
 	// return error if unsafe sql or comment found outside of 'quotes', ex.: -- ; DELETE INSERT UPDATE...
@@ -184,6 +197,76 @@ func translateExprCalcToSql(table *TableMeta, calcId int, calculateExpr string) 
 	if err != nil {
 		return []string{}, "", false, err
 	}
+
+	// translate parameter names by replacing it with CTE alias and CTE parameter value name:
+	//	param.Name          => BP103.param_value
+	//	param.Name[base]    => PB103.param_base
+	//	param.Name[variant] => PV103.param_var
+	// also retrun INNER JOIN between parameter CTE view and main table:
+	//  INNER JOIN par_103   BP103 ON (BP103.run_id = B.run_id)
+	//  INNER JOIN pbase_103 PB103
+	//  INNER JOIN pvar_103  PV103 ON (PV103.run_id = V.run_id)
+	isParamSimple := false
+	isParamBase := false
+	isParamVar := false
+
+	makeParamColName := func(colKey string, isSimple, isVar bool, alias string) (string, string, error) {
+
+		pCol, ok := paramCols[colKey]
+		if !ok {
+			return "", "", errors.New("Error: parameter not found: " + colKey)
+		}
+		if !pCol.isNumber || pCol.paramRow == nil {
+			return "", "", errors.New("Error: parameter must a be numeric scalar: " + colKey)
+		}
+
+		sqlName := ""
+		innerJoin := ""
+		sHid := strconv.Itoa(pCol.paramRow.ParamHid)
+		if isSimple {
+			isParamSimple = true
+			pCol.isSimple = true
+			pa := "BP" + sHid
+			sqlName = pa + ".param_value" // not a run comparison: param.Name => BP103.param_value
+			innerJoin = "INNER JOIN par_" + sHid + " " + pa + " ON (" + pa + ".run_id = " + alias + ".run_id)"
+		} else {
+			if isVar {
+				isParamVar = true
+				pCol.isVar = true
+				pa := "PV" + strconv.Itoa(pCol.paramRow.ParamHid)
+				sqlName = pa + ".param_var" // variant run parameter: param.Name[variant] => PV103.param_var
+				innerJoin = "INNER JOIN pvar_" + sHid + " " + pa + " ON (" + pa + ".run_id = " + alias + ".run_id)"
+			} else {
+				isParamBase = true
+				pCol.isBase = true
+				pa := "PB" + strconv.Itoa(pCol.paramRow.ParamHid)
+				sqlName = pa + ".param_base" // base run parameter: param.Name[base] => PB103.param_base
+				innerJoin = "INNER JOIN pbase_" + sHid + " " + pa
+			}
+		}
+		paramCols[colKey] = pCol
+
+		return sqlName, innerJoin, nil
+	}
+
+	// make scalar parameter names:
+	// it can be param.Extra[base] or param.Extra[variant],... or just param.Extra without [base] and [variant]
+	pCount := 0
+	for _, pCol := range paramCols {
+		if pCol.isNumber {
+			pCount++
+		}
+	}
+
+	pBaseNames := make(map[string]string, pCount)
+	pVarNames := make(map[string]string, pCount)
+	for pKey, pCol := range paramCols {
+		if pCol.isNumber {
+			pBaseNames[pKey+"[base]"] = pKey
+			pVarNames[pKey+"[variant]"] = pKey
+		}
+	}
+	paramJoinArr := []string{}
 
 	// make sql column names as src0,...,srcN and make sure column names are different from expression names
 	exprCount := len(table.Expr)
@@ -221,12 +304,12 @@ func translateExprCalcToSql(table *TableMeta, calcId int, calculateExpr string) 
 	// substitute each table expression name with corresponding sql column name
 	/*
 		If this is base and variant expression:
-			(Expr1[base] + Expr1[variant] + Expr0[variant]) / OM_DIV_BY(Expr0[base])
+			(Expr1[base] + Expr1[variant] + Expr0[variant] + (param.Extra[variant] - param.Extra[base])) / OM_DIV_BY(Expr0[base])
 				==>
-			(Expr1[base] + Expr1[variant] + Expr0[variant]) / CASE WHEN ABS(Expr0[base]) > 1.0e-37 THEN Expr0[base] ELSE NULL END
+			(Expr1[base] + Expr1[variant] + Expr0[variant] + (param.Extra[variant] - param.Extra[base])) / CASE WHEN ABS(Expr0[base]) > 1.0e-37 THEN Expr0[base] ELSE NULL END
 				==>
-			(B1.src1 + V1.src1 + V.src0) / CASE WHEN ABS(B.src0) > 1.0e-37 THEN B.src0 ELSE NULL END
-		Or single run expression (no base and varinat):
+			(B1.src1 + V1.src1 + V.src0 + (PV103.param_var - PB103.param_base)) / CASE WHEN ABS(B.src0) > 1.0e-37 THEN B.src0 ELSE NULL END
+		Or single run expression (no base and variant):
 			Expr0 + Expr1
 				==>
 		    B.src0 + B1.src1
@@ -247,7 +330,7 @@ func translateExprCalcToSql(table *TableMeta, calcId int, calculateExpr string) 
 			break
 		}
 
-		// substitute all occurences of base expression name with sql column from base or variant CTE
+		// substitute all occurences of base expression name with sql column from base CTE
 		// for example: Expr1[base] ==> B1.src1
 		isFound := false
 
@@ -271,7 +354,7 @@ func translateExprCalcToSql(table *TableMeta, calcId int, calculateExpr string) 
 			}
 		}
 
-		// substitute all occurences of variant expression name with sql column from base or variant CTE
+		// substitute all occurences of variant expression name with sql column from variant CTE
 		// for example: Expr1[variant] ==> V1.src1
 		for k := 0; !isFound && k < exprCount; k++ {
 
@@ -293,7 +376,7 @@ func translateExprCalcToSql(table *TableMeta, calcId int, calculateExpr string) 
 			}
 		}
 
-		// substitute all occurences of source expression name with sql column from base or variant CTE
+		// substitute all occurences of source expression name with sql column from CTE
 		// for example: Expr1 ==> B1.src1
 		for k := 0; !isFound && k < exprCount; k++ {
 			n := findNamePos(expr[nStart:nEnd], table.Expr[k].Name)
@@ -313,6 +396,93 @@ func translateExprCalcToSql(table *TableMeta, calcId int, calculateExpr string) 
 			}
 		}
 
+		// substitute all occurences of parameter from base run with sql column from base CTE
+		// for example: param.Extra[base] ==> PB103.param_base
+		if !isFound {
+			for baseName, pColKey := range pBaseNames {
+
+				n := findNamePos(expr[nStart:nEnd], baseName)
+				if n >= 0 {
+					isFound = true
+
+					col, pJoin, e := makeParamColName(pColKey, false, false, "B")
+					if e != nil {
+						return []string{}, expr, false, errors.New("Error at: " + calculateExpr + " : " + e.Error())
+					}
+
+					isNew := true
+					for k := 0; isNew && k < len(paramJoinArr); k++ {
+						isNew = paramJoinArr[k] != pJoin
+					}
+					if isNew {
+						paramJoinArr = append(paramJoinArr, pJoin)
+					}
+
+					expr = expr[:nStart] + strings.ReplaceAll(expr[nStart:nEnd], baseName, col) + expr[nEnd:]
+
+					break // done with this parameter substitution
+				}
+			}
+		}
+
+		// substitute all occurences of parameter from variant run sql column from variant CTE
+		// for example: param.Extra[variant] ==> PV103.param_var
+		if !isFound {
+			for varName, pColKey := range pVarNames {
+
+				n := findNamePos(expr[nStart:nEnd], varName)
+				if n >= 0 {
+					isFound = true
+
+					col, pJoin, e := makeParamColName(pColKey, false, true, "V")
+					if e != nil {
+						return []string{}, expr, false, errors.New("Error at: " + calculateExpr + " : " + e.Error())
+					}
+
+					isNew := true
+					for k := 0; isNew && k < len(paramJoinArr); k++ {
+						isNew = paramJoinArr[k] != pJoin
+					}
+					if isNew {
+						paramJoinArr = append(paramJoinArr, pJoin)
+					}
+
+					expr = expr[:nStart] + strings.ReplaceAll(expr[nStart:nEnd], varName, col) + expr[nEnd:]
+
+					break // done with this parameter substitution
+				}
+			}
+		}
+
+		// substitute all occurences of parameter name run sql column from variant CTE
+		// for example: param.Extra ==> BP103.param_value
+		if !isFound {
+			for pKey := range paramCols {
+
+				n := findNamePos(expr[nStart:nEnd], pKey)
+				if n >= 0 {
+					isFound = true
+
+					col, pJoin, e := makeParamColName(pKey, true, false, "B")
+					if e != nil {
+						return []string{}, expr, false, errors.New("Error at: " + calculateExpr + " : " + e.Error())
+					}
+
+					isNew := true
+					for k := 0; isNew && k < len(paramJoinArr); k++ {
+						isNew = paramJoinArr[k] != pJoin
+					}
+					if isNew {
+						paramJoinArr = append(paramJoinArr, pJoin)
+					}
+
+					expr = expr[:nStart] + strings.ReplaceAll(expr[nStart:nEnd], pKey, col) + expr[nEnd:]
+
+					break // done with this parameter substitution
+				}
+			}
+		}
+
 		if !isFound {
 			nStart = nEnd // to the next 'unquoted part' of calculation string
 		}
@@ -328,6 +498,62 @@ func translateExprCalcToSql(table *TableMeta, calcId int, calculateExpr string) 
 	}
 	if !isSrcOnly && !isAnyBase && !isAnyVar {
 		return []string{}, expr, false, errors.New("error: there are no expression names found in: " + calculateExpr)
+	}
+
+	// validate parameter names:
+	// if it is run comparison then parameter name cannot be simple else parameter name cannot be [base] or [variant]
+	if !isSrcOnly && isParamSimple {
+		return []string{}, expr, false, errors.New("invalid use of parameter name in run comparison: " + calculateExpr)
+	}
+	if isSrcOnly && (isParamBase || isParamVar) {
+		return []string{}, expr, false, errors.New("invalid use of parameter run comparison name in expression: " + calculateExpr)
+	}
+
+	// validate: expression should not have any param. or [base] or [variant]
+	nStart = 0
+	for nEnd := 0; nStart >= 0 && nEnd >= 0; {
+
+		if nStart, nEnd, err = nextUnquoted(expr, nStart); err != nil {
+			return []string{}, "", false, err
+		}
+		if nStart < 0 || nEnd < 0 { // end of source formula
+			break
+		}
+
+		n := strings.Index(expr[nStart:nEnd], "param.")
+
+		isErr := n >= 0
+		if isErr && n > 0 {
+			r, _ := utf8.DecodeRuneInString(expr[nStart+n-1:])
+			isErr = unicode.IsSpace(r) || strings.ContainsRune(leftDelims, r)
+		}
+		if isErr {
+			return []string{}, expr, false, errors.New("invalid parameter name in expression: " + calculateExpr)
+		}
+
+		n = strings.Index(expr[nStart:nEnd], "[base]")
+
+		isErr = n >= 0
+		if isErr && n+len("[base]") < len(expr) {
+			r, _ := utf8.DecodeRuneInString(expr[nStart+n+len("[base]"):])
+			isErr = r == ',' || unicode.IsSpace(r) || strings.ContainsRune(rightDelims, r)
+		}
+		if isErr {
+			return []string{}, expr, false, errors.New("invalid use of [base] or invalid parameter name in expression: " + calculateExpr)
+		}
+
+		n = strings.Index(expr[nStart:nEnd], "[variant]")
+
+		isErr = n >= 0
+		if isErr && n+len("[variant]") < len(expr) {
+			r, _ := utf8.DecodeRuneInString(expr[nStart+n+len("[variant]"):])
+			isErr = r == ',' || unicode.IsSpace(r) || strings.ContainsRune(rightDelims, r)
+		}
+		if isErr {
+			return []string{}, expr, false, errors.New("invalid use of [variant] or invalid parameter name in expression: " + calculateExpr)
+		}
+
+		nStart = nEnd // to the next 'unquoted part' of calculation string
 	}
 
 	/*
@@ -349,11 +575,13 @@ func translateExprCalcToSql(table *TableMeta, calcId int, calculateExpr string) 
 		)
 		SELECT
 			V.run_id, CalcId AS calc_id, B.dim0, B.dim1,
-			(B1.src1 + V1.src1 + V.src0) / CASE WHEN ABS(B.src0) > 1.0e-37 THEN B.src0 ELSE NULL END AS calc_value
+			(B1.src1 + V1.src1 + V.src0 + (PV103.param_var - PB103.param_base)) / CASE WHEN ABS(B.src0) > 1.0e-37 THEN B.src0 ELSE NULL END AS calc_value
 		FROM cs0 B
 		INNER JOIN cs1 B1 ON (B1.run_id = B.run_id AND B1.dim0 = B.dim0 AND B1.dim1 = B.dim1)
 		INNER JOIN cs0 V ON (V.dim0 = B.dim0 AND V.dim1 = B.dim1)
 		INNER JOIN cs1 V1 ON (V1.run_id = V.run_id AND V1.dim0 = B.dim0 AND V1.dim1 = B.dim1)
+		INNER JOIN pbase_103 PB103
+		INNER JOIN pvar_103  PV103 ON (PV103.run_id = V.run_id)
 		WHERE B.run_id = 102
 		AND V.run_id IN (103, 104, 105, 106, 107, 108, 109, 110, 111, 112)
 		ORDER BY 1, 2, 3
@@ -462,6 +690,13 @@ func translateExprCalcToSql(table *TableMeta, calcId int, calculateExpr string) 
 				mainSql += ")"
 			}
 		}
+	}
+
+	// if there are any parameters in expression then append parameter inner joins
+	slices.Sort(paramJoinArr)
+
+	for k := 0; k < len(paramJoinArr); k++ {
+		mainSql += " " + paramJoinArr[k]
 	}
 
 	return cteSql, mainSql, !isSrcOnly, nil

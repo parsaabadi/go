@@ -27,6 +27,15 @@ type aggrColumn struct {
 	isSimple bool   // if true then attribute is used in aggregation without comparison
 }
 
+// scalar parameter column used as value in calculated expression
+type paramColumn struct {
+	isNumber bool         // if true then parameter is numeric scalar: zero rank integer or float
+	isBase   bool         // if true then parameter is used for the base run in comparison
+	isVar    bool         // if true then parameter is used for the variant run in comparison
+	isSimple bool         // if true then parameter is used in aggregation without comparison
+	paramRow *ParamDicRow // db row of parameter_dic join to model_parameter_dic table
+}
+
 // Parsed aggregation expressions for each nesting level
 type levelDef struct {
 	level          int              // nesting level
@@ -34,6 +43,7 @@ type levelDef struct {
 	innerAlias     string           // inner join table alias
 	nextInnerAlias string           // next level inner join table alias
 	exprArr        []aggrExprColumn // column names and expressions
+	paramJoinArr   []string         // parameters inner join: inner join between parameter CTE and main table
 	firstAgcIdx    int              // first used aggregation column index (accumulator or attribute index)
 	agcUsageArr    []bool           // contains true if aggregation column (accumulator or attribute) used at current level
 }
@@ -47,7 +57,11 @@ type levelParseState struct {
 
 // Parse output table accumulators calculation.
 func parseAggrCalculation(
-	aggrCols []aggrColumn, calculateExpr string, makeColName func(string, int, bool, bool, string, string, bool) string,
+	aggrCols []aggrColumn,
+	paramCols map[string]paramColumn,
+	calculateExpr string,
+	makeAggrColName func(string, int, bool, bool, string, string, bool) string,
+	makeParamColName func(string, bool, bool, string) (string, string, error),
 ) (
 	[]levelDef, error,
 ) {
@@ -65,7 +79,8 @@ func parseAggrCalculation(
 				colName: "calc_value",
 				srcExpr: calculateExpr,
 			}},
-			agcUsageArr: make([]bool, len(aggrCols)),
+			paramJoinArr: []string{},
+			agcUsageArr:  make([]bool, len(aggrCols)),
 		}}
 	lps := &levelParseState{
 		levelDef:       &levelArr[len(levelArr)-1],
@@ -115,7 +130,7 @@ func parseAggrCalculation(
 			}
 			lps.exprArr[nL].sqlExpr = sqlExpr
 
-			// accumultors first pass: collect accumulators usage is current sql expression
+			// accumultors first pass: collect accumulators usage in current sql expression
 			var err error = nil
 
 			nStart := 0
@@ -148,7 +163,19 @@ func parseAggrCalculation(
 		for ne := range lps.exprArr {
 
 			var e error
-			if lps.exprArr[ne].sqlExpr, e = lps.processAggrColumns(lps.exprArr[ne].sqlExpr, aggrCols, makeColName); e != nil {
+			if lps.exprArr[ne].sqlExpr, e = lps.processAggrColumns(lps.exprArr[ne].sqlExpr, aggrCols, makeAggrColName); e != nil {
+				return []levelDef{}, e
+			}
+		}
+
+		// find parameter names and replace with column name:
+		//   param.Name          => M1P103.param_value
+		//   param.Name[base]    => M1PB103.param_base
+		//   param.Name[variant] => M1PV103.param_var
+		for ne := range lps.exprArr {
+
+			var e error
+			if lps.exprArr[ne].sqlExpr, e = lps.processParamColumns(lps.exprArr[ne].sqlExpr, paramCols, makeParamColName); e != nil {
 				return []levelDef{}, e
 			}
 		}
@@ -167,6 +194,7 @@ func parseAggrCalculation(
 				innerAlias:     "T" + strconv.Itoa(nLevel),
 				nextInnerAlias: "T" + strconv.Itoa(nLevel+1),
 				exprArr:        append([]aggrExprColumn{}, lps.nextExprArr...),
+				paramJoinArr:   []string{},
 				agcUsageArr:    make([]bool, len(aggrCols)),
 			})
 
@@ -263,6 +291,81 @@ func (lps *levelParseState) processAggrColumns(
 				col := makeColName(aggrCols[k].name, k, (!isBase && !isVar), isVar, firstAlias, levelAlias, isFirstAgc)
 
 				expr = expr[:nStart+n] + col + expr[nStart+n+nLen:]
+			}
+		}
+
+		if !isFound {
+			nStart = nEnd // to the next 'unquoted part' of calculation string
+		}
+	}
+
+	return expr, nil
+}
+
+// Translate parameter names by replacing it with CTE alias and CTE parameter value name:
+//
+//	param.Name          => M1P103.param_value
+//	param.Name[base]    => M1PB103.param_base
+//	param.Name[variant] => M1PV103.param_var
+func (lps *levelParseState) processParamColumns(
+	expr string, paramCols map[string]paramColumn, makeColName func(string, bool, bool, string) (string, string, error),
+) (
+	string, error,
+) {
+
+	// for each 'unquoted' part of expression check if there is any param.AnyName
+	// if it is a paramter then substitute param.AnyName with corresponding sql column name
+	var err error = nil
+	nStart := 0
+
+	for nEnd := 0; nStart >= 0 && nEnd >= 0; {
+
+		nStart, nEnd, err = nextUnquoted(expr, nStart)
+		if err != nil {
+			return "", err
+		}
+		if nStart < 0 || nEnd < 0 { // end of source expression
+			break
+		}
+
+		// substitute first occurence of accumulator name with sql column name
+		// for example: acc0 => M1.acc_value or acc4 => L1A4.acc4
+		isFound := false
+
+		for pn := range paramCols {
+
+			n := findNamePos(expr[nStart:nEnd], pn)
+			if n >= 0 {
+				isFound = true
+
+				nLen := len(pn)
+				isBase := false
+				isVar := false
+
+				switch {
+				case strings.HasPrefix(expr[nStart+n+nLen:], "[variant]"):
+					isVar = true
+					nLen += len("[variant]")
+				case strings.HasPrefix(expr[nStart+n+nLen:], "[base]"):
+					isBase = true
+					nLen += len("[base]")
+				}
+
+				cname, pJoin, e := makeColName(pn, (!isBase && !isVar), isVar, lps.fromAlias)
+				if e != nil {
+					return "", e
+				}
+				expr = expr[:nStart+n] + cname + expr[nStart+n+nLen:]
+
+				isNew := true
+				for k := 0; isNew && k < len(lps.paramJoinArr); k++ {
+					isNew = lps.paramJoinArr[k] != pJoin
+				}
+				if isNew {
+					lps.paramJoinArr = append(lps.paramJoinArr, pJoin)
+				}
+
+				break // parameter found
 			}
 		}
 
