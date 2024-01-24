@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 
 	"github.com/openmpp/go/ompp/db"
@@ -31,7 +32,11 @@ func worksetReadonlyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// update workset read-only status
-	digest, ws, ok := theCatalog.UpdateWorksetReadonly(dn, wsn, isReadonly)
+	digest, ws, ok, err := theCatalog.UpdateWorksetReadonly(dn, wsn, isReadonly)
+	if err != nil {
+		http.Error(w, "Error at updating workset read-only flag "+wsn, http.StatusBadRequest)
+		return
+	}
 	if ok {
 		w.Header().Set("Content-Location", "/api/model/"+digest+"/workset/"+ws.Name)
 	} else {
@@ -328,7 +333,7 @@ func worksetUpdateHandler(isReplace bool, w http.ResponseWriter, r *http.Request
 	jsonResponse(w, r, wsRow)
 }
 
-// worksetDeleteHandler delete workset and workset parameters:
+// Delete workset and workset parameters:
 // DELETE /api/model/:model/workset/:set
 // If multiple models with same name exist then result is undefined.
 // If no such workset exist in database then no error, empty operation.
@@ -337,7 +342,7 @@ func worksetDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	dn := getRequestParam(r, "model")
 	wsn := getRequestParam(r, "set")
 
-	// update workset metadata
+	// delete workset
 	ok, err := theCatalog.DeleteWorkset(dn, wsn)
 	if err != nil {
 		http.Error(w, "Workset delete failed "+dn+": "+wsn, http.StatusBadRequest)
@@ -347,6 +352,53 @@ func worksetDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Location", "/api/model/"+dn+"/workset/"+wsn)
 		w.Header().Set("Content-Type", "text/plain")
 	}
+}
+
+// Delete multiple worksets and workset parameters:
+// POST /api/model/:model/delete-worksets
+// Request body contains array of workset names to delete.
+// Model identified by digest-or-name.
+// If multiple models with same name exist then result is undefined.
+// If no such worksets exist in database then no error, empty operation.
+func worksetListDeleteHandler(w http.ResponseWriter, r *http.Request) {
+
+	dn := getRequestParam(r, "model")
+
+	// decode json array of workset names
+	var nameLst []string
+	if !jsonRequestDecode(w, r, true, &nameLst) {
+		return // error at json decode, response done with http error
+	}
+
+	// delete all worksets
+	n := 0
+
+	for _, name := range nameLst {
+
+		if name == "" { // skip empty names
+			continue
+		}
+
+		// set read-write status
+		_, _, _, err := theCatalog.UpdateWorksetReadonly(dn, name, false)
+		if err != nil {
+			http.Error(w, "Error at clear workset read-only "+dn+": "+name, http.StatusBadRequest)
+			return
+		}
+
+		// delete workset
+		ok, err := theCatalog.DeleteWorkset(dn, name)
+		if err != nil {
+			http.Error(w, "Workset delete failed "+dn+": "+name, http.StatusBadRequest)
+			return
+		}
+		if ok {
+			n++
+		}
+	}
+
+	w.Header().Set("Content-Location", "/api/model/"+dn+"//delete-worksets/"+strconv.Itoa(n))
+	w.Header().Set("Content-Type", "text/plain")
 }
 
 // parameterPageUpdateHandler update a "page" of workset parameter values.

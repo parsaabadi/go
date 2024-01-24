@@ -9,7 +9,7 @@ import (
 	"strconv"
 )
 
-// DeleteModel delete existing model metadata and drop model data tables from database.
+// Delete existing model metadata and drop model data tables from database.
 func DeleteModel(dbConn *sql.DB, modelId int) error {
 
 	// validate parameters
@@ -30,7 +30,7 @@ func DeleteModel(dbConn *sql.DB, modelId int) error {
 	return nil
 }
 
-// doDeleteModel delete existing model metadata and drop model data tables from database.
+// delete existing model metadata and drop model data tables from database.
 // It does update as part of transaction
 func doDeleteModel(trx *sql.Tx, modelId int) error {
 

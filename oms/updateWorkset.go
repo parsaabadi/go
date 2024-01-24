@@ -16,53 +16,53 @@ import (
 )
 
 // UpdateWorksetReadonly update workset read-only status by model digest-or-name and workset name.
-func (mc *ModelCatalog) UpdateWorksetReadonly(dn, wsn string, isReadonly bool) (string, *db.WorksetRow, bool) {
+func (mc *ModelCatalog) UpdateWorksetReadonly(dn, wsn string, isReadonly bool) (string, *db.WorksetRow, bool, error) {
 
 	// if model digest-or-name or workset name is empty then return empty results
 	if dn == "" {
 		omppLog.Log("Warning: invalid (empty) model digest and name")
-		return "", &db.WorksetRow{}, false
+		return "", &db.WorksetRow{}, false, nil
 	}
 	if wsn == "" {
 		omppLog.Log("Warning: invalid (empty) workset name")
-		return "", &db.WorksetRow{}, false
+		return "", &db.WorksetRow{}, false, nil
 	}
 	meta, dbConn, ok := mc.modelMeta(dn)
 	if !ok {
-		omppLog.Log("Error: model digest or name not found: ", dn)
-		return "", &db.WorksetRow{}, false // return empty result: model not found or error
+		omppLog.Log("Warning: model digest or name not found: ", dn)
+		return "", &db.WorksetRow{}, false, nil // return empty result: model not found or error
 	}
 
 	// find workset in database
 	w, err := db.GetWorksetByName(dbConn, meta.Model.ModelId, wsn)
 	if err != nil {
 		omppLog.Log("Error at get workset status: ", dn, ": ", wsn, ": ", err.Error())
-		return "", &db.WorksetRow{}, false // return empty result: workset select error
+		return "", &db.WorksetRow{}, false, err // return empty result: workset select error
 	}
 	if w == nil {
 		omppLog.Log("Warning: workset not found: ", dn, ": ", wsn)
-		return "", &db.WorksetRow{}, false // return empty result: workset_lst row not found
+		return "", &db.WorksetRow{}, false, nil // return empty result: workset_lst row not found
 	}
 
 	// update workset readonly status
 	err = db.UpdateWorksetReadonly(dbConn, w.SetId, isReadonly)
 	if err != nil {
 		omppLog.Log("Error at update workset status: ", dn, ": ", wsn, ": ", err.Error())
-		return "", &db.WorksetRow{}, false // return empty result: workset select error
+		return "", &db.WorksetRow{}, false, err // return empty result: workset select error
 	}
 
 	// get workset status
 	w, err = db.GetWorkset(dbConn, w.SetId)
 	if err != nil {
 		omppLog.Log("Error at get workset status: ", dn, ": ", w.SetId, ": ", err.Error())
-		return "", &db.WorksetRow{}, false // return empty result: workset select error
+		return "", &db.WorksetRow{}, false, err // return empty result: workset select error
 	}
 	if w == nil {
 		omppLog.Log("Warning workset status not found: ", dn, ": ", wsn)
-		return "", &db.WorksetRow{}, false // return empty result: workset_lst row not found
+		return "", &db.WorksetRow{}, false, nil // return empty result: workset_lst row not found
 	}
 
-	return meta.Model.Digest, w, true
+	return meta.Model.Digest, w, true, nil
 }
 
 // UpdateWorkset update workset metadata: create new workset, replace existsing or merge metadata.

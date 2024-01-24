@@ -6,6 +6,7 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"slices"
 
 	"github.com/openmpp/go/ompp/db"
 	"github.com/openmpp/go/ompp/omppLog"
@@ -30,7 +31,7 @@ func (mc *ModelCatalog) UpdateRunStatus(dn, rdsn string, status string) (bool, e
 	}
 
 	// find model run by digest, stamp or run name
-	r, err := db.GetRunByDigestOrStampOrName(dbConn, meta.Model.ModelId, rdsn)
+	r, err := db.GetRunByDigestStampName(dbConn, meta.Model.ModelId, rdsn)
 	if err != nil {
 		omppLog.Log("Error at get model run: ", dn, ": ", rdsn, ": ", err.Error())
 		return false, err
@@ -48,8 +49,8 @@ func (mc *ModelCatalog) UpdateRunStatus(dn, rdsn string, status string) (bool, e
 	return true, nil
 }
 
-// DeleteRun do delete  model run including output table values, input parameters and microdata.
-func (mc *ModelCatalog) DeleteRun(dn, rdsn string) (bool, error) {
+// Start a separate thread to delete model run including output table values, input parameters and microdata.
+func (mc *ModelCatalog) DeleteRunStart(dn, rdsn string) (bool, error) {
 
 	// if model digest-or-name or run digest-or-name name is empty then return empty results
 	if dn == "" {
@@ -67,7 +68,7 @@ func (mc *ModelCatalog) DeleteRun(dn, rdsn string) (bool, error) {
 	}
 
 	// find model run by digest, stamp or run name
-	r, err := db.GetRunByDigestOrStampOrName(dbConn, meta.Model.ModelId, rdsn)
+	r, err := db.GetRunByDigestStampName(dbConn, meta.Model.ModelId, rdsn)
 	if err != nil {
 		omppLog.Log("Error at get model run: ", dn, ": ", rdsn, ": ", err.Error())
 		return false, err
@@ -76,27 +77,30 @@ func (mc *ModelCatalog) DeleteRun(dn, rdsn string) (bool, error) {
 		return false, nil // return OK: model run not found
 	}
 
-	// delete run from database
-	err = db.DeleteRun(dbConn, r.RunId)
-	if err != nil {
-		omppLog.Log("Error at delete model run: ", dn, ": ", rdsn, ": ", err.Error())
-		return false, err
-	}
+	// do delete run from database in background
+	go func(dbc *sql.DB, runId int, dn, rdsn string) {
+
+		e := db.DeleteRun(dbc, runId)
+		if e != nil {
+			omppLog.Log("Error at delete model run: ", dn, ": ", rdsn, ": ", e.Error())
+		} else {
+			omppLog.Log("Deleted model run: ", dn, ": ", rdsn)
+		}
+	}(dbConn, r.RunId, dn, rdsn)
 
 	return true, nil
 }
 
-// UnlinkRunStart start non-transactiomnal delete of model run including output table values, input parameters and microdata.
-func (mc *ModelCatalog) UnlinkRunStart(dn, rdsn string) (bool, error) {
+// Start a separate thread to delete list of model runs including output table values, input parameters and microdata.
+func (mc *ModelCatalog) DeleteRunListStart(dn string, rdsnLst []string) (bool, error) {
 
 	// if model digest-or-name or run digest-or-name name is empty then return empty results
 	if dn == "" {
 		omppLog.Log("Warning: invalid (empty) model digest and name")
 		return false, nil
 	}
-	if rdsn == "" {
-		omppLog.Log("Warning: invalid (empty) model run digest, stamp and name")
-		return false, nil
+	if len(rdsnLst) <= 0 {
+		return false, nil // return OK: empty list of model runs
 	}
 	meta, dbConn, ok := mc.modelMeta(dn)
 	if !ok {
@@ -104,26 +108,46 @@ func (mc *ModelCatalog) UnlinkRunStart(dn, rdsn string) (bool, error) {
 		return false, nil
 	}
 
-	// find model run by digest, stamp or run name
-	r, err := db.GetRunByDigestOrStampOrName(dbConn, meta.Model.ModelId, rdsn)
-	if err != nil {
-		omppLog.Log("Error at get model run: ", dn, ": ", rdsn, ": ", err.Error())
-		return false, err
-	}
-	if r == nil {
-		return false, nil // return OK: model run not found
-	}
+	// for each run find run id by digest, stamp or run name
+	rIds := make([]int, 0, len(rdsnLst))
+	rm := make(map[int]string, len(rdsnLst))
 
-	// do unlink run from database in background
-	go func(dbc *sql.DB, modelId, runId int, dn, rdsn string) {
+	for _, rdsn := range rdsnLst {
 
-		e := db.UnlinkRun(dbc, modelId, runId)
-		if e != nil {
-			omppLog.Log("Error at unlink model run: ", dn, ": ", rdsn, ": ", e.Error())
-		} else {
-			omppLog.Log("Completed unlink model run: ", dn, ": ", rdsn)
+		rLst, err := db.GetRunListByDigestStampName(dbConn, meta.Model.ModelId, rdsn)
+		if err != nil {
+			omppLog.Log("Error at get model run: ", dn, ": ", rdsn, ": ", err.Error())
+			return false, err
 		}
-	}(dbConn, meta.Model.ModelId, r.RunId, dn, rdsn)
+
+		for k := range rLst {
+			rIds = append(rIds, rLst[k].RunId)
+			rm[rLst[k].RunId] = rdsn
+		}
+	}
+
+	// do delete runs from database in background
+	go func(dbc *sql.DB, modelDn string, runIds []int, rdsnMap map[int]string) {
+
+		slices.Sort(rIds) // delete runs in descending order
+
+		n := 0
+		for k := len(runIds) - 1; k >= 0; k-- {
+
+			if runIds[k] <= 0 || k < len(runIds)-1 && runIds[k] == runIds[k+1] {
+				continue // skip invalid run id or duplicate run id
+			}
+
+			e := db.DeleteRun(dbc, runIds[k])
+			if e != nil {
+				omppLog.Log("Error at delete model run: ", modelDn, ": ", runIds[k], " ", rdsnMap[runIds[k]], ": ", e.Error())
+				return
+			}
+			n++
+		}
+		omppLog.Log("Deleted multiple model runs: ", n, ": ", modelDn)
+
+	}(dbConn, dn, rIds, rm)
 
 	return true, nil
 }
@@ -172,7 +196,7 @@ func (mc *ModelCatalog) UpdateRunText(rp *db.RunPub) (bool, string, string, erro
 	}
 
 	// find model run by digest, stamp or run name
-	r, err := db.GetRunByDigestOrStampOrName(dbConn, meta.Model.ModelId, rdsn)
+	r, err := db.GetRunByDigestStampName(dbConn, meta.Model.ModelId, rdsn)
 	if err != nil {
 		omppLog.Log("Error at get model run: ", dn, ": ", rdsn, ": ", err.Error())
 		return false, dn, rdsn, err
@@ -253,7 +277,7 @@ func (mc *ModelCatalog) UpdateRunParameterText(dn, rdsn string, pvtLst []db.Para
 	}
 
 	// find model run by digest, stamp or run name
-	r, err := db.GetRunByDigestOrStampOrName(dbConn, meta.Model.ModelId, rdsn)
+	r, err := db.GetRunByDigestStampName(dbConn, meta.Model.ModelId, rdsn)
 	if err != nil {
 		return false, errors.New("Model run not found: " + dn + ": " + rdsn + ": " + err.Error())
 	}

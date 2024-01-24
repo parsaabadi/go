@@ -9,7 +9,8 @@ import (
 	"strconv"
 )
 
-// DeleteTask delete modeling task and task run history from database.
+// Delete modeling task and task run history from database.
+// Only task itself is deleted, model runs and worksets are not affected.
 func DeleteTask(dbConn *sql.DB, taskId int) error {
 
 	// validate parameters
@@ -30,7 +31,8 @@ func DeleteTask(dbConn *sql.DB, taskId int) error {
 	return nil
 }
 
-// dbDeleteTask delete modeling task and task run history from database.
+// delete modeling task and task run history from database.
+// Only task itself is deleted from task_lst and other task_ tables, model runs and worksets are not affected.
 // It does update as part of transaction
 func doDeleteTask(trx *sql.Tx, taskId int) error {
 

@@ -507,6 +507,9 @@ func apiUpdateRoutes(router *vestigo.Router) {
 	router.Delete("/api/model/:model/workset/:set", worksetDeleteHandler, logRequest)
 	router.Delete("/api/model/:model/workset/", http.NotFound)
 
+	// POST /api/model/:model/delete-worksets
+	router.Post("/api/model/:model/delete-worksets", worksetListDeleteHandler, logRequest)
+
 	// PATCH /api/model/:model/workset/:set/parameter/:name/new/value
 	router.Patch("/api/model/:model/workset/:set/parameter/:name/new/value", parameterPageUpdateHandler, logRequest)
 
@@ -544,12 +547,11 @@ func apiUpdateRoutes(router *vestigo.Router) {
 	router.Patch("/api/run/text", runTextMergeHandler, logRequest)
 
 	// DELETE /api/model/:model/run/:run
-	router.Delete("/api/model/:model/run/:run", runDeleteHandler, logRequest)
+	router.Delete("/api/model/:model/run/:run", runDeleteStartHandler, logRequest)
 	router.Delete("/api/model/:model/run/", http.NotFound)
 
-	// DELETE /api/model/:model/unlink/run/:run
-	router.Delete("/api/model/:model/unlink/run/:run", runUnlinkStartHandler, logRequest)
-	router.Delete("/api/model/:model/unlink/run/", http.NotFound)
+	// POST /api/model/:model/delete-runs
+	router.Post("/api/model/:model/delete-runs", runListDeleteStartHandler, logRequest)
 
 	// PATCH /api/model/:model/run/:run/parameter-text
 	router.Patch("/api/model/:model/run/:run/parameter-text", runParameterTextMergeHandler, logRequest)

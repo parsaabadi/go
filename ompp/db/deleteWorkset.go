@@ -122,7 +122,7 @@ func dbDeleteWorksetAllParameters(trx *sql.Tx, setId int) error {
 	case err != nil:
 		return err
 	case nRd != 1:
-		return errors.New("failed to update: workset is read-only: " + sId)
+		return errors.New("failed to delete: workset is read-only: " + sId)
 	}
 
 	// build a list of workset parameters db-tables

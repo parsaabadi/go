@@ -127,11 +127,11 @@ func GetLastRunByName(dbConn *sql.DB, modelId int, name string) (*RunRow, error)
 			")")
 }
 
-// GetRunByDigestOrStampOrName return model run row by run digest or run stamp or run name: run_lst table row.
+// GetRunByDigestStampName return model run row by run digest or run stamp or run name: run_lst table row.
 //
 // It does select run row by digest, if not found then by model id and stamp, if not found by model id and run name.
 // If there is multiple runs with this stamp or name then run with min(run_id) returned
-func GetRunByDigestOrStampOrName(dbConn *sql.DB, modelId int, rdsn string) (*RunRow, error) {
+func GetRunByDigestStampName(dbConn *sql.DB, modelId int, rdsn string) (*RunRow, error) {
 
 	r, err := GetRunByDigest(dbConn, rdsn)
 	if err == nil && r == nil {
@@ -143,11 +143,11 @@ func GetRunByDigestOrStampOrName(dbConn *sql.DB, modelId int, rdsn string) (*Run
 	return r, err
 }
 
-// GetRunListByDigestOrStampOrName return list of model run rows by run digest or run stamp or run name: run_lst table rows.
+// GetRunListByDigestStampName return list of model run rows by run digest or run stamp or run name: run_lst table rows.
 //
 // It does select run row by digest, if not found then by model id and stamp, if not found by model id and run name.
 // If there is multiple runs with this stamp or name then multiple rows returned
-func GetRunListByDigestOrStampOrName(dbConn *sql.DB, modelId int, rdsn string) ([]RunRow, error) {
+func GetRunListByDigestStampName(dbConn *sql.DB, modelId int, rdsn string) ([]RunRow, error) {
 
 	sql := "SELECT" +
 		" H.run_id, H.model_id, H.run_name, H.sub_count," +

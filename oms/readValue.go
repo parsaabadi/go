@@ -48,7 +48,7 @@ func (mc *ModelCatalog) ReadParameterTo(dn, src string, layout *db.ReadParamLayo
 	} else {
 
 		// get run_lst db row by digest, stamp or run name
-		rst, err := db.GetRunByDigestOrStampOrName(dbConn, meta.Model.ModelId, src)
+		rst, err := db.GetRunByDigestStampName(dbConn, meta.Model.ModelId, src)
 		if err != nil {
 			omppLog.Log("Error at get run status: ", meta.Model.Name, ": ", src, ": ", err.Error())
 			return nil, false // return empty result: run select error

@@ -12,7 +12,7 @@ import (
 	"github.com/openmpp/go/ompp/helper"
 )
 
-// DeleteRun delete model run metadata, parameters run values and output tables run values from database.
+// Delete model run: delete metadata, parameters run values and output tables run values from database.
 func DeleteRun(dbConn *sql.DB, runId int) error {
 
 	// validate parameters
@@ -25,15 +25,7 @@ func DeleteRun(dbConn *sql.DB, runId int) error {
 	if err != nil {
 		return err
 	}
-	if err = doUnlinkRun(trx, runId); err != nil {
-		trx.Rollback()
-		return err
-	}
-	if err = doDeleteRunBody(trx, runId); err != nil {
-		trx.Rollback()
-		return err
-	}
-	if err = doDeleteRunMeta(trx, runId); err != nil {
+	if err := doDeleteRun(trx, runId); err != nil {
 		trx.Rollback()
 		return err
 	}
@@ -41,34 +33,20 @@ func DeleteRun(dbConn *sql.DB, runId int) error {
 	return nil
 }
 
-// doUnlinkRun set run status to d=deleted and unlink run values (parameter, output tables, microdata) from base run:
+// delete model run metadata and run values (parameter, output tables, microdata) run values from database.
 // if run values used by any other run as a base run then base run id updated to the next minimal run id.
 // It does update as part of transaction
-func doUnlinkRun(trx *sql.Tx, runId int) error {
+func doDeleteRun(trx *sql.Tx, runId int) error {
 
 	// update model run master record to prevent run use
 	sId := strconv.Itoa(runId)
 	delTs := helper.MakeTimeStamp(time.Now())
-
-	err := TrxUpdate(trx, "UPDATE run_lst SET run_name = "+ToQuoted("deleted: "+delTs)+" WHERE run_id = "+sId)
+	err := TrxUpdate(trx,
+		"UPDATE run_lst"+
+			" SET status = 'd', run_name = "+ToQuoted("deleted: "+delTs)+
+			" WHERE run_id = "+sId)
 	if err != nil {
 		return err
-	}
-
-	status := ""
-	err = TrxSelectFirst(trx,
-		"SELECT status FROM run_lst WHERE run_id = "+sId,
-		func(row *sql.Row) error {
-			if err := row.Scan(&status); err != nil {
-				return err
-			}
-			return nil
-		})
-	if err != nil {
-		return err
-	}
-	if status == "d" { // run unlink already done
-		return nil
 	}
 
 	// update to NULL base run id for all worksets where base run id = target run id
@@ -77,343 +55,505 @@ func doUnlinkRun(trx *sql.Tx, runId int) error {
 		return err
 	}
 
+	// replace value digests for parameter, output tables and microdata to avoid using values as a base run values
+	delDgst := ("x-" + sId + "-" + delTs)
+
+	err = TrxUpdate(trx,
+		"UPDATE run_parameter SET value_digest = "+toQuotedMax(delDgst, codeDbMax)+
+			" WHERE run_id = "+sId+
+			" AND EXISTS (SELECT * FROM run_lst RL WHERE RL.run_id = run_parameter.run_id AND RL.run_id = "+sId+")")
+	if err != nil {
+		return err
+	}
+	err = TrxUpdate(trx,
+		"UPDATE run_table SET value_digest = "+toQuotedMax(delDgst, codeDbMax)+
+			" WHERE run_id = "+sId+
+			" AND EXISTS (SELECT * FROM run_lst RL WHERE RL.run_id = run_table.run_id AND RL.run_id = "+sId+")")
+	if err != nil {
+		return err
+	}
+	err = TrxUpdate(trx,
+		"UPDATE run_entity SET value_digest = "+toQuotedMax(delDgst, codeDbMax)+
+			" WHERE run_id = "+sId+
+			" AND EXISTS (SELECT * FROM run_lst RL WHERE RL.run_id = run_entity.run_id AND RL.run_id = "+sId+")")
+	if err != nil {
+		return err
+	}
+
+	// build a list of run parameter values db-tables
+	var pTbls []string
+	pHidTbl := map[int]string{}
+
+	err = TrxSelectRows(trx,
+		"SELECT P.parameter_hid, P.db_run_table"+
+			" FROM run_parameter RP"+
+			" INNER JOIN parameter_dic P ON (P.parameter_hid = RP.parameter_hid)"+
+			" WHERE RP.run_id = "+sId+
+			" ORDER BY 1",
+		func(rows *sql.Rows) error {
+			var hId int
+			tn := ""
+			if err := rows.Scan(&hId, &tn); err != nil {
+				return err
+			}
+			pTbls = append(pTbls, tn)
+			pHidTbl[hId] = tn
+			return nil
+		})
+	if err != nil {
+		return err
+	}
+
+	// build a list of run expression and accumulator values db-tables
+	var eTbls []string
+	var aTbls []string
+	eHidTbl := map[int]string{}
+	aHidTbl := map[int]string{}
+
+	err = TrxSelectRows(trx,
+		"SELECT T.table_hid, T.db_expr_table, T.db_acc_table"+
+			" FROM run_table RT"+
+			" INNER JOIN table_dic T ON (T.table_hid = RT.table_hid)"+
+			" WHERE RT.run_id = "+sId+
+			" ORDER BY 1",
+		func(rows *sql.Rows) error {
+			var hId int
+			etn := ""
+			atn := ""
+			if err := rows.Scan(&hId, &etn, &atn); err != nil {
+				return err
+			}
+			eTbls = append(eTbls, etn)
+			aTbls = append(aTbls, atn)
+			eHidTbl[hId] = etn
+			aHidTbl[hId] = atn
+			return nil
+		})
+	if err != nil {
+		return err
+	}
+
+	// build a list of run microdata values db-tables
+	var mTbls []string
+	mHidTbl := map[int]string{}
+
+	err = TrxSelectRows(trx,
+		"SELECT EG.entity_gen_hid, EG.db_entity_table"+
+			" FROM entity_gen EG"+
+			" INNER JOIN run_entity RE ON (RE.entity_gen_hid = EG.entity_gen_hid)"+
+			" WHERE RE.run_id = "+sId+
+			" ORDER BY 1",
+		func(rows *sql.Rows) error {
+			var hId int
+			tn := ""
+			if err := rows.Scan(&hId, &tn); err != nil {
+				return err
+			}
+			mTbls = append(mTbls, tn)
+			mHidTbl[hId] = tn
+			return nil
+		})
+	if err != nil {
+		return err
+	}
+
 	// delete model runs:
-	// for all model parameters where parameter run value shared between runs
-	// build list of new base run id's
-	rbArr, err := selectBaseRunsOfSharedValues(trx,
-		"SELECT"+
-			" RP.parameter_hid, RP.run_id, RP.base_run_id,"+
+	// find new base run id for all model parameters where parameter run value shared between runs
+
+	type hr struct {
+		hId   int // parameter or output table Hid
+		runId int // run id in run_parameter or run_table
+	}
+	type hrMap map[hr]bool // map of [hid, run_id] to keep list of shared parameters, output tables or microdata
+
+	// list of run parameters where base run id is the run id to be deleted
+	hrm := hrMap{}
+	hLst := []int{}
+	hMap := map[int]int{} // parameter or output table Hid to new base run id
+	pId := -1
+
+	err = TrxSelectRows(trx,
+		"SELECT parameter_hid, run_id"+
+			" FROM run_parameter"+
+			" WHERE run_id <> "+sId+
+			" AND base_run_id = "+sId+
+			" ORDER BY 1, 2",
+		func(rows *sql.Rows) error {
+			var r hr
+			if err := rows.Scan(&r.hId, &r.runId); err != nil {
+				return err
+			}
+			hrm[r] = true
+			if pId <= 0 || pId != r.hId {
+				hLst = append(hLst, r.hId)
+				pId = r.hId
+				hMap[pId] = 0
+			}
+			return nil
+		})
+	if err != nil {
+		return err
+	}
+
+	// set new base run id in run_parameter table
+	okLst := ToQuoted(DoneRunStatus) + ", " + ToQuoted(ProgressRunStatus) + ", " + ToQuoted(ExitRunStatus) // run status p=progress s=success x=exit
+
+	err = TrxUpdate(trx,
+		"UPDATE run_parameter SET base_run_id ="+
+			" CASE"+
+			" WHEN"+
+			" NOT ("+
+			" SELECT MIN(NR.run_id)"+
+			" FROM run_parameter NR"+
+			" INNER JOIN run_lst RL ON (RL.run_id = NR.run_id)"+
+			" WHERE NR.parameter_hid = run_parameter.parameter_hid"+
+			" AND NR.run_id <> "+sId+
+			" AND NR.value_digest = run_parameter.value_digest"+
+			" AND RL.status IN ("+okLst+")"+
+			" ) IS NULL"+
+			" THEN"+
 			" ("+
 			" SELECT MIN(NR.run_id)"+
 			" FROM run_parameter NR"+
 			" INNER JOIN run_lst RL ON (RL.run_id = NR.run_id)"+
-			" WHERE NR.parameter_hid = RP.parameter_hid"+
-			" AND NR.base_run_id = RP.base_run_id"+
-			" AND NR.run_id <> NR.base_run_id"+
-			" AND RL.status = "+ToQuoted(DoneRunStatus)+
+			" WHERE NR.parameter_hid = run_parameter.parameter_hid "+
+			" AND NR.run_id <> "+sId+
+			" AND NR.value_digest = run_parameter.value_digest"+
+			" AND RL.status IN ("+okLst+")"+
 			" )"+
-			" FROM run_parameter RP"+
-			" WHERE RP.run_id <> RP.base_run_id"+
-			" AND RP.base_run_id = "+sId+
-			" ORDER BY 1, 3")
+			" WHEN"+
+			" NOT ("+
+			" SELECT MIN(NR.run_id)"+
+			" FROM run_parameter NR"+
+			" INNER JOIN run_lst RL ON (RL.run_id = NR.run_id)"+
+			" WHERE NR.parameter_hid = run_parameter.parameter_hid"+
+			" AND NR.run_id <> "+sId+
+			" AND NR.value_digest = run_parameter.value_digest"+
+			" ) IS NULL"+
+			" THEN"+
+			" ("+
+			" SELECT MIN(NR.run_id)"+
+			" FROM run_parameter NR"+
+			" INNER JOIN run_lst RL ON (RL.run_id = NR.run_id)"+
+			" WHERE NR.parameter_hid = run_parameter.parameter_hid"+
+			" AND NR.run_id <> "+sId+
+			" AND NR.value_digest = run_parameter.value_digest"+
+			" )"+
+			" ELSE 0"+ // new base run not found
+			" END"+
+			" WHERE run_id <> "+sId+
+			" AND base_run_id = "+sId)
 	if err != nil {
 		return err
 	}
 
-	// delete model runs:
-	// where parameter run value shared between runs
-	// re-base run values: update run id for parameter values with new base run id
-	tblName := ""
-	hId := 0
-	oldId := 0
-	for k := range rbArr {
-
-		// find db table name for parameter run value
-		// if not same parameter as before
-		if hId == 0 || hId != rbArr[k].hId {
-
-			err = TrxSelectFirst(trx,
-				"SELECT db_run_table FROM parameter_dic WHERE parameter_hid = "+strconv.Itoa(rbArr[k].hId),
-				func(row *sql.Row) error {
-					if err := row.Scan(&tblName); err != nil {
-						return err
-					}
-					return nil
-				})
-			if err != nil {
+	// collect new base run id for run parameters
+	err = TrxSelectRows(trx,
+		"SELECT parameter_hid, run_id, base_run_id"+
+			" FROM run_parameter"+
+			" ORDER BY 1, 2",
+		func(rows *sql.Rows) error {
+			var r hr
+			var nSql sql.NullInt64
+			var n int
+			if err := rows.Scan(&r.hId, &r.runId, &nSql); err != nil {
 				return err
 			}
+			if nSql.Valid {
+				n = int(nSql.Int64)
+			} else {
+				n = 0 // new base run undefined
+			}
+			if _, ok := hrm[r]; !ok {
+				return nil // skip: parameter_hid, run_id not found in the list shared parameters
+			}
+			if n <= 0 {
+				return errors.New("Unable to delete model run parameter:" + " " + strconv.Itoa(r.hId) + " run_id: " + strconv.Itoa(r.runId) + " " + "error: no new base run id exist")
+			}
+			hMap[r.hId] = n // new base run id
+
+			return nil
+		})
+	if err != nil {
+		return err
+	}
+
+	// update parameter value run id with new base run id
+	for _, hId := range hLst {
+
+		n := hMap[hId]
+		if n <= 0 {
+			return errors.New("Unable to delete model run parameter:" + " " + strconv.Itoa(hId) + " " + "error: new base run id not found")
 		}
-
-		// re-base run values in parameter value table and in run_parameter list
-		// if not same parameter and base run id as before
-		if hId == 0 || oldId == 0 || hId != rbArr[k].hId || oldId != rbArr[k].oldBase {
-
-			hId = rbArr[k].hId
-			oldId = rbArr[k].oldBase
-
-			// update parameter value run id with new base run id
-			err = TrxUpdate(trx,
-				"UPDATE "+tblName+
-					" SET run_id = "+strconv.Itoa(rbArr[k].newBase)+
-					" WHERE run_id = "+strconv.Itoa(rbArr[k].oldBase))
-			if err != nil {
-				return err
-			}
-
-			// set new base run id in run_paramter table
-			err = TrxUpdate(trx,
-				"UPDATE run_parameter SET base_run_id = "+strconv.Itoa(rbArr[k].newBase)+
-					" WHERE base_run_id = "+strconv.Itoa(rbArr[k].oldBase)+
-					" AND parameter_hid = "+strconv.Itoa(rbArr[k].hId))
-			if err != nil {
-				return err
-			}
+		err = TrxUpdate(trx,
+			"UPDATE "+pHidTbl[hId]+" SET run_id = "+strconv.Itoa(n)+" WHERE run_id = "+sId)
+		if err != nil {
+			return err
 		}
 	}
 
 	// delete model runs:
-	// for all model output tables where output table value shared between runs
-	// build list of new base run id's
-	rbArr, err = selectBaseRunsOfSharedValues(trx,
-		"SELECT"+
-			" RT.table_hid, RT.run_id, RT.base_run_id,"+
+	// find new base run id for all model output tables where table values shared between runs
+
+	// list of run output tables where base run id is the run id to be deleted
+	hrm = hrMap{}
+	hLst = []int{}
+	clear(hMap)
+	pId = -1
+
+	err = TrxSelectRows(trx,
+		"SELECT table_hid, run_id"+
+			" FROM run_table"+
+			" WHERE run_id <> "+sId+
+			" AND base_run_id = "+sId+
+			" ORDER BY 1, 2",
+		func(rows *sql.Rows) error {
+			var r hr
+			if err := rows.Scan(&r.hId, &r.runId); err != nil {
+				return err
+			}
+			hrm[r] = true
+			if pId <= 0 || pId != r.hId {
+				hLst = append(hLst, r.hId)
+				pId = r.hId
+				hMap[pId] = 0
+			}
+			return nil
+		})
+	if err != nil {
+		return err
+	}
+
+	// set new base run id in run_table table
+	err = TrxUpdate(trx,
+		"UPDATE run_table SET base_run_id ="+
+			" CASE"+
+			" WHEN"+
+			" NOT ("+
+			" SELECT MIN(NR.run_id)"+
+			" FROM run_table NR"+
+			" INNER JOIN run_lst RL ON (RL.run_id = NR.run_id)"+
+			" WHERE NR.table_hid = run_table.table_hid"+
+			" AND NR.run_id <> "+sId+
+			" AND NR.value_digest = run_table.value_digest"+
+			" AND RL.status IN ("+okLst+")"+
+			" ) IS NULL"+
+			" THEN"+
 			" ("+
 			" SELECT MIN(NR.run_id)"+
 			" FROM run_table NR"+
 			" INNER JOIN run_lst RL ON (RL.run_id = NR.run_id)"+
-			" WHERE NR.table_hid = RT.table_hid"+
-			" AND NR.base_run_id = RT.base_run_id"+
-			" AND NR.run_id <> NR.base_run_id"+
-			" AND RL.status = "+ToQuoted(DoneRunStatus)+
+			" WHERE NR.table_hid = run_table.table_hid "+
+			" AND NR.run_id <> "+sId+
+			" AND NR.value_digest = run_table.value_digest"+
+			" AND RL.status IN ("+okLst+")"+
 			" )"+
-			" FROM run_table RT"+
-			" WHERE RT.run_id <> RT.base_run_id"+
-			" AND RT.base_run_id = "+sId+
-			" ORDER BY 1, 3")
+			" WHEN"+
+			" NOT ("+
+			" SELECT MIN(NR.run_id)"+
+			" FROM run_table NR"+
+			" INNER JOIN run_lst RL ON (RL.run_id = NR.run_id)"+
+			" WHERE NR.table_hid = run_table.table_hid"+
+			" AND NR.run_id <> "+sId+
+			" AND NR.value_digest = run_table.value_digest"+
+			" ) IS NULL"+
+			" THEN"+
+			" ("+
+			" SELECT MIN(NR.run_id)"+
+			" FROM run_table NR"+
+			" INNER JOIN run_lst RL ON (RL.run_id = NR.run_id)"+
+			" WHERE NR.table_hid = run_table.table_hid"+
+			" AND NR.run_id <> "+sId+
+			" AND NR.value_digest = run_table.value_digest"+
+			" )"+
+			" ELSE 0"+ // new base run not found
+			" END"+
+			" WHERE run_id <> "+sId+
+			" AND base_run_id = "+sId)
 	if err != nil {
 		return err
 	}
 
-	// delete model runs:
-	// where output table shared between models and output value shared between runs
-	// re-base run values: update run id for accumulators and expressions with new base run id
-	eTbl := ""
-	aTbl := ""
-	hId = 0
-	oldId = 0
-	for k := range rbArr {
-
-		// find db table names for accumulators and expressions run value
-		// if not same output table as before
-		if hId == 0 || hId != rbArr[k].hId {
-
-			err = TrxSelectFirst(trx,
-				"SELECT db_expr_table, db_acc_table FROM table_dic WHERE table_hid = "+strconv.Itoa(rbArr[k].hId),
-				func(row *sql.Row) error {
-					if err := row.Scan(&eTbl, &aTbl); err != nil {
-						return err
-					}
-					return nil
-				})
-			if err != nil {
+	// collect new base run id for run output tables
+	err = TrxSelectRows(trx,
+		"SELECT table_hid, run_id, base_run_id"+
+			" FROM run_table"+
+			" ORDER BY 1, 2",
+		func(rows *sql.Rows) error {
+			var r hr
+			var nSql sql.NullInt64
+			var n int
+			if err := rows.Scan(&r.hId, &r.runId, &nSql); err != nil {
 				return err
 			}
+			if nSql.Valid {
+				n = int(nSql.Int64)
+			} else {
+				n = 0 // new base run undefined
+			}
+			if _, ok := hrm[r]; !ok {
+				return nil // skip: table_hid, run_id not found in the list shared output tables
+			}
+			if n <= 0 {
+				return errors.New("Unable to delete model run output table:" + " " + strconv.Itoa(r.hId) + " " + " run_id: " + strconv.Itoa(r.runId) + " " + "error: no new base run id exist")
+			}
+			hMap[r.hId] = n // new base run id
+
+			return nil
+		})
+	if err != nil {
+		return err
+	}
+
+	// update expression values db tables and accumulator values db tables run id with new base run id
+	for _, hId := range hLst {
+
+		n := hMap[hId]
+		if n <= 0 {
+			return errors.New("Unable to delete model run output table:" + " " + strconv.Itoa(hId) + " " + "error: new base run id not found")
 		}
 
-		// re-base run values:
-		// update run id in accumulators and expression tables with new base run id
-		// update output value base run id in run_table list
-		// if not same output table and base run id as before
-		if hId == 0 || oldId == 0 || hId != rbArr[k].hId || oldId != rbArr[k].oldBase {
+		err = TrxUpdate(trx,
+			"UPDATE "+eHidTbl[hId]+" SET run_id = "+strconv.Itoa(n)+" WHERE run_id = "+sId)
+		if err != nil {
+			return err
+		}
 
-			hId = rbArr[k].hId
-			oldId = rbArr[k].oldBase
-
-			// update accumulators and expressions value run id with new base run id
-			err = TrxUpdate(trx,
-				"UPDATE "+eTbl+
-					" SET run_id = "+strconv.Itoa(rbArr[k].newBase)+
-					" WHERE run_id = "+strconv.Itoa(rbArr[k].oldBase))
-			if err != nil {
-				return err
-			}
-			err = TrxUpdate(trx,
-				"UPDATE "+aTbl+
-					" SET run_id = "+strconv.Itoa(rbArr[k].newBase)+
-					" WHERE run_id = "+strconv.Itoa(rbArr[k].oldBase))
-			if err != nil {
-				return err
-			}
-
-			// set new base run id in run_table
-			err = TrxUpdate(trx,
-				"UPDATE run_table SET base_run_id = "+strconv.Itoa(rbArr[k].newBase)+
-					" WHERE base_run_id = "+strconv.Itoa(rbArr[k].oldBase)+
-					" AND table_hid = "+strconv.Itoa(rbArr[k].hId))
-			if err != nil {
-				return err
-			}
+		err = TrxUpdate(trx,
+			"UPDATE "+aHidTbl[hId]+" SET run_id = "+strconv.Itoa(n)+" WHERE run_id = "+sId)
+		if err != nil {
+			return err
 		}
 	}
 
 	// delete model runs:
-	// for all entity generations where microdata run value shared between runs
-	// build list of new base run id's
-	rbArr, err = selectBaseRunsOfSharedValues(trx,
-		"SELECT"+
-			" RE.entity_gen_hid, RE.run_id, RE.base_run_id,"+
+	// find new base run id all entity generations where microdata run value shared between runs
+
+	// list of entity generations where base run id is the run id to be deleted
+	hrm = hrMap{}
+	hLst = []int{}
+	clear(hMap)
+	pId = -1
+
+	err = TrxSelectRows(trx,
+		"SELECT entity_gen_hid, run_id"+
+			" FROM run_entity"+
+			" WHERE run_id <> "+sId+
+			" AND base_run_id = "+sId+
+			" ORDER BY 1, 2",
+		func(rows *sql.Rows) error {
+			var r hr
+			if err := rows.Scan(&r.hId, &r.runId); err != nil {
+				return err
+			}
+			hrm[r] = true
+			if pId <= 0 || pId != r.hId {
+				hLst = append(hLst, r.hId)
+				pId = r.hId
+				hMap[pId] = 0
+			}
+			return nil
+		})
+	if err != nil {
+		return err
+	}
+
+	// set new base run id in run_entity table
+	err = TrxUpdate(trx,
+		"UPDATE run_entity SET base_run_id ="+
+			" CASE"+
+			" WHEN"+
+			" NOT ("+
+			" SELECT MIN(NR.run_id)"+
+			" FROM run_entity NR"+
+			" INNER JOIN run_lst RL ON (RL.run_id = NR.run_id)"+
+			" WHERE NR.entity_gen_hid = run_entity.entity_gen_hid"+
+			" AND NR.run_id <> "+sId+
+			" AND NR.value_digest = run_entity.value_digest"+
+			" AND RL.status IN ("+okLst+")"+
+			" ) IS NULL"+
+			" THEN"+
 			" ("+
 			" SELECT MIN(NR.run_id)"+
 			" FROM run_entity NR"+
 			" INNER JOIN run_lst RL ON (RL.run_id = NR.run_id)"+
-			" WHERE NR.entity_gen_hid = RE.entity_gen_hid"+
-			" AND NR.base_run_id = RE.base_run_id"+
-			" AND NR.run_id <> NR.base_run_id"+
-			" AND RL.status = "+ToQuoted(DoneRunStatus)+
+			" WHERE NR.entity_gen_hid = run_entity.entity_gen_hid "+
+			" AND NR.run_id <> "+sId+
+			" AND NR.value_digest = run_entity.value_digest"+
+			" AND RL.status IN ("+okLst+")"+
 			" )"+
-			" FROM run_entity RE"+
-			" WHERE RE.run_id <> RE.base_run_id"+
-			" AND RE.base_run_id = "+sId+
-			" ORDER BY 1, 3")
+			" WHEN"+
+			" NOT ("+
+			" SELECT MIN(NR.run_id)"+
+			" FROM run_entity NR"+
+			" INNER JOIN run_lst RL ON (RL.run_id = NR.run_id)"+
+			" WHERE NR.entity_gen_hid = run_entity.entity_gen_hid"+
+			" AND NR.run_id <> "+sId+
+			" AND NR.value_digest = run_entity.value_digest"+
+			" ) IS NULL"+
+			" THEN"+
+			" ("+
+			" SELECT MIN(NR.run_id)"+
+			" FROM run_entity NR"+
+			" INNER JOIN run_lst RL ON (RL.run_id = NR.run_id)"+
+			" WHERE NR.entity_gen_hid = run_entity.entity_gen_hid"+
+			" AND NR.run_id <> "+sId+
+			" AND NR.value_digest = run_entity.value_digest"+
+			" )"+
+			" ELSE 0"+ // new base run not found
+			" END"+
+			" WHERE run_id <> "+sId+
+			" AND base_run_id = "+sId)
 	if err != nil {
 		return err
 	}
 
-	// delete model runs:
-	// where microdata run value shared between runs
-	// re-base run values: update run id for microdata values with new base run id
-	tblName = ""
-	hId = 0
-	oldId = 0
-	for k := range rbArr {
-
-		// find db table name for microdata run value
-		// if not same microdata as before
-		if hId == 0 || hId != rbArr[k].hId {
-
-			err = TrxSelectFirst(trx,
-				"SELECT db_entity_table FROM entity_gen WHERE entity_gen_hid = "+strconv.Itoa(rbArr[k].hId),
-				func(row *sql.Row) error {
-					if err := row.Scan(&tblName); err != nil {
-						return err
-					}
-					return nil
-				})
-			if err != nil {
+	// collect new base run id for run microdata
+	err = TrxSelectRows(trx,
+		"SELECT entity_gen_hid, run_id, base_run_id"+
+			" FROM run_entity"+
+			" ORDER BY 1, 2",
+		func(rows *sql.Rows) error {
+			var r hr
+			var nSql sql.NullInt64
+			var n int
+			if err := rows.Scan(&r.hId, &r.runId, &nSql); err != nil {
 				return err
 			}
+			if nSql.Valid {
+				n = int(nSql.Int64)
+			} else {
+				n = 0 // new base run undefined
+			}
+			if _, ok := hrm[r]; !ok {
+				return nil // skip: entity_gen_hid, run_id not found in the list shared microdata
+			}
+			if n <= 0 {
+				return errors.New("Unable to delete model run microdata:" + " " + strconv.Itoa(r.hId) + " run_id: " + strconv.Itoa(r.runId) + " " + "error: no new base run id exist")
+			}
+			hMap[r.hId] = n // new base run id
+
+			return nil
+		})
+	if err != nil {
+		return err
+	}
+
+	// update microdata values db tables run id with new base run id
+	for _, hId := range hLst {
+
+		n := hMap[hId]
+		if n <= 0 {
+			return errors.New("Unable to delete model run microdata:" + " " + strconv.Itoa(hId) + " " + "error: new base run id not found")
 		}
-
-		// re-base run values in microdata value table and in run_entity list
-		// if not same microdata and base run id as before
-		if hId == 0 || oldId == 0 || hId != rbArr[k].hId || oldId != rbArr[k].oldBase {
-
-			hId = rbArr[k].hId
-			oldId = rbArr[k].oldBase
-
-			// update microdata value run id with new base run id
-			err = TrxUpdate(trx,
-				"UPDATE "+tblName+
-					" SET run_id = "+strconv.Itoa(rbArr[k].newBase)+
-					" WHERE run_id = "+strconv.Itoa(rbArr[k].oldBase))
-			if err != nil {
-				return err
-			}
-
-			// set new base run id in run_entity table
-			err = TrxUpdate(trx,
-				"UPDATE run_entity SET base_run_id = "+strconv.Itoa(rbArr[k].newBase)+
-					" WHERE base_run_id = "+strconv.Itoa(rbArr[k].oldBase)+
-					" AND entity_gen_hid = "+strconv.Itoa(rbArr[k].hId))
-			if err != nil {
-				return err
-			}
+		err = TrxUpdate(trx,
+			"UPDATE "+mHidTbl[hId]+" SET run_id = "+strconv.Itoa(n)+" WHERE run_id = "+sId)
+		if err != nil {
+			return err
 		}
 	}
 
-	// replace value digests for parameter, output tables and microdata to avoid using values as a base run values
-	delDgst := ("del-" + sId + "-" + delTs)
-
-	err = TrxUpdate(trx,
-		"UPDATE run_parameter SET value_digest = "+toQuotedMax(delDgst, codeDbMax)+" WHERE run_id = "+sId)
-	if err != nil {
-		return err
-	}
-	err = TrxUpdate(trx,
-		"UPDATE run_table SET value_digest = "+toQuotedMax(delDgst, codeDbMax)+" WHERE run_id = "+sId)
-	if err != nil {
-		return err
-	}
-	err = TrxUpdate(trx,
-		"UPDATE run_entity SET value_digest = "+toQuotedMax(delDgst, codeDbMax)+" WHERE run_id = "+sId)
-	if err != nil {
-		return err
-	}
-
-	// set run status d=deleted and replace run digest
-	err = TrxUpdate(trx,
-		"UPDATE run_lst SET status = 'd', run_digest = "+toQuotedMax(delDgst, codeDbMax)+
-			" WHERE run_id = "+sId)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// doDeleteRunMeta delete model run metadata from database.
-// Run status must be d=deleted and there are no rows in run_parameter, run_table and run_entity for that run id.
-// It does update as part of transaction
-func doDeleteRunMeta(trx *sql.Tx, runId int) error {
-
-	// check run status, it must d=deleted
-	sId := strconv.Itoa(runId)
-	status := ""
-	err := TrxSelectFirst(trx,
-		"SELECT status FROM run_lst WHERE run_id = "+sId,
-		func(row *sql.Row) error {
-			if err := row.Scan(&status); err != nil {
-				return err
-			}
-			return nil
-		})
-	if err != nil {
-		return err
-	}
-	if status != "d" {
-		return errors.New("invalid run status, it must be 'd': " + status + " run id: " + strconv.Itoa(runId))
-	}
-
-	// validate: should be no rows in run_parameter, run_table, run_entity for that run id
-	var n int = 0
-
-	err = TrxSelectFirst(trx,
-		"SELECT COUNT(*) FROM run_parameter WHERE run_id = "+sId,
-		func(row *sql.Row) error {
-			if err := row.Scan(&n); err != nil {
-				return err
-			}
-			return nil
-		})
-	if err != nil && err != sql.ErrNoRows {
-		return err
-	}
-	if n != 0 {
-		return errors.New("invalid run: it should zero parameters before delete: " + strconv.Itoa(n) + " run id: " + strconv.Itoa(runId))
-	}
-
-	err = TrxSelectFirst(trx,
-		"SELECT COUNT(*) FROM run_table WHERE run_id = "+sId,
-		func(row *sql.Row) error {
-			if err := row.Scan(&n); err != nil {
-				return err
-			}
-			return nil
-		})
-	if err != nil && err != sql.ErrNoRows {
-		return err
-	}
-	if n != 0 {
-		return errors.New("invalid run: it should zero output tables before delete: " + strconv.Itoa(n) + " run id: " + strconv.Itoa(runId))
-	}
-
-	err = TrxSelectFirst(trx,
-		"SELECT COUNT(*) FROM run_entity WHERE run_id = "+sId,
-		func(row *sql.Row) error {
-			if err := row.Scan(&n); err != nil {
-				return err
-			}
-			return nil
-		})
-	if err != nil && err != sql.ErrNoRows {
-		return err
-	}
-	if n != 0 {
-		return errors.New("invalid run: it should zero microdata values before delete: " + strconv.Itoa(n) + " run id: " + strconv.Itoa(runId))
-	}
-
-	// delete run metadata
+	// delete model runs: delete run metadata
 	err = TrxUpdate(trx, "DELETE FROM run_progress WHERE run_id = "+sId)
 	if err != nil {
 		return err
@@ -455,75 +595,6 @@ func doDeleteRunMeta(trx *sql.Tx, runId int) error {
 	}
 
 	err = TrxUpdate(trx, "DELETE FROM run_lst WHERE run_id = "+sId)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// doDeleteRunBody delete model run values from database: do delete parameters, output tables and microdata values.
-// It does update as part of transaction
-func doDeleteRunBody(trx *sql.Tx, runId int) error {
-
-	// build a list of run parameter values db-tables
-	sId := strconv.Itoa(runId)
-
-	var pTbls []string
-	err := TrxSelectRows(trx,
-		"SELECT P.db_run_table"+
-			" FROM run_parameter RP"+
-			" INNER JOIN parameter_dic P ON (P.parameter_hid = RP.parameter_hid)"+
-			" WHERE RP.run_id = "+sId,
-		func(rows *sql.Rows) error {
-			tn := ""
-			if err := rows.Scan(&tn); err != nil {
-				return err
-			}
-			pTbls = append(pTbls, tn)
-			return nil
-		})
-	if err != nil {
-		return err
-	}
-
-	// build a list of run expression and accumulator values db-tables
-	var eTbls []string
-	var aTbls []string
-	err = TrxSelectRows(trx,
-		"SELECT T.db_expr_table, T.db_acc_table"+
-			" FROM run_table RT"+
-			" INNER JOIN table_dic T ON (T.table_hid = RT.table_hid)"+
-			" WHERE RT.run_id = "+sId,
-		func(rows *sql.Rows) error {
-			etn := ""
-			atn := ""
-			if err := rows.Scan(&etn, &atn); err != nil {
-				return err
-			}
-			eTbls = append(eTbls, etn)
-			aTbls = append(aTbls, atn)
-			return nil
-		})
-	if err != nil {
-		return err
-	}
-
-	// build a list of run microdata values db-tables
-	var mTbls []string
-	err = TrxSelectRows(trx,
-		"SELECT EG.db_entity_table"+
-			" FROM entity_gen EG"+
-			" INNER JOIN run_entity RE ON (RE.entity_gen_hid = EG.entity_gen_hid)"+
-			" WHERE RE.run_id = "+sId,
-		func(rows *sql.Rows) error {
-			tn := ""
-			if err := rows.Scan(&tn); err != nil {
-				return err
-			}
-			mTbls = append(mTbls, tn)
-			return nil
-		})
 	if err != nil {
 		return err
 	}
@@ -604,18 +675,11 @@ func doDeleteRunBody(trx *sql.Tx, runId int) error {
 				return err
 			}
 		}
+	}
 
-		// delete microdata run row: there is no microdata values of that entity exist in that model run
-		err = TrxUpdate(trx,
-			"DELETE FROM run_entity"+
-				" WHERE run_id = "+sId+
-				" AND EXISTS"+
-				" ("+
-				" SELECT * FROM entity_gen EG"+
-				" WHERE EG.entity_gen_hid = run_entity.entity_gen_hid"+
-				" AND EG.db_entity_table = "+ToQuoted(mTbls[k])+
-				" )",
-		)
+	// delete rows from run parameter value tables
+	for k := range pTbls {
+		err = TrxUpdate(trx, "DELETE FROM "+pTbls[k]+" WHERE run_id = "+sId)
 		if err != nil {
 			return err
 		}
@@ -633,26 +697,6 @@ func doDeleteRunBody(trx *sql.Tx, runId int) error {
 		if err != nil {
 			return err
 		}
-	}
-	// delete run output tables rows: there is no output values exist in that model run
-	err = TrxUpdate(trx,
-		"DELETE FROM run_table WHERE run_id = "+sId)
-	if err != nil {
-		return err
-	}
-
-	// delete rows from run parameters value tables
-	for k := range pTbls {
-		err = TrxUpdate(trx, "DELETE FROM "+pTbls[k]+" WHERE run_id = "+sId)
-		if err != nil {
-			return err
-		}
-	}
-	// delete run parameters rows: there is no parameters values exist in that model run
-	err = TrxUpdate(trx,
-		"DELETE FROM run_parameter WHERE run_id = "+sId)
-	if err != nil {
-		return err
 	}
 
 	return nil
