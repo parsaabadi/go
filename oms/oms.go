@@ -510,7 +510,8 @@ func mainBody(args []string) error {
 	apiRunModelRoutes(router) // web-service /api routes to run the model
 	apiUserRoutes(router)     // web-service /api routes for user-specific requests
 	apiServiceRoutes(router)  // web-service /api routes for service state
-	apiAdminRoutes(router)    // web-service /api routes for administrative tasks
+	apiAdminRoutes(router)    // web-service /api routes for oms instance administrative tasks
+	adminAllRoutes(router)    // web-service /admin-all routes for global administrative tasks
 
 	// serve static content from home/io/download folder
 	if isDownload {
@@ -537,11 +538,11 @@ func mainBody(args []string) error {
 	srv := http.Server{Addr: addr, Handler: router}
 
 	// add shutdown handler, it does not wait for requests, it does reset connections and exit
-	// PUT /api/admin/shutdown
+	// PUT /shutdown
 	ctx, cancel := context.WithCancel((context.Background()))
 	defer cancel()
 
-	adminShutdownHandler := func(w http.ResponseWriter, r *http.Request) {
+	shutdownHandler := func(w http.ResponseWriter, r *http.Request) {
 
 		// close models catalog
 		omppLog.Log("Shutdown server...")
@@ -555,7 +556,7 @@ func mainBody(args []string) error {
 
 		cancel() // send shutdown completed to the main
 	}
-	router.Put("/api/admin/shutdown", adminShutdownHandler, logRequest)
+	router.Put("/shutdown", shutdownHandler, logRequest)
 
 	// start to listen at specified TCP address
 	ln, err := net.Listen("tcp", addr)
