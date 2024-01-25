@@ -239,7 +239,7 @@ func doDeleteRun(trx *sql.Tx, runId int) error {
 			" AND NR.run_id <> "+sId+
 			" AND NR.value_digest = run_parameter.value_digest"+
 			" )"+
-			" ELSE 0"+ // new base run not found
+			" ELSE NULL"+ // new base run not found
 			" END"+
 			" WHERE run_id <> "+sId+
 			" AND base_run_id = "+sId)
@@ -366,7 +366,7 @@ func doDeleteRun(trx *sql.Tx, runId int) error {
 			" AND NR.run_id <> "+sId+
 			" AND NR.value_digest = run_table.value_digest"+
 			" )"+
-			" ELSE 0"+ // new base run not found
+			" ELSE NULL"+ // new base run not found
 			" END"+
 			" WHERE run_id <> "+sId+
 			" AND base_run_id = "+sId)
@@ -470,7 +470,7 @@ func doDeleteRun(trx *sql.Tx, runId int) error {
 			" WHERE NR.entity_gen_hid = run_entity.entity_gen_hid"+
 			" AND NR.run_id <> "+sId+
 			" AND NR.value_digest = run_entity.value_digest"+
-			" AND RL.status IN ("+okLst+")"+
+			" AND RL.status = "+ToQuoted(DoneRunStatus)+
 			" ) IS NULL"+
 			" THEN"+
 			" ("+
@@ -480,7 +480,7 @@ func doDeleteRun(trx *sql.Tx, runId int) error {
 			" WHERE NR.entity_gen_hid = run_entity.entity_gen_hid "+
 			" AND NR.run_id <> "+sId+
 			" AND NR.value_digest = run_entity.value_digest"+
-			" AND RL.status IN ("+okLst+")"+
+			" AND RL.status = "+ToQuoted(DoneRunStatus)+
 			" )"+
 			" WHEN"+
 			" NOT ("+
@@ -500,7 +500,7 @@ func doDeleteRun(trx *sql.Tx, runId int) error {
 			" AND NR.run_id <> "+sId+
 			" AND NR.value_digest = run_entity.value_digest"+
 			" )"+
-			" ELSE 0"+ // new base run not found
+			" ELSE NULL"+ // new base run not found
 			" END"+
 			" WHERE run_id <> "+sId+
 			" AND base_run_id = "+sId)
