@@ -9,116 +9,113 @@ Web-server allow to serve static html (css, images, javascipt) content from html
 
 Arguments for oms can be specified on command line or through .ini file:
 
-	oms -ini my-oms.ini
-	oms -OpenM.IniFile my-oms.ini
+oms -ini my-oms.ini
+oms -OpenM.IniFile my-oms.ini
 
-Command line arguments take precedence over ini-file options.
-There are some arguments which can be specified through ini-file and not on command line,
-please see oms.ini file in our source code or our wiki for more details.
+	Command line arguments take precedence over ini-file options.
+	There are some arguments which can be specified through ini-file and not on command line,
+	please see oms.ini file in our source code or our wiki for more details.
 
 Following arguments supporetd by oms:
 
-	-l localhost:4040
-	-oms.Listen localhost:4040
+-l localhost:4040
+-oms.Listen localhost:4040
 
-address to listen, default: localhost:4040.
-Use -l :4040 if you need to access oms web-service from other computer (make sure firewall configured properly).
+	address to listen, default: localhost:4040.
+	Use -l :4040 if you need to access oms web-service from other computer (make sure firewall configured properly).
 
-	-oms.UrlSaveTo someModel.ui.url.txt
+-oms.UrlSaveTo someModel.ui.url.txt
 
-file path to save oms URL which can be used to open web UI in browser.
-Default: empty value, URL is not saved in a file by default, example of URL file content: http://localhost:4040
+	file path to save oms URL which can be used to open web UI in browser.
+	Default: empty value, URL is not saved in a file by default, example of URL file content: http://localhost:4040
 
-	-oms.RootDir om/root
+-oms.RootDir om/root
 
-oms root directory, default: current directory.
-Recommended to have log/ subdirectory to store oms web-service log files.
+	oms root directory, default: current directory.
+	Recommended to have log/ subdirectory to store oms web-service log files.
 
-	-oms.ModelDir models/bin
+-oms.ModelDir models/bin
 
-models executable and model.sqlite database files directory, default: models/bin,
-If relative then must be relative to oms root directory.
+	models executable and model.sqlite database files directory, default: models/bin,
+	If relative then must be relative to oms root directory.
 
-	-oms.ModelLogDir models/log
+-oms.ModelLogDir models/log
 
-models log directory, default: models/log, if relative then must be relative to oms root directory.
+	models log directory, default: models/log, if relative then must be relative to oms root directory.
 
-	-oms.HtmlDir html
+-oms.ModelDocDir models
 
-front-end UI directory, default: html.
-If relative then must be relative to oms root directory.
-It is not used if -oms.ApiOnly specified.
+	parent of models documentation directory, default: models, if relative then must be relative to oms root directory
+	it must have /doc/ subdirectory, for example model documentation must be in: C:\home\ompp\models\doc
 
-	-oms.EtcDir etc
+-oms.HtmlDir html
 
-configuration files directory, default: etc.
-If relative then must be relative to oms root directory.
-It is an optional directory, it may contain configuration files,for example, templates to run models on MPI cluster.
+	front-end UI directory, default: html.
+	If relative then must be relative to oms root directory.
+	It is not used if -oms.ApiOnly specified.
 
-	-oms.JobDir job
+-oms.EtcDir etc
 
-jobs control directory.
-If relative then must be relative to oms root directory.
-Jobs control allow to manage computational resources (e.g. CPUs) and organize model run queue.
-Default value is empty "" string and it is disable jobs control.
+	configuration files directory, default: etc.
+	If relative then must be relative to oms root directory.
+	It is an optional directory, it may contain configuration files,for example, templates to run models on MPI cluster.
 
-	-oms.Name someName
+-oms.JobDir job
 
-instance name which used for job control.
+	 jobs control directory.
+	 If relative then must be relative to oms root directory.
+	 Jobs control allow to manage computational resources (e.g. CPUs) and organize model run queue.
+	 Default value is empty "" string and it is disable jobs control.
+
+		-oms.Name someName
+
+	 instance name which used for job control.
 
 -oms.HomeDir models/home
-user personal home directory to store files and settings.
-If relative then must be relative to oms root directory.
-Default value is empty "" string and it is disable use of home directory.
 
-	-oms.AllowDownload false
+	user personal home directory to store files and settings.
+	If relative then must be relative to oms root directory.
+	Default value is empty "" string and it is disable use of home directory.
 
-if true then allow download from user home/io/download directory.
+-oms.AllowDownload false
 
-	-oms.AllowUpload false
+	if true then allow download from user home/io/download directory.
 
-if true then allow upload to user home/io/upload directory.
+-oms.AllowUpload false
 
-	-oms.AllowMicrodata
+	if true then allow upload to user home/io/upload directory.
 
-if true then allow model runs microdata usage else model microdata API disabled.
+-oms.AllowMicrodata
 
-	-oms.ArchiveDays
+	if true then allow model runs microdata usage else model microdata API disabled.
 
-number of days to keep model runs, input sets, downloads and uploads before moving it into achive directory.
+-oms.ApiOnly false
 
-	-oms.ArchiveDir
+	if true then API only web-service, it is false by default and oms also act as http server for openM++ UI.
 
-achive directory, if relative then must be relative to oms root directory.
-Default value is user user home/io/download directory.
+-oms.LogRequest false
 
-	-oms.ApiOnly false
+	if true then log HTTP requests on console and/or log file.
 
-if true then API only web-service, it is false by default and oms also act as http server for openM++ UI.
+-oms.Admin
 
-	-oms.LogRequest false
+	if true then allow global administrative routes: /admin-all/
 
-if true then log HTTP requests on console and/or log file.
+-oms.Languages en
 
-	-oms.Admin
+	comma-separated list of supported languages, default: en.
+	That list is matched with request language list and model language list in order to return proper text results.
 
-if true then allow global administrative routes: /admin-all/
+-oms.DoubleFormat %.15g
 
-	-oms.Languages en
+	format to convert float or double value to string, default: %.15g.
+	OpenM++ is using hash digest to compare models, input parameters and output values.
+	By default float and double values converted into text with "%.15g" format.
 
-comma-separated list of supported languages, default: en.
-That list is matched with request language list and model language list in order to return proper text results.
+-oms.CodePage
 
-	-oms.DoubleFormat %.15g
-
-format to convert float or double value to string, default: %.15g.
-OpenM++ is using hash digest to compare models, input parameters and output values.
-By default float and double values converted into text with "%.15g" format.
-
-	-oms.CodePage
-
-"code page" to convert source file into utf-8, for example: windows-1252.
-It is used only for compatibility with old Windows files.
+	"code page" to convert source file into utf-8, for example: windows-1252.
+	It is used only for compatibility with old Windows files.
 
 Also oms support OpenM++ standard log settings (described in openM++ wiki):
 
@@ -141,7 +138,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -163,6 +159,7 @@ const (
 	rootDirArgKey      = "oms.RootDir"        // oms root directory, expected to contain log subfolder
 	modelDirArgKey     = "oms.ModelDir"       // models executable and model.sqlite directory, if relative then must be relative to oms root directory
 	modelLogDirArgKey  = "oms.ModelLogDir"    // models log directory, if relative then must be relative to oms root directory
+	modelDocDirArgKey  = "oms.ModelDocDir"    // parent of models documentation directory, if relative then must be relative to oms root directory
 	etcDirArgKey       = "oms.EtcDir"         // configuration files directory, if relative then must be relative to oms root directory
 	htmlDirArgKey      = "oms.HtmlDir"        // front-end UI directory, if relative then must be relative to oms root directory
 	jobDirArgKey       = "oms.JobDir"         // job control directory, if relative then must be relative to oms root directory
@@ -176,11 +173,6 @@ const (
 	uiLangsArgKey      = "oms.Languages"      // list of supported languages
 	encodingArgKey     = "oms.CodePage"       // code page for converting source files, e.g. windows-1252
 	doubleFormatArgKey = "oms.DoubleFormat"   // format to convert float or double value to string, e.g. %.15g
-	//
-	archiveDaysArgKey     = "oms.ArchiveDays" // number of days to keep model runs, input sets, downloads and uploads before moving it into achive directory
-	archiveDirArgKey      = "oms.ArchiveDir"  // achive directory, if relative then must be relative to oms root directory
-	archiveRunKeepSection = "ArchiveKeepRun"  // ini file section to specify list of model runs protected from archiving
-	archiveSetKeepSection = "ArchiveKeepSet"  // ini file section to specify list of worksets protected from archiving
 )
 
 // server run configuration
@@ -194,6 +186,8 @@ var theCfg = struct {
 	uploadDir    string            // if upload allowed then it is home/io/upload directory
 	inOutDir     string            // if download or upload allowed then it is home/io directory
 	isMicrodata  bool              // if true then allow model run microdata
+	isModelDoc   bool              // if true then model documentation enabled and models/doc is exist
+	docParentDir string            // parent of models documentation directory, default: models
 	isAdminAll   bool              // if true then admin-all routes are enabled
 	isJobControl bool              // if true then do job control: model run queue and resource allocation
 	isJobPast    bool              // if true then do job history shadow copy
@@ -203,32 +197,19 @@ var theCfg = struct {
 	doubleFmt    string            // format to convert float or double value to string
 	codePage     string            // "code page" to convert source file into utf-8, for example: windows-1252
 	env          map[string]string // server config environmemt variables to control UI
-	//
-	isArchive        bool                // if true then archiving is eanbled: after "archive days" period old data moved out from database to archive directory
-	archiveDays      int                 // if > 0 then number of days to keep model runs, input sets, downloads and uploads before achiving
-	archiveAlertDays int                 // if > 0 then number of days to issue archive alert
-	archiveDir       string              // achive directory, default: home/io/download directory
-	archiveRunKeep   map[string][]string // runs to exclude from archiving: map model digest to runs name, stamp or digest
-	archiveSetKeep   map[string][]string // worksets to exclude from archiving: map model digest to worksets name
-	archiveStatePath string              // path to archive state json file
 }{
-	htmlDir:          "html",
-	etcDir:           "etc",
-	isHome:           false,
-	homeDir:          "",
-	downloadDir:      "",
-	uploadDir:        "",
-	isJobControl:     false,
-	jobDir:           "",
-	omsName:          "",
-	doubleFmt:        "%.15g",
-	env:              map[string]string{},
-	isArchive:        false,
-	archiveDays:      0,
-	archiveAlertDays: 0,
-	archiveDir:       "",
-	archiveRunKeep:   map[string][]string{},
-	archiveSetKeep:   map[string][]string{},
+	htmlDir:      "html",
+	etcDir:       "etc",
+	isHome:       false,
+	homeDir:      "",
+	downloadDir:  "",
+	uploadDir:    "",
+	isModelDoc:   false,
+	isJobControl: false,
+	jobDir:       "",
+	omsName:      "",
+	doubleFmt:    "%.15g",
+	env:          map[string]string{},
 }
 
 // if true then log http requests
@@ -259,6 +240,7 @@ func mainBody(args []string) error {
 	_ = flag.String(rootDirArgKey, "", "root directory, default: current directory")
 	_ = flag.String(modelDirArgKey, "models/bin", "models directory, if relative then must be relative to root directory")
 	_ = flag.String(modelLogDirArgKey, "models/log", "models log directory, if relative then must be relative to root directory")
+	_ = flag.String(modelDocDirArgKey, "models", "parent of models documentation directory, if relative then must be relative to root directory")
 	_ = flag.String(etcDirArgKey, theCfg.etcDir, "configuration files directory, if relative then must be relative to oms root directory")
 	_ = flag.String(htmlDirArgKey, theCfg.htmlDir, "front-end UI directory, if relative then must be relative to root directory")
 	_ = flag.String(homeDirArgKey, "", "user personal home directory, if relative then must be relative to root directory")
@@ -267,8 +249,6 @@ func mainBody(args []string) error {
 	_ = flag.Bool(isMicrodataArgKey, false, "if true then allow model run microdata")
 	_ = flag.String(jobDirArgKey, "", "job control directory, if relative then must be relative to root directory")
 	_ = flag.String(omsNameArgKey, "", "instance name, automatically generated if empty")
-	_ = flag.Int(archiveDaysArgKey, theCfg.archiveDays, "number of days before achiving model runs, input sets, downloads and uploads")
-	_ = flag.String(archiveDirArgKey, theCfg.archiveDir, "achive directory, default is user home/io/download directory")
 	_ = flag.Bool(logRequestArgKey, false, "if true then log HTTP requests")
 	_ = flag.Bool(apiOnlyArgKey, false, "if true then API only web-service, no web UI")
 	_ = flag.Bool(adminAllArgKey, false, "if true then allow global administrative routes: /admin-all/")
@@ -337,7 +317,7 @@ func mainBody(args []string) error {
 	omppLog.New(logOpts) // adjust log options, log path can be relative to root directory
 
 	if theCfg.rootDir != "" && theCfg.rootDir != "." {
-		omppLog.Log("Change directory to: ", theCfg.rootDir)
+		omppLog.Log("Change directory to:  ", theCfg.rootDir)
 	}
 
 	// model directory required to build initial list of model sqlite files
@@ -346,10 +326,22 @@ func mainBody(args []string) error {
 	if modelDir == "" || modelDir == "." {
 		return errors.New("Error: model directory argument cannot be empty or . dot")
 	}
-	omppLog.Log("Models directory:    ", modelDir)
+	omppLog.Log("Models directory:     ", modelDir)
 
 	if err := theCatalog.refreshSqlite(modelDir, modelLogDir); err != nil {
 		return err
+	}
+
+	// check if model documentation directory exists
+	theCfg.isModelDoc = false
+
+	if theCfg.docParentDir = runOpts.String(modelDocDirArgKey); theCfg.docParentDir != "" {
+
+		d := filepath.Join(theCfg.docParentDir, "doc") // in UI it always start with /doc
+
+		if theCfg.isModelDoc = dirExist(d); theCfg.isModelDoc {
+			omppLog.Log("Models documentation: ", d)
+		}
 	}
 
 	// check if it is single user run mode and use of home directory enabled
@@ -360,7 +352,7 @@ func mainBody(args []string) error {
 		}
 		theCfg.isHome = theCfg.homeDir != ""
 		if theCfg.isHome {
-			omppLog.Log("User directory:      ", theCfg.homeDir)
+			omppLog.Log("User directory:       ", theCfg.homeDir)
 		}
 	}
 
@@ -397,7 +389,7 @@ func mainBody(args []string) error {
 			theCfg.downloadDir = ""
 			omppLog.Log("Warning: user home download directory not found or dbcopy not found, download disabled")
 		} else {
-			omppLog.Log("Download directory:  ", theCfg.downloadDir)
+			omppLog.Log("Download directory:   ", theCfg.downloadDir)
 		}
 	}
 	if runOpts.Bool(isUploadArgKey) {
@@ -414,15 +406,8 @@ func mainBody(args []string) error {
 			theCfg.uploadDir = ""
 			omppLog.Log("Warning: user home upload directory not found or dbcopy not found, upload disabled")
 		} else {
-			omppLog.Log("Upload directory:    ", theCfg.uploadDir)
+			omppLog.Log("Upload directory:     ", theCfg.uploadDir)
 		}
-	}
-
-	// set archive options
-	configureArchive(isDbCopy, runOpts)
-
-	if theCfg.isArchive {
-		omppLog.Log("Archive directory:   ", theCfg.archiveDir)
 	}
 
 	// if UI required then server root directory must have html subdir
@@ -432,7 +417,7 @@ func mainBody(args []string) error {
 			isApiOnly = true
 			omppLog.Log("Warning: serving API only because UI directory not found: ", theCfg.htmlDir)
 		} else {
-			omppLog.Log("HTML UI directory:   ", theCfg.htmlDir)
+			omppLog.Log("HTML UI directory:    ", theCfg.htmlDir)
 		}
 	}
 
@@ -443,7 +428,7 @@ func mainBody(args []string) error {
 	}
 	theCfg.isJobControl = theCfg.jobDir != ""
 	if theCfg.isJobControl {
-		omppLog.Log("Jobs directory:      ", theCfg.jobDir)
+		omppLog.Log("Jobs directory:       ", theCfg.jobDir)
 	}
 
 	// etc subdirectory required to run MPI models
@@ -451,7 +436,7 @@ func mainBody(args []string) error {
 	if !dirExist(theCfg.etcDir) {
 		omppLog.Log("Warning: configuration files directory not found, it is required to run models on MPI cluster: ", filepath.Join(theCfg.etcDir))
 	} else {
-		omppLog.Log("Etc directory:       ", theCfg.etcDir)
+		omppLog.Log("Etc directory:        ", theCfg.etcDir)
 	}
 
 	// make instance name, use address to listen if name not specified
@@ -460,7 +445,7 @@ func mainBody(args []string) error {
 		theCfg.omsName = runOpts.String(listenArgKey)
 	}
 	theCfg.omsName = helper.CleanPath(theCfg.omsName)
-	omppLog.Log("Oms instance name:   ", theCfg.omsName)
+	omppLog.Log("Oms instance name:    ", theCfg.omsName)
 
 	// refresh run state catalog and start scanning model log files
 	jsc, _ := jobStateRead()
@@ -481,9 +466,6 @@ func mainBody(args []string) error {
 	doneRunJobScanC := make(chan bool)
 	go scanRunJobs(doneRunJobScanC)
 
-	doneArchiveScanC := make(chan bool)
-	go scanArchive(doneArchiveScanC)
-
 	// setup router and start server
 	router := vestigo.NewRouter()
 
@@ -503,9 +485,6 @@ func mainBody(args []string) error {
 	if isUpload {
 		apiUploadRoutes(router) // web-service /api routes to upload and manage files at home/io/upload folder
 	}
-	if theCfg.isArchive {
-		apiArchiveRoutes(router) // web-service /api routes to download and manage archive files
-	}
 	apiUpdateRoutes(router)   // web-service /api routes to update metadata
 	apiRunModelRoutes(router) // web-service /api routes to run the model
 	apiUserRoutes(router)     // web-service /api routes for user-specific requests
@@ -521,9 +500,9 @@ func mainBody(args []string) error {
 	if isUpload {
 		router.Get("/upload/*", downloadHandler, logRequest)
 	}
-	// serve static content from archive folder
-	if theCfg.isArchive {
-		router.Get("/archive/*", downloadHandler, logRequest)
+	// serve static content from models/doc folder
+	if theCfg.isModelDoc {
+		router.Get("/doc/*", modelDocHandler, logRequest)
 	}
 
 	// set web root handler: UI web pages or "not found" if this is web-service mode
@@ -604,7 +583,6 @@ func mainBody(args []string) error {
 		}
 	}
 
-	doneArchiveScanC <- true
 	doneRunJobScanC <- true
 	doneStateJobScanC <- true
 	doneOuterJobScanC <- true
@@ -627,114 +605,4 @@ func exitOnPanic() {
 		omppLog.Log("FAILED")
 	}
 	os.Exit(2) // final exit
-}
-
-// configure archive options
-func configureArchive(isDbCopy bool, runOpts *config.RunOptions) {
-
-	// if there is archiving days set then start thread to move models runs and worksets to archive and auto clean downlods, uploads and archive
-	theCfg.archiveDays = runOpts.Int(archiveDaysArgKey, 0)
-	if theCfg.archiveDays < 0 {
-		theCfg.archiveDays = 0
-	}
-
-	if theCfg.archiveDays > 0 && !isDbCopy {
-		omppLog.Log("Warning: dbcopy not found, archiving disabled")
-		theCfg.archiveDays = 0
-	}
-
-	if theCfg.archiveDays > 0 {
-
-		theCfg.archiveDir = runOpts.String(archiveDirArgKey)
-
-		if theCfg.archiveDir == "" && theCfg.downloadDir != "" {
-			theCfg.archiveDir = theCfg.downloadDir
-		}
-		if theCfg.archiveDir != "" && !dirExist(theCfg.archiveDir) {
-			theCfg.archiveDir = ""
-		}
-		if theCfg.archiveDir == "" {
-			omppLog.Log("Warning: archive directory not found, archiving disabled")
-		}
-	}
-
-	// check if archive ise eanbled
-	theCfg.isArchive = theCfg.archiveDays > 0 && theCfg.archiveDir != ""
-
-	if !theCfg.isArchive {
-		return
-	}
-	// archive is enabled
-
-	theCfg.archiveStatePath = filepath.Join(theCfg.archiveDir, archiveStateFile)
-
-	// set user alert number of days
-	switch {
-	case theCfg.archiveDays > 30:
-		theCfg.archiveAlertDays = theCfg.archiveDays - 10
-	case theCfg.archiveDays > 10:
-		theCfg.archiveAlertDays = theCfg.archiveDays - 5
-	default:
-		theCfg.archiveAlertDays = theCfg.archiveDays - 1
-	}
-
-	// read a list of model runs and worksest excluded from archiving
-	mbs := theCatalog.allModels()
-
-	for nM := range mbs {
-
-		// if there is an option: ArchiveKeepRun.ModelName = Run 1, run-2
-		// then parse csv list of runs: name, stamp or digest and store it as sorted unique list
-		if s := runOpts.String(archiveRunKeepSection + "." + mbs[nM].model.Name); s != "" {
-
-			lst := helper.ParseCsvLine(s, 0)
-
-			if len(lst) >= 0 { // make unique list of runs for the model
-
-				sort.Strings(lst)
-				j := 1
-				for k := range lst {
-					if lst[k] == archiveRunKeepAll { // if it is keep all special name then ignore any other values
-						lst[0] = archiveRunKeepAll
-						j = 1
-						break
-					}
-					if k > 0 && lst[k] != lst[k-1] {
-						lst[j] = lst[k]
-						j++
-					}
-				}
-				lst = lst[:j]
-
-				theCfg.archiveRunKeep[mbs[nM].model.Digest] = lst
-			}
-		}
-
-		// if there is an option: ArchiveKeepSet.ModelName = Scenario-1, scenario 2
-		// then parse csv list of workset names and store it as sorted unique list
-		if s := runOpts.String(archiveSetKeepSection + "." + mbs[nM].model.Name); s != "" {
-
-			lst := helper.ParseCsvLine(s, 0)
-
-			if len(lst) >= 0 { // make unique list of worksets for the model
-
-				sort.Strings(lst)
-				j := 1
-				for k := range lst {
-					if lst[k] == archiveSetKeepAll { // if it is keep all special name then ignore any other values
-						lst[0] = archiveSetKeepAll
-						j = 1
-						break
-					}
-					if k > 0 && lst[k] != lst[k-1] {
-						lst[j] = lst[k]
-						j++
-					}
-				}
-				lst = lst[:j]
-
-				theCfg.archiveSetKeep[mbs[nM].model.Digest] = lst
-			}
-		}
-	}
 }

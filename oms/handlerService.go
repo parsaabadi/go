@@ -26,7 +26,8 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 		AllowUpload    bool               // if true then allow upload from home/io/upload directory
 		AllowMicrodata bool               // if true then allow model run microdata
 		IsJobControl   bool               // if true then job control enabled
-		IsArchive      bool               // if true the archiving is enabled: old data moved out from into archive directory
+		IsModelDoc     bool               // if true then model documentation is enabled
+		IsDiskUse      bool               // if true then disk space usage control enabled
 		Env            map[string]string  // server config environmemt variables for UI
 		ModelCatalog   ModelCatalogConfig // "public" state of model catalog
 		RunCatalog     RunCatalogConfig   // "public" state of model run catalog
@@ -38,28 +39,13 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 		AllowUpload:    theCfg.uploadDir != "",
 		AllowMicrodata: theCfg.isMicrodata,
 		IsJobControl:   theCfg.isJobControl,
-		IsArchive:      theCfg.isArchive,
+		IsModelDoc:     theCfg.isModelDoc,
+		IsDiskUse:      false,
 		Env:            theCfg.env,
 		ModelCatalog:   theCatalog.toPublicConfig(),
 		RunCatalog:     *theRunCatalog.toPublicConfig(),
 	}
 	jsonResponse(w, r, st)
-}
-
-// archiveStateHandler return current state of archive job by reading it from archive-state.json file.
-// GET /api/archive/state
-func archiveStateHandler(w http.ResponseWriter, r *http.Request) {
-
-	// read archive state file and send file content as json response body
-	bt, err := theArchive.readArchiveState()
-
-	if err != nil {
-		omppLog.Log("Error: unable to read from ", theCfg.archiveStatePath, " ", err)
-		http.Error(w, "Error: unable to read from "+archiveStateFile, http.StatusInternalServerError)
-		return // archive state file read error
-	}
-
-	jsonResponseBytes(w, r, bt)
 }
 
 // serviceStateHandler return service and model runs state: queue, active runs and run history

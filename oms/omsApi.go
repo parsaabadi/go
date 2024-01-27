@@ -26,6 +26,23 @@ func downloadHandler(w http.ResponseWriter, r *http.Request) {
 	setContentType(http.FileServer(http.Dir(theCfg.inOutDir))).ServeHTTP(w, r)
 }
 
+// modelDocHandler is static pages handler for model documentation served /doc URLs.
+// Files served from models/doc directory URLs are:
+//
+//	https://domain.name/doc/any-dir/ModelName.doc.EN.html
+//	https://domain.name/doc/any-dir/ModelName.doc.FR.html
+//
+// Model documentation file path must be specified through ModelName.extra.json file.
+// It must be relative to models, for example:
+//
+//	ModelName.extra.json: any-dir/ModelName.doc.FR.html
+//	result in URL:        https://domain.name/doc/any-dir/ModelName.doc.FR.html
+//
+// Only GET requests expected.
+func modelDocHandler(w http.ResponseWriter, r *http.Request) {
+	setContentType(http.FileServer(http.Dir(theCfg.docParentDir))).ServeHTTP(w, r)
+}
+
 // add http GET web-service /api routes to get metadata
 func apiGetRoutes(router *vestigo.Router) {
 
@@ -675,10 +692,6 @@ func apiUploadRoutes(router *vestigo.Router) {
 	router.Delete("/api/upload/start/delete/", http.NotFound)
 }
 
-// add http web-service /api routes to download and manage archive files
-func apiArchiveRoutes(router *vestigo.Router) {
-}
-
 // add http web-service /api routes to upload, download and manage files at home/io/files folder
 func apiFilesRoutes(router *vestigo.Router) {
 
@@ -744,9 +757,6 @@ func apiServiceRoutes(router *vestigo.Router) {
 	// DELETE /api/service/job/delete/history/:job
 	router.Delete("/api/service/job/delete/history/:job", jobHistoryDeleteHandler, logRequest)
 	router.Delete("/api/service/job/delete/history/", http.NotFound)
-
-	// GET /api/archive/state
-	router.Get("/api/archive/state", archiveStateHandler, logRequest)
 }
 
 // add web-service /api routes for oms instance administrative tasks
