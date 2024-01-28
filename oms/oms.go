@@ -43,10 +43,10 @@ Following arguments supporetd by oms:
 
 	models log directory, default: models/log, if relative then must be relative to oms root directory.
 
--oms.ModelDocDir models
+-oms.ModelDocDir models/doc
 
-	parent of models documentation directory, default: models, if relative then must be relative to oms root directory
-	it must have /doc/ subdirectory, for example model documentation must be in: C:\home\ompp\models\doc
+	models documentation directory, default: models/doc, if relative then must be relative to oms root directory
+	UI expect it ends /doc subdirectory, for example: C:\any\dir\doc
 
 -oms.HtmlDir html
 
@@ -67,7 +67,7 @@ Following arguments supporetd by oms:
 	 Jobs control allow to manage computational resources (e.g. CPUs) and organize model run queue.
 	 Default value is empty "" string and it is disable jobs control.
 
-		-oms.Name someName
+-oms.Name someName
 
 	 instance name which used for job control.
 
@@ -159,7 +159,7 @@ const (
 	rootDirArgKey      = "oms.RootDir"        // oms root directory, expected to contain log subfolder
 	modelDirArgKey     = "oms.ModelDir"       // models executable and model.sqlite directory, if relative then must be relative to oms root directory
 	modelLogDirArgKey  = "oms.ModelLogDir"    // models log directory, if relative then must be relative to oms root directory
-	modelDocDirArgKey  = "oms.ModelDocDir"    // parent of models documentation directory, if relative then must be relative to oms root directory
+	modelDocDirArgKey  = "oms.ModelDocDir"    // models documentation directory, if relative then must be relative to oms root directory
 	etcDirArgKey       = "oms.EtcDir"         // configuration files directory, if relative then must be relative to oms root directory
 	htmlDirArgKey      = "oms.HtmlDir"        // front-end UI directory, if relative then must be relative to oms root directory
 	jobDirArgKey       = "oms.JobDir"         // job control directory, if relative then must be relative to oms root directory
@@ -240,7 +240,7 @@ func mainBody(args []string) error {
 	_ = flag.String(rootDirArgKey, "", "root directory, default: current directory")
 	_ = flag.String(modelDirArgKey, "models/bin", "models directory, if relative then must be relative to root directory")
 	_ = flag.String(modelLogDirArgKey, "models/log", "models log directory, if relative then must be relative to root directory")
-	_ = flag.String(modelDocDirArgKey, "models", "parent of models documentation directory, if relative then must be relative to root directory")
+	_ = flag.String(modelDocDirArgKey, "models/doc", "models documentation directory, if relative then must be relative to root directory")
 	_ = flag.String(etcDirArgKey, theCfg.etcDir, "configuration files directory, if relative then must be relative to oms root directory")
 	_ = flag.String(htmlDirArgKey, theCfg.htmlDir, "front-end UI directory, if relative then must be relative to root directory")
 	_ = flag.String(homeDirArgKey, "", "user personal home directory, if relative then must be relative to root directory")
@@ -333,14 +333,18 @@ func mainBody(args []string) error {
 	}
 
 	// check if model documentation directory exists
-	theCfg.isModelDoc = false
+	docDir := filepath.Clean(runOpts.String(modelDocDirArgKey))
+	docDir = strings.TrimSuffix(docDir, string(filepath.Separator))
 
-	if theCfg.docParentDir = runOpts.String(modelDocDirArgKey); theCfg.docParentDir != "" {
+	theCfg.docParentDir = filepath.Dir(docDir)
+	theCfg.isModelDoc = dirExist(docDir) && dirExist(theCfg.docParentDir)
 
-		d := filepath.Join(theCfg.docParentDir, "doc") // in UI it always start with /doc
+	if theCfg.isModelDoc {
 
-		if theCfg.isModelDoc = dirExist(d); theCfg.isModelDoc {
-			omppLog.Log("Models documentation: ", d)
+		omppLog.Log("Models documentation: ", docDir)
+
+		if filepath.Base(docDir) != "doc" {
+			omppLog.Log("Warning: UI expect model documentation directory ends with 'doc', for example: /any/dir/doc")
 		}
 	}
 
