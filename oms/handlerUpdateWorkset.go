@@ -396,6 +396,7 @@ func worksetListDeleteHandler(w http.ResponseWriter, r *http.Request) {
 			n++
 		}
 	}
+	omppLog.Log("Deleted multiple worksets: ", n, ": ", dn)
 
 	w.Header().Set("Content-Location", "/api/model/"+dn+"/delete-worksets/"+strconv.Itoa(n))
 	w.Header().Set("Content-Type", "text/plain")
