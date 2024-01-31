@@ -397,7 +397,7 @@ func worksetListDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Location", "/api/model/"+dn+"//delete-worksets/"+strconv.Itoa(n))
+	w.Header().Set("Content-Location", "/api/model/"+dn+"/delete-worksets/"+strconv.Itoa(n))
 	w.Header().Set("Content-Type", "text/plain")
 }
 

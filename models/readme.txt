@@ -7,6 +7,9 @@ models/
        log/
             : default location of model run log files
 	      To change it use: -oms.ModelLogDir
+       doc/
+            : default location of model documentation
+	      To change it use: -oms.ModelDocDir
 
       home/io/
               : default location of user data, model downloads and model uploads.
