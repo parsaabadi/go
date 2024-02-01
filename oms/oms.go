@@ -62,14 +62,14 @@ Following arguments supporetd by oms:
 
 -oms.JobDir job
 
-	 jobs control directory.
-	 If relative then must be relative to oms root directory.
-	 Jobs control allow to manage computational resources (e.g. CPUs) and organize model run queue.
-	 Default value is empty "" string and it is disable jobs control.
+	jobs control directory.
+	If relative then must be relative to oms root directory.
+	Jobs control allow to manage computational resources (e.g. CPUs) and organize model run queue.
+	Default value is empty "" string and it is disable jobs control.
 
 -oms.Name someName
 
-	 instance name which used for job control.
+	instance name which used for job control.
 
 -oms.HomeDir models/home
 
