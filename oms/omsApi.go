@@ -648,8 +648,16 @@ func apiDownloadRoutes(router *vestigo.Router) {
 	router.Delete("/api/download/delete/", http.NotFound)
 
 	// DELETE /api/download/start/delete/:folder
-	router.Delete("/api/download/start/delete/:folder", downloadAsyncDeleteHandler, logRequest)
+	router.Delete("/api/download/start/delete/:folder", downloadDeleteAsyncHandler, logRequest)
 	router.Delete("/api/download/start/delete/", http.NotFound)
+
+	// DELETE /api/download/delete-all
+	router.Delete("/api/download/delete-all", downloadAllDeleteHandler, logRequest)
+	router.Delete("/api/download/delete-all/", http.NotFound)
+
+	// DELETE /api/download/start/delete-all
+	router.Delete("/api/download/start/delete-all", downloadAllDeleteAsyncHandler, logRequest)
+	router.Delete("/api/download/start/delete-all/", http.NotFound)
 }
 
 // add http web-service /api routes to upload and manage files at home/io/upload folder
@@ -688,8 +696,16 @@ func apiUploadRoutes(router *vestigo.Router) {
 	router.Delete("/api/upload/delete/", http.NotFound)
 
 	// DELETE /api/upload/start/delete/:folder
-	router.Delete("/api/upload/start/delete/:folder", uploadAsyncDeleteHandler, logRequest)
+	router.Delete("/api/upload/start/delete/:folder", uploadDeleteAsyncHandler, logRequest)
 	router.Delete("/api/upload/start/delete/", http.NotFound)
+
+	// DELETE /api/upload/delete-all
+	router.Delete("/api/upload/delete-all", uploadAllDeleteHandler, logRequest)
+	router.Delete("/api/upload/delete-all/", http.NotFound)
+
+	// DELETE /api/upload/start/delete-all
+	router.Delete("/api/upload/start/delete-all", uploadAllDeleteAsyncHandler, logRequest)
+	router.Delete("/api/upload/start/delete-all/", http.NotFound)
 }
 
 // add http web-service /api routes to upload, download and manage files at home/io/files folder

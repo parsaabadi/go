@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -203,10 +205,10 @@ func downloadDeleteHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-// downloadAsyncDeleteHandler starts deleting of download files by folder name.
+// starts deleting of download files by folder name.
 // DELETE /api/download/start/delete/:folder
 // Delete started on separate thread and does delete of folder, .zip file and .download.log files
-func downloadAsyncDeleteHandler(w http.ResponseWriter, r *http.Request) {
+func downloadDeleteAsyncHandler(w http.ResponseWriter, r *http.Request) {
 	upDownDelete("download", theCfg.downloadDir, true, w, r)
 }
 
@@ -218,11 +220,121 @@ func uploadDeleteHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-// uploadAsyncDeleteHandler starts deleting of upload files by folder name.
+// starts deleting of upload files by folder name.
 // DELETE /api/upload/start/delete/:folder
 // Delete started on separate thread and does delete of folder, .zip file and .upload.log files
-func uploadAsyncDeleteHandler(w http.ResponseWriter, r *http.Request) {
+func uploadDeleteAsyncHandler(w http.ResponseWriter, r *http.Request) {
 	upDownDelete("upload", theCfg.uploadDir, true, w, r)
+}
+
+// delete all download files for all models.
+// DELETE /api/download/delete-all
+// Delete all models deletes folder, .zip file and .download.log files
+func downloadAllDeleteHandler(w http.ResponseWriter, r *http.Request) {
+	upDownAllDelete("download", theCfg.downloadDir, false, w, r)
+}
+
+// start deleting all download files for all models.
+// DELETE /api/download/start/delete-all
+// Delete started on separate thread and fo all models deletes folder, .zip file and .download.log files
+func downloadAllDeleteAsyncHandler(w http.ResponseWriter, r *http.Request) {
+	upDownAllDelete("download", theCfg.downloadDir, true, w, r)
+}
+
+// delete all upload files for all models.
+// DELETE /api/upload/delete-all
+// Delete all models folder, .zip file and .upload.log files
+func uploadAllDeleteHandler(w http.ResponseWriter, r *http.Request) {
+	upDownAllDelete("upload", theCfg.uploadDir, false, w, r)
+}
+
+// start deleting all upload files for all models.
+// DELETE /api/upload/start/delete-all
+// Delete started on separate thread and for all models deletes folder, .zip file and .upload.log files
+func uploadAllDeleteAsyncHandler(w http.ResponseWriter, r *http.Request) {
+	upDownAllDelete("upload", theCfg.uploadDir, true, w, r)
+}
+
+// Delete all files and folders, on separate thread or blocking current thread
+func upDownAllDelete(upDown string, upDownDir string, isAsync bool, w http.ResponseWriter, r *http.Request) {
+
+	if !dirExist(upDownDir) {
+		http.Error(w, "Folder not found: "+upDownDir, http.StatusBadRequest)
+		return
+	}
+
+	// list of files and folders
+	pLst, err := filepath.Glob(filepath.Join(upDownDir, "*"))
+	if err != nil {
+		omppLog.Log("Error at get file list of: ", upDownDir, " : ", err.Error())
+		http.Error(w, "Error at folder scan: "+upDown, http.StatusBadRequest)
+		return
+	}
+
+	// delete all files and folders, write progress to log
+	doDeleteAll := func(upDown string, upDownDir string, nameLst []string) {
+
+		slices.Sort(nameLst) // sort names: folders are shroter, files after folders
+
+		// create new up-or-down.progress.log file and write delete header
+		const logDelAll = "delete-all_"
+		logName := logDelAll + helper.MakeTimeStamp(time.Now()) + ".progress." + upDown + ".log"
+		logPath := filepath.Join(upDownDir, logName)
+
+		logPath, isLog := createUpDownLog(logPath)
+		if !isLog {
+			omppLog.Log("Failed to create log file: " + logName)
+			return
+		}
+		if !appendToUpDownLog(logPath, true, "Start deleting all from: "+upDown+" [ "+strconv.Itoa(len(nameLst))+" ]") {
+			renameToUpDownErrorLog(upDown, logPath, "", nil)
+			omppLog.Log("Failed to write into log file: " + logName)
+			return
+		}
+
+		for _, p := range nameLst {
+
+			fi, e := os.Stat(p)
+			if e != nil {
+				continue // ignore directory entry where file removed after readdir()
+			}
+			name := fi.Name()
+
+			if strings.HasPrefix(name, logDelAll) {
+				continue // skip delete-all log files
+			}
+
+			// remove files and directories
+			if !fi.IsDir() {
+				if !removeUpDownFile(upDown, p, logPath, name) {
+					return
+				}
+			} else {
+				if !removeUpDownDir(upDown, p, logPath, name) {
+					return
+				}
+			}
+		}
+
+		// last step: remove delete progress log file
+		if e := os.Remove(logPath); e != nil && !os.IsNotExist(e) {
+			omppLog.Log(e)
+		}
+	}
+
+	// do delete all files
+	nFound := len(pLst)
+
+	if nFound > 0 {
+		if isAsync {
+			go doDeleteAll(upDown, upDownDir, pLst)
+		} else {
+			doDeleteAll(upDown, upDownDir, pLst)
+		}
+	}
+
+	// report to the client results location
+	w.Header().Set("Content-Location", "/api/"+upDown+"/delete-all/"+strconv.Itoa(nFound))
 }
 
 // upDownDelete delete download or upload files by folder name.
