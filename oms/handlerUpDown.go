@@ -170,19 +170,15 @@ func fileTreeUpDownGet(upDownDir string, w http.ResponseWriter, r *http.Request)
 
 	// get list of files under up-or-down/folder
 	treeLst := []PathItem{}
-	err := filepath.WalkDir(folderPath, func(path string, de fs.DirEntry, err error) error {
+	err := filepath.Walk(folderPath, func(path string, fi fs.FileInfo, err error) error {
 		if err != nil {
 			omppLog.Log("Error at directory walk: ", path, " : ", err.Error())
 			return err
 		}
-		fi, e := de.Info()
-		if e != nil {
-			return nil // ignore directory entry where file removed after readdir()
-		}
 		p := strings.TrimPrefix(filepath.ToSlash(path), dp)
 		treeLst = append(treeLst, PathItem{
 			Path:    filepath.ToSlash(p),
-			IsDir:   de.IsDir(),
+			IsDir:   fi.IsDir(),
 			Size:    fi.Size(),
 			ModTime: fi.ModTime().UnixNano() / int64(time.Millisecond),
 		})
@@ -286,11 +282,10 @@ func upDownAllDelete(upDown string, upDownDir string, isAsync bool, w http.Respo
 			omppLog.Log("Failed to create log file: " + logName)
 			return
 		}
-		if !appendToUpDownLog(logPath, true, "Start deleting all from: "+upDown+" [ "+strconv.Itoa(len(nameLst))+" ]") {
-			renameToUpDownErrorLog(upDown, logPath, "", nil)
-			omppLog.Log("Failed to write into log file: " + logName)
-			return
+		if isLog {
+			isLog = appendToUpDownLog(logPath, true, "Start deleting all from: "+upDown+" [ "+strconv.Itoa(len(nameLst))+" ]")
 		}
+		nErr := 0
 
 		for _, p := range nameLst {
 
@@ -305,20 +300,34 @@ func upDownAllDelete(upDown string, upDownDir string, isAsync bool, w http.Respo
 			}
 
 			// remove files and directories
+			if isLog {
+				isLog = appendToUpDownLog(logPath, true, "delete: "+name)
+			}
 			if !fi.IsDir() {
-				if !removeUpDownFile(upDown, p, logPath, name) {
-					return
+				if e := os.Remove(p); e != nil && !os.IsNotExist(e) {
+					if isLog {
+						isLog = appendToUpDownLog(logPath, true, "Error at delete "+name, e.Error())
+					}
+					nErr++
 				}
 			} else {
-				if !removeUpDownDir(upDown, p, logPath, name) {
-					return
+				if e := os.RemoveAll(p); e != nil && !os.IsNotExist(e) {
+					if isLog {
+						isLog = appendToUpDownLog(logPath, true, "Error at delete "+name, e.Error())
+					}
+					nErr++
 				}
 			}
 		}
 
-		// last step: remove delete progress log file
-		if e := os.Remove(logPath); e != nil && !os.IsNotExist(e) {
-			omppLog.Log(e)
+		// last step: remove delete progress log file or rename it on errors
+		if nErr == 0 {
+			if e := os.Remove(logPath); e != nil && !os.IsNotExist(e) {
+				omppLog.Log(e)
+			}
+		} else {
+			omppLog.Log("Failed to delete from ", upDown, ". Errors: ", nErr)
+			renameToUpDownErrorLog(upDown, logPath, "Errors: "+strconv.Itoa(nErr), nil)
 		}
 	}
 

@@ -191,6 +191,7 @@ var theCfg = struct {
 	isAdminAll   bool              // if true then admin-all routes are enabled
 	isJobControl bool              // if true then do job control: model run queue and resource allocation
 	isJobPast    bool              // if true then do job history shadow copy
+	isDiskUse    bool              // if true then storage usage control enabled
 	jobDir       string            // job control directory
 	omsName      string            // oms instance name, if empty then derived from address to listen
 	dbcopyPath   string            // if download or upload allowed then it is path to dbcopy.exe
@@ -427,7 +428,8 @@ func mainBody(args []string) error {
 
 	// check if job control is required:
 	theCfg.jobDir = runOpts.String(jobDirArgKey)
-	if theCfg.isJobPast, err = jobDirValid(theCfg.jobDir); err != nil {
+	theCfg.isJobPast, theCfg.isDiskUse, err = jobDirValid(theCfg.jobDir)
+	if err != nil {
 		return errors.New("Error: invalid job control directory: " + err.Error())
 	}
 	theCfg.isJobControl = theCfg.jobDir != ""
@@ -469,6 +471,9 @@ func mainBody(args []string) error {
 
 	doneRunJobScanC := make(chan bool)
 	go scanRunJobs(doneRunJobScanC)
+
+	doneDiskScanC := make(chan bool)
+	go scanDisk(doneDiskScanC)
 
 	// setup router and start server
 	router := vestigo.NewRouter()
@@ -587,6 +592,7 @@ func mainBody(args []string) error {
 		}
 	}
 
+	doneDiskScanC <- true
 	doneRunJobScanC <- true
 	doneStateJobScanC <- true
 	doneOuterJobScanC <- true

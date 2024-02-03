@@ -328,6 +328,7 @@ func dirExist(dirPath string) bool {
 
 // return file Stat if this is a directory
 func dirStat(dirPath string) (fs.FileInfo, error) {
+
 	fi, err := os.Stat(dirPath)
 	if err != nil {
 		if os.IsNotExist(err) {

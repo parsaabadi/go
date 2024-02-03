@@ -18,34 +18,22 @@ import (
 
 // jobDirValid checking job control configuration, return bool flag to indicate if past sub-directory exists.
 // if job control directory is empty then job control disabled.
-// if job control directory not empty then it must have active, queue, history and state subdirectories.
+// if job control directory not empty then it must have active, state, queue, history subdirectories.
 // if state.json exists then it must be a valid configuration file.
-func jobDirValid(jobDir string) (bool, error) {
+func jobDirValid(jobDir string) (bool, bool, error) {
 
 	if jobDir == "" {
-		return false, nil // job control disabled
+		return false, false, nil // job control disabled
 	}
+	if !dirExist(jobDir) ||
+		!dirExist(filepath.Join(jobDir, "active")) || !dirExist(filepath.Join(jobDir, "state")) ||
+		!dirExist(filepath.Join(jobDir, "queue")) || !dirExist(filepath.Join(jobDir, "history")) {
+		return false, false, nil
+	}
+	isPast := dirExist(filepath.Join(jobDir, "past"))
+	isDisk := fileExist(filepath.Join(jobDir, "disk.ini"))
 
-	if _, err := dirStat(jobDir); err != nil {
-		return false, err
-	}
-	if _, err := dirStat(filepath.Join(jobDir, "active")); err != nil {
-		return false, err
-	}
-	if _, err := dirStat(filepath.Join(jobDir, "queue")); err != nil {
-		return false, err
-	}
-	if _, err := dirStat(filepath.Join(jobDir, "state")); err != nil {
-		return false, err
-	}
-	if _, err := dirStat(filepath.Join(jobDir, "history")); err != nil {
-		return false, err
-	}
-	isPast := false
-	if _, err := dirStat(filepath.Join(jobDir, "past")); err == nil {
-		isPast = true
-	}
-	return isPast, nil
+	return isPast, isDisk, nil
 }
 
 // Return job control file path if model is running now.
@@ -123,6 +111,24 @@ func compUsedPath(name, submitStamp string, cpu, mem int) string {
 		theCfg.jobDir,
 		"state",
 		"comp-used-#-"+name+"-#-"+submitStamp+"-#-"+theCfg.omsName+"-#-cpu-#-"+strconv.Itoa(cpu)+"-#-mem-#-"+strconv.Itoa(mem))
+}
+
+// Return disk state use file path: oms instance name, usage in MBytes, status (over / ok), time stamp and clock ticks.
+// For example: job/state/disk-#-_4040-#-size-#-100-#-status-#-ok-#-2022_07_08_23_45_12_123-#-125678.json
+func diskUseStatePath(totalSize int64, isOver bool, tickMs int64) string {
+
+	s := "over"
+	if !isOver {
+		s = "ok"
+	}
+	mb := int(math.Ceil(float64(totalSize) / (1024.0 * 1024.0)))
+
+	tPart := helper.MakeTimeStamp(time.UnixMilli(tickMs)) + "-#-" + strconv.FormatInt(tickMs, 10)
+
+	return filepath.Join(
+		theCfg.jobDir,
+		"state",
+		"disk-#-"+theCfg.omsName+"-#-size-#-"+strconv.Itoa(mb)+"-#-status-#-"+s+"-#-"+tPart+".json")
 }
 
 // parse job file path or job file name:
@@ -361,6 +367,53 @@ func parseCompUsedPath(srcPath string) (string, string, string, int, int) {
 	return sp[1], sp[2], sp[3], cpu, mem
 }
 
+// Parse disk state use file path: job/state/disk-#-_4040-#-size-#-100-#-status-#-ok-#-2022_07_08_23_45_12_123-#-125678.json
+// Return oms instance name, usage in bytes, is over status, time stamp and clock ticks.
+func parseDiskUseStatePath(srcPath string) (string, int64, bool, string, int64) {
+
+	// remove job state directory and extension, file extension must be .json
+	if filepath.Ext(srcPath) != ".json" {
+		return "", 0, false, "", 0
+	}
+	p := filepath.Base(srcPath)
+	p = p[:len(p)-len(".json")]
+
+	// split file name and check result: it must be 8 non-empty parts with time stamp
+	sp := strings.Split(p, "-#-")
+
+	if len(sp) != 8 ||
+		sp[0] != "disk" || sp[1] == "" ||
+		sp[2] != "size" || sp[3] == "" ||
+		sp[4] != "status" || sp[5] == "" ||
+		!helper.IsUnderscoreTimeStamp(sp[6]) || sp[7] == "" {
+		return "", 0, false, "", 0 // source file path is not disk use state file
+	}
+
+	// parse and convert total size from MBytes to bytes
+	mb, err := strconv.ParseInt(sp[3], 10, 64)
+	if err != nil || mb < 0 {
+		return "", 0, false, "", 0 // disk usage must be non-negative integer
+	}
+
+	// check status: it must be "ok" or "over"
+	isOver := false
+	if sp[5] != "over" {
+		isOver = true
+	} else {
+		if sp[5] != "ok" {
+			return "", 0, false, "", 0 // status it must be "ok" or "over"
+		}
+	}
+
+	// convert clock ticks
+	tickMs, err := strconv.ParseInt(sp[7], 10, 64)
+	if err != nil || tickMs <= minJobTickMs {
+		return "", 0, false, "", 0 // clock ticks must after 2020-08-17 23:45:59
+	}
+
+	return sp[1], (mb * 1024 * 1024), isOver, sp[6], tickMs
+}
+
 // move run job to active state from queue
 func moveJobToActive(queueJobPath string, rState *RunState, res RunRes, runStamp string) (string, bool) {
 	if !theCfg.isJobControl {
@@ -595,6 +648,49 @@ func jobStateWrite(jsc jobControlState) bool {
 		return false
 	}
 	return true
+}
+
+// save storage usage state into the file, return false on error
+func diskUseStateWrite(duState *diskUseState, dbUse []dbDiskUse) bool {
+
+	deleteDiskUseStateFiles() // delete all existing disk use state files for current instance
+
+	ds := struct {
+		diskUseState
+		DbUse []dbDiskUse
+	}{
+		diskUseState: *duState,
+		DbUse:        dbUse,
+	}
+
+	err := helper.ToJsonIndentFile(
+		diskUseStatePath(duState.TotalSize, duState.IsOver, duState.UpdateTs),
+		&ds)
+	if err != nil {
+		omppLog.Log(err)
+		return false
+	}
+	return true
+}
+
+// Remove all existing disk use state files for current oms instance, log delete errors, return true on success or false or errors.
+func deleteDiskUseStateFiles() bool {
+
+	// pattern: job/state/disk-#-_4040-#-size-#-100-#-status-#-ok-#-2022_07_08_23_45_12_123-#-125678.json
+	p := filepath.Join(theCfg.jobDir, "state", "disk-#-"+theCfg.omsName+"-#-size-#-*-#-status-#-*-#-*-#-*.json")
+	isNoError := true
+
+	fl := filesByPattern(p, "Error at disk use state files search")
+	for _, f := range fl {
+		isOk := fileDeleteAndLog(false, f)
+		isNoError = isNoError && isOk
+		if !isOk {
+			// createCompStateFile(name, "error")
+			omppLog.Log("FAILED to delete disk use state file: ", theCfg.omsName, " ", p)
+		}
+	}
+
+	return isNoError
 }
 
 // return model run memory size in GB from number of processes, thread count, process memory in MBytes and therad memory in MBytes

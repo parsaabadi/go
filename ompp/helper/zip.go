@@ -7,6 +7,7 @@ import (
 	"archive/zip"
 	"errors"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 )
@@ -47,7 +48,7 @@ func PackZip(srcPath string, isCleanDstDir bool, dstDir string) (string, error) 
 	defer zwr.Close()
 
 	// walk in source directory and compress files and subdirs
-	err = filepath.Walk(cleanPath, func(src string, info os.FileInfo, err error) error {
+	err = filepath.WalkDir(cleanPath, func(src string, de fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -60,7 +61,7 @@ func PackZip(srcPath string, isCleanDstDir bool, dstDir string) (string, error) 
 		rel = filepath.ToSlash(rel)
 
 		// if this is directory add it to header to store empty dirs
-		if info.IsDir() {
+		if de.IsDir() {
 			_, err := zwr.Create(rel + "/")
 			return err
 		}

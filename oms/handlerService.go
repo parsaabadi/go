@@ -27,7 +27,8 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 		AllowMicrodata bool               // if true then allow model run microdata
 		IsJobControl   bool               // if true then job control enabled
 		IsModelDoc     bool               // if true then model documentation is enabled
-		IsDiskUse      bool               // if true then disk space usage control enabled
+		IsDiskUse      bool               // if true then storage usage control enabled
+		DiskUse        diskUseConfig      // disk use config
 		Env            map[string]string  // server config environmemt variables for UI
 		ModelCatalog   ModelCatalogConfig // "public" state of model catalog
 		RunCatalog     RunCatalogConfig   // "public" state of model run catalog
@@ -40,7 +41,8 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 		AllowMicrodata: theCfg.isMicrodata,
 		IsJobControl:   theCfg.isJobControl,
 		IsModelDoc:     theCfg.isModelDoc,
-		IsDiskUse:      false,
+		IsDiskUse:      theCfg.isDiskUse,
+		DiskUse:        theRunCatalog.getDiskConfig(),
 		Env:            theCfg.env,
 		ModelCatalog:   theCatalog.toPublicConfig(),
 		RunCatalog:     *theRunCatalog.toPublicConfig(),
@@ -69,12 +71,17 @@ func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
 		Active          []RunJob         // list of active (currently running) model run jobs
 		History         []historyJobFile // history of model runs
 		ComputeState    []cItem          // state of computational servers or clusters
+		IsDiskUse       bool             // if true then storage usage control enabled
+		DiskUseState    diskUseState     // storage space use state
+		DbDiskUse       []dbDiskUse      // model db file disk usage
 	}{
 		IsJobControl: theCfg.isJobControl,
 		Queue:        []RunJob{},
 		Active:       []RunJob{},
 		History:      []historyJobFile{},
 		ComputeState: []cItem{},
+		IsDiskUse:    theCfg.isDiskUse,
+		DbDiskUse:    []dbDiskUse{},
 	}
 
 	if theCfg.isJobControl {
@@ -116,6 +123,11 @@ func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
 			st.ComputeState[k].LastUsedTs = cState[k].lastUsedTs
 		}
 	}
+
+	if theCfg.isDiskUse {
+		st.DiskUseState, st.DbDiskUse = theRunCatalog.getDiskUse()
+	}
+
 	jsonResponse(w, r, st)
 }
 

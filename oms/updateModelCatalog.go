@@ -40,7 +40,7 @@ func (mc *ModelCatalog) refreshSqlite(modelDir, modelLogDir string) error {
 
 	// get list of model/dir/*.sqlite files
 	pathLst := []string{}
-	err := filepath.Walk(modelDir, func(src string, info os.FileInfo, err error) error {
+	err := filepath.WalkDir(modelDir, func(src string, de os.DirEntry, err error) error {
 		if err != nil {
 			if err != filepath.SkipDir {
 				omppLog.Log("Error at refresh model catalog, path: ", src, " : ", err.Error())
