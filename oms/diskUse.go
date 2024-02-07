@@ -38,9 +38,9 @@ type dbDiskUse struct {
 
 // storage usage control settings
 type diskUseConfig struct {
-	ScanInterval int   // timeout in msec, sleep interval between scanning storage
-	Limit        int64 // bytes, this instance storage limit
-	AllLimit     int64 // bytes, total storage limit for all oms instances
+	DiskScanMs int64 // timeout in msec, sleep interval between scanning storage
+	Limit      int64 // bytes, this instance storage limit
+	AllLimit   int64 // bytes, total storage limit for all oms instances
 }
 
 /*
@@ -62,7 +62,7 @@ func scanDisk(doneC <-chan bool) {
 
 	duState := diskUseState{
 		diskUseConfig: diskUseConfig{
-			ScanInterval: diskScanDefaultInterval,
+			DiskScanMs: diskScanDefaultInterval,
 		},
 	}
 	dbUse := []dbDiskUse{}
@@ -87,7 +87,7 @@ func scanDisk(doneC <-chan bool) {
 		// find all disk use files and calculate total disk usage by all other oms instances
 		// if disk use file does not updated more than 3 times of scan interval (and minimum 1 minute) then oms instance is dead
 		minuteTs := nowTime.Add(-1 * time.Minute).UnixMilli()
-		minTs := nowTime.Add(-1 * 3 * time.Duration(cfg.ScanInterval) * time.Millisecond).UnixMilli()
+		minTs := nowTime.Add(-1 * 3 * time.Duration(cfg.DiskScanMs) * time.Millisecond).UnixMilli()
 		if minTs > minuteTs {
 			minTs = minuteTs
 		}
@@ -171,7 +171,7 @@ func scanDisk(doneC <-chan bool) {
 		diskUseStateWrite(&duState, dbUse)
 
 		// wait for doneC or sleep
-		if isExitSleep(time.Duration(cfg.ScanInterval), doneC) {
+		if isExitSleep(time.Duration(cfg.DiskScanMs), doneC) {
 			break
 		}
 	}
@@ -183,7 +183,7 @@ func (rsc *RunCatalog) updateDiskUse(duState *diskUseState, dbUse []dbDiskUse) {
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
-	rsc.DiskUseState = *duState
+	rsc.DiskUse = *duState
 
 	// copy db file info for current models list
 	if len(rsc.DbDiskUse) != len(rsc.models) {
@@ -205,13 +205,13 @@ func (rsc *RunCatalog) updateDiskUse(duState *diskUseState, dbUse []dbDiskUse) {
 	}
 }
 
-// return disk use config
-func (rsc *RunCatalog) getDiskConfig() diskUseConfig {
+// return disk use status: flag is disk use over limit and disk use config
+func (rsc *RunCatalog) getDiskUseStatus() (bool, diskUseConfig) {
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
-	return rsc.DiskUseState.diskUseConfig
+	return rsc.DiskUse.IsOver, rsc.DiskUse.diskUseConfig
 }
 
 // return copy of current disk use state
@@ -220,7 +220,7 @@ func (rsc *RunCatalog) getDiskUse() (diskUseState, []dbDiskUse) {
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
-	duState := rsc.DiskUseState
+	duState := rsc.DiskUse
 
 	dbUse := make([]dbDiskUse, len(rsc.DbDiskUse))
 	copy(dbUse, rsc.DbDiskUse)
@@ -231,7 +231,7 @@ func (rsc *RunCatalog) getDiskUse() (diskUseState, []dbDiskUse) {
 // read job service state and computational servers definition from job.ini
 func initDiskState(diskIniPath string) (bool, diskUseConfig) {
 
-	cfg := diskUseConfig{ScanInterval: diskScanDefaultInterval}
+	cfg := diskUseConfig{DiskScanMs: diskScanDefaultInterval}
 
 	// read available resources limits and computational servers configuration from job.ini
 	if diskIniPath == "" || !fileExist(diskIniPath) {
@@ -244,9 +244,9 @@ func initDiskState(diskIniPath string) (bool, diskUseConfig) {
 		return false, cfg
 	}
 
-	cfg.ScanInterval = 1000 * opts.Int("Common.ScanInterval", diskScanDefaultInterval)
-	if cfg.ScanInterval < minDiskScanInterval {
-		cfg.ScanInterval = diskScanDefaultInterval // if too low then use default
+	cfg.DiskScanMs = 1000 * opts.Int64("Common.ScanInterval", diskScanDefaultInterval)
+	if cfg.DiskScanMs < minDiskScanInterval {
+		cfg.DiskScanMs = diskScanDefaultInterval // if too low then use default
 	}
 	cfg.AllLimit = 1024 * 1024 * 1024 * opts.Int64("Common.AllUsersLimit", 0) // total limit in bytes for all oms instances
 	if cfg.AllLimit < 0 {

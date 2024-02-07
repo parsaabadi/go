@@ -22,7 +22,7 @@ type RunCatalog struct {
 	presets         []RunOptionsPreset                 // list of preset run options
 	modelRuns       map[string]map[string]*runStateLog // map each model digest to run stamps to run state and log file
 	JobServiceState                                    // jobs service state: paused, resources usage and limits
-	DiskUseState    diskUseState                       // storage space use state
+	DiskUse         diskUseState                       // storage space use state
 	DbDiskUse       []dbDiskUse                        // model db file disk usage
 	queueKeys       []string                           // run submission stamps of model runs waiting in the queue
 	queueJobs       map[string]queueJobFile            // model run jobs waiting in the queue

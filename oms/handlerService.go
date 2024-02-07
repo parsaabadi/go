@@ -12,7 +12,7 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
-// serviceConfigHandler return service configuration, including configuration of model catalog and run catalog.
+// return service configuration: model catalog, run catalog, job service and disk use configuartion.
 // GET /api/service/config
 func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -42,15 +42,17 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 		IsJobControl:   theCfg.isJobControl,
 		IsModelDoc:     theCfg.isModelDoc,
 		IsDiskUse:      theCfg.isDiskUse,
-		DiskUse:        theRunCatalog.getDiskConfig(),
 		Env:            theCfg.env,
 		ModelCatalog:   theCatalog.toPublicConfig(),
 		RunCatalog:     *theRunCatalog.toPublicConfig(),
 	}
+	if theCfg.isDiskUse {
+		_, st.DiskUse = theRunCatalog.getDiskUseStatus()
+	}
 	jsonResponse(w, r, st)
 }
 
-// serviceStateHandler return service and model runs state: queue, active runs and run history
+// return job service state: model runs queue, active runs and run history
 // GET /api/service/state
 func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -72,8 +74,8 @@ func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
 		History         []historyJobFile // history of model runs
 		ComputeState    []cItem          // state of computational servers or clusters
 		IsDiskUse       bool             // if true then storage usage control enabled
-		DiskUseState    diskUseState     // storage space use state
-		DbDiskUse       []dbDiskUse      // model db file disk usage
+		IsDiskOver      bool             // if true then storage use reach the limit
+		diskUseConfig                    // storage use settings
 	}{
 		IsJobControl: theCfg.isJobControl,
 		Queue:        []RunJob{},
@@ -81,7 +83,6 @@ func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
 		History:      []historyJobFile{},
 		ComputeState: []cItem{},
 		IsDiskUse:    theCfg.isDiskUse,
-		DbDiskUse:    []dbDiskUse{},
 	}
 
 	if theCfg.isJobControl {
@@ -125,9 +126,28 @@ func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if theCfg.isDiskUse {
-		st.DiskUseState, st.DbDiskUse = theRunCatalog.getDiskUse()
+		st.IsDiskOver, st.diskUseConfig = theRunCatalog.getDiskUseStatus()
 	}
 
+	jsonResponse(w, r, st)
+}
+
+// return disk use state: summary of disk use and list of model database files size.
+// GET /api/service/disk-use
+func serviceDiskUseHandler(w http.ResponseWriter, r *http.Request) {
+
+	st := struct {
+		IsDiskUse bool         // if true then storage usage control enabled
+		DiskUse   diskUseState // storage space use state
+		DbDiskUse []dbDiskUse  // model db file disk usage
+	}{
+		IsDiskUse: theCfg.isDiskUse,
+		DbDiskUse: []dbDiskUse{},
+	}
+
+	if theCfg.isDiskUse {
+		st.DiskUse, st.DbDiskUse = theRunCatalog.getDiskUse()
+	}
 	jsonResponse(w, r, st)
 }
 
