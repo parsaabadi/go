@@ -48,7 +48,7 @@ scan all models directories, download and upload directories to collect storage 
 
 Other file statistics also collected, e.g. files count, SQLite db file size for each model, etc.
 */
-func scanDisk(doneC <-chan bool) {
+func scanDisk(doneC <-chan bool, refreshC <-chan bool) {
 	if !theCfg.isDiskUse {
 		return // storage use control disabled
 	}
@@ -106,8 +106,6 @@ func scanDisk(doneC <-chan bool) {
 				nOtherSize += size // oms instance is alive
 			}
 		}
-
-		// parseDiskUseStatePath
 
 		// for all models get database file size and mod time
 		mbs := theCatalog.allModels()
@@ -171,7 +169,14 @@ func scanDisk(doneC <-chan bool) {
 		diskUseStateWrite(&duState, dbUse)
 
 		// wait for doneC or sleep
-		if isExitSleep(time.Duration(cfg.DiskScanMs), doneC) {
+		isExit := false
+		select {
+		case <-doneC:
+			isExit = true
+		case <-refreshC:
+		case <-time.After(time.Duration(cfg.DiskScanMs) * time.Millisecond):
+		}
+		if isExit {
 			break
 		}
 	}

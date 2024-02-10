@@ -180,7 +180,7 @@ func fileTreeUpDownGet(upDownDir string, w http.ResponseWriter, r *http.Request)
 			Path:    filepath.ToSlash(p),
 			IsDir:   fi.IsDir(),
 			Size:    fi.Size(),
-			ModTime: fi.ModTime().UnixNano() / int64(time.Millisecond),
+			ModTime: fi.ModTime().UnixMilli(),
 		})
 		return nil
 	})
@@ -328,6 +328,11 @@ func upDownAllDelete(upDown string, upDownDir string, isAsync bool, w http.Respo
 		} else {
 			omppLog.Log("Failed to delete from ", upDown, ". Errors: ", nErr)
 			renameToUpDownErrorLog(upDown, logPath, "Errors: "+strconv.Itoa(nErr), nil)
+		}
+
+		// if disk usage scan active then refersh disk use now
+		if theCfg.isDiskUse {
+			refreshDiskScanC <- true
 		}
 	}
 

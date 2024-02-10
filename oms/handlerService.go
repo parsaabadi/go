@@ -151,6 +151,17 @@ func serviceDiskUseHandler(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, r, st)
 }
 
+// refersh disk use state: scan disk usage now.
+// POST /api/service/disk-use/refresh
+func serviceRefreshDiskUseHandler(w http.ResponseWriter, r *http.Request) {
+
+	if theCfg.isDiskUse {
+		refreshDiskScanC <- true
+	}
+	// respond with disk usage active status
+	w.Header().Set("Content-Location", "/api/service/disk-use/refresh/"+strconv.FormatBool(theCfg.isDiskUse))
+}
+
 // job control state, log file content and run progress
 type runJobState struct {
 	JobStatus string      // if not empty then job run status name: success, error, exit

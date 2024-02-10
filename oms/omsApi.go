@@ -758,6 +758,9 @@ func apiServiceRoutes(router *vestigo.Router) {
 	// GET /api/service/disk-use
 	router.Get("/api/service/disk-use", serviceDiskUseHandler, logRequest)
 
+	// POST /api/service/disk-use/refresh
+	router.Post("/api/service/disk-use/refresh", serviceRefreshDiskUseHandler, logRequest)
+
 	// GET /api/service/job/active/:job
 	// GET /api/service/job/queue/:job
 	// GET /api/service/job/history/:job

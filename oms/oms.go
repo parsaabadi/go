@@ -219,6 +219,8 @@ var isLogRequest bool
 // matcher to find UI supported language corresponding to request
 var uiLangMatcher language.Matcher
 
+var refreshDiskScanC chan bool
+
 // main entry point: wrapper to handle errors
 func main() {
 	defer exitOnPanic() // fatal error handler: log and exit
@@ -473,7 +475,8 @@ func mainBody(args []string) error {
 	go scanRunJobs(doneRunJobScanC)
 
 	doneDiskScanC := make(chan bool)
-	go scanDisk(doneDiskScanC)
+	refreshDiskScanC = make(chan bool)
+	go scanDisk(doneDiskScanC, refreshDiskScanC)
 
 	// setup router and start server
 	router := vestigo.NewRouter()
