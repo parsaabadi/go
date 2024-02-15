@@ -271,8 +271,8 @@ func scanSqlRowToCellMicro(entity *EntityMeta, entityAttrs []EntityAttrRow) ([]i
 	nAttr := len(entityAttrs)
 	scanBuf := make([]interface{}, 1+nAttr) // entity key and attributes
 
-	var eKey uint64
-	scanBuf[0] = &eKey // first column is entity key
+	var eKeySrc int64
+	scanBuf[0] = &eKeySrc // first column is entity key
 
 	fd := make([]func(interface{}) (attrValue, error), nAttr) // conversion functions for all attributes
 
@@ -370,7 +370,7 @@ func scanSqlRowToCellMicro(entity *EntityMeta, entityAttrs []EntityAttrRow) ([]i
 	// sql row conevrsion function: convert entity key and each attribute value from scan buffer
 	cvt := func(c *CellMicro) error {
 
-		c.Key = eKey
+		c.Key = uint64(eKeySrc)
 
 		for k := 0; k < nAttr; k++ {
 			v, e := fd[k](scanBuf[1+k])
