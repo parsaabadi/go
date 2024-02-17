@@ -69,8 +69,8 @@ func apiGetRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/text/lang/:lang", modelTextHandler, logRequest)
 	router.Get("/api/model/:model/text/lang/", http.NotFound)
 
-	// GET /api/model/:model/text/all
-	router.Get("/api/model/:model/text/all", modelAllTextHandler, logRequest)
+	// GET /api/model/:model/text-all
+	router.Get("/api/model/:model/text-all", modelAllTextHandler, logRequest)
 
 	//
 	// GET model extra: languages, profile(s)
@@ -133,8 +133,8 @@ func apiGetRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/run/:run/text/", http.NotFound)
 	router.Get("/api/model/:model/run/:run/text/lang/", http.NotFound)
 
-	// GET /api/model/:model/run/:run/text/all
-	router.Get("/api/model/:model/run/:run/text/all", runAllTextHandler, logRequest)
+	// GET /api/model/:model/run/:run/text-all
+	router.Get("/api/model/:model/run/:run/text-all", runAllTextHandler, logRequest)
 
 	//
 	// GET model set of input parameters (workset)
@@ -163,8 +163,8 @@ func apiGetRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/workset/:set/", http.NotFound)
 	router.Get("/api/model/:model/workset/:set/text/", http.NotFound)
 
-	// GET /api/model/:model/workset/:set/text/all
-	router.Get("/api/model/:model/workset/:set/text/all", worksetAllTextHandler, logRequest)
+	// GET /api/model/:model/workset/:set/text-all
+	router.Get("/api/model/:model/workset/:set/text-all", worksetAllTextHandler, logRequest)
 
 	//
 	// GET modeling tasks and task run history
@@ -211,8 +211,8 @@ func apiGetRoutes(router *vestigo.Router) {
 	router.Get("/api/model/:model/task/:task/text/", http.NotFound)
 	router.Get("/api/model/:model/task/:task/text/lang/", http.NotFound)
 
-	// GET /api/model/:model/task/:task/text/all
-	router.Get("/api/model/:model/task/:task/text/all", taskAllTextHandler, logRequest)
+	// GET /api/model/:model/task/:task/text-all
+	router.Get("/api/model/:model/task/:task/text-all", taskAllTextHandler, logRequest)
 }
 
 // add http GET or POST web-service /api routes to read parameters or output tables

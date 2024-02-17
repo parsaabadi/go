@@ -52,7 +52,7 @@ func worksetReadonlyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 // If workset name is empty in json request then automatically generate unique workset name.
 // If workset with same name already exist for that model then return error.
 // Json content: workset "public" metadata and optioanl parameters list.
-// Workset and parameters "public" metadata expected to be same as return of GET /api/model/:model/workset/:set/text/all
+// Workset and parameters "public" metadata expected to be same as return of GET /api/model/:model/workset/:set/text-all
 // Each parameter (if present) must contain "public" metadata and parameter values.
 // Parameter values must include all values and can be either:
 // JSON cell values, identical to output of read parameter "page": POST /api/model/:model/workset/:set/parameter/value

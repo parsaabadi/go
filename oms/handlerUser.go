@@ -25,7 +25,7 @@ func userViewGetHandler(w http.ResponseWriter, r *http.Request) {
 	dn := getRequestParam(r, "model")
 
 	// find model by digest or name
-	m, ok := theCatalog.ModelMetaByDigestOrName(dn)
+	m, ok := theCatalog.ModelDicByDigestOrName(dn)
 	if !ok {
 		http.Error(w, "Error: model not found "+dn, http.StatusNotFound)
 		return // not found error: model not found in model catalog
@@ -33,7 +33,7 @@ func userViewGetHandler(w http.ResponseWriter, r *http.Request) {
 
 	// open model.view.json file from user home directory
 	// if model.view.json not exist then return empty object {} response
-	fileName := m.Model.Name + ".view.json"
+	fileName := m.Name + ".view.json"
 	bt, err := os.ReadFile(filepath.Join(theCfg.homeDir, fileName))
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -64,14 +64,14 @@ func userViewPutHandler(w http.ResponseWriter, r *http.Request) {
 	dn := getRequestParam(r, "model")
 
 	// find model by digest or name
-	m, ok := theCatalog.ModelMetaByDigestOrName(dn)
+	m, ok := theCatalog.ModelDicByDigestOrName(dn)
 	if !ok {
 		http.Error(w, "Error: model not found "+dn, http.StatusNotFound)
 		return // not found error: model not found in model catalog
 	}
 
 	// copy request body into home/user/model.view.json file
-	_ = jsonRequestToFile(w, r, filepath.Join(theCfg.homeDir, m.Model.Name+".view.json"))
+	_ = jsonRequestToFile(w, r, filepath.Join(theCfg.homeDir, m.Name+".view.json"))
 }
 
 // userViewDeleteHandler delete model.view.json file from user home directory:
@@ -88,14 +88,14 @@ func userViewDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	dn := getRequestParam(r, "model")
 
 	// find model by digest or name
-	m, ok := theCatalog.ModelMetaByDigestOrName(dn)
+	m, ok := theCatalog.ModelDicByDigestOrName(dn)
 	if !ok {
 		http.Error(w, "Error: model not found "+dn, http.StatusNotFound)
 		return // not found error: model not found in model catalog
 	}
 
 	// delete model views file from home directory
-	fName := m.Model.Name + ".view.json"
+	fName := m.Name + ".view.json"
 	err := os.Remove(filepath.Join(theCfg.homeDir, fName))
 	if err != nil {
 		if !os.IsNotExist(err) {

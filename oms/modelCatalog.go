@@ -63,105 +63,10 @@ type modelBasic struct {
 	extra    string         // if not empty then model extra content from models/bin/dir/model.extra.json
 }
 
-// ModelMetaFull is full model metadata: language-neutral db rows
-// and language-specific rows in all languages.
-type ModelMetaFull struct {
-	db.ModelMeta    // model metadata db rows, language-neutral portion of it
-	db.ModelTxtMeta // language-specific portion of model metadata db rows
-}
-
-// ModelMetaDescrNote is language-specific model metadata db rows.
-// It is sliced by one single language, but it can be different single language for each row.
-// It is either user preferred language, model default language, first of the row or empty "" language.
-type ModelMetaDescrNote struct {
-	ModelDicDescrNote                   // model text rows: model_dic_txt
-	TypeTxt           []TypeDescrNote   // model type text rows: type_dic_txt join to model_type_dic
-	ParamTxt          []ParamDescrNote  // model parameter text rows: parameter_dic, model_parameter_dic, parameter_dic_txt, parameter_dims_txt
-	TableTxt          []TableDescrNote  // model output table text rows: table_dic, model_table_dic, table_dic_txt, table_dims_txt, table_acc_txt, table_expr_txt
-	EntityTxt         []EntityDescrNote // model entity text rows: join of entity_dic, model_entity_dic, entity_dic_txt, entity_attr_txt
-	GroupTxt          []GroupDescrNote  // model group text rows: group_txt join to group_lst
-}
-
 // ModelDicDescrNote is join of model_dic db row and model_dic_txt row
 type ModelDicDescrNote struct {
 	Model     db.ModelDicRow // model_dic db row
 	DescrNote db.DescrNote   // from model_dic_txt
-}
-
-// TypeDescrNote is join of type_dic_txt, model_type_dic, type_dic_txt
-type TypeDescrNote struct {
-	Type        db.TypeDicRow       // model type row: type_dic join to model_type_dic
-	DescrNote   db.DescrNote        // from type_dic_txt
-	TypeEnumTxt []TypeEnumDescrNote // type enum text rows: type_enum_txt join to model_type_dic
-}
-
-// TypeEnumDescrNote is join of type_enum_lst, model_type_dic, type_enum_txt
-type TypeEnumDescrNote struct {
-	Enum      db.TypeEnumRow // type enum row: type_enum_lst join to model_type_dic
-	DescrNote db.DescrNote   // from type_enum_txt
-}
-
-// ParamDescrNote is join of parameter_dic, model_parameter_dic, parameter_dic_txt, parameter_dims_txt
-type ParamDescrNote struct {
-	Param        db.ParamDicRow       // parameter row: parameter_dic join to model_parameter_dic table
-	DescrNote    db.DescrNote         // from parameter_dic_txt
-	ParamDimsTxt []ParamDimsDescrNote // parameter dimension text rows: parameter_dims_txt join to model_parameter_dic
-}
-
-// ParamDimsDescrNote is join of parameter_dims, model_parameter_dic, parameter_dims_txt
-type ParamDimsDescrNote struct {
-	Dim       db.ParamDimsRow // parameter dimension row: parameter_dims join to model_parameter_dic table
-	DescrNote db.DescrNote    // from parameter_dims_txt
-}
-
-// TableDescrNote is join of table_dic, model_table_dic, table_dic_txt, table_dims_txt, table_acc_txt, table_expr_txt
-type TableDescrNote struct {
-	Table        db.TableDicRow       // output table row: table_dic join to model_table_dic
-	LangCode     string               // table_dic_txt.lang_code
-	TableDescr   string               // table_dic_txt.descr
-	TableNote    string               // table_dic_txt.note
-	ExprDescr    string               // table_dic_txt.expr_descr
-	ExprNote     string               // table_dic_txt.expr_note
-	TableDimsTxt []TableDimsDescrNote // output table dimension text rows: table_dims_txt join to model_table_dic
-	TableAccTxt  []TableAccDescrNote  // output table accumulator text rows: table_acc_txt join to model_table_dic
-	TableExprTxt []TableExprDescrNote // output table expression text rows: table_expr_txt join to model_table_dic
-}
-
-// TableDimsDescrNote is join of table_dims, model_table_dic, table_dims_txt
-type TableDimsDescrNote struct {
-	Dim       db.TableDimsRow // parameter dimension row: table_dims join to model_table_dic table
-	DescrNote db.DescrNote    // from table_dims_txt
-}
-
-// TableAccDescrNote is join of table_acc, model_table_dic, table_acc_txt
-type TableAccDescrNote struct {
-	Acc       db.TableAccRow // output table accumulator row: table_acc join to model_table_dic
-	DescrNote db.DescrNote   // from table_acc_txt
-}
-
-// TableExprDescrNote is join of table_expr, model_table_dic, table_expr_txt
-type TableExprDescrNote struct {
-	Expr      db.TableExprRow // output table expression row: table_expr join to model_table_dic
-	DescrNote db.DescrNote    // from table_expr_txt
-}
-
-// EntityDescrNote is join of entity_dic, model_entity_dic, entity_dic_txt, entity_attr_txt
-type EntityDescrNote struct {
-	Entity        db.EntityDicRow       // entity row: entity_dic join to model_entity_dic
-	DescrNote     db.DescrNote          // from entity_dic_txt
-	EntityAttrTxt []EntityAttrDescrNote // entity attribute text rows: entity_attr, model_entity_dic, entity_attr_txt
-}
-
-// EntityAttrDescrNote is join of entity_attr, model_entity_dic, entity_attr_txt
-type EntityAttrDescrNote struct {
-	Attr      db.EntityAttrRow // entity attribute row: entity_attr join to model_entity_dic table
-	DescrNote db.DescrNote     // from entity_attr_txt
-}
-
-// GroupDescrNote is join of group_lst, group_pc and group_txt
-type GroupDescrNote struct {
-	Group     db.GroupMeta // parameters or output tables group rows: group_lst join to group_pc
-	DescrNote db.DescrNote // from group_txt
 }
 
 // ModelLangWord is (code, label) rows from lang_word and model_word language-specific db tables.

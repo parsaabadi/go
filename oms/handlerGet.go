@@ -4,6 +4,7 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/openmpp/go/ompp/db"
@@ -81,49 +82,64 @@ func modelMetaHandler(w http.ResponseWriter, r *http.Request) {
 
 	dn := getRequestParam(r, "model")
 
-	m, _ := theCatalog.ModelMetaByDigestOrName(dn)
-	jsonResponse(w, r, m)
-}
+	// start json response
+	jsonSetHeaders(w, r)
+	enc := json.NewEncoder(w)
 
-// modelTextHandler return language-specific model metadata:
-// GET /api/model/:model/text
-// GET /api/model/:model/text/lang/:lang
-// Model digest-or-name must specified, if multiple models with same name exist only one is returned.
-// If optional lang specified then result in that language else in browser language or model default.
-func modelTextHandler(w http.ResponseWriter, r *http.Request) {
-
-	dn := getRequestParam(r, "model")
-	rqLangTags := getRequestLang(r, "lang") // get optional language argument and languages accepted by browser
-
-	mt, _ := theCatalog.ModelMetaTextByDigestOrName(dn, rqLangTags)
-	jsonResponse(w, r, mt)
+	// find model metadata in catalog and write to output stream
+	m, err := theCatalog.ModelMetaByDigestOrName(dn)
+	if err != nil {
+		omppLog.Log("Error at model metadata search: ", dn, ": ", err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	err = enc.Encode(m)
+	if err != nil {
+		omppLog.Log("Error at model metadata write to output stream: ", dn, ": ", err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 // modelAllTextHandler return language-specific model metadata:
-// GET /api/model/:model/text/all
+// GET /api/model/:model/text-all
 // Model digest-or-name must specified, if multiple models with same name exist only one is returned.
 // Text rows returned in all languages.
 func modelAllTextHandler(w http.ResponseWriter, r *http.Request) {
 
 	dn := getRequestParam(r, "model")
 
-	// find model language-neutral metadata by digest or name
-	mf := &ModelMetaFull{}
-
-	m, ok := theCatalog.ModelMetaByDigestOrName(dn)
-	if !ok {
-		jsonResponse(w, r, mf)
-		return // empty result: digest not found
+	// find model metadata in catalog
+	m, err := theCatalog.ModelMetaByDigestOrName(dn)
+	if err != nil {
+		omppLog.Log("Error at model metadata search: ", dn, ": ", err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
-	mf.ModelMeta = *m
 
 	// find model language-specific metadata by digest
-	if t, ok := theCatalog.ModelMetaAllTextByDigest(mf.ModelMeta.Model.Digest); ok {
-		mf.ModelTxtMeta = *t
+	t, err := theCatalog.ModelMetaAllTextByDigestOrName(m.Model.Digest)
+	if err != nil {
+		omppLog.Log("Error at model language-specific metadata search: ", dn, ": ", err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
-	// write json response
-	jsonResponse(w, r, mf)
+	// start json response
+	jsonSetHeaders(w, r)
+	enc := json.NewEncoder(w)
+
+	mf := struct {
+		*db.ModelMeta    // model metadata db rows, language-neutral portion of it
+		*db.ModelTxtMeta // language-specific portion of model metadata db rows
+	}{
+		ModelMeta:    m,
+		ModelTxtMeta: t,
+	}
+	err = enc.Encode(mf)
+	if err != nil {
+		omppLog.Log("Error at model metadata write to output stream: ", dn, ": ", err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 // langListHandler return list of model langauages:
@@ -300,7 +316,7 @@ func runTextHandler(w http.ResponseWriter, r *http.Request) {
 // runAllTextHandler return full run metadata: run_lst, run_options, run_progress, run_parameter db rows
 // and corresponding text db rows from run_txt and run_parameter_txt tables
 // by model digest-or-name and digest-or-stamp-or-name:
-// GET /api/model/:model/run/:run/text/all
+// GET /api/model/:model/run/:run/text-all
 // If multiple models with same name exist then result is undefined.
 // If multiple runs with same stamp or name exist then result is undefined.
 // It does not return non-completed runs (run in progress).
@@ -386,7 +402,7 @@ func worksetTextHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // worksetAllTextHandler return full workset metadata by model digest-or-name and workset name:
-// GET /api/model/:model/workset/:set/text/all
+// GET /api/model/:model/workset/:set/text-all
 // If multiple models with same name exist only one is returned.
 // If no such workset exist in database then empty result returned.
 // Text rows returned in all languages.
@@ -545,7 +561,7 @@ func taskTextHandler(w http.ResponseWriter, r *http.Request) {
 
 // taskAllTextHandler return full task metadata, description, notes, run history by model digest-or-name and task name
 // from db-tables: task_lst, task_txt, task_set, task_run_lst, task_run_set and also from workset_txt, run_txt.
-// GET /api/model/:model/task/:task/text/all
+// GET /api/model/:model/task/:task/text-all
 // If multiple models with same name exist only one is returned.
 // It does not return non-completed runs (run in progress).
 // Run completed if run status one of: s=success, x=exit, e=error.
