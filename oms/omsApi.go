@@ -60,14 +60,22 @@ func apiGetRoutes(router *vestigo.Router) {
 	router.Get("/api/model-list/text/lang/", http.NotFound)
 
 	// GET /api/model/:model
+	// GET /api/model/:model/pack
 	router.Get("/api/model/:model", modelMetaHandler, logRequest)
+	router.Get("/api/model/:model/pack", modelMetaPackHandler, logRequest)
 	router.Get("/api/model/", http.NotFound)
+	router.Get("/api/model/:model/pack/", http.NotFound)
 
 	// GET /api/model/:model/text
 	// GET /api/model/:model/text/lang/:lang
+	// GET /api/model/:model/pack/text
+	// GET /api/model/:model/pack/text/lang/:lang
 	router.Get("/api/model/:model/text", modelTextHandler, logRequest)
 	router.Get("/api/model/:model/text/lang/:lang", modelTextHandler, logRequest)
+	router.Get("/api/model/:model/pack/text", modelTextPackHandler, logRequest)
+	router.Get("/api/model/:model/pack/text/lang/:lang", modelTextPackHandler, logRequest)
 	router.Get("/api/model/:model/text/lang/", http.NotFound)
+	router.Get("/api/model/:model/pack/text/lang/", http.NotFound)
 
 	// GET /api/model/:model/text-all
 	router.Get("/api/model/:model/text-all", modelAllTextHandler, logRequest)

@@ -107,7 +107,7 @@ func toModelJson(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 	}
 
 	// get model text (description and notes) in all languages
-	modelTxt, err := db.GetModelText(dbConn, modelDef.Model.ModelId, "")
+	modelTxt, err := db.GetModelText(dbConn, modelDef.Model.ModelId, "", true)
 	if err != nil {
 		return err
 	}

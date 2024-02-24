@@ -458,7 +458,7 @@ func putInsertMicroFrom(
 		}
 
 		// set sql statement microdata values: entity key, attributes value
-		row[0] = cell.Key
+		row[0] = int64(cell.Key)
 
 		for k, av := range cell.Attr {
 

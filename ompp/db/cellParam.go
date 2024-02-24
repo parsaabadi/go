@@ -101,7 +101,7 @@ func (cellCvt *CellParamConverter) KeyIds(name string) (func(interface{}, []int)
 	return cvt, nil
 }
 
-// ToCsvIdRow return converter from parameter cell (sub id, dimensions, value) to csv row []string.
+// ToCsvIdRow return converter from parameter cell (sub id, dimensions, value) to csv id's row []string.
 //
 // Converter return isNotEmpty flag, it is always true if there were no error during conversion.
 // Converter simply does Sprint() for each sub-value id, dimension item id and value.

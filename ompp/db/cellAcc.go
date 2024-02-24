@@ -106,7 +106,7 @@ func (cellCvt *CellAccConverter) KeyIds(name string) (func(interface{}, []int) e
 	return cvt, nil
 }
 
-// ToCsvIdRow return converter from output table cell (acc_id, sub_id, dimensions, value) to csv row []string.
+// ToCsvIdRow return converter from output table cell (acc_id, sub_id, dimensions, value) to csv id's row []string.
 //
 // Converter return isNotEmpty flag, it return false if IsNoZero or IsNoNull is set and cell value is empty or zero.
 // Converter simply does Sprint() for each dimension item id, accumulator id, subvalue number and value.

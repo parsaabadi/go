@@ -16,6 +16,7 @@ const wordDbMax = 255     // max database length for word: word_code, word_value
 const optionDbMax = 32000 // max database length for option value: profile_option, run_option
 const noteDbMax = 32000   // max database notes length: notes varchar (clob, text)
 const stringDbMax = 32000 // max database string length: parameter varchar (clob, text)
+const rangeDicId = 3      // range type
 
 // ModelMeta is model metadata db rows, language-neutral portion of it.
 //
@@ -65,6 +66,12 @@ type ModelTxtMeta struct {
 // TypeMeta is type metadata: type name and enums
 type TypeMeta struct {
 	TypeDicRow               // model type rows: type_dic join to model_type_dic
+	Enum       []TypeEnumRow // type enum rows: type_enum_lst join to model_type_dic
+}
+
+// model type metadata, "unpacked" during marshaled to json (range enums restored)
+type TypeMetaUnpack struct {
+	TypeDicRow *TypeDicRow   // model type rows: type_dic join to model_type_dic
 	Enum       []TypeEnumRow // type enum rows: type_enum_lst join to model_type_dic
 }
 
@@ -165,7 +172,7 @@ type ModelTxtRow struct {
 	Note     string // note         VARCHAR(32000)
 }
 
-// TypeDicRow is db row of type_dic join to model_type_dic table.
+// TypeDicRow is db row of type_dic join to model_type_dic table and min, max, count of enum id's.
 //
 // TypeHid (type_dic.type_hid) is db-unique id of the type, use digest to find same type in other db.
 // TypeId (model_type_dic.model_type_id) is model-unique type id, assigned by model compiler.
@@ -177,6 +184,10 @@ type TypeDicRow struct {
 	Digest      string // type_digest   VARCHAR(32)  NOT NULL
 	DicId       int    // dic_id        INT NOT NULL, -- dictionary id: 0=simple 1=logical 2=classification 3=range 4=partition 5=link
 	TotalEnumId int    // total_enum_id INT NOT NULL, -- if total enabled this is enum_value of total item =max+1
+	IsRange     bool   // if true then it is range type and enums calculated
+	MinEnumId   int    // min enum id
+	MaxEnumId   int    // max enum id
+	sizeOf      int    // number of enums
 }
 
 // TypeTxtRow is db row of type_dic_txt join to model_type_dic table

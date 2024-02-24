@@ -86,6 +86,12 @@ func (meta *ModelMeta) updateInternals() error {
 	// update type digest, if it is empty
 	for idx := range meta.Type {
 
+		if !meta.Type[idx].IsRange {
+			meta.Type[idx].sizeOf = len(meta.Type[idx].Enum)
+		} else {
+			meta.Type[idx].sizeOf = 1 + meta.Type[idx].MaxEnumId - meta.Type[idx].MinEnumId
+		}
+
 		if meta.Type[idx].Digest != "" { // digest already defined, skip
 			continue
 		}
@@ -114,11 +120,24 @@ func (meta *ModelMeta) updateInternals() error {
 		if err != nil {
 			return err
 		}
-		for k := range meta.Type[idx].Enum {
-			_, err := hMd5.Write([]byte(
-				strconv.Itoa(meta.Type[idx].Enum[k].EnumId) + "," + meta.Type[idx].Enum[k].Name + "\n"))
-			if err != nil {
-				return err
+		if !meta.Type[idx].IsRange {
+
+			for k := range meta.Type[idx].Enum {
+				_, err := hMd5.Write([]byte(
+					strconv.Itoa(meta.Type[idx].Enum[k].EnumId) + "," + meta.Type[idx].Enum[k].Name + "\n"))
+				if err != nil {
+					return err
+				}
+			}
+		} else {
+
+			for k := 0; k < meta.Type[idx].sizeOf; k++ {
+				sId := strconv.Itoa(k + meta.Type[idx].MinEnumId)
+				_, err := hMd5.Write(
+					[]byte(sId + "," + sId + "\n"))
+				if err != nil {
+					return err
+				}
 			}
 		}
 
@@ -152,11 +171,12 @@ func (meta *ModelMeta) updateInternals() error {
 				return errors.New("type " + strconv.Itoa(meta.Param[idx].Dim[i].TypeId) + " not found for " + meta.Param[idx].Name)
 			}
 			meta.Param[idx].Dim[i].typeOf = &meta.Type[j]
-			meta.Param[idx].Dim[i].sizeOf = len(meta.Param[idx].Dim[i].typeOf.Enum)
+			meta.Param[idx].Dim[i].sizeOf = meta.Param[idx].Dim[i].typeOf.sizeOf
 
 			if meta.Param[idx].Dim[i].sizeOf > 0 {
 				meta.Param[idx].sizeOf *= meta.Param[idx].Dim[i].sizeOf
 			}
+
 		}
 		meta.Param[idx].updateParameterColumnNames() // set dimensions db column name
 

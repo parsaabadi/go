@@ -122,7 +122,7 @@ func (cellCvt *CellTableCalcConverter) KeyIds(name string) (func(interface{}, []
 	return cvt, nil
 }
 
-// ToCsvIdRow return converter from output table calculated cell (run_id, calc_id, dimensions, calc_value) to csv row []string.
+// ToCsvIdRow return converter from output table calculated cell (run_id, calc_id, dimensions, calc_value) to csv id's row []string.
 //
 // Converter return isNotEmpty flag, it is always true if there were no error during conversion.
 // Converter simply does Sprint() for each dimension item id, run id and value.

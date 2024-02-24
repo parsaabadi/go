@@ -174,9 +174,15 @@ func cvtToSqlDbValue(isNullable bool, typeOf *TypeMeta, msgName string) func(boo
 			return nil, errors.New("invalid value type, expected: integer enum id " + msgName)
 		}
 
-		// validate enum id: it must be in enum list
-		for j := range typeOf.Enum {
-			if iv == typeOf.Enum[j].EnumId {
+		// validate enum id: it must be in enum list or in the range
+		if !typeOf.IsRange {
+			for j := range typeOf.Enum {
+				if iv == typeOf.Enum[j].EnumId {
+					return iv, nil
+				}
+			}
+		} else {
+			if typeOf.MinEnumId <= iv && iv <= typeOf.MaxEnumId {
 				return iv, nil
 			}
 		}
@@ -229,7 +235,7 @@ func digestIntKeysCellsFrom(hSum hash.Hash, modelDef *ModelMeta, name string, cs
 	}
 
 	// for each row append dimensions and value to digest
-	cvt, err := csvCvt.ToCsvIdRow() // converter from cell id's to csv row []string
+	cvt, err := csvCvt.ToCsvIdRow() // converter from cell id's to csv id's row []string
 	if err != nil {
 		return nil, &isOrderBy, err
 	}

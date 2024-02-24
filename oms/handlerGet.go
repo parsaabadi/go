@@ -75,29 +75,71 @@ func modelTextListHandler(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, r, mtl)
 }
 
-// modelMetaHandler return language-indepedent model metadata:
 // GET /api/model/:model
+// Get language-indepedent model metadata.
 // If multiple models with same name exist only one is returned.
 func modelMetaHandler(w http.ResponseWriter, r *http.Request) {
+	doModelMetaHandler(w, r, false)
+}
+
+// GET /api/model/:model/pack
+// Get language-indepedent model metadata with packed range types.
+// If multiple models with same name exist only one is returned.
+func modelMetaPackHandler(w http.ResponseWriter, r *http.Request) {
+	doModelMetaHandler(w, r, true)
+}
+
+// Get language-indepedent model metadata.
+// If isPack is true then return "packed" range types as [min, max] enum id's, not as full enum array.
+// If multiple models with same name exist only one is returned.
+func doModelMetaHandler(w http.ResponseWriter, r *http.Request, isPack bool) {
 
 	dn := getRequestParam(r, "model")
 
-	// start json response
-	jsonSetHeaders(w, r)
-	enc := json.NewEncoder(w)
+	// if model digest-or-name is empty then return empty results
+	if dn == "" {
+		omppLog.Log("Error: invalid (empty) model digest and name")
+		http.Error(w, "Invalid (empty) model digest and name", http.StatusBadRequest)
+		return
+	}
 
 	// find model metadata in catalog and write to output stream
 	m, err := theCatalog.ModelMetaByDigestOrName(dn)
 	if err != nil {
-		omppLog.Log("Error at model metadata search: ", dn, ": ", err.Error())
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		omppLog.Log("Error: model digest or name not found: ", dn)
+		http.Error(w, "Model digest or name not found"+": "+dn, http.StatusBadRequest)
 		return
 	}
-	err = enc.Encode(m)
-	if err != nil {
-		omppLog.Log("Error at model metadata write to output stream: ", dn, ": ", err.Error())
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+
+	// ranges are stored as "packed" [min, max] enum id's
+	if isPack {
+		jsonResponse(w, r, m) // response with "packed" metatada
+		return
 	}
+	// else: "unpack" range types during json marshal
+
+	// copy of ModelMeta, using alias for TypeMeta to do a special range type marshaling
+	mcp := struct {
+		Model  *db.ModelDicRow     // model_dic table row
+		Type   []db.TypeMetaUnpack // types metadata: type name and enums
+		Param  []db.ParamMeta      // parameters metadata: parameter name, type, dimensions
+		Table  []db.TableMeta      // output tables metadata: table name, dimensions, accumulators, expressions
+		Entity []db.EntityMeta     // model entities and attributes
+		Group  []db.GroupMeta      // groups of parameters or output tables
+	}{
+		Model:  &m.Model,
+		Type:   make([]db.TypeMetaUnpack, len(m.Type)),
+		Param:  m.Param,
+		Table:  m.Table,
+		Entity: m.Entity,
+		Group:  m.Group,
+	}
+	for k := range m.Type {
+		mcp.Type[k].TypeDicRow = &m.Type[k].TypeDicRow
+		mcp.Type[k].Enum = m.Type[k].Enum
+	}
+
+	jsonResponse(w, r, mcp)
 }
 
 // modelAllTextHandler return language-specific model metadata:

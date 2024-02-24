@@ -301,7 +301,7 @@ func translateMicroCalcToSql(
 	//	param.Name          => M1P103.param_value
 	//	param.Name[base]    => M1PB103.param_base
 	//	param.Name[variant] => M1PV103.param_var
-	// also retrun INNER JOIN between parameter CTE view and main table:
+	// also return INNER JOIN between parameter CTE view and main table:
 	//  INNER JOIN par_103   M1P103 ON (M1P103.run_id = M1.run_id)
 	//  INNER JOIN pbase_103 M1PB103
 	//  INNER JOIN pvar_103  M1PV103 ON (M1P103.run_id = M1.run_id)

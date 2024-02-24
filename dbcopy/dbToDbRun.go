@@ -316,7 +316,7 @@ func copyRunDbToDb(
 			if err != nil {
 				return 0, err
 			}
-			if cLst.Len() <= 0 { // microdata rows must exist if entity generation exist for that run
+			if cLst.Len() != pub.Entity[j].RowCount {
 				return 0, errors.New("missing run microdata values " + microLt.Name + " run id: " + strconv.Itoa(microLt.FromId))
 			}
 

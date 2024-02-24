@@ -568,9 +568,15 @@ func cvtParamValueToSqlString(param *ParamMeta, doubleFmt string) func(cell Cell
 				return "", errors.New("invalid parameter value, expected: integer enum id")
 			}
 
-			// validate enum id: it must be in enum list
-			for j := range param.typeOf.Enum {
-				if iv == param.typeOf.Enum[j].EnumId {
+			// validate enum id: it must be in enum list or in the range
+			if !param.typeOf.IsRange {
+				for j := range param.typeOf.Enum {
+					if iv == param.typeOf.Enum[j].EnumId {
+						return strconv.Itoa(iv), nil
+					}
+				}
+			} else {
+				if param.typeOf.MinEnumId <= iv && iv <= param.typeOf.MaxEnumId {
 					return strconv.Itoa(iv), nil
 				}
 			}

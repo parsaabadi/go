@@ -98,7 +98,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 	// INSERT INTO model_dic
 	//   (model_id, model_name, model_digest, model_type, model_ver, create_dt, default_lang_id)
 	// VALUES
-	//   (1234, 'modelOne', '1234abcd', 0, '1.0.0.0', '2012-08-17 16:04:59.148')
+	//   (1234, 'modelOne', '1234abcd', 0, '1.0.0.0', '2012-08-17 16:04:59.148', 0)
 	err = TrxUpdate(trx,
 		"INSERT INTO model_dic"+
 			" (model_id, model_name, model_digest, model_type, model_ver, create_dt, default_lang_id)"+
@@ -168,6 +168,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 			case err != nil:
 				return err
 			}
+			sHid := strconv.Itoa(modelDef.Type[idx].TypeHid)
 
 			// INSERT INTO type_dic
 			//   (type_hid, type_name, type_digest, dic_id, total_enum_id)
@@ -176,7 +177,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 			err = TrxUpdate(trx,
 				"INSERT INTO type_dic (type_hid, type_name, type_digest, dic_id, total_enum_id)"+
 					" VALUES ("+
-					strconv.Itoa(modelDef.Type[idx].TypeHid)+", "+
+					sHid+", "+
 					toQuotedMax(modelDef.Type[idx].Name, nameDbMax)+", "+
 					toQuotedMax(modelDef.Type[idx].Digest, codeDbMax)+", "+
 					strconv.Itoa(modelDef.Type[idx].DicId)+", "+
@@ -186,17 +187,33 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 			}
 
 			// INSERT INTO type_enum_lst (type_hid, enum_id, enum_name) VALUES (26, 0, '10')
-			for j := range modelDef.Type[idx].Enum {
+			if !modelDef.Type[idx].IsRange || len(modelDef.Type[idx].Enum) > 0 {
 
-				modelDef.Type[idx].Enum[j].ModelId = modelDef.Model.ModelId // update model id with db value
+				for j := range modelDef.Type[idx].Enum {
 
-				err = TrxUpdate(trx,
-					"INSERT INTO type_enum_lst (type_hid, enum_id, enum_name) VALUES ("+
-						strconv.Itoa(modelDef.Type[idx].TypeHid)+", "+
-						strconv.Itoa(modelDef.Type[idx].Enum[j].EnumId)+", "+
-						toQuotedMax(modelDef.Type[idx].Enum[j].Name, nameDbMax)+")")
-				if err != nil {
-					return err
+					modelDef.Type[idx].Enum[j].ModelId = modelDef.Model.ModelId // update model id with db value
+
+					err = TrxUpdate(trx,
+						"INSERT INTO type_enum_lst (type_hid, enum_id, enum_name) VALUES ("+
+							sHid+", "+
+							strconv.Itoa(modelDef.Type[idx].Enum[j].EnumId)+", "+
+							toQuotedMax(modelDef.Type[idx].Enum[j].Name, nameDbMax)+")")
+					if err != nil {
+						return err
+					}
+				}
+			} else {
+
+				for nId := modelDef.Type[idx].MinEnumId; nId <= modelDef.Type[idx].MaxEnumId; nId++ {
+
+					err = TrxUpdate(trx,
+						"INSERT INTO type_enum_lst (type_hid, enum_id, enum_name) VALUES ("+
+							sHid+", "+
+							strconv.Itoa(nId)+", "+
+							"'"+strconv.Itoa(nId)+"')")
+					if err != nil {
+						return err
+					}
 				}
 			}
 		}

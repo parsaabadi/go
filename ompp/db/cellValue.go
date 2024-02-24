@@ -58,7 +58,7 @@ type CsvConverter interface {
 	// if isAllAcc is true: sub_id,dim0,dim1,acc0,acc1,acc2
 	CsvHeader() ([]string, error)
 
-	// return converter from cell of parameter, output table or microdata to csv row []string.
+	// return converter from cell of parameter, output table or microdata to csv id's row []string.
 	// converter simply sprint() dimension id's and value into []string buffer.
 	// converter return isNotEmpty flag if cell value is not empty.
 	ToCsvIdRow() (func(interface{}, []string) (bool, error), error)

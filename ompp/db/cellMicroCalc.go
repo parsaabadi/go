@@ -101,7 +101,7 @@ func (cellCvt *CellMicroCalcConverter) CsvHeader() ([]string, error) {
 	return h, nil
 }
 
-// ToCsvIdRow return converter from microdata cell: (microdata key, attributes as enum id or built-in type value) to csv row []string.
+// ToCsvIdRow return converter from microdata cell: (microdata key, attributes as enum id or built-in type value) to csv id's row []string.
 //
 // Converter return isNotEmpty flag, it is always true if there were no error during conversion.
 // Converter simply does Sprint() for key and each attribute value, if value is NULL then empty "" string used.

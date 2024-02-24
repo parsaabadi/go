@@ -368,7 +368,7 @@ func makeWhereIdFilter(
 	// use IN filter by default
 	if op == InAutoOpFilter {
 
-		if len(typeOf.Enum) <= 0 {
+		if typeOf.sizeOf <= 0 {
 			return "", errors.New("auto filter cannot be applied to " + msgParent + " " + msgName)
 		}
 
@@ -376,24 +376,38 @@ func makeWhereIdFilter(
 		case nFlt == 1:
 			op = EqOpFilter // single value: use equal
 
-		case nFlt == len(typeOf.Enum)-1: // single value excluded: use NE
+		case nFlt == typeOf.sizeOf-1: // single value excluded: use NE
 
 			n := 0
-			for k := 0; k < len(typeOf.Enum); k++ {
+			if !typeOf.IsRange {
 
-				j := sort.Search(nFlt, func(i int) bool {
-					return flt.EnumIds[i] >= typeOf.Enum[k].EnumId
-				})
-				if j < 0 || j >= nFlt || flt.EnumIds[j] != typeOf.Enum[k].EnumId {
-					n++
-					if n > 1 {
-						break // this is not NE filter, more than one value not included
+				for k := 0; k < len(typeOf.Enum); k++ {
+
+					j := sort.Search(nFlt, func(i int) bool {
+						return flt.EnumIds[i] >= typeOf.Enum[k].EnumId
+					})
+					if j < 0 || j >= nFlt || flt.EnumIds[j] != typeOf.Enum[k].EnumId {
+						n++
+						if n > 1 {
+							break // this is not NE filter, more than one value not included
+						}
+						neVal = typeOf.Enum[k].EnumId // found a value for not equal condition
 					}
-					neVal = typeOf.Enum[k].EnumId // found a value for not equal condition
+				}
+			} else {
+
+				for _, e := range flt.EnumIds {
+					if e < typeOf.MinEnumId || typeOf.MaxEnumId < e {
+						n++
+						if n > 1 {
+							break // this is not NE filter, more than one value not included
+						}
+						neVal = e // found a value for not equal condition
+					}
 				}
 			}
 			if n <= 1 {
-				op = NeOpFilter
+				op = NeOpFilter // it is a NE filter: only one value excluded from the list of enums
 			}
 
 		default: // multiple values: check if BETWEEN possible else use IN
@@ -410,32 +424,49 @@ func makeWhereIdFilter(
 			}
 
 			// check if all type enums between min and max (no holes)
-			if len(typeOf.Enum) > 0 {
+			if !typeOf.IsRange {
+				if len(typeOf.Enum) > 0 {
 
-				isHole := true
-				for k := 0; k < len(typeOf.Enum); k++ {
+					isHole := true
+					for k := 0; k < len(typeOf.Enum); k++ {
 
-					if typeOf.Enum[k].EnumId < emin {
-						continue
-					}
-					if typeOf.Enum[k].EnumId > emax {
-						break
-					}
-					// between min and max
-					isHole = true
-					for _, e := range flt.EnumIds {
-						if e == typeOf.Enum[k].EnumId {
-							isHole = false
+						if typeOf.Enum[k].EnumId < emin {
+							continue
+						}
+						if typeOf.Enum[k].EnumId > emax {
 							break
 						}
+						// between min and max
+						isHole = true
+						for _, e := range flt.EnumIds {
+							if e == typeOf.Enum[k].EnumId {
+								isHole = false
+								break
+							}
+						}
+						if isHole {
+							break // current type enum id is not between min and max filter
+						}
 					}
-					if isHole {
-						break // current type enum id is not between min and max filter
+					if !isHole {
+						op = BetweenOpFilter // all type enum ids is between filter min and max enum ids
 					}
 				}
+			} else { // it is a range dimension
+				// all filter id's must be sequential int numbers, no holes
+				// filter id's are sorted already
+				isHole := false
+				ePrev := flt.EnumIds[0]
 
+				for k := 1; k < len(flt.EnumIds); k++ {
+					isHole = flt.EnumIds[k] != ePrev+1
+					if isHole {
+						break // current filter enum id is not previous + 1: hole found
+					}
+					ePrev = flt.EnumIds[k]
+				}
 				if !isHole {
-					op = BetweenOpFilter // all type enum ids is between filter min and max enum ids
+					op = BetweenOpFilter // all filter enum id's are sequential integers: it is a bteween filter
 				}
 			}
 		}

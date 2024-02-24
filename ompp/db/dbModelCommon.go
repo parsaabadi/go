@@ -4,7 +4,9 @@
 package db
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -401,13 +403,26 @@ func (typeOf *TypeMeta) itemCodeToId(msgName string, isTotalEnabled bool) (func(
 	case !typeOf.IsBuiltIn(): // enum dimension: find enum id by code
 
 		cvt = func(src string) (int, error) {
-			for j := range typeOf.Enum {
-				if src == typeOf.Enum[j].Name {
-					return typeOf.Enum[j].EnumId, nil
-				}
-			}
+
 			if isTotalEnabled && src == TotalEnumCode { // check is it total item
 				return typeOf.TotalEnumId, nil
+			}
+			if !typeOf.IsRange { // enum dimension: find enum id by code
+
+				for j := range typeOf.Enum {
+					if src == typeOf.Enum[j].Name {
+						return typeOf.Enum[j].EnumId, nil
+					}
+				}
+			} else { // range dimension: item id the same as code
+
+				nId, err := strconv.Atoi(src)
+				if err != nil {
+					return 0, errors.New("invalid value: " + src + " of: " + msgName)
+				}
+				if typeOf.MinEnumId <= nId && nId <= typeOf.MaxEnumId {
+					return nId, nil
+				}
 			}
 			return 0, errors.New("invalid value: " + src + " of: " + msgName)
 		}
@@ -415,6 +430,7 @@ func (typeOf *TypeMeta) itemCodeToId(msgName string, isTotalEnabled bool) (func(
 	case typeOf.IsBool(): // boolean dimension: false=>0, true=>1
 
 		cvt = func(src string) (int, error) {
+
 			if isTotalEnabled && src == TotalEnumCode { // check is it total item
 				return typeOf.TotalEnumId, nil
 			}
@@ -459,13 +475,22 @@ func (typeOf *TypeMeta) itemIdToCode(msgName string, isTotalEnabled bool) (func(
 	case !typeOf.IsBuiltIn(): // enum dimension: find enum code by id
 
 		cvt = func(itemId int) (string, error) {
-			for j := range typeOf.Enum {
-				if itemId == typeOf.Enum[j].EnumId {
-					return typeOf.Enum[j].Name, nil
-				}
-			}
+
 			if isTotalEnabled && itemId == typeOf.TotalEnumId { // check is it total item
 				return TotalEnumCode, nil
+			}
+			if !typeOf.IsRange { // enum dimension: find enum code by id
+
+				for j := range typeOf.Enum {
+					if itemId == typeOf.Enum[j].EnumId {
+						return typeOf.Enum[j].Name, nil
+					}
+				}
+			} else { // range dimension: item id the same as code
+
+				if typeOf.MinEnumId <= itemId && itemId <= typeOf.MaxEnumId {
+					return strconv.Itoa(itemId), nil
+				}
 			}
 			return "", errors.New("invalid value: " + strconv.Itoa(itemId) + " of: " + msgName)
 		}
@@ -522,4 +547,53 @@ func NameOfRunStatus(status string) string {
 		return "delete"
 	}
 	return "unknown"
+}
+
+// marshal type row and type enums[] to json, "unpack" range enums which may be not loaded from database
+func (src *TypeMetaUnpack) MarshalJSON() ([]byte, error) {
+
+	tm := struct {
+		*TypeDicRow
+		Enum []TypeEnumRow
+	}{
+		TypeDicRow: src.TypeDicRow,
+		Enum:       src.Enum,
+	}
+	// if type not a range or enums loaded from database then use standard json marshal
+	if !tm.IsRange {
+		return json.Marshal(tm)
+	}
+	if len(tm.Enum) > 0 {
+		return json.Marshal(tm) // all range enums are loaded from database
+	}
+	// else it is a range type and there no enums: marshal array of [min, max] enum Id and Name
+
+	// convert type row
+	bt, err := json.Marshal(tm.TypeDicRow)
+	if err != nil {
+		return bt, err
+	}
+
+	// remove closing } bracket
+	sHead := string(bt)
+	sHead = sHead[:len(sHead)-1]
+
+	// start with type json and open "Enum":[ array
+	var sb strings.Builder
+	sb.WriteString(sHead + `,"Enum":[`)
+
+	// for each enum append to output json: {"ModelId":101,"TypeId":103,"EnumId":1234,"Name":"1234"}
+	isFirst := true
+	for nId := tm.MinEnumId; nId <= tm.MaxEnumId; nId++ {
+		if !isFirst {
+			sb.WriteRune(',')
+		}
+		fmt.Fprintf(&sb, "{\"ModelId\":%d,\"TypeId\":%d,\"EnumId\":%d,\"Name\":\"%d\"}", tm.ModelId, tm.TypeId, nId, nId)
+		isFirst = false
+	}
+
+	// close ] enum array and object } bracket
+	sb.WriteString("]}")
+
+	return []byte(sb.String()), nil
 }

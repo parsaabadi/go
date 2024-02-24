@@ -179,6 +179,7 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 				&r.ModelId, &r.TypeId, &r.TypeHid, &r.Name, &r.Digest, &r.DicId, &r.TotalEnumId); err != nil {
 				return err
 			}
+			r.IsRange = r.DicId == rangeDicId
 			meta.Type = append(meta.Type, TypeMeta{TypeDicRow: r})
 			return nil
 		})
@@ -187,6 +188,42 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 	}
 	if len(meta.Type) <= 0 {
 		return nil, errors.New("no model types found")
+	}
+
+	// for each type find min, max and count of enum id's
+	nTypeIdx := 0
+	err = SelectRows(dbConn,
+		"SELECT"+
+			" M.model_id, M.model_type_id, MIN(E.enum_id), MAX(E.enum_id), COUNT(E.enum_id)"+
+			" FROM type_dic H"+
+			" INNER JOIN model_type_dic M ON (M.type_hid = H.type_hid)"+
+			" INNER JOIN type_enum_lst E ON (E.type_hid = H.type_hid)"+
+			" WHERE M.model_id = "+smId+
+			" GROUP BY M.model_id, M.model_type_id"+
+			" ORDER BY 1, 2",
+		func(rows *sql.Rows) error {
+			var modelId, typeId, minE, maxE, countE int
+			if err := rows.Scan(
+				&modelId, &typeId, &minE, &maxE, &countE); err != nil {
+				return err
+			}
+			for ; nTypeIdx < len(meta.Type); nTypeIdx++ {
+				if meta.Type[nTypeIdx].ModelId == modelId && meta.Type[nTypeIdx].TypeId == typeId {
+					meta.Type[nTypeIdx].MinEnumId = minE
+					meta.Type[nTypeIdx].MaxEnumId = maxE
+					meta.Type[nTypeIdx].sizeOf = countE
+					break
+				}
+			}
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+	for nTypeIdx = 0; nTypeIdx < len(meta.Type); nTypeIdx++ {
+		if !meta.Type[nTypeIdx].IsBuiltIn() && meta.Type[nTypeIdx].sizeOf <= 0 {
+			return nil, errors.New("invalid (empty) type, no enums found:" + " " + meta.Type[nTypeIdx].Name + " " + "model:" + " " + modelRow.Name + " " + modelRow.Digest)
+		}
 	}
 
 	// select db rows from type_enum_lst join to model_type_dic
@@ -209,7 +246,10 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 				return errors.New("type " + strconv.Itoa(r.TypeId) + " not found for " + r.Name)
 			}
 
-			meta.Type[k].Enum = append(meta.Type[k].Enum, r)
+			if meta.Type[k].IsRange { // skip range enums, store range as [min, max] id's
+				return nil
+			}
+			meta.Type[k].Enum = append(meta.Type[k].Enum, r) // this not a range: append enum item
 			return nil
 		})
 	if err != nil {
@@ -306,7 +346,7 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 				return errors.New("type " + strconv.Itoa(r.TypeId) + " not found for " + r.Name)
 			}
 			r.typeOf = &meta.Type[k]
-			r.sizeOf = len(r.typeOf.Enum)
+			r.sizeOf = r.typeOf.sizeOf
 
 			meta.Param[idx].Dim = append(meta.Param[idx].Dim, r)
 			return nil

@@ -76,7 +76,7 @@ func copyDbToDb(
 	}
 
 	// source: get model text (description and notes) in all languages
-	modelTxt, err := db.GetModelText(srcDb, srcModel.Model.ModelId, "")
+	modelTxt, err := db.GetModelText(srcDb, srcModel.Model.ModelId, "", true)
 	if err != nil {
 		return err
 	}

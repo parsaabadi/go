@@ -202,7 +202,7 @@ func translateExprCalcToSql(table *TableMeta, paramCols map[string]paramColumn, 
 	//	param.Name          => BP103.param_value
 	//	param.Name[base]    => PB103.param_base
 	//	param.Name[variant] => PV103.param_var
-	// also retrun INNER JOIN between parameter CTE view and main table:
+	// also return INNER JOIN between parameter CTE view and main table:
 	//  INNER JOIN par_103   BP103 ON (BP103.run_id = B.run_id)
 	//  INNER JOIN pbase_103 PB103
 	//  INNER JOIN pvar_103  PV103 ON (PV103.run_id = V.run_id)

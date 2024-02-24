@@ -50,7 +50,7 @@ func GetModelTextRowById(dbConn *sql.DB, modelId int, langCode string) ([]ModelT
 
 // GetModelText return model text metadata: description and notes.
 // If langCode not empty then only specified language selected else all languages.
-func GetModelText(dbConn *sql.DB, modelId int, langCode string) (*ModelTxtMeta, error) {
+func GetModelText(dbConn *sql.DB, modelId int, langCode string, isPack bool) (*ModelTxtMeta, error) {
 
 	// select model name and digest by id
 	meta := &ModelTxtMeta{
@@ -114,25 +114,31 @@ func GetModelText(dbConn *sql.DB, modelId int, langCode string) (*ModelTxtMeta, 
 	}
 
 	// select db rows from type_dic_txt join to model_type_dic
+
+	rangeT := map[int]bool{} // map type id to is a range flag
+
 	err = SelectRows(dbConn,
 		"SELECT"+
-			" M.model_id, M.model_type_id, T.lang_id, L.lang_code, T.descr, T.note"+
+			" M.model_id, M.model_type_id, T.lang_id, H.dic_id, L.lang_code, T.descr, T.note"+
 			" FROM type_dic_txt T"+
 			" INNER JOIN model_type_dic M ON (M.type_hid = T.type_hid)"+
+			" INNER JOIN type_dic H ON (H.type_hid = T.type_hid)"+
 			" INNER JOIN lang_lst L ON (L.lang_id = T.lang_id)"+
 			where+
 			" ORDER BY 1, 2, 3",
 		func(rows *sql.Rows) error {
 			var r TypeTxtRow
-			var lId int
+			var lId, dicId int
 			var note sql.NullString
 			if err := rows.Scan(
-				&r.ModelId, &r.TypeId, &lId, &r.LangCode, &r.Descr, &note); err != nil {
+				&r.ModelId, &r.TypeId, &lId, &dicId, &r.LangCode, &r.Descr, &note); err != nil {
 				return err
 			}
 			if note.Valid {
 				r.Note = note.String
 			}
+			rangeT[r.TypeId] = dicId == rangeDicId
+
 			meta.TypeTxt = append(meta.TypeTxt, r)
 			return nil
 		})
@@ -160,7 +166,12 @@ func GetModelText(dbConn *sql.DB, modelId int, langCode string) (*ModelTxtMeta, 
 			if note.Valid {
 				r.Note = note.String
 			}
-			meta.TypeEnumTxt = append(meta.TypeEnumTxt, r)
+			// skip empty text: if description and notes are empty
+			// skip range text: if pack range flag set then skip range text, it is always empty
+			if r.Descr == "" && r.Note == "" || isPack && rangeT[r.TypeId] {
+				return nil
+			}
+			meta.TypeEnumTxt = append(meta.TypeEnumTxt, r) // append enum item: it is not a range type or do not pack range types
 			return nil
 		})
 	if err != nil {

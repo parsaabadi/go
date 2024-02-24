@@ -15,7 +15,7 @@ import (
 func toModelTextCsv(dbConn *sql.DB, modelId int, outDir string) error {
 
 	// get model text metadata in all languages
-	modelTxt, err := db.GetModelText(dbConn, modelId, "")
+	modelTxt, err := db.GetModelText(dbConn, modelId, "", true)
 	if err != nil {
 		return err
 	}
@@ -90,7 +90,11 @@ func toModelTextCsv(dbConn *sql.DB, modelId int, outDir string) error {
 		[]string{"model_id", "model_type_id", "enum_id", "lang_code", "descr", "note"},
 		func() (bool, []string, error) {
 
-			if 0 <= idx && idx < len(modelTxt.TypeEnumTxt) {
+			for ; idx < len(modelTxt.TypeEnumTxt); idx++ {
+
+				if modelTxt.TypeEnumTxt[idx].Descr == "" && modelTxt.TypeEnumTxt[idx].Note == "" {
+					continue // skip empty enum text
+				}
 				row[1] = strconv.Itoa(modelTxt.TypeEnumTxt[idx].TypeId)
 				row[2] = strconv.Itoa(modelTxt.TypeEnumTxt[idx].EnumId)
 				row[3] = modelTxt.TypeEnumTxt[idx].LangCode
@@ -101,6 +105,7 @@ func toModelTextCsv(dbConn *sql.DB, modelId int, outDir string) error {
 				} else {
 					row[5] = modelTxt.TypeEnumTxt[idx].Note
 				}
+
 				idx++
 				return false, row, nil
 			}

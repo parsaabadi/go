@@ -193,24 +193,35 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 			}
 
 			// if end of current type enums then find next type with enum list
-			if j < 0 || j >= len(modelDef.Type[idx].Enum) {
+			if j < 0 ||
+				!modelDef.Type[idx].IsRange && j >= len(modelDef.Type[idx].Enum) ||
+				modelDef.Type[idx].IsRange && j > modelDef.Type[idx].MaxEnumId-modelDef.Type[idx].MinEnumId {
+
 				j = 0
 				for {
 					idx++
 					if idx < 0 || idx >= len(modelDef.Type) { // end of type rows
 						return true, row, nil
 					}
-					if len(modelDef.Type[idx].Enum) > 0 {
+					if modelDef.Type[idx].IsRange || len(modelDef.Type[idx].Enum) > 0 {
 						break
 					}
 				}
 			}
 
 			// make type enum []string row
-			row[1] = strconv.Itoa(modelDef.Type[idx].Enum[j].TypeId)
-			row[2] = strconv.Itoa(modelDef.Type[idx].Enum[j].EnumId)
-			row[3] = modelDef.Type[idx].Enum[j].Name
+			if !modelDef.Type[idx].IsRange {
+				row[1] = strconv.Itoa(modelDef.Type[idx].Enum[j].TypeId)
+				row[2] = strconv.Itoa(modelDef.Type[idx].Enum[j].EnumId)
+				row[3] = modelDef.Type[idx].Enum[j].Name
+			} else {
+				row[1] = strconv.Itoa(modelDef.Type[idx].TypeId)
+				sId := strconv.Itoa(modelDef.Type[idx].MinEnumId + j) // range type: enum id is the same as enum code
+				row[2] = sId
+				row[3] = sId
+			}
 			j++
+
 			return false, row, nil
 		})
 	if err != nil {

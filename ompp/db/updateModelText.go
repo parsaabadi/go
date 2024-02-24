@@ -9,7 +9,7 @@ import (
 	"strconv"
 )
 
-// UpdateModelText insert new or update existing model text (description and notes) in database.
+// delete existing and insert new model text (description and notes) in database.
 //
 // Model id, type Hid, parameter Hid, table Hid, language id updated with actual database id's
 func UpdateModelText(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangMeta, modelTxt *ModelTxtMeta) error {
@@ -41,7 +41,7 @@ func UpdateModelText(dbConn *sql.DB, modelDef *ModelMeta, langDef *LangMeta, mod
 	return nil
 }
 
-// doUpdateModelText insert new or update existing model text (description and notes) in database.
+// delete existing and insert new model text (description and notes) in database.
 // It does update as part of transaction
 // Model id, type Hid, parameter Hid, entity Hid, table Hid, language id updated with actual database id's
 func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, modelTxt *ModelTxtMeta) error {
@@ -73,6 +73,7 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 	}
 
 	// update type_dic_txt and ids
+	prevHid := -1
 	for idx := range modelTxt.TypeTxt {
 
 		modelTxt.TypeTxt[idx].ModelId = modelDef.Model.ModelId // update model id
@@ -84,17 +85,23 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 		}
 		hId := modelDef.Type[k].TypeHid
 
+		// delete existing enum text and type text
+		if hId != prevHid {
+			err := TrxUpdate(trx, "DELETE FROM type_enum_txt WHERE type_hid = "+strconv.Itoa(hId))
+			if err != nil {
+				return err
+			}
+			err = TrxUpdate(trx, "DELETE FROM type_dic_txt WHERE type_hid = "+strconv.Itoa(hId))
+			if err != nil {
+				return err
+			}
+			prevHid = hId
+		}
+
 		// if language code valid then delete and insert into type_dic_txt
 		if lId, ok := langDef.IdByCode(modelTxt.TypeTxt[idx].LangCode); ok {
 
 			err := TrxUpdate(trx,
-				"DELETE FROM type_dic_txt"+
-					" WHERE type_hid = "+strconv.Itoa(hId)+
-					" AND lang_id = "+strconv.Itoa(lId))
-			if err != nil {
-				return err
-			}
-			err = TrxUpdate(trx,
 				"INSERT INTO type_dic_txt (type_hid, lang_id, descr, note) VALUES ("+
 					strconv.Itoa(hId)+", "+
 					strconv.Itoa(lId)+", "+
@@ -111,6 +118,11 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 
 		modelTxt.TypeEnumTxt[idx].ModelId = modelDef.Model.ModelId // update model id
 
+		// skip if description and notes are empty
+		if modelTxt.TypeEnumTxt[idx].Descr == "" && modelTxt.TypeEnumTxt[idx].Note == "" {
+			continue
+		}
+
 		// find type Hid
 		k, ok := modelDef.TypeByKey(modelTxt.TypeEnumTxt[idx].TypeId)
 		if !ok {
@@ -122,14 +134,6 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 		if lId, ok := langDef.IdByCode(modelTxt.TypeEnumTxt[idx].LangCode); ok {
 
 			err := TrxUpdate(trx,
-				"DELETE FROM type_enum_txt"+
-					" WHERE type_hid = "+strconv.Itoa(hId)+
-					" AND enum_id = "+strconv.Itoa(modelTxt.TypeEnumTxt[idx].EnumId)+
-					" AND lang_id = "+strconv.Itoa(lId))
-			if err != nil {
-				return err
-			}
-			err = TrxUpdate(trx,
 				"INSERT INTO type_enum_txt (type_hid, enum_id, lang_id, descr, note) VALUES ("+
 					strconv.Itoa(hId)+", "+
 					strconv.Itoa(modelTxt.TypeEnumTxt[idx].EnumId)+", "+

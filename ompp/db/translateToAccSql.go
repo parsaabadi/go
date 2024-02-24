@@ -216,7 +216,7 @@ func transalteAccAggrToSql(table *TableMeta, paramCols map[string]paramColumn, c
 
 	// translate parameter names by replacing it with CTE alias and CTE parameter value name:
 	//	param.Name          => M1P103.param_value
-	// also retrun INNER JOIN between parameter CTE view and main table:
+	// also return INNER JOIN between parameter CTE view and main table:
 	//  INNER JOIN par_103   M1P103 ON (M1P103.run_id = M1.run_id)
 	// it cannot be run comparison
 	makeParamColName := func(colKey string, isSimple, isVar bool, alias string) (string, string, error) {

@@ -186,7 +186,7 @@ func (mc *ModelCatalog) loadModelText(dn string) bool {
 	}
 
 	// read model text metadata from database and update catalog
-	txt, err := db.GetModelText(dbConn, mdRow.ModelId, "")
+	txt, err := db.GetModelText(dbConn, mdRow.ModelId, "", true)
 	if err != nil {
 		omppLog.Log("Error at get model text metadata: ", dn, ": ", err.Error())
 		return false

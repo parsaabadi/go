@@ -112,7 +112,7 @@ func (cellCvt *CellExprConverter) KeyIds(name string) (func(interface{}, []int) 
 	return cvt, nil
 }
 
-// ToCsvIdRow return converter from output table cell (expr_id, dimensions, value) to csv row []string.
+// ToCsvIdRow return converter from output table cell (expr_id, dimensions, value) to csv id's row []string.
 //
 // Converter return isNotEmpty flag, it return false if IsNoZero or IsNoNull is set and cell value is empty or zero.
 // Converter simply does Sprint() for each dimension item id, expression id and value.
