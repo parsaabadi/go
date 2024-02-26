@@ -69,12 +69,6 @@ type TypeMeta struct {
 	Enum       []TypeEnumRow // type enum rows: type_enum_lst join to model_type_dic
 }
 
-// model type metadata, "unpacked" during marshaled to json (range enums restored)
-type TypeMetaUnpack struct {
-	TypeDicRow *TypeDicRow   // model type rows: type_dic join to model_type_dic
-	Enum       []TypeEnumRow // type enum rows: type_enum_lst join to model_type_dic
-}
-
 // ParamMeta is parameter metadata: parameter name, type, dimensions
 type ParamMeta struct {
 	ParamDicRow                  // model parameter row: parameter_dic join to model_parameter_dic table

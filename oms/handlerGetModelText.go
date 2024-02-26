@@ -4,9 +4,7 @@
 package main
 
 import (
-	"encoding/json"
 	"net/http"
-	"strconv"
 
 	"github.com/openmpp/go/ompp/db"
 	"github.com/openmpp/go/ompp/omppLog"
@@ -40,7 +38,7 @@ func doModelTextHandler(w http.ResponseWriter, r *http.Request, isPack bool) {
 	type TypeDescrNote struct {
 		Type        *db.TypeDicRow      // model type row: type_dic join to model_type_dic
 		DescrNote   aDescrNote          // from type_dic_txt
-		TypeEnumTxt []TypeEnumDescrNote // type enum text rows: type_enum_txt join to model_type_dic
+		TypeEnumTxt []typeEnumDescrNote // type enum text rows: type_enum_txt join to model_type_dic
 	}
 
 	// ParamDimsDescrNote is join of parameter_dims, model_parameter_dic, parameter_dims_txt
@@ -147,7 +145,7 @@ func doModelTextHandler(w http.ResponseWriter, r *http.Request, isPack bool) {
 		// model types
 		for k := range mt.TypeTxt {
 			mt.TypeTxt[k].Type = &meta.Type[k].TypeDicRow
-			mt.TypeTxt[k].TypeEnumTxt = make([]TypeEnumDescrNote, len(meta.Type[k].Enum))
+			mt.TypeTxt[k].TypeEnumTxt = make([]typeEnumDescrNote, len(meta.Type[k].Enum))
 			mt.TypeTxt[k].DescrNote.LangCode = &emptyStr
 			mt.TypeTxt[k].DescrNote.Descr = &emptyStr
 			mt.TypeTxt[k].DescrNote.Note = &emptyStr
@@ -1341,14 +1339,14 @@ func doModelTextHandler(w http.ResponseWriter, r *http.Request, isPack bool) {
 	// copy of modelMetaDescrNote, using alias for TypeMeta to do a special range type marshaling
 	mcp := struct {
 		*ModelDicDescrNote                       // model text rows: model_dic_txt
-		TypeTxt            []TypeUnpackDescrNote // model type text rows: type_dic_txt join to model_type_dic
+		TypeTxt            []typeUnpackDescrNote // model type text rows: type_dic_txt join to model_type_dic
 		ParamTxt           []ParamDescrNote      // model parameter text rows: parameter_dic, model_parameter_dic, parameter_dic_txt, parameter_dims_txt
 		TableTxt           []TableDescrNote      // model output table text rows: table_dic, model_table_dic, table_dic_txt, table_dims_txt, table_acc_txt, table_expr_txt
 		EntityTxt          []EntityDescrNote     // model entity text rows: join of entity_dic, model_entity_dic, entity_dic_txt, entity_attr_txt
 		GroupTxt           []GroupDescrNote      // model group text rows: group_txt join to group_lst
 	}{
 		ModelDicDescrNote: &mt.ModelDicDescrNote,
-		TypeTxt:           make([]TypeUnpackDescrNote, len(mt.TypeTxt)),
+		TypeTxt:           make([]typeUnpackDescrNote, len(mt.TypeTxt)),
 		ParamTxt:          mt.ParamTxt,
 		TableTxt:          mt.TableTxt,
 		EntityTxt:         mt.EntityTxt,
@@ -1370,88 +1368,4 @@ func doModelTextHandler(w http.ResponseWriter, r *http.Request, isPack bool) {
 	}
 
 	jsonResponse(w, r, mcp)
-}
-
-type aDescrNote struct {
-	LangCode *string // lang_code VARCHAR(32)  NOT NULL
-	Descr    *string // descr     VARCHAR(255) NOT NULL
-	Note     *string // note      VARCHAR(32000)
-}
-
-// TypeEnumDescrNote is join of type_enum_lst, model_type_dic, type_enum_txt
-type TypeEnumDescrNote struct {
-	Enum      *db.TypeEnumRow // type enum row: type_enum_lst join to model_type_dic
-	DescrNote aDescrNote      // from type_enum_txt
-}
-
-// TypeDescrNote is join of type_dic_txt, model_type_dic, type_dic_txt
-type TypeUnpackDescrNote struct {
-	Type        *db.TypeDicRow      // model type row: type_dic join to model_type_dic
-	DescrNote   *aDescrNote         // from type_dic_txt
-	TypeEnumTxt []TypeEnumDescrNote // type enum text rows: type_enum_txt join to model_type_dic
-	langCode    string              // language for description and notes
-}
-
-// marshal type text metadata to json, "unpack" range enums which may be not loaded from database
-func (src *TypeUnpackDescrNote) MarshalJSON() ([]byte, error) {
-
-	tm := struct {
-		Type        *db.TypeDicRow
-		DescrNote   *aDescrNote
-		TypeEnumTxt []TypeEnumDescrNote // type enum text rows: type_enum_txt join to model_type_dic
-	}{
-		Type:        src.Type,
-		DescrNote:   src.DescrNote,
-		TypeEnumTxt: src.TypeEnumTxt,
-	}
-	// if type not a range or enums loaded from database then use standard json marshal
-	if !tm.Type.IsRange {
-		return json.Marshal(tm)
-	}
-	if len(tm.TypeEnumTxt) > 0 {
-		return json.Marshal(tm) // all range enums are loaded from database
-	}
-	// else it is a range type and there no enums: marshal array of [min, max] enum Id, Name, Descr
-
-	n := 1 + (tm.Type.MaxEnumId - tm.Type.MinEnumId)
-	tm.TypeEnumTxt = make([]TypeEnumDescrNote, n)
-	emptyNote := ""
-
-	for k := 0; k < n; k++ {
-
-		nId := k + tm.Type.MinEnumId
-		et := TypeEnumDescrNote{
-			Enum: &db.TypeEnumRow{
-				ModelId: tm.Type.ModelId,
-				TypeId:  tm.Type.TypeId,
-				EnumId:  nId,
-				Name:    strconv.Itoa(nId),
-			},
-			DescrNote: aDescrNote{
-				LangCode: &src.langCode,
-				Note:     &emptyNote,
-			},
-		}
-		et.DescrNote.Descr = &et.Enum.Name // for range type enum code same as description and same as enum id
-
-		tm.TypeEnumTxt[k] = et
-	}
-
-	return json.Marshal(tm)
-}
-
-// marshal enum text to json, if not description or notes not epty, otherwise return "DescrNote": null
-func (src TypeEnumDescrNote) MarshalJSON() ([]byte, error) {
-
-	tm := struct {
-		Enum      *db.TypeEnumRow
-		DescrNote *aDescrNote
-	}{
-		Enum: src.Enum,
-	}
-	if src.DescrNote.Descr != nil && *src.DescrNote.Descr != "" || src.DescrNote.Note != nil && *src.DescrNote.Note != "" {
-		tm.DescrNote = &src.DescrNote
-	}
-
-	return json.Marshal(tm)
 }

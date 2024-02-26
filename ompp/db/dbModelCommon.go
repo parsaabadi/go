@@ -4,9 +4,7 @@
 package db
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -547,53 +545,4 @@ func NameOfRunStatus(status string) string {
 		return "delete"
 	}
 	return "unknown"
-}
-
-// marshal type row and type enums[] to json, "unpack" range enums which may be not loaded from database
-func (src *TypeMetaUnpack) MarshalJSON() ([]byte, error) {
-
-	tm := struct {
-		*TypeDicRow
-		Enum []TypeEnumRow
-	}{
-		TypeDicRow: src.TypeDicRow,
-		Enum:       src.Enum,
-	}
-	// if type not a range or enums loaded from database then use standard json marshal
-	if !tm.IsRange {
-		return json.Marshal(tm)
-	}
-	if len(tm.Enum) > 0 {
-		return json.Marshal(tm) // all range enums are loaded from database
-	}
-	// else it is a range type and there no enums: marshal array of [min, max] enum Id and Name
-
-	// convert type row
-	bt, err := json.Marshal(tm.TypeDicRow)
-	if err != nil {
-		return bt, err
-	}
-
-	// remove closing } bracket
-	sHead := string(bt)
-	sHead = sHead[:len(sHead)-1]
-
-	// start with type json and open "Enum":[ array
-	var sb strings.Builder
-	sb.WriteString(sHead + `,"Enum":[`)
-
-	// for each enum append to output json: {"ModelId":101,"TypeId":103,"EnumId":1234,"Name":"1234"}
-	isFirst := true
-	for nId := tm.MinEnumId; nId <= tm.MaxEnumId; nId++ {
-		if !isFirst {
-			sb.WriteRune(',')
-		}
-		fmt.Fprintf(&sb, "{\"ModelId\":%d,\"TypeId\":%d,\"EnumId\":%d,\"Name\":\"%d\"}", tm.ModelId, tm.TypeId, nId, nId)
-		isFirst = false
-	}
-
-	// close ] enum array and object } bracket
-	sb.WriteString("]}")
-
-	return []byte(sb.String()), nil
 }

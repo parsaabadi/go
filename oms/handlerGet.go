@@ -4,7 +4,6 @@
 package main
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/openmpp/go/ompp/db"
@@ -117,27 +116,7 @@ func doModelMetaHandler(w http.ResponseWriter, r *http.Request, isPack bool) {
 		return
 	}
 	// else: "unpack" range types during json marshal
-
-	// copy of ModelMeta, using alias for TypeMeta to do a special range type marshaling
-	mcp := struct {
-		Model  *db.ModelDicRow     // model_dic table row
-		Type   []db.TypeMetaUnpack // types metadata: type name and enums
-		Param  []db.ParamMeta      // parameters metadata: parameter name, type, dimensions
-		Table  []db.TableMeta      // output tables metadata: table name, dimensions, accumulators, expressions
-		Entity []db.EntityMeta     // model entities and attributes
-		Group  []db.GroupMeta      // groups of parameters or output tables
-	}{
-		Model:  &m.Model,
-		Type:   make([]db.TypeMetaUnpack, len(m.Type)),
-		Param:  m.Param,
-		Table:  m.Table,
-		Entity: m.Entity,
-		Group:  m.Group,
-	}
-	for k := range m.Type {
-		mcp.Type[k].TypeDicRow = &m.Type[k].TypeDicRow
-		mcp.Type[k].Enum = m.Type[k].Enum
-	}
+	mcp := copyModelMetaToUnpack(m)
 
 	jsonResponse(w, r, mcp)
 }
@@ -166,22 +145,18 @@ func modelAllTextHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// start json response
-	jsonSetHeaders(w, r)
-	enc := json.NewEncoder(w)
+	// "unpack" range types during json marshal
+	// copy of ModelMeta, using alias for TypeMeta to do a special range type marshaling
+	mcp := copyModelMetaToUnpack(m)
 
 	mf := struct {
-		*db.ModelMeta    // model metadata db rows, language-neutral portion of it
+		*modelMetaUnpack // model metadata db rows, language-neutral portion of it
 		*db.ModelTxtMeta // language-specific portion of model metadata db rows
 	}{
-		ModelMeta:    m,
-		ModelTxtMeta: t,
+		modelMetaUnpack: mcp,
+		ModelTxtMeta:    t,
 	}
-	err = enc.Encode(mf)
-	if err != nil {
-		omppLog.Log("Error at model metadata write to output stream: ", dn, ": ", err.Error())
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+	jsonResponse(w, r, mf)
 }
 
 // langListHandler return list of model langauages:
