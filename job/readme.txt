@@ -9,7 +9,7 @@ job/        : this folder must be shared between all oms instances
            jobs.queue-#-$INSTANCE-#-paused : if this file exist the instance model runs queue is paused
            jobs.queue.all.paused : if this file exist all model runs queues are paused
     job.ini   : job control settings
-    disk.ini  : storage quotas storage control settings
+    disk.ini  : storage control settings: disk usage quotas
 
 To use model run jobs use -oms.JobDir option, for example:
 
