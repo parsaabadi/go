@@ -16,24 +16,24 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
-// jobDirValid checking job control configuration, return bool flag to indicate if past sub-directory exists.
+// jobDirValid checking job control configuration
+// and return flags: is job control enabled, is past sub-directory exists, is disk usage control enabled.
 // if job control directory is empty then job control disabled.
 // if job control directory not empty then it must have active, state, queue, history subdirectories.
-// if state.json exists then it must be a valid configuration file.
-func jobDirValid(jobDir string) (bool, bool, error) {
+func jobDirValid(jobDir string) (bool, bool, bool, error) {
 
 	if jobDir == "" {
-		return false, false, nil // job control disabled
+		return false, false, false, nil // job control disabled
 	}
 	if !dirExist(jobDir) ||
 		!dirExist(filepath.Join(jobDir, "active")) || !dirExist(filepath.Join(jobDir, "state")) ||
 		!dirExist(filepath.Join(jobDir, "queue")) || !dirExist(filepath.Join(jobDir, "history")) {
-		return false, false, nil
+		return false, false, false, nil
 	}
 	isPast := dirExist(filepath.Join(jobDir, "past"))
 	isDisk := fileExist(filepath.Join(jobDir, "disk.ini"))
 
-	return isPast, isDisk, nil
+	return true, isPast, isDisk, nil
 }
 
 // Return job control file path if model is running now.
@@ -580,6 +580,9 @@ func makeOmsTick() (string, bool) {
 // Create new compute server file with current timestamp.
 // For example: job/state/comp-start-#-name-#-2022_07_08_23_45_12_123-#-1257894000000
 func createCompStateFile(name, state string) string {
+	if !theCfg.isJobControl {
+		return "" // job control disabled
+	}
 
 	ts := time.Now()
 	fp := filepath.Join(
@@ -641,6 +644,9 @@ func jobStateRead() (*jobControlState, bool) {
 
 // save job control state into the file, return false on error
 func jobStateWrite(jsc jobControlState) bool {
+	if !theCfg.isJobControl {
+		return false // job control disabled
+	}
 
 	err := helper.ToJsonIndentFile(jobStatePath(), jsc)
 	if err != nil {
@@ -652,6 +658,9 @@ func jobStateWrite(jsc jobControlState) bool {
 
 // save storage usage state into the file, return false on error
 func diskUseStateWrite(duState *diskUseState, dbUse []dbDiskUse) bool {
+	if !theCfg.isDiskUse {
+		return false // job control disabled
+	}
 
 	deleteDiskUseStateFiles() // delete all existing disk use state files for current instance
 
@@ -707,6 +716,9 @@ func memoryRunSize(procCount, threadCount, procMem, threadMem int) int {
 // Create MPI job hostfile, e.g.: models/log/host-2022_07_08_23_03_27_555-_4040.ini
 // Return path to host file and or error if file create failed.
 func createHostFile(job *RunJob, hfCfg hostIni, compUse []computeUse) (string, error) {
+	if !theCfg.isJobControl {
+		return "", nil // job control disabled
+	}
 
 	if !job.IsMpi || !hfCfg.isUse || len(compUse) <= 0 { // hostfile is not required
 		return "", nil

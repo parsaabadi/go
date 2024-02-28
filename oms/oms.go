@@ -430,11 +430,10 @@ func mainBody(args []string) error {
 
 	// check if job control is required:
 	theCfg.jobDir = runOpts.String(jobDirArgKey)
-	theCfg.isJobPast, theCfg.isDiskUse, err = jobDirValid(theCfg.jobDir)
+	theCfg.isJobControl, theCfg.isJobPast, theCfg.isDiskUse, err = jobDirValid(theCfg.jobDir)
 	if err != nil {
 		return errors.New("Error: invalid job control directory: " + err.Error())
 	}
-	theCfg.isJobControl = theCfg.jobDir != ""
 	if theCfg.isJobControl {
 		omppLog.Log("Jobs directory:       ", theCfg.jobDir)
 	}
