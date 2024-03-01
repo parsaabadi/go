@@ -13,7 +13,8 @@ import (
 )
 
 // return service configuration: model catalog, run catalog, job service and disk use configuartion.
-// GET /api/service/config
+//
+//	GET /api/service/config
 func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 
 	st := struct {
@@ -53,7 +54,8 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // return job service state: model runs queue, active runs and run history
-// GET /api/service/state
+//
+//	GET /api/service/state
 func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
 
 	// service state: model run jobs queue, active jobs, history jobs and compute servers state
@@ -133,7 +135,8 @@ func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // return disk use state: summary of disk use and list of model database files size.
-// GET /api/service/disk-use
+//
+//	GET /api/service/disk-use
 func serviceDiskUseHandler(w http.ResponseWriter, r *http.Request) {
 
 	st := struct {
@@ -152,7 +155,8 @@ func serviceDiskUseHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // refersh disk use state: scan disk usage now.
-// POST /api/service/disk-use/refresh
+//
+//	POST /api/service/disk-use/refresh
 func serviceRefreshDiskUseHandler(w http.ResponseWriter, r *http.Request) {
 
 	if theCfg.isDiskUse {
@@ -202,8 +206,9 @@ func emptyRunJobState(submitStamp string) runJobState {
 	}
 }
 
-// jobActiveHandler return active job state, run log file content and, if model run exists in database then also run progress
-// GET /api/service/job/active/:job
+// return active job state, run log file content and, if model run exists in database then also run progress
+//
+//	GET /api/service/job/active/:job
 func jobActiveHandler(w http.ResponseWriter, r *http.Request) {
 
 	// url or query parameters: submission stamp
@@ -231,8 +236,9 @@ func jobActiveHandler(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, r, st) // return final result
 }
 
-// jobQueueHandler return queue job state
-// GET /api/service/job/queue/:job
+// return queue job state
+//
+//	GET /api/service/job/queue/:job
 func jobQueueHandler(w http.ResponseWriter, r *http.Request) {
 
 	// url or query parameters: submission stamp
@@ -260,8 +266,9 @@ func jobQueueHandler(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, r, st) // return final result
 }
 
-// jobHistoryHandler return history job state, run log file content and, if model run exists in database then also return run progress
-// GET /api/service/job/history/:job
+// return history job state, run log file content and, if model run exists in database then also return run progress
+//
+//	GET /api/service/job/history/:job
 func jobHistoryHandler(w http.ResponseWriter, r *http.Request) {
 
 	// url or query parameters: submission stamp
@@ -290,7 +297,7 @@ func jobHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, r, st) // return final result
 }
 
-// getJobState returns job control file content, run log file content and, if model run exists in database then also return run progress
+// returns job control file content, run log file content and, if model run exists in database then also return run progress
 // it is clear (set to empty) server-only part of job state: pid, exe path, log path and environment
 func getJobState(filePath string) (bool, *runJobState) {
 
@@ -348,8 +355,10 @@ func getJobState(filePath string) (bool, *runJobState) {
 	return true, &st // return final result
 }
 
-// jobMoveHandler move job into the specified queue index position.
-// PUT /api/service/job/move/:pos/:job
+// move job into the specified queue index position.
+//
+//	PUT /api/service/job/move/:pos/:job
+//
 // Top of the queue position is zero, negative position treated as zero.
 // If position number exceeds queue length then job moved to the bottom of the queue.
 func jobMoveHandler(w http.ResponseWriter, r *http.Request) {
@@ -384,8 +393,9 @@ func jobMoveHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Location", "service/job/move/true/"+sp+"/"+submitStamp)
 }
 
-// jobHistoryDeleteHandler delete only job history json file, it does not delete model run.
-// DELETE /api/service/job/delete/history/:job
+// delete only job history json file, it does not delete model run.
+//
+//	DELETE /api/service/job/delete/history/:job
 func jobHistoryDeleteHandler(w http.ResponseWriter, r *http.Request) {
 
 	// url or query parameters: submission stamp

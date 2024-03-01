@@ -798,21 +798,21 @@ func apiAdminRoutes(router *vestigo.Router) {
 	// POST /api/admin/all-models/close
 	router.Post("/api/admin/all-models/close", allModelsCloseHandler, logRequest)
 
+	// POST /api/admin/model/:model/close
+	router.Post("/api/admin/model/:model/close", modelCloseHandler, logRequest)
+
 	// POST /api/admin/jobs-pause/:pause
 	router.Post("/api/admin/jobs-pause/:pause", jobsPauseHandler, logRequest)
 	router.Post("/api/admin/jobs-pause/", http.NotFound)
-}
 
-// add web-service /admin-all routes for global administrative tasks, enabled by -oms.Admin run option
-func adminAllRoutes(router *vestigo.Router) {
+	// add web-service /admin-all routes for global administrative tasks, enabled by -oms.Admin run option
 
-	if !theCfg.isAdminAll {
-		return
+	if theCfg.isAdminAll {
+
+		// POST /admin-all/jobs-pause/:pause
+		router.Post("/admin-all/jobs-pause/:pause", jobsAllPauseHandler, logRequest)
+		router.Post("/admin-all/jobs-pause/", http.NotFound)
 	}
-
-	// POST /admin-all/jobs-pause/:pause
-	router.Post("/admin-all/jobs-pause/:pause", jobsAllPauseHandler, logRequest)
-	router.Post("/admin-all/jobs-pause/", http.NotFound)
 
 	// DO NOT USE in production, development only
 	//

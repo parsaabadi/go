@@ -23,7 +23,7 @@ type RunCatalog struct {
 	modelRuns       map[string]map[string]*runStateLog // map each model digest to run stamps to run state and log file
 	JobServiceState                                    // jobs service state: paused, resources usage and limits
 	DiskUse         diskUseState                       // storage space use state
-	DbDiskUse       []dbDiskUse                        // model db file disk usage
+	DbDiskUse       []dbDiskUse                        // db files disk usage, it may be not a model.sqlite but also model.db file
 	queueKeys       []string                           // run submission stamps of model runs waiting in the queue
 	queueJobs       map[string]queueJobFile            // model run jobs waiting in the queue
 	activeJobs      map[string]runJobFile              // active (currently running) model run jobs

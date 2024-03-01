@@ -15,15 +15,23 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
-// runUploadPostHandler post of model run zip archive in home/io/upload folder.
-// POST /api/upload/model/:model/run
-// POST /api/upload/model/:model/run/:run
+// post of model run zip archive in home/io/upload folder.
+//
+//	POST /api/upload/model/:model/run
+//	POST /api/upload/model/:model/run/:run
+//
 // Zip archive is the same as created by dbcopy command line utilty.
 // Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
 func runUploadPostHandler(w http.ResponseWriter, r *http.Request) {
 	// url or query parameters
 	dn := getRequestParam(r, "model")  // model digest-or-name
 	rName := getRequestParam(r, "run") // run name
+
+	// block upload if disk space usage exceed the limits
+	if isOver, _ := theRunCatalog.getDiskUseStatus(); isOver {
+		http.Error(w, "Disk space usage exceeds quota, upload disabled", http.StatusBadRequest)
+		return
+	}
 
 	// find model metadata by digest or name
 	mb, ok := theCatalog.modelBasicByDigestOrName(dn)
@@ -133,9 +141,11 @@ func runUploadPostHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Location", "/api/upload/model/"+dn+"/run/"+runName+"/"+baseName)
 }
 
-// worksetUploadPostHandler post of model workset zip archive in home/io/upload folder.
-// POST /api/upload/model/:model/workset
-// POST /api/upload/model/:model/workset/:set
+// post of model workset zip archive in home/io/upload folder.
+//
+//	POST /api/upload/model/:model/workset
+//	POST /api/upload/model/:model/workset/:set
+//
 // Zip archive is the same as created by dbcopy command line utilty.
 // Dimension(s) and enum-based parameters returned as enum codes, not enum id's.
 // Posted multi-part form can have optional "workset-upload-options" part with json upload options
@@ -145,6 +155,12 @@ func worksetUploadPostHandler(w http.ResponseWriter, r *http.Request) {
 	// url or query parameters
 	dn := getRequestParam(r, "model") // model digest-or-name
 	wsn := getRequestParam(r, "set")  // workset name
+
+	// block upload if disk space usage exceed the limits
+	if isOver, _ := theRunCatalog.getDiskUseStatus(); isOver {
+		http.Error(w, "Disk space usage exceeds quota, upload disabled", http.StatusBadRequest)
+		return
+	}
 
 	// find model metadata by digest or name
 	mb, ok := theCatalog.modelBasicByDigestOrName(dn)

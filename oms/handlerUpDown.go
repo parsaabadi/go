@@ -18,21 +18,25 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
-// fileLogDownloadGetHandler return .download.log file by name and download status.
-// GET /api/download/log/file/:name
+// return .download.log file by name and download status.
+//
+//	GET /api/download/log/file/:name
+//
 // Download status is one of: progress ready error or "" if unknown
 func fileLogDownloadGetHandler(w http.ResponseWriter, r *http.Request) {
 	fileLogUpDownGet("download", theCfg.downloadDir, w, r)
 }
 
-// fileLogUploadGetHandler return .upload.log file by name and upload status.
-// GET /api/upload/log/file/:name
+// return .upload.log file by name and upload status.
+//
+//	GET /api/upload/log/file/:name
+//
 // Upload status is one of: progress ready error or "" if unknown
 func fileLogUploadGetHandler(w http.ResponseWriter, r *http.Request) {
 	fileLogUpDownGet("upload", theCfg.uploadDir, w, r)
 }
 
-// fileLogUpDownGet return .up-or-down.log file by name and status.
+// return .up-or-down.log file by name and status.
 // Status is one of: progress ready error or "" if unknown
 func fileLogUpDownGet(upDown string, upDownDir string, w http.ResponseWriter, r *http.Request) {
 
@@ -67,21 +71,25 @@ func fileLogUpDownGet(upDown string, upDownDir string, w http.ResponseWriter, r 
 	jsonResponse(w, r, uds) // return log file content and status
 }
 
-// allDownloadLogGetHandler return all .download.log files and download status.
-// GET /api/download/log/all
+// return all .download.log files and download status.
+//
+//	GET /api/download/log/all
+//
 // Download status is one of: progress ready error or "" if unknown
 func allLogDownloadGetHandler(w http.ResponseWriter, r *http.Request) {
 	allLogUpDownGet("download", theCfg.downloadDir, w, r)
 }
 
-// allUploadLogGetHandler return all .upload.log files and download status.
-// GET /api/upload/log/all
+// return all .upload.log files and download status.
+//
+//	GET /api/upload/log/all
+//
 // Upload status is one of: progress ready error or "" if unknown
 func allLogUploadGetHandler(w http.ResponseWriter, r *http.Request) {
 	allLogUpDownGet("upload", theCfg.uploadDir, w, r)
 }
 
-// allDownloadLogGetHandler return all .up-or-down.log files and status.
+// return all .up-or-down.log files and status.
 // Status is one of: progress ready error or "" if unknown
 func allLogUpDownGet(upDown string, upDownDir string, w http.ResponseWriter, r *http.Request) {
 
@@ -98,21 +106,25 @@ func allLogUpDownGet(upDown string, upDownDir string, w http.ResponseWriter, r *
 	jsonResponse(w, r, udsLst)
 }
 
-// modelDownloadLogGetHandler return model .download.log files with download status.
-// GET /api/download/log/model/:model
+// return model .download.log files with download status.
+//
+//	GET /api/download/log/model/:model
+//
 // Download status is one of: progress ready error or "" if unknown
 func modelLogDownloadGetHandler(w http.ResponseWriter, r *http.Request) {
 	modelLogUpDownGet("download", theCfg.downloadDir, w, r)
 }
 
-// modelUploadLogGetHandler return model .upload.log files with upload status.
-// GET /api/upload/log/model/:model
+// return model .upload.log files with upload status.
+//
+//	GET /api/upload/log/model/:model
+//
 // Upload status is one of: progress ready error or "" if unknown
 func modelLogUploadGetHandler(w http.ResponseWriter, r *http.Request) {
 	modelLogUpDownGet("upload", theCfg.uploadDir, w, r)
 }
 
-// modelUpDownLogGet return model .up-or-down.log files and status.
+// return model .up-or-down.log files and status.
 // Status is one of: progress ready error or "" if unknown
 func modelLogUpDownGet(upDown string, upDownDir string, w http.ResponseWriter, r *http.Request) {
 
@@ -139,19 +151,21 @@ func modelLogUpDownGet(upDown string, upDownDir string, w http.ResponseWriter, r
 	jsonResponse(w, r, udsLst)
 }
 
-// fileTreeDownloadGetHandler return file tree (file path, size, modification time) by folder name.
-// GET /api/download/file-tree/:folder
+// return file tree (file path, size, modification time) by folder name.
+//
+//	GET /api/download/file-tree/:folder
 func fileTreeDownloadGetHandler(w http.ResponseWriter, r *http.Request) {
 	fileTreeUpDownGet(theCfg.downloadDir, w, r)
 }
 
-// fileTreeUploadGetHandler return file tree (file path, size, modification time) by folder name.
-// GET /api/upload/file-tree/:folder
+// return file tree (file path, size, modification time) by folder name.
+//
+//	GET /api/upload/file-tree/:folder
 func fileTreeUploadGetHandler(w http.ResponseWriter, r *http.Request) {
 	fileTreeUpDownGet(theCfg.uploadDir, w, r)
 }
 
-// fileTreeUpDownGet return file tree (file path, size, modification time) by folder name.
+// return file tree (file path, size, modification time) by folder name.
 func fileTreeUpDownGet(upDownDir string, w http.ResponseWriter, r *http.Request) {
 
 	// url or query parameters
@@ -193,8 +207,10 @@ func fileTreeUpDownGet(upDownDir string, w http.ResponseWriter, r *http.Request)
 	jsonResponse(w, r, treeLst)
 }
 
-// downloadDeleteHandler delete download files by folder name.
-// DELETE /api/download/delete/:folder
+// delete download files by folder name.
+//
+//	DELETE /api/download/delete/:folder
+//
 // Delete folder, .zip file and .download.log files
 func downloadDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	upDownDelete("download", theCfg.downloadDir, false, w, r)
@@ -202,14 +218,18 @@ func downloadDeleteHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // starts deleting of download files by folder name.
-// DELETE /api/download/start/delete/:folder
+//
+//	DELETE /api/download/start/delete/:folder
+//
 // Delete started on separate thread and does delete of folder, .zip file and .download.log files
 func downloadDeleteAsyncHandler(w http.ResponseWriter, r *http.Request) {
 	upDownDelete("download", theCfg.downloadDir, true, w, r)
 }
 
-// uploadDeleteHandler delete upload files by folder name.
-// DELETE /api/upload/delete/:folder
+// delete upload files by folder name.
+//
+//	DELETE /api/upload/delete/:folder
+//
 // Delete folder, .zip file and .upload.log files
 func uploadDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	upDownDelete("upload", theCfg.uploadDir, false, w, r)
@@ -217,7 +237,9 @@ func uploadDeleteHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // starts deleting of upload files by folder name.
-// DELETE /api/upload/start/delete/:folder
+//
+//	DELETE /api/upload/start/delete/:folder
+//
 // Delete started on separate thread and does delete of folder, .zip file and .upload.log files
 func uploadDeleteAsyncHandler(w http.ResponseWriter, r *http.Request) {
 	upDownDelete("upload", theCfg.uploadDir, true, w, r)
@@ -231,7 +253,9 @@ func downloadAllDeleteHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // start deleting all download files for all models.
-// DELETE /api/download/start/delete-all
+//
+//	DELETE /api/download/start/delete-all
+//
 // Delete started on separate thread and fo all models deletes folder, .zip file and .download.log files
 func downloadAllDeleteAsyncHandler(w http.ResponseWriter, r *http.Request) {
 	upDownAllDelete("download", theCfg.downloadDir, true, w, r)
@@ -245,7 +269,9 @@ func uploadAllDeleteHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // start deleting all upload files for all models.
-// DELETE /api/upload/start/delete-all
+//
+//	DELETE /api/upload/start/delete-all
+//
 // Delete started on separate thread and for all models deletes folder, .zip file and .upload.log files
 func uploadAllDeleteAsyncHandler(w http.ResponseWriter, r *http.Request) {
 	upDownAllDelete("upload", theCfg.uploadDir, true, w, r)

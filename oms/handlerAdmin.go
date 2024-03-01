@@ -10,8 +10,9 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
-// allModelsRefreshHandler reload models catalog: rescan models directory tree and reload model.sqlite.
-// POST /api/admin/all-models/refresh
+// reload models catalog: rescan models directory tree and reload model.sqlite.
+//
+//	POST /api/admin/all-models/refresh
 func allModelsRefreshHandler(w http.ResponseWriter, r *http.Request) {
 
 	// model directory required to build list of model sqlite files
@@ -42,14 +43,15 @@ func allModelsRefreshHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 }
 
-// allModelsCloseHandler clean models catalog: close all model.sqlite connections and clean models catalog
-// POST /api/admin/all-models/close
+// clean models catalog: close all model.sqlite connections and clean models catalog
+//
+//	POST /api/admin/all-models/close
 func allModelsCloseHandler(w http.ResponseWriter, r *http.Request) {
 
 	// close models catalog
 	modelDir, _ := theCatalog.getModelDir()
 
-	if err := theCatalog.close(); err != nil {
+	if err := theCatalog.closeAll(); err != nil {
 		omppLog.Log(err)
 		http.Error(w, "Failed to close models catalog: "+modelDir, http.StatusBadRequest)
 		return
@@ -58,21 +60,50 @@ func allModelsCloseHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 }
 
-// jobsPauseHandler pause or resume jobs queue processing by this oms instance
-// POST /api/admin/jobs-pause/:pause
+// close model.sqlite connection and clean model from catalog
+//
+//	POST /api/admin/model/:model/close
+//
+// Model identified by digest-or-name.
+// If multiple models with same name exist then result is undefined.
+func modelCloseHandler(w http.ResponseWriter, r *http.Request) {
+
+	dn := getRequestParam(r, "model")
+
+	if dn == "" {
+		omppLog.Log("Error: invalid (empty) model digest and name")
+		http.Error(w, "Invalid (empty) model digest and name", http.StatusBadRequest)
+		return
+	}
+
+	// close model and remove from catalog
+	if err := theCatalog.closeModel(dn); err != nil {
+		omppLog.Log(err)
+		http.Error(w, "Failed to close model"+": "+dn, http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Location", "/api/admin/model/"+dn+"/close")
+	w.Header().Set("Content-Type", "text/plain")
+}
+
+// pause or resume jobs queue processing by this oms instance
+//
+//	POST /api/admin/jobs-pause/:pause
 func jobsPauseHandler(w http.ResponseWriter, r *http.Request) {
 	doJobsPause(jobQueuePausedPath(theCfg.omsName), "/api/admin/jobs-pause/", w, r)
 }
 
-// jobsAllPauseHandler pause or resume jobs queue processing by all oms instances
-// POST /admin-all/jobs-pause/:pause
+// pause or resume jobs queue processing by all oms instances
+//
+//	POST /admin-all/jobs-pause/:pause
 func jobsAllPauseHandler(w http.ResponseWriter, r *http.Request) {
 	doJobsPause(jobAllQueuePausedPath(), "/admin-all/jobs-pause/", w, r)
 }
 
 // Pause or resume jobs queue processing by this oms instance all by all oms instances
-// POST /admin/jobs-pause/:pause
-// POST /admin-all/jobs-pause/:pause
+//
+//	POST /admin/jobs-pause/:pause
+//	POST /admin-all/jobs-pause/:pause
 func doJobsPause(filePath, urlPath string, w http.ResponseWriter, r *http.Request) {
 
 	// url or query parameters: pause or resume boolean flag

@@ -6,6 +6,8 @@ package main
 import (
 	"io/fs"
 	"path/filepath"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/openmpp/go/ompp/config"
@@ -31,6 +33,7 @@ type diskUseState struct {
 
 // model and database file info
 type dbDiskUse struct {
+	DbPath string // path to model.sqlite, relative to model root and slashed: dir/sub/model.sqlite
 	Digest string // model digest
 	Size   int64  // bytes, if non zero then model database file size
 	ModTs  int64  // db file mod time info update time (unix milliseconds)
@@ -107,23 +110,60 @@ func scanDisk(doneC <-chan bool, refreshC <-chan bool) {
 			}
 		}
 
-		// for all models get database file size and mod time
-		mbs := theCatalog.allModels()
+		// scan models/bin directory and for each .sqlite or .db file get database file size and mod time
+		mDir, _ := theCatalog.getModelDir()
 
-		if len(dbUse) != len(mbs) {
-			dbUse = make([]dbDiskUse, len(mbs)) // model catalog updated
+		duState.BinSize = 0
+		dbUse = dbUse[:0]
+
+		err := filepath.Walk(mDir, func(path string, fi fs.FileInfo, err error) error {
+			if err != nil {
+				omppLog.Log("Error at directory walk: ", path, " : ", err.Error())
+				return err
+			}
+			if fi.IsDir() {
+				return nil
+			}
+			duState.BinSize = duState.BinSize + fi.Size() // total models/bin size
+
+			isSqlite := strings.EqualFold(filepath.Ext(path), ".sqlite")
+			if !isSqlite && !strings.EqualFold(filepath.Ext(path), ".db") {
+				return nil
+			}
+
+			// it is a database file: get path, size and mod time
+			rp, e := filepath.Rel(mDir, path)
+			if e != nil {
+				omppLog.Log("Error at directory walk: ", path, " : ", e.Error())
+				return e
+			}
+			nSize := fi.Size()
+
+			dbUse = append(dbUse,
+				dbDiskUse{
+					DbPath: filepath.ToSlash(rp),
+					Size:   nSize,
+					ModTs:  fi.ModTime().UnixMilli(),
+				})
+			if isSqlite {
+				duState.DbSize = duState.DbSize + nSize // total size of all model.sqlite files
+			}
+			return nil
+		})
+		if err != nil {
+			// omppLog.Log("Error at directory walk: ", folderPath, " :", err.Error())
 		}
 
+		// for currently open model.sqlite databases set model digest
+		mbs := theCatalog.allModels()
+
 		for k := 0; k < len(mbs); k++ {
-
-			dbUse[k].Digest = mbs[k].model.Digest
-			dbUse[k].Size = 0
-
-			if st, e := fileStat(mbs[k].dbPath); e == nil { // skip on file errors
-				dbUse[k].Size = st.Size()
-				dbUse[k].ModTs = st.ModTime().UnixMilli()
+			j := slices.IndexFunc(
+				dbUse, func(du dbDiskUse) bool { return du.DbPath == mbs[k].relPath },
+			)
+			if j >= 0 && j < len(dbUse) {
+				dbUse[j].Digest = mbs[k].model.Digest
 			}
-			duState.DbSize = duState.DbSize + dbUse[k].Size
 		}
 
 		// get total size of all files in the folder and sub-folders
@@ -147,10 +187,7 @@ func scanDisk(doneC <-chan bool, refreshC <-chan bool) {
 			return nTotal
 		}
 
-		// total size of models/bin directory, downlod and upload
-		mDir, _ := theCatalog.getModelDir()
-		duState.BinSize = doTotalSize(mDir)
-
+		// total size of downlod and upload directories
 		if theCfg.downloadDir != "" {
 			duState.DownSize = doTotalSize(theCfg.downloadDir)
 		}
@@ -190,23 +227,11 @@ func (rsc *RunCatalog) updateDiskUse(duState *diskUseState, dbUse []dbDiskUse) {
 
 	rsc.DiskUse = *duState
 
-	// copy db file info for current models list
-	if len(rsc.DbDiskUse) != len(rsc.models) {
-		rsc.DbDiskUse = make([]dbDiskUse, len(rsc.models))
-	}
+	// copy all db files disk usage, it can be not only model.sqlite but also model.db files
+	rsc.DbDiskUse = rsc.DbDiskUse[:0]
 
-	k := 0
-	for dgst := range rsc.models {
-
-		rsc.DbDiskUse[k] = dbDiskUse{Digest: dgst}
-
-		for j := 0; j < len(dbUse); j++ {
-			if dbUse[j].Digest == dgst {
-				rsc.DbDiskUse[k] = dbUse[j]
-				break
-			}
-		}
-		k++
+	for _, du := range dbUse {
+		rsc.DbDiskUse = append(rsc.DbDiskUse, du)
 	}
 }
 

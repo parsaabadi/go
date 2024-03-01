@@ -504,7 +504,6 @@ func mainBody(args []string) error {
 	apiUserRoutes(router)     // web-service /api routes for user-specific requests
 	apiServiceRoutes(router)  // web-service /api routes for service state
 	apiAdminRoutes(router)    // web-service /api routes for oms instance administrative tasks
-	adminAllRoutes(router)    // web-service /admin-all routes for global administrative tasks
 
 	// serve static content from home/io/download folder
 	if isDownload {
@@ -539,7 +538,7 @@ func mainBody(args []string) error {
 
 		// close models catalog
 		omppLog.Log("Shutdown server...")
-		if err := theCatalog.close(); err != nil {
+		if err := theCatalog.closeAll(); err != nil {
 			omppLog.Log(err)
 		}
 

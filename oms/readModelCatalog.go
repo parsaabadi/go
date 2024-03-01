@@ -60,11 +60,12 @@ func (mc *ModelCatalog) allModels() []modelBasic {
 			model:    mc.modelLst[idx].meta.Model,
 			binDir:   mc.modelLst[idx].binDir,
 			dbPath:   mc.modelLst[idx].dbPath,
-			relDir:   mc.modelLst[idx].relDir,
+			relPath:  mc.modelLst[idx].relPath,
 			logDir:   mc.modelLst[idx].logDir,
 			isLogDir: mc.modelLst[idx].isLogDir,
 			extra:    mc.modelLst[idx].extra,
 		}
+
 	}
 	return mbs
 }
@@ -82,7 +83,7 @@ func (mc *ModelCatalog) modelBasicByDigestOrName(dn string) (modelBasic, bool) {
 			model:    mc.modelLst[idx].meta.Model,
 			binDir:   mc.modelLst[idx].binDir,
 			dbPath:   mc.modelLst[idx].dbPath,
-			relDir:   mc.modelLst[idx].relDir,
+			relPath:  mc.modelLst[idx].relPath,
 			logDir:   mc.modelLst[idx].logDir,
 			isLogDir: mc.modelLst[idx].isLogDir,
 			extra:    mc.modelLst[idx].extra,

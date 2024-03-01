@@ -82,7 +82,7 @@ func (mc *ModelCatalog) refreshSqlite(modelDir, modelLogDir string) error {
 			omppLog.Log("Error: ", fp, " : ", err.Error())
 			continue
 		}
-		dbRel, err := filepath.Rel(modelDir, dbDir)
+		dbRel, err := filepath.Rel(modelDir, fp)
 		if err != nil {
 			omppLog.Log("Error: ", fp, " : ", err.Error())
 			continue
@@ -169,7 +169,7 @@ func (mc *ModelCatalog) refreshSqlite(modelDir, modelLogDir string) error {
 				dbConn:        dbc,
 				binDir:        dbDir,
 				dbPath:        dbPath,
-				relDir:        filepath.ToSlash(dbRel),
+				relPath:       filepath.ToSlash(dbRel),
 				logDir:        modelLogDir,
 				isLogDir:      isLogDir,
 				meta:          meta,
@@ -205,7 +205,7 @@ func (mc *ModelCatalog) refreshSqlite(modelDir, modelLogDir string) error {
 }
 
 // close all db-connection to model.sqlite files and clear model list.
-func (mc *ModelCatalog) close() error {
+func (mc *ModelCatalog) closeAll() error {
 
 	// lock and update model catalog
 	mc.theLock.Lock()
@@ -225,6 +225,39 @@ func (mc *ModelCatalog) close() error {
 	// clear model list
 	mc.modelLst = []modelDef{}
 	return firstErr
+}
+
+// close model db-connection and remove model from models list.
+func (mc *ModelCatalog) closeModel(dn string) error {
+
+	if dn == "" {
+		return nil
+	}
+	// lock and update model catalog
+	mc.theLock.Lock()
+	defer mc.theLock.Unlock()
+
+	// close model db connection and remove model from the list
+	isFound := false
+	n := 0
+
+	for k := range mc.modelLst {
+
+		if !isFound && (mc.modelLst[k].meta.Model.Digest == dn || mc.modelLst[k].meta.Model.Name == dn) {
+			if err := mc.modelLst[k].dbConn.Close(); err != nil {
+				omppLog.Log("Error: close db connection error" + ": " + dn + " : " + err.Error())
+				return err
+			}
+			isFound = true
+			continue
+		}
+		mc.modelLst[n] = mc.modelLst[k]
+		n++
+	}
+	if isFound {
+		mc.modelLst = mc.modelLst[:n]
+	}
+	return nil
 }
 
 // getNewTimeStamp return new unique timestamp and source time of it.

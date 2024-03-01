@@ -14,8 +14,10 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
-// runModelHandler run the model identified by model digest-or-name with specified run options.
-// POST /api/run
+// run the model identified by model digest-or-name with specified run options.
+//
+//	POST /api/run
+//
 // Json RunRequest structure is posted to specify model digest-or-name, run stamp and othe run options.
 // If multiple models with same name exist then result is undefined.
 // Model run console output redirected to log file: models/log/modelName.runStamp.console.log
@@ -34,6 +36,12 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 				req.Opts["OpenM.MessageLanguage"] = rqLangTags[0].String()
 			}
 		}
+	}
+
+	// block model run if disk space usage exceed the limits
+	if isOver, _ := theRunCatalog.getDiskUseStatus(); isOver {
+		http.Error(w, "Disk space usage exceeds quota, model run disabled", http.StatusBadRequest)
+		return
 	}
 
 	// find model metadata by digest or name
@@ -186,8 +194,10 @@ func resFromRequest(req RunRequest) (RunRes, bool, bool) {
 	return res, isNotOnRoot, true
 }
 
-// stopModelHandler kill model run by model digest-or-name and run stamp or remove model run request from queue by submit stamp.
-// PUT /api/run/stop/model/:model/stamp/:stamp
+// kill model run by model digest-or-name and run stamp or remove model run request from queue by submit stamp.
+//
+//	PUT /api/run/stop/model/:model/stamp/:stamp
+//
 // If multiple models with same name exist then result is undefined.
 func stopModelHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -216,9 +226,11 @@ func stopModelHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 }
 
-// runLogPageHandler return model run status and log by model digest-or-name and run-or-submit stamp.
-// GET /api/run/log/model/:model/stamp/:stamp
-// GET /api/run/log/model/:model/stamp/:stamp/start/:start/count/:count
+// return model run status and log by model digest-or-name and run-or-submit stamp.
+//
+//	GET /api/run/log/model/:model/stamp/:stamp
+//	GET /api/run/log/model/:model/stamp/:stamp/start/:start/count/:count
+//
 // If multiple models with same name exist then result is undefined.
 // Model run log is same as console output and include stdout and stderr.
 // Run log can be returned by page defined by zero-based "start" line and line count.

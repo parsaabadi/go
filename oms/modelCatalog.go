@@ -37,9 +37,9 @@ type ModelCatalogConfig struct {
 // modelDef is database connection and model metadata database rows
 type modelDef struct {
 	dbConn        *sql.DB           // database connection
-	binDir        string            // database and .exe directory: directory part of models/bin/dir/model.sqlite
-	dbPath        string            // absolute path to sqlite database file: /root/models/bin/dir/model.sqlite
-	relDir        string            // relative database directory, relative to model root and slashed: dir/sub
+	binDir        string            // database and .exe directory: directory part of models/bin/dir/sub/model.sqlite
+	dbPath        string            // absolute path to sqlite database file: /root/models/bin/dir/sub/model.sqlite
+	relPath       string            // relative path to sqlite database file: relative to model root and slashed: dir/sub/model.sqlite
 	logDir        string            // model log directory
 	isLogDir      bool              // if true then use model log directory for model run logs
 	meta          *db.ModelMeta     // model metadata, language-neutral part, should not be nil
@@ -55,9 +55,9 @@ type modelDef struct {
 // modelBasic is basic model info: name, digest, files location
 type modelBasic struct {
 	model    db.ModelDicRow // model_dic db row
-	binDir   string         // database and .exe directory: directory part of models/bin/model.sqlite
-	dbPath   string         // absolute path to sqlite database file: models/bin/model.sqlite
-	relDir   string         // relative database directory, relative to model root and slashed: dir/sub
+	binDir   string         // database and .exe directory: directory part of models/bin/dir/sub/model.sqlite
+	dbPath   string         // absolute path to sqlite database file: models/bin/dir/sub/model.sqlite
+	relPath  string         // relative path to sqlite database file: relative to model root and slashed: dir/sub/model.sqlite
 	logDir   string         // model log directory
 	isLogDir bool           // if true then use model log directory for model run logs
 	extra    string         // if not empty then model extra content from models/bin/dir/model.extra.json
