@@ -205,6 +205,11 @@ func modelDbCleanupHandler(w http.ResponseWriter, r *http.Request) {
 		lp = path.Join(d, lp)
 	}
 
+	// join db path with models/bin root
+	if mr, isOk := theCatalog.getModelDir(); isOk {
+		dbPath = path.Join(mr, dbPath)
+	}
+
 	// start database cleanup
 	go func(cmdPath, mDbPath, mName, mDigest, logPath string) {
 
@@ -251,7 +256,7 @@ func modelDbCleanupHandler(w http.ResponseWriter, r *http.Request) {
 		go doLog(logPath, errPipe, errDoneC)
 
 		// start db cleanup
-		omppLog.Log(cmdPath, " ", strings.Join(cmd.Args, " "))
+		omppLog.Log(strings.Join(cmd.Args, " "))
 		isLogOk = writeToCmdLog(logPath, true, strings.Join(cmd.Args, " "))
 
 		err = cmd.Start()
@@ -285,7 +290,9 @@ func modelDbCleanupHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// else: completed OK
-		if !isLogOk {
+		if isLogOk {
+			writeToCmdLog(logPath, true, "Done.")
+		} else {
 			omppLog.Log("Warning: db cleanup log output may be incomplete")
 		}
 	}(diskUse.dbCleanupCmd, dbPath, name, digest, lp)

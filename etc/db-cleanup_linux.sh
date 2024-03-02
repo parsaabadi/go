@@ -188,4 +188,4 @@ do_sql_cmd "${new_db}" "SELECT COUNT(*) FROM workset_lst;"
 do_cmd rm "${src_path}"
 do_cmd mv "${new_db}" "${db_path}"
 
-echo "Done."
+echo "Done: ${db_path}"
