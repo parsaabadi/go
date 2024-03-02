@@ -93,7 +93,7 @@ func runUploadPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// create new upload.progress.log file and write model run decsription
-	logPath, isLog := createUpDownLog(logPath)
+	isLog := fileCreateEmpty(false, logPath)
 	if !isLog {
 		omppLog.Log("Failed to create upload log file: " + baseName + ".progress.upload.log")
 		http.Error(w, "Model run upload failed: "+baseName, http.StatusBadRequest)
@@ -109,13 +109,13 @@ func runUploadPostHandler(w http.ResponseWriter, r *http.Request) {
 		"Folder           : " + baseName,
 		"------------------",
 	}
-	if !appendToUpDownLog(logPath, true, "Upload of: "+baseName) {
+	if !writeToCmdLog(logPath, true, "Upload of: "+baseName) {
 		renameToUploadErrorLog(logPath, "", nil)
 		omppLog.Log("Failed to write into upload log file: " + baseName + ".progress.upload.log")
 		http.Error(w, "Model run upload failed: "+baseName, http.StatusBadRequest)
 		return
 	}
-	if !appendToUpDownLog(logPath, false, hdrMsg...) {
+	if !writeToCmdLog(logPath, false, hdrMsg...) {
 		renameToUploadErrorLog(logPath, "", nil)
 		omppLog.Log("Failed to write into upload log file: " + baseName + ".progress.upload.log")
 		http.Error(w, "Model run upload failed: "+baseName, http.StatusBadRequest)
@@ -250,7 +250,7 @@ func worksetUploadPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// create new upload.progress.log file and write model scenario decsription
-	logPath, isLog := createUpDownLog(logPath)
+	isLog := fileCreateEmpty(false, logPath)
 	if !isLog {
 		omppLog.Log("Failed to create upload log file: " + baseName + ".progress.upload.log")
 		http.Error(w, "Model scenario upload failed: "+baseName, http.StatusBadRequest)
@@ -266,13 +266,13 @@ func worksetUploadPostHandler(w http.ResponseWriter, r *http.Request) {
 		"Folder           : " + baseName,
 		"------------------",
 	}
-	if !appendToUpDownLog(logPath, true, "Upload of: "+baseName) {
+	if !writeToCmdLog(logPath, true, "Upload of: "+baseName) {
 		renameToUploadErrorLog(logPath, "", nil)
 		omppLog.Log("Failed to write into upload log file: " + baseName + ".progress.upload.log")
 		http.Error(w, "Model scenario upload failed: "+baseName, http.StatusBadRequest)
 		return
 	}
-	if !appendToUpDownLog(logPath, false, hdrMsg...) {
+	if !writeToCmdLog(logPath, false, hdrMsg...) {
 		renameToUploadErrorLog(logPath, "", nil)
 		omppLog.Log("Failed to write into upload log file: " + baseName + ".progress.upload.log")
 		http.Error(w, "Model scenario upload failed: "+baseName, http.StatusBadRequest)

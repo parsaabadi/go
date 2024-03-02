@@ -814,6 +814,16 @@ func apiAdminRoutes(router *vestigo.Router) {
 		router.Post("/admin-all/jobs-pause/", http.NotFound)
 	}
 
+	// POST /api/admin/db-cleanup/:path
+	// POST /api/admin/db-cleanup/:path/name/:name
+	// POST /api/admin/db-cleanup/:path/name/:name/digest/:digest
+	router.Post("/api/admin/db-cleanup/:path", modelDbCleanupHandler, logRequest)
+	router.Post("/api/admin/db-cleanup/:path/name/:name", modelDbCleanupHandler, logRequest)
+	router.Post("/api/admin/db-cleanup/:path/name/:name/digest/:digest", modelDbCleanupHandler, logRequest)
+	router.Post("/api/admin/db-cleanup/", http.NotFound)
+	router.Post("/api/admin/db-cleanup/:path/name/", http.NotFound)
+	router.Post("/api/admin/db-cleanup/:path/name/:name/digest/", http.NotFound)
+
 	// DO NOT USE in production, development only
 	//
 	// POST /api/admin/run-test/:exe/:arg

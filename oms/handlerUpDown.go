@@ -303,13 +303,13 @@ func upDownAllDelete(upDown string, upDownDir string, isAsync bool, w http.Respo
 		logName := logDelAll + helper.MakeTimeStamp(time.Now()) + ".progress." + upDown + ".log"
 		logPath := filepath.Join(upDownDir, logName)
 
-		logPath, isLog := createUpDownLog(logPath)
+		isLog := fileCreateEmpty(false, logPath)
 		if !isLog {
 			omppLog.Log("Failed to create log file: " + logName)
 			return
 		}
 		if isLog {
-			isLog = appendToUpDownLog(logPath, true, "Start deleting all from: "+upDown+" [ "+strconv.Itoa(len(nameLst))+" ]")
+			isLog = writeToCmdLog(logPath, true, "Start deleting all from: "+upDown+" [ "+strconv.Itoa(len(nameLst))+" ]")
 		}
 		nErr := 0
 
@@ -327,19 +327,19 @@ func upDownAllDelete(upDown string, upDownDir string, isAsync bool, w http.Respo
 
 			// remove files and directories
 			if isLog {
-				isLog = appendToUpDownLog(logPath, true, "delete: "+name)
+				isLog = writeToCmdLog(logPath, true, "delete: "+name)
 			}
 			if !fi.IsDir() {
 				if e := os.Remove(p); e != nil && !os.IsNotExist(e) {
 					if isLog {
-						isLog = appendToUpDownLog(logPath, true, "Error at delete "+name, e.Error())
+						isLog = writeToCmdLog(logPath, true, "Error at delete "+name, e.Error())
 					}
 					nErr++
 				}
 			} else {
 				if e := os.RemoveAll(p); e != nil && !os.IsNotExist(e) {
 					if isLog {
-						isLog = appendToUpDownLog(logPath, true, "Error at delete "+name, e.Error())
+						isLog = writeToCmdLog(logPath, true, "Error at delete "+name, e.Error())
 					}
 					nErr++
 				}
@@ -407,7 +407,7 @@ func doDeleteUpDown(upDown string, upDownDir string, isAsync bool, folder string
 	// create new up-or-down.progress.log file and write delete header
 	logPath := filepath.Join(upDownDir, folder+".progress."+upDown+".log")
 
-	logPath, isLog := createUpDownLog(logPath)
+	isLog := fileCreateEmpty(false, logPath)
 	if !isLog {
 		omppLog.Log("Failed to create log file: " + folder + ".progress." + upDown + ".log")
 		return errors.New("Delete failed: " + folder)
@@ -418,12 +418,12 @@ func doDeleteUpDown(upDown string, upDownDir string, isAsync bool, folder string
 		"Folder        : " + folder,
 		"---------------",
 	}
-	if !appendToUpDownLog(logPath, true, "Start deleting: "+folder) {
+	if !writeToCmdLog(logPath, true, "Start deleting: "+folder) {
 		renameToUpDownErrorLog(upDown, logPath, "", nil)
 		omppLog.Log("Failed to write into log file: " + folder + ".progress." + upDown + ".log")
 		return errors.New("Delete failed: " + folder)
 	}
-	if !appendToUpDownLog(logPath, false, hdrMsg...) {
+	if !writeToCmdLog(logPath, false, hdrMsg...) {
 		renameToUpDownErrorLog(upDown, logPath, "", nil)
 		omppLog.Log("Failed to write into log file: " + folder + ".progress." + upDown + ".log")
 		return errors.New("Delete failed: " + folder)

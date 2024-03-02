@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/husobee/vestigo"
 	"golang.org/x/text/language"
 
+	"github.com/openmpp/go/ompp/helper"
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
@@ -239,11 +241,11 @@ func fileMoveAndLog(isLog bool, srcPath string, dstPath string) bool {
 }
 
 // Create or truncate existing file and log path if isLog is true, return false on create error.
-func fileCreateEmpty(isLog bool, path string) bool {
+func fileCreateEmpty(isLog bool, fPath string) bool {
 	if isLog {
-		omppLog.Log("Create: ", path)
+		omppLog.Log("Create: ", fPath)
 	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(fPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
 		omppLog.Log(err)
 		return false
@@ -287,6 +289,38 @@ func fileCopy(isLog bool, src, dst string) bool {
 		return false
 	}
 	return true
+}
+
+// append to message to log file
+func writeToCmdLog(logPath string, isDoTimestamp bool, msg ...string) bool {
+
+	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return false // disable log on error
+	}
+	defer f.Close()
+
+	tsPrefix := helper.MakeDateTime(time.Now()) + " "
+
+	for _, m := range msg {
+		if isDoTimestamp {
+			if _, err = f.WriteString(tsPrefix); err != nil {
+				return false // disable log on error
+			}
+		}
+		if _, err = f.WriteString(m); err != nil {
+			return false // disable log on error
+		}
+		if runtime.GOOS == "windows" { // adjust newline for windows
+			_, err = f.WriteString("\r\n")
+		} else {
+			_, err = f.WriteString("\n")
+		}
+		if err != nil {
+			return false
+		}
+	}
+	return err == nil // disable log on error
 }
 
 // dbcopyPath return path to dbcopy.exe, it is expected to be in the same directory as oms.exe.

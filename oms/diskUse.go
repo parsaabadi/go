@@ -41,9 +41,10 @@ type dbDiskUse struct {
 
 // storage usage control settings
 type diskUseConfig struct {
-	DiskScanMs int64 // timeout in msec, sleep interval between scanning storage
-	Limit      int64 // bytes, this instance storage limit
-	AllLimit   int64 // bytes, total storage limit for all oms instances
+	DiskScanMs   int64  // timeout in msec, sleep interval between scanning storage
+	Limit        int64  // bytes, this instance storage limit
+	AllLimit     int64  // bytes, total storage limit for all oms instances
+	dbCleanupCmd string // path to database cleanup script
 }
 
 /*
@@ -258,12 +259,12 @@ func (rsc *RunCatalog) getDiskUse() (diskUseState, []dbDiskUse) {
 	return duState, dbUse
 }
 
-// read job service state and computational servers definition from job.ini
+// read disk usage settings from disk.ini
 func initDiskState(diskIniPath string) (bool, diskUseConfig) {
 
 	cfg := diskUseConfig{DiskScanMs: diskScanDefaultInterval}
 
-	// read available resources limits and computational servers configuration from job.ini
+	// exit if disk.ini does not exists: return empty default configuration
 	if diskIniPath == "" || !fileExist(diskIniPath) {
 		return false, cfg
 	}
@@ -282,6 +283,7 @@ func initDiskState(diskIniPath string) (bool, diskUseConfig) {
 	if cfg.AllLimit < 0 {
 		cfg.AllLimit = 0 // unlimited
 	}
+	cfg.dbCleanupCmd = opts.String("Common.DbCleanup")
 
 	// find oms instance limit defined by name
 	var uGb int64

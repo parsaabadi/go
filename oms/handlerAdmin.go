@@ -4,8 +4,16 @@
 package main
 
 import (
+	"bufio"
+	"io"
 	"net/http"
+	"os/exec"
+	"path"
+	"path/filepath"
+	"slices"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/openmpp/go/ompp/omppLog"
 )
@@ -128,6 +136,162 @@ func doJobsPause(filePath, urlPath string, w http.ResponseWriter, r *http.Reques
 	// Content-Location: /api/admin/jobs-pause/true
 	w.Header().Set("Content-Location", urlPath+strconv.FormatBool(isPause))
 	w.Header().Set("Content-Type", "text/plain")
+}
+
+// async start of model database cleanup and retrun LogFileName on success
+//
+//	POST /api/admin/db-cleanup/:path
+//	POST /api/admin/db-cleanup/:path/name/:name
+//	POST /api/admin/db-cleanup/:path/name/:name/digest/:digest
+//
+// Relative path to model database file is required, slash / in the path must be replaced with * star.
+// Model name and digest are optional parameters.
+// Cleanup is done on separate thread by db cleanup script, defined in disk.ini [Common] DbCleanup.
+// Model database must be closed, for example by: POST /api/admin/model/:model/close.
+func modelDbCleanupHandler(w http.ResponseWriter, r *http.Request) {
+
+	// if disk space use control disabled then do nothing
+	if !theCfg.isDiskUse {
+		w.Header().Set("Content-Location", "/api/admin/db-cleanup/none")
+		w.Header().Set("Content-Type", "text/plain")
+	}
+
+	// validate parameters: path to database file is required
+	dbPath := getRequestParam(r, "path")
+	name := getRequestParam(r, "name")
+	digest := getRequestParam(r, "digest")
+
+	if dbPath == "" {
+		omppLog.Log("Error: invalid (empty) path to model database file")
+		http.Error(w, "Invalid (empty) path to model database file", http.StatusBadRequest)
+		return
+	}
+	dbPath = strings.ReplaceAll(dbPath, "*", "/") // restore slashed / path
+
+	// check if database cleanup script defined
+	// check if database file is exists and belong to current oms instance: it must be in the list of instance database files
+	diskUse, dbUse := theRunCatalog.getDiskUse()
+
+	if diskUse.dbCleanupCmd == "" {
+		omppLog.Log("Error: db cleanup script is not defined in disk.ini")
+		http.Error(w, "Error: db cleanup script is not defined in disk.ini", http.StatusInternalServerError)
+		return
+	}
+	if i := slices.IndexFunc(
+		dbUse, func(du dbDiskUse) bool { return du.DbPath == dbPath }); i < 0 || i >= len(dbUse) {
+		http.Error(w, "Error: model database not found"+" "+name+" "+digest, http.StatusBadRequest)
+		return
+	}
+
+	// check if model database is closed: it should not be in the list of model db files
+	mbs := theCatalog.allModels()
+
+	if i := slices.IndexFunc(mbs, func(mb modelBasic) bool { return mb.relPath == dbPath }); i >= 0 && i < len(mbs) {
+		http.Error(w, "Error: model database must be closed"+" "+name+" "+digest, http.StatusBadRequest)
+		return
+	}
+
+	// make log file path
+	ts, _ := theCatalog.getNewTimeStamp()
+
+	ln := filepath.Base(dbPath)
+	if ln == "." || ln == "/" || ln == "\\" {
+		ln = "no-name"
+	}
+	ln = "db-cleanup." + ts + "." + ln + ".console.txt"
+
+	lp := ln
+	if d, isOk := theCatalog.getModelLogDir(); isOk {
+		lp = path.Join(d, lp)
+	}
+
+	// start database cleanup
+	go func(cmdPath, mDbPath, mName, mDigest, logPath string) {
+
+		// make db cleanup command
+		cArgs := []string{
+			mDbPath,
+			mName,
+			mDigest,
+		}
+		cmd := exec.Command(cmdPath, cArgs...)
+
+		// connect console output to output log file
+		outPipe, err := cmd.StdoutPipe()
+		if err != nil {
+			omppLog.Log("Error at join to stdout log", ": ", logPath, ": ", err)
+			return
+		}
+		errPipe, err := cmd.StderrPipe()
+		if err != nil {
+			omppLog.Log("Error at join to stderr log", ": ", logPath, ": ", err)
+			return
+		}
+		outDoneC := make(chan bool, 1)
+		errDoneC := make(chan bool, 1)
+		logTck := time.NewTicker(logTickTimeout * time.Millisecond)
+
+		// start console output listners
+		isLogOk := fileCreateEmpty(false, logPath)
+		if !isLogOk {
+			omppLog.Log("Error at creating log file", ": ", logPath)
+		}
+
+		doLog := func(path string, r io.Reader, done chan<- bool) {
+			sc := bufio.NewScanner(r)
+			for sc.Scan() {
+				if isLogOk {
+					isLogOk = writeToCmdLog(path, false, sc.Text())
+				}
+			}
+			done <- true
+			close(done)
+		}
+		go doLog(logPath, outPipe, outDoneC)
+		go doLog(logPath, errPipe, errDoneC)
+
+		// start db cleanup
+		omppLog.Log(cmdPath, " ", strings.Join(cmd.Args, " "))
+		isLogOk = writeToCmdLog(logPath, true, strings.Join(cmd.Args, " "))
+
+		err = cmd.Start()
+		if err != nil {
+			omppLog.Log("Error at", ": ", logPath, ": ", err)
+			writeToCmdLog(logPath, true, err.Error())
+			return
+		}
+		// else db cleanup started: wait until completed
+
+		// wait until stdout and stderr closed
+		for outDoneC != nil || errDoneC != nil {
+			select {
+			case _, ok := <-outDoneC:
+				if !ok {
+					outDoneC = nil
+				}
+			case _, ok := <-errDoneC:
+				if !ok {
+					errDoneC = nil
+				}
+			case <-logTck.C:
+			}
+		}
+
+		// wait for db cleanup to be completed
+		e := cmd.Wait()
+		if e != nil {
+			omppLog.Log("Error at: ", cmd.Args)
+			writeToCmdLog(logPath, true, e.Error())
+			return
+		}
+		// else: completed OK
+		if !isLogOk {
+			omppLog.Log("Warning: db cleanup log output may be incomplete")
+		}
+	}(diskUse.dbCleanupCmd, dbPath, name, digest, lp)
+
+	// db cleanup is starting now: return path to log file
+	jsonResponse(w, r, struct{ LogFileName string }{LogFileName: ln})
 }
 
 /*

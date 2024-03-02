@@ -2,12 +2,14 @@
 #
 # Linux: compress model database by copy the model into a new database
 #
-# It does:
-#   use sqlite3 to create new empty model db: modelName.db
-#   use dbcopy to copy from old modelName.sqlite into new modelName.db
-#   delete old database file modelName.sqlite
-#   rename modelName.sqlite into modelName.db
+# !!! DO NOT use this script if you have multiple models in that database file
 #
+# It does:
+#   rename source modelName.sqlite into modelName-sqlite.db
+#   use sqlite3 to create new empty model db: modelName.db
+#   use dbcopy to copy from old modelName-sqlite.db into new modelName.db
+#   delete old database file modelName-sqlite.db
+#   rename modelName.db into modelName.sqlite
 #
 # Environment:
 #   sqlite3   - must be in the $PATH
@@ -112,19 +114,27 @@ then
   exit 1
 fi
 
-# create new modelName.db empty file
 #
+# start database cleanup
+#   rename existing model.sqlite into model-sqlite.db
+#
+do_cmd()
+{
+  if ! "$@" ;
+  then
+    echo "ERROR at: $@"
+    exit 1
+  fi
+}
+src_path="${db_dir}/${db_stem}-sqlite.db"
+
+do_cmd mv "${db_path}" "${src_path}"
+
+# create new modelName.db empty file
 
 new_db="${db_dir}/${db_stem}.db"
 
-if [ -f "${new_db}" ] ;
-then
-  if ! rm "${new_db}" ;
-  then
-    echo "ERROR: fail to delete: ${new_db}"
-    exit 1
-  fi
-fi
+[ -f "${new_db}" ] && do_cmd rm "${new_db}"
 
 do_sql_script()
 {
@@ -139,10 +149,9 @@ do_sql_script "${new_db}" "${OM_ROOT}/sql/create_db.sql"
 do_sql_script "${new_db}" "${OM_ROOT}/sql/insert_default.sql"
 do_sql_script "${new_db}" "${OM_ROOT}/sql/sqlite/optional_meta_views_sqlite.sql"
 
-# source database: 
+# prepare source database:
 # report run status and lock all worksets
 #
-
 do_sql_cmd()
 {
   if ! echo "$2" | "${SQLITE_EXE}" "$1" ;
@@ -153,25 +162,19 @@ do_sql_cmd()
 }
 
 echo Source model run status count:
-do_sql_cmd "${db_path}" "SELECT status, COUNT(*) FROM run_lst GROUP BY status ORDER BY 1;" 
+do_sql_cmd "${src_path}" "SELECT status, COUNT(*) FROM run_lst GROUP BY status ORDER BY 1;"
 
 echo Update source input scenario: set read-only
-do_sql_cmd "${db_path}" "UPDATE workset_lst SET is_readonly = 1;"
+do_sql_cmd "${src_path}" "UPDATE workset_lst SET is_readonly = 1;"
 
 echo Source input scenario count:
-do_sql_cmd "${db_path}" "SELECT COUNT(*) FROM workset_lst;"
+do_sql_cmd "${src_path}" "SELECT COUNT(*) FROM workset_lst;"
 
 # copy model into new database
-#
 
-if ! "${dbcopy_exe}" ${m_arg} -dbcopy.To db2db -dbcopy.ToSqlite "${new_db}"  -dbcopy.FromSqlite "${db_path}" ;
-then
-  echo "ERROR at: ${dbcopy_exe} ${m_arg} -dbcopy.To db2db -dbcopy.ToSqlite ${new_db}  -dbcopy.FromSqlite ${db_path}"
-  exit 1
-fi
+do_cmd "${dbcopy_exe}" ${m_arg} -dbcopy.To db2db -dbcopy.ToSqlite "${new_db}"  -dbcopy.FromSqlite "${src_path}"
 
 # report copy results
-#
 
 echo Results model run status:
 do_sql_cmd "${new_db}" "SELECT status, COUNT(*) FROM run_lst GROUP BY status ORDER BY 1;"
@@ -179,18 +182,10 @@ do_sql_cmd "${new_db}" "SELECT status, COUNT(*) FROM run_lst GROUP BY status ORD
 echo Results input scenario count:
 do_sql_cmd "${new_db}" "SELECT COUNT(*) FROM workset_lst;"
 
-# final copy
-#
+# delete old database file
+# rename new database file into modelName.sqlite
 
-if ! rm "${db_path}" ;
-then
-  echo "ERROR: fail to delete: ${db_path}"
-  exit 1
-fi
-if ! mv "${new_db}" "${db_path}" ;
-then
-  echo "ERROR: fail to rename: ${new_db} -> ${db_path}"
-  exit 1
-fi
+do_cmd rm "${src_path}"
+do_cmd mv "${new_db}" "${db_path}"
 
 echo "Done."

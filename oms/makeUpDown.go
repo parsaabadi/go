@@ -10,12 +10,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/openmpp/go/ompp/helper"
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
@@ -317,7 +315,7 @@ func runUpDownDbcopy(upDown string, upDownDir string, baseName string, cmd *exec
 	if !removeUpDownDir(upDown, basePath, logPath, baseName) {
 		return
 	}
-	appendToUpDownLog(logPath, true, cmdMsg)
+	writeToCmdLog(logPath, true, cmdMsg)
 
 	// connect console output to output log file
 	outPipe, err := cmd.StdoutPipe()
@@ -340,7 +338,7 @@ func runUpDownDbcopy(upDown string, upDownDir string, baseName string, cmd *exec
 		sc := bufio.NewScanner(r)
 		for sc.Scan() {
 			if isLogOk {
-				isLogOk = appendToUpDownLog(path, false, sc.Text())
+				isLogOk = writeToCmdLog(path, false, sc.Text())
 			}
 		}
 		done <- true
@@ -387,13 +385,13 @@ func runUpDownDbcopy(upDown string, upDownDir string, baseName string, cmd *exec
 	e := cmd.Wait()
 	if e != nil {
 		omppLog.Log("Error at: ", cmd.Args)
-		appendToUpDownLog(logPath, true, e.Error())
+		writeToCmdLog(logPath, true, e.Error())
 		renameToUpDownErrorLog(upDown, logPath, "Error at: "+cmdMsg, e)
 		return
 	}
 	// else: completed OK
 	if !isLogOk {
-		omppLog.Log("Warning: dbcopy log output may incomplete")
+		omppLog.Log("Warning: dbcopy log output may be incomplete")
 	}
 
 	// all done, rename log file on success: model......progress.up-or-down.log into model......ready.up-or-down.log
@@ -416,7 +414,7 @@ func removeUploadFile(path string, logPath string, fileName string) bool {
 // on error do rename log file into model......error.up-or-down.log and return false
 func removeUpDownFile(upDown string, path string, logPath string, fileName string) bool {
 
-	if !appendToUpDownLog(logPath, true, "delete: "+fileName) {
+	if !writeToCmdLog(logPath, true, "delete: "+fileName) {
 		renameToUpDownErrorLog(upDown, logPath, "", nil)
 		return false
 	}
@@ -443,7 +441,7 @@ func removeUploadDir(path string, logPath string, dirName string) bool {
 // on error do rename log file into model......error.up-or-down.log and return false
 func removeUpDownDir(upDown string, path string, logPath string, dirName string) bool {
 
-	if !appendToUpDownLog(logPath, true, "delete: "+dirName) {
+	if !writeToCmdLog(logPath, true, "delete: "+dirName) {
 		renameToUpDownErrorLog(upDown, logPath, "", nil)
 		return false
 	}
@@ -452,17 +450,6 @@ func removeUpDownDir(upDown string, path string, logPath string, dirName string)
 		return false
 	}
 	return true
-}
-
-// create new upload or download log file or truncate existing
-func createUpDownLog(logPath string) (string, bool) {
-
-	f, err := os.Create(logPath)
-	if err != nil {
-		return "", false
-	}
-	defer f.Close()
-	return logPath, true
 }
 
 // rename upload or download log file on error: model......progress.download.log into model......error.download.log
@@ -481,41 +468,9 @@ func renameToUpDownErrorLog(upDown string, logPath string, logErrMsg string, err
 		omppLog.Log(err)
 	}
 	if logErrMsg != "" {
-		appendToUpDownLog(logPath, true, logErrMsg)
+		writeToCmdLog(logPath, true, logErrMsg)
 	}
 	os.Rename(logPath, strings.TrimSuffix(logPath, ".progress."+upDown+".log")+".error."+upDown+".log")
-}
-
-// append to message into upload or download log file
-func appendToUpDownLog(logPath string, isDoTimestamp bool, msg ...string) bool {
-
-	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		return false // disable log on error
-	}
-	defer f.Close()
-
-	tsPrefix := helper.MakeDateTime(time.Now()) + " "
-
-	for _, m := range msg {
-		if isDoTimestamp {
-			if _, err = f.WriteString(tsPrefix); err != nil {
-				return false // disable log on error
-			}
-		}
-		if _, err = f.WriteString(m); err != nil {
-			return false // disable log on error
-		}
-		if runtime.GOOS == "windows" { // adjust newline for windows
-			_, err = f.WriteString("\r\n")
-		} else {
-			_, err = f.WriteString("\n")
-		}
-		if err != nil {
-			return false
-		}
-	}
-	return err == nil // disable log on error
 }
 
 // update file status of download files
