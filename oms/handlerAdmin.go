@@ -94,6 +94,52 @@ func modelCloseHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 }
 
+// open SQLite db file and get all models from it.
+//
+//	POST /api/admin/db-file-open/:path
+//
+// Path to model database must be relative to models/bin root.
+// Slashes / or back \ slashes in the path must be replaced with * star.
+// If model(s) with the same digest already open then method return an error.
+func modelOpenDbFileHandler(w http.ResponseWriter, r *http.Request) {
+
+	dbPath := getRequestParam(r, "path")
+
+	if dbPath == "" {
+		omppLog.Log("Error: invalid (empty) path to model database file")
+		http.Error(w, "Invalid (empty) path to model database file", http.StatusBadRequest)
+		return
+	}
+	dbPath = strings.ReplaceAll(dbPath, "*", "/") // restore slashed / path
+
+	// make db path realtive to models/bin root
+	// and check if model database file is already open: it should not be in the list of model db files
+	mbinDir, _ := theCatalog.getModelDir()
+	srcPath := path.Join(mbinDir, dbPath)
+
+	mbs := theCatalog.allModels()
+	if slices.IndexFunc(mbs, func(mb modelBasic) bool { return mb.relPath == srcPath }) >= 0 {
+		http.Error(w, "Error: model database file already open"+" "+dbPath, http.StatusBadRequest)
+		return
+	}
+
+	// open db file and add models to catalog
+	n, err := theCatalog.loadModelDbFile(srcPath)
+	if err != nil {
+		omppLog.Log(err)
+		http.Error(w, "Failed to open model db file"+": "+dbPath, http.StatusBadRequest)
+		return
+	}
+	if n <= 0 {
+		omppLog.Log(err)
+		http.Error(w, "Error: invalid (empty) model db file"+": "+dbPath, http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Location", "/api/admin/db-file-open/"+dbPath)
+	w.Header().Set("Content-Type", "text/plain")
+}
+
 // pause or resume jobs queue processing by this oms instance
 //
 //	POST /api/admin/jobs-pause/:pause
@@ -206,8 +252,9 @@ func modelDbCleanupHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// join db path with models/bin root
+	srcPath := dbPath
 	if mr, isOk := theCatalog.getModelDir(); isOk {
-		dbPath = path.Join(mr, dbPath)
+		srcPath = path.Join(mr, dbPath)
 	}
 
 	// start database cleanup
@@ -295,7 +342,7 @@ func modelDbCleanupHandler(w http.ResponseWriter, r *http.Request) {
 		} else {
 			omppLog.Log("Warning: db cleanup log output may be incomplete")
 		}
-	}(diskUse.dbCleanupCmd, dbPath, name, digest, lp)
+	}(diskUse.dbCleanupCmd, srcPath, name, digest, lp)
 
 	// db cleanup is starting now: return path to log file
 	jsonResponse(w, r, struct{ LogFileName string }{LogFileName: ln})
