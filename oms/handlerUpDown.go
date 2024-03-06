@@ -73,7 +73,7 @@ func fileLogUpDownGet(upDown string, upDownDir string, w http.ResponseWriter, r 
 
 // return all .download.log files and download status.
 //
-//	GET /api/download/log/all
+//	GET /api/download/log-all
 //
 // Download status is one of: progress ready error or "" if unknown
 func allLogDownloadGetHandler(w http.ResponseWriter, r *http.Request) {
@@ -82,7 +82,7 @@ func allLogDownloadGetHandler(w http.ResponseWriter, r *http.Request) {
 
 // return all .upload.log files and download status.
 //
-//	GET /api/upload/log/all
+//	GET /api/upload/log-all
 //
 // Upload status is one of: progress ready error or "" if unknown
 func allLogUploadGetHandler(w http.ResponseWriter, r *http.Request) {

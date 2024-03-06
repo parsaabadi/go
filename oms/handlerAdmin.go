@@ -237,25 +237,21 @@ func modelDbCleanupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// make log file path
-	ts, _ := theCatalog.getNewTimeStamp()
+	// join db path with models/bin root
+	srcPath := dbPath
+	if mr, isOk := theCatalog.getModelDir(); isOk {
+		srcPath = filepath.Join(mr, dbPath)
+	}
+	srcPath = filepath.Clean(srcPath)
 
+	// make log file name and path
 	ln := filepath.Base(dbPath)
 	if ln == "." || ln == "/" || ln == "\\" {
 		ln = "no-name"
 	}
-	ln = "db-cleanup." + ts + "." + ln + ".console.txt"
+	ld, _ := theCatalog.getModelLogDir()
 
-	lp := ln
-	if d, isOk := theCatalog.getModelLogDir(); isOk {
-		lp = path.Join(d, lp)
-	}
-
-	// join db path with models/bin root
-	srcPath := dbPath
-	if mr, isOk := theCatalog.getModelDir(); isOk {
-		srcPath = path.Join(mr, dbPath)
-	}
+	ln, lp := dbCleanupLogNamePath(ln, ld)
 
 	// start database cleanup
 	go func(cmdPath, mDbPath, mName, mDigest, logPath string) {
@@ -348,38 +344,94 @@ func modelDbCleanupHandler(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, r, struct{ LogFileName string }{LogFileName: ln})
 }
 
-/*
-// DO NOT USE in production, development only
+// get list of all db cleanup log files
 //
-// runTestHandler run command: exe arg
-// POST /api/admin/run-test/:exe/:arg
-func runTestHandler(w http.ResponseWriter, r *http.Request) {
+//	GET /api/db-cleanup/log-all
+func dbCleanupAllLogGetHandler(w http.ResponseWriter, r *http.Request) {
 
-	// url or query parameters: executable name and argument
-	// executable must be a name only, cannot be a path: / or \ not allowed
-	exe := getRequestParam(r, "exe")
-	arg := getRequestParam(r, "arg")
-	if exe == "" || strings.ContainsAny(exe, "/\\") {
-		http.Error(w, "Invalid (or empty) executable name", http.StatusBadRequest)
+	type fi struct {
+		DbName      string // database file name
+		LogStamp    string // log file date-time stamp
+		LogFileName string // db-cleanup.2024_03_05_00_30_37_568.modelOne.sqlite.console.txt
+	}
+
+	logDir, isLog := theCatalog.getModelLogDir()
+	if !isLog {
+		jsonResponse(w, r, []fi{}) // log is not enabled: empty response
 		return
 	}
 
-	// make a command, run it and return combined output
-	cmd := exec.Command(exe, arg)
+	// get list of models/log/db-cleanup.*.txt files
+	fiLst := []fi{}
 
-	out, err := cmd.CombinedOutput()
+	pl, err := filepath.Glob(logDir + string(filepath.Separator) + "db-cleanup.*.txt")
 	if err != nil {
-		omppLog.Log("Run error: ", err)
-		if len(out) > 0 {
-			omppLog.Log(string(out))
+		http.Error(w, "Error at db cleanup log files list", http.StatusInternalServerError)
+		return
+	}
+	for _, p := range pl {
+
+		ts, base, fn := parseDbCleanupLogPath(p)
+
+		if ts != "" && base != "" {
+			fiLst = append(fiLst, fi{
+				DbName:      base,
+				LogStamp:    ts,
+				LogFileName: fn,
+			})
 		}
-		http.Error(w, "Error: "+err.Error(), http.StatusInternalServerError)
+	}
+
+	jsonResponse(w, r, fiLst)
+}
+
+// get db cleanup log file content by name
+//
+//	GET /api/db-cleanup/log/:name
+func dbCleanupFileLogGetHandler(w http.ResponseWriter, r *http.Request) {
+
+	// check log file: it must be db cleanup log file
+	logName := getRequestParam(r, "name")
+
+	ts, base, fn := parseDbCleanupLogPath(logName)
+	if ts == "" || base == "" || fn != logName {
+		http.Error(w, "Invalid db cleanup log file name", http.StatusBadRequest)
 		return
 	}
 
-	// return combined output
-	w.Header().Set("Content-Location", "/api/admin/run-test/"+exe+"/"+arg)
-	w.Header().Set("Content-Type", "text/plain")
-	w.Write(out)
+	// response: db cleanup log file info and content
+	st := struct {
+		DbName      string   // database file name
+		LogStamp    string   // log file date-time stamp
+		LogFileName string   // db-cleanup.2024_03_05_00_30_37_568.modelOne.sqlite.console.txt
+		Size        int64    // bytes, log file size
+		ModTs       int64    // unix milliseconds, log file update time
+		Lines       []string // log file content
+	}{
+		Lines: []string{},
+	}
+
+	// check if log file exists in models/log directory
+	logDir, isLog := theCatalog.getModelLogDir()
+	if !isLog {
+		jsonResponse(w, r, []string{}) // log is not enabled: empty response
+		return
+	}
+	logPath := filepath.Join(logDir, logName)
+
+	fi, err := fileStat(logPath)
+	if err != nil {
+		http.Error(w, "Error at db cleanup log file get: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// read log file content and return result
+	st.DbName = base
+	st.LogStamp = ts
+	st.LogFileName = logName
+	st.Size = fi.Size()
+	st.ModTs = fi.ModTime().UnixMilli()
+	st.Lines, _ = readLogFile(logPath)
+
+	jsonResponse(w, r, st)
 }
-*/

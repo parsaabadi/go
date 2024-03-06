@@ -50,6 +50,7 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 	if theCfg.isDiskUse {
 		_, st.DiskUse = theRunCatalog.getDiskUseStatus()
 	}
+
 	jsonResponse(w, r, st)
 }
 

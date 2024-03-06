@@ -324,12 +324,17 @@ func mainBody(args []string) error {
 	}
 
 	// model directory required to build initial list of model sqlite files
-	modelLogDir := runOpts.String(modelLogDirArgKey)
 	modelDir := filepath.Clean(runOpts.String(modelDirArgKey))
 	if modelDir == "" || modelDir == "." {
 		return errors.New("Error: model directory argument cannot be empty or . dot")
 	}
 	omppLog.Log("Models directory:     ", modelDir)
+
+	modelLogDir := filepath.Clean(runOpts.String(modelLogDirArgKey))
+	modelLogDir = strings.TrimSuffix(modelLogDir, string(filepath.Separator))
+	if modelLogDir != "" && modelLogDir != "." && dirExist(modelLogDir) {
+		omppLog.Log("Models log directory: ", modelLogDir)
+	}
 
 	if err := theCatalog.refreshSqlite(modelDir, modelLogDir); err != nil {
 		return err

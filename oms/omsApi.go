@@ -622,8 +622,7 @@ func apiRunModelRoutes(router *vestigo.Router) {
 // add http web-service /api routes to download and manage files at home/io/download folder
 func apiDownloadRoutes(router *vestigo.Router) {
 
-	// GET /api/download/log/all
-	router.Get("/api/download/log/all", allLogDownloadGetHandler, logRequest)
+	// GET /api/download/log-all
 
 	// GET /api/download/log/model/:model
 	router.Get("/api/download/log/model/:model", modelLogDownloadGetHandler, logRequest)
@@ -671,8 +670,8 @@ func apiDownloadRoutes(router *vestigo.Router) {
 // add http web-service /api routes to upload and manage files at home/io/upload folder
 func apiUploadRoutes(router *vestigo.Router) {
 
-	// GET /api/upload/log/all
-	router.Get("/api/upload/log/all", allLogUploadGetHandler, logRequest)
+	// GET /api/upload/log-all
+	router.Get("/api/upload/log-all", allLogUploadGetHandler, logRequest)
 
 	// GET /api/upload/log/model/:model
 	router.Get("/api/upload/log/model/:model", modelLogUploadGetHandler, logRequest)
@@ -828,8 +827,9 @@ func apiAdminRoutes(router *vestigo.Router) {
 	router.Post("/api/admin/db-cleanup/:path/name/", http.NotFound)
 	router.Post("/api/admin/db-cleanup/:path/name/:name/digest/", http.NotFound)
 
-	// DO NOT USE in production, development only
-	//
-	// POST /api/admin/run-test/:exe/:arg
-	// router.Post("/api/admin/run-test/:exe/:arg", runTestHandler, logRequest)
+	// GET /api/db-cleanup/log-all
+	// GET /api/db-cleanup/log/:name
+	router.Get("/api/db-cleanup/log-all", dbCleanupAllLogGetHandler, logRequest)
+	router.Get("/api/db-cleanup/log/:name", dbCleanupFileLogGetHandler, logRequest)
+	router.Get("/api/db-cleanup/log/", http.NotFound)
 }
