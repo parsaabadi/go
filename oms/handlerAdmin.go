@@ -338,6 +338,9 @@ func modelDbCleanupHandler(w http.ResponseWriter, r *http.Request) {
 		} else {
 			omppLog.Log("Warning: db cleanup log output may be incomplete")
 		}
+		// refresh disk usage
+		refreshDiskScanC <- true
+
 	}(diskUse.dbCleanupCmd, srcPath, name, digest, lp)
 
 	// db cleanup is starting now: return path to log file
