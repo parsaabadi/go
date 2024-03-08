@@ -75,13 +75,17 @@ func jobHistoryPath(status, submitStamp, modelName, modelDigest, runStamp string
 		submitStamp+"-#-"+theCfg.omsName+"-#-"+modelName+"-#-"+modelDigest+"-#-"+runStamp+"-#-"+db.NameOfRunStatus(status)+".json")
 }
 
-// Return job control file path to shadow copy of model with run history.
-// For example: job/past/2022_07_04_20_06_10_817-#-_4040-#-RiskPaths-#-d90e1e9a-#-2022_07_04_20_06_10_818-#-success.json
-func jobPastPath(status, submitStamp, modelName, modelDigest, runStamp string) string {
-	return filepath.Join(
-		theCfg.jobDir,
-		"past",
-		submitStamp+"-#-"+theCfg.omsName+"-#-"+modelName+"-#-"+modelDigest+"-#-"+runStamp+"-#-"+db.NameOfRunStatus(status)+".json")
+// Return parts of job control shadow history file path: past folde, month sub-folder and file name.
+// For example: job/past, 2022_07, 2022_07_04_20_06_10_817-#-_4040-#-RiskPaths-#-d90e1e9a-#-2022_07_04_20_06_10_818-#-success.json
+func jobPastPath(status, submitStamp, modelName, modelDigest, runStamp string) (string, string, string) {
+
+	d := ""
+	if len(submitStamp) >= 7 {
+		d = submitStamp[:7]
+	}
+	return filepath.Join(theCfg.jobDir, "past"),
+		d,
+		submitStamp + "-#-" + theCfg.omsName + "-#-" + modelName + "-#-" + modelDigest + "-#-" + runStamp + "-#-" + db.NameOfRunStatus(status) + ".json"
 }
 
 // Return job state file path e.g.: job/state/_4040.json
@@ -466,9 +470,18 @@ func moveActiveJobToHistory(activePath, status string, submitStamp, modelName, m
 	if !isOk {
 		fileDeleteAndLog(true, activePath) // if move failed then delete job control file from active list
 	} else {
-		if theCfg.isJobPast {
-			past := jobPastPath(status, submitStamp, modelName, modelDigest, runStamp)
-			fileCopy(false, hst, past)
+		if theCfg.isJobPast { // copy to the shadow history path
+
+			pastDir, monthDir, fn := jobPastPath(status, submitStamp, modelName, modelDigest, runStamp)
+			if monthDir == "" {
+				fileCopy(false, hst, filepath.Join(pastDir, fn))
+			} else {
+				d := filepath.Join(pastDir, monthDir)
+				if dirCreateIfNotExist(d) == nil {
+					fileCopy(false, hst, filepath.Join(d, fn))
+				}
+			}
+
 		}
 	}
 
@@ -499,9 +512,18 @@ func moveJobQueueToFailed(queuePath string, submitStamp, modelName, modelDigest,
 		fileDeleteAndLog(true, queuePath) // if move failed then delete job control file from queue
 		return false
 	} else {
-		if theCfg.isJobPast {
-			past := jobPastPath(db.ErrorRunStatus, submitStamp, modelName, modelDigest, runStamp)
-			fileCopy(false, hst, past)
+
+		if theCfg.isJobPast { // copy to the shadow history path
+
+			pastDir, monthDir, fn := jobPastPath(db.ErrorRunStatus, submitStamp, modelName, modelDigest, runStamp)
+			if monthDir == "" {
+				fileCopy(false, hst, filepath.Join(pastDir, fn))
+			} else {
+				d := filepath.Join(pastDir, monthDir)
+				if dirCreateIfNotExist(d) == nil {
+					fileCopy(false, hst, filepath.Join(d, fn))
+				}
+			}
 		}
 	}
 	return true

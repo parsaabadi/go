@@ -177,6 +177,31 @@ func dirStat(dirPath string) (fs.FileInfo, error) {
 	return fi, nil
 }
 
+// create directory if not exists, it creates all directories specified by dirPath
+func dirCreateIfNotExist(dirPath string) error {
+
+	if dirPath == "" || dirPath == "." || dirPath == ".." || dirPath == "./" || dirPath == "../" || dirPath == ".\\" || dirPath == "..\\" {
+		return errors.New("Invlaid or empty directory path " + dirPath)
+	}
+
+	// create if not exists
+	fi, err := os.Stat(dirPath)
+	if err == nil {
+
+		// path already exists, check if it is a directory
+		if !fi.IsDir() {
+			return errors.New("Error: directory expected: " + dirPath)
+		}
+		return nil // directory already exist
+	}
+	// else path not exists or access denied
+
+	if os.IsNotExist(err) {
+		err = os.MkdirAll(dirPath, 0750) // path not exists, create all directroies in the new path
+	}
+	return err // retrun a result, no error if new directory created
+}
+
 // fileExist return error if file not exist, not accessible or it is not a regular file
 func fileExist(filePath string) bool {
 	if filePath == "" {
