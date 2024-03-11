@@ -97,7 +97,15 @@ Following arguments supporetd by oms:
 
 	if true then log HTTP requests on console and/or log file.
 
--oms.Admin
+-oms.NoAdmin
+
+	if true then disable local administrative routes: /admin/
+
+-oms.NoShutdown
+
+	if true then disable shutdown route: /shutdown/
+
+-oms.AdminAll
 
 	if true then allow global administrative routes: /admin-all/
 
@@ -169,7 +177,9 @@ const (
 	isMicrodataArgKey  = "oms.AllowMicrodata" // if true then allow model run microdata
 	logRequestArgKey   = "oms.LogRequest"     // if true then log http request
 	apiOnlyArgKey      = "oms.ApiOnly"        // if true then API only web-service, no web UI
-	adminAllArgKey     = "oms.Admin"          // if true then allow global administrative routes: /admin-all/
+	adminAllArgKey     = "oms.AdminAll"       // if true then allow global administrative routes: /admin-all/
+	noAdminArgKey      = "oms.NoAdmin"        // if true then disable loca administrative routes: /admin/
+	noShutdownArgKey   = "oms.NoShutdown"     // if true then disable shutdown route: /shutdown/
 	uiLangsArgKey      = "oms.Languages"      // list of supported languages
 	encodingArgKey     = "oms.CodePage"       // code page for converting source files, e.g. windows-1252
 	doubleFormatArgKey = "oms.DoubleFormat"   // format to convert float or double value to string, e.g. %.15g
@@ -188,7 +198,6 @@ var theCfg = struct {
 	isMicrodata  bool              // if true then allow model run microdata
 	isModelDoc   bool              // if true then model documentation enabled and models/doc is exist
 	docParentDir string            // parent of models documentation directory, default: models
-	isAdminAll   bool              // if true then admin-all routes are enabled
 	isJobControl bool              // if true then do job control: model run queue and resource allocation
 	isJobPast    bool              // if true then do job history shadow copy
 	isDiskUse    bool              // if true then storage usage control enabled
@@ -255,6 +264,8 @@ func mainBody(args []string) error {
 	_ = flag.Bool(logRequestArgKey, false, "if true then log HTTP requests")
 	_ = flag.Bool(apiOnlyArgKey, false, "if true then API only web-service, no web UI")
 	_ = flag.Bool(adminAllArgKey, false, "if true then allow global administrative routes: /admin-all/")
+	_ = flag.Bool(noAdminArgKey, false, "if true then disable loca administrative routes: /admin/")
+	_ = flag.Bool(noShutdownArgKey, false, "if true then disable shutdown route: /shutdown/")
 	_ = flag.String(uiLangsArgKey, "en", "comma-separated list of supported languages")
 	_ = flag.String(encodingArgKey, "", "code page to convert source file into utf-8, e.g.: windows-1252")
 	_ = flag.String(doubleFormatArgKey, theCfg.doubleFmt, "format to convert float or double value to string")
@@ -275,10 +286,10 @@ func mainBody(args []string) error {
 	isLogRequest = runOpts.Bool(logRequestArgKey)
 	isApiOnly := runOpts.Bool(apiOnlyArgKey)
 	theCfg.isMicrodata = runOpts.Bool(isMicrodataArgKey)
-	theCfg.isAdminAll = runOpts.Bool(adminAllArgKey)
-
+	isAdminAll := runOpts.Bool(adminAllArgKey)
+	isAdmin := !runOpts.Bool(noAdminArgKey)
+	isShutdown := !runOpts.Bool(noShutdownArgKey)
 	theCfg.doubleFmt = runOpts.String(doubleFormatArgKey)
-
 	theCfg.codePage = runOpts.String(encodingArgKey)
 
 	// get server config environmemt variables and pass it to UI
@@ -508,7 +519,9 @@ func mainBody(args []string) error {
 	apiRunModelRoutes(router) // web-service /api routes to run the model
 	apiUserRoutes(router)     // web-service /api routes for user-specific requests
 	apiServiceRoutes(router)  // web-service /api routes for service state
-	apiAdminRoutes(router)    // web-service /api routes for oms instance administrative tasks
+	if isAdmin {
+		apiAdminRoutes(isAdminAll, router) // web-service /api routes for oms instance administrative tasks
+	}
 
 	// serve static content from home/io/download folder
 	if isDownload {
@@ -553,7 +566,9 @@ func mainBody(args []string) error {
 
 		cancel() // send shutdown completed to the main
 	}
-	router.Put("/shutdown", shutdownHandler, logRequest)
+	if isShutdown {
+		router.Put("/shutdown", shutdownHandler, logRequest)
+	}
 
 	// start to listen at specified TCP address
 	ln, err := net.Listen("tcp", addr)

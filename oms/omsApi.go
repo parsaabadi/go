@@ -789,7 +789,7 @@ func apiServiceRoutes(router *vestigo.Router) {
 }
 
 // add web-service /api routes for oms instance administrative tasks
-func apiAdminRoutes(router *vestigo.Router) {
+func apiAdminRoutes(isAdminAll bool, router *vestigo.Router) {
 
 	// POST /api/admin/all-models/refresh
 	router.Post("/api/admin/all-models/refresh", allModelsRefreshHandler, logRequest)
@@ -810,7 +810,7 @@ func apiAdminRoutes(router *vestigo.Router) {
 
 	// add web-service /admin-all routes for global administrative tasks, enabled by -oms.Admin run option
 
-	if theCfg.isAdminAll {
+	if isAdminAll {
 
 		// POST /admin-all/jobs-pause/:pause
 		router.Post("/admin-all/jobs-pause/:pause", jobsAllPauseHandler, logRequest)
@@ -827,9 +827,9 @@ func apiAdminRoutes(router *vestigo.Router) {
 	router.Post("/api/admin/db-cleanup/:path/name/", http.NotFound)
 	router.Post("/api/admin/db-cleanup/:path/name/:name/digest/", http.NotFound)
 
-	// GET /api/db-cleanup/log-all
-	// GET /api/db-cleanup/log/:name
-	router.Get("/api/db-cleanup/log-all", dbCleanupAllLogGetHandler, logRequest)
-	router.Get("/api/db-cleanup/log/:name", dbCleanupFileLogGetHandler, logRequest)
-	router.Get("/api/db-cleanup/log/", http.NotFound)
+	// GET /api/admin/db-cleanup/log-all
+	// GET /api/admin/db-cleanup/log/:name
+	router.Get("/api/admin/db-cleanup/log-all", dbCleanupAllLogGetHandler, logRequest)
+	router.Get("/api/admin/db-cleanup/log/:name", dbCleanupFileLogGetHandler, logRequest)
+	router.Get("/api/admin/db-cleanup/log/", http.NotFound)
 }

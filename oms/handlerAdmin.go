@@ -349,7 +349,7 @@ func modelDbCleanupHandler(w http.ResponseWriter, r *http.Request) {
 
 // get list of all db cleanup log files
 //
-//	GET /api/db-cleanup/log-all
+//	GET /api/admin/db-cleanup/log-all
 func dbCleanupAllLogGetHandler(w http.ResponseWriter, r *http.Request) {
 
 	type fi struct {
@@ -390,7 +390,7 @@ func dbCleanupAllLogGetHandler(w http.ResponseWriter, r *http.Request) {
 
 // get db cleanup log file content by name
 //
-//	GET /api/db-cleanup/log/:name
+//	GET /api/admin/db-cleanup/log/:name
 func dbCleanupFileLogGetHandler(w http.ResponseWriter, r *http.Request) {
 
 	// check log file: it must be db cleanup log file
