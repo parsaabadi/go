@@ -149,16 +149,16 @@ func jobsPauseHandler(w http.ResponseWriter, r *http.Request) {
 
 // pause or resume jobs queue processing by all oms instances
 //
-//	POST /admin-all/jobs-pause/:pause
+//	POST /api/admin-all/jobs-pause/:pause
 func jobsAllPauseHandler(w http.ResponseWriter, r *http.Request) {
-	doJobsPause(jobAllQueuePausedPath(), "/admin-all/jobs-pause/", w, r)
+	doJobsPause(jobAllQueuePausedPath(), "/api/admin-all/jobs-pause/", w, r)
 }
 
 // Pause or resume jobs queue processing by this oms instance all by all oms instances
 //
-//	POST /admin/jobs-pause/:pause
-//	POST /admin-all/jobs-pause/:pause
-func doJobsPause(filePath, urlPath string, w http.ResponseWriter, r *http.Request) {
+//	POST /api/admin/jobs-pause/:pause
+//	POST /api/admin-all/jobs-pause/:pause
+func doJobsPause(filePath, msgPath string, w http.ResponseWriter, r *http.Request) {
 
 	// url or query parameters: pause or resume boolean flag
 	sp := getRequestParam(r, "pause")
@@ -180,7 +180,7 @@ func doJobsPause(filePath, urlPath string, w http.ResponseWriter, r *http.Reques
 	}
 
 	// Content-Location: /api/admin/jobs-pause/true
-	w.Header().Set("Content-Location", urlPath+strconv.FormatBool(isPause))
+	w.Header().Set("Content-Location", msgPath+strconv.FormatBool(isPause))
 	w.Header().Set("Content-Type", "text/plain")
 }
 
