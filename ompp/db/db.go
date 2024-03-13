@@ -111,12 +111,12 @@ func Open(dbConnStr, dbDriver string, isFacetRequired bool) (*sql.DB, Facet, err
 // IfEmptyMakeDefault return SQLite connection string and driver name based on model name:
 //
 //	Database=modelName.sqlite; Timeout=86400; OpenMode=ReadWrite;
-func IfEmptyMakeDefault(modelName, modelSqlitePath, dbConnStr, dbDriver string) (string, string) {
+func IfEmptyMakeDefault(modelName, sqlitePath, dbConnStr, dbDriver string) (string, string) {
 	if dbDriver == "" {
 		dbDriver = SQLiteDbDriver
 	}
 	if dbDriver == SQLiteDbDriver && dbConnStr == "" {
-		p := modelSqlitePath
+		p := sqlitePath
 		if p == "" && modelName != "" {
 			p = modelName + ".sqlite"
 		}
@@ -128,12 +128,12 @@ func IfEmptyMakeDefault(modelName, modelSqlitePath, dbConnStr, dbDriver string) 
 // IfEmptyMakeDefaultReadOnly return read-only SQLite connection string and driver name based on model name:
 //
 //	Database=modelName.sqlite; Timeout=86400; OpenMode=ReadWrite;
-func IfEmptyMakeDefaultReadOnly(modelName, modelSqlitePath, dbConnStr, dbDriver string) (string, string) {
+func IfEmptyMakeDefaultReadOnly(modelName, sqlitePath, dbConnStr, dbDriver string) (string, string) {
 	if dbDriver == "" {
 		dbDriver = SQLiteDbDriver
 	}
 	if dbDriver == SQLiteDbDriver && dbConnStr == "" {
-		p := modelSqlitePath
+		p := sqlitePath
 		if p == "" && modelName != "" {
 			p = modelName + ".sqlite"
 		}
@@ -145,15 +145,15 @@ func IfEmptyMakeDefaultReadOnly(modelName, modelSqlitePath, dbConnStr, dbDriver 
 // MakeSqliteDefault return default SQLite connection string based on model.sqlite file path:
 //
 //	Database=model.sqlite; Timeout=86400; OpenMode=ReadWrite;
-func MakeSqliteDefault(modelSqlitePath string) string {
-	return "Database=" + modelSqlitePath + "; Timeout=" + strconv.Itoa(SQLiteTimeout) + "; OpenMode=ReadWrite;"
+func MakeSqliteDefault(sqlitePath string) string {
+	return "Database=" + sqlitePath + "; Timeout=" + strconv.Itoa(SQLiteTimeout) + "; OpenMode=ReadWrite;"
 }
 
 // MakeSqliteDefaultReadOnly return default read-only SQLite connection string based on model.sqlite file path:
 //
 //	Database=model.sqlite; Timeout=86400; OpenMode=ReadOnly;
-func MakeSqliteDefaultReadOnly(modelSqlitePath string) string {
-	return "Database=" + modelSqlitePath + "; Timeout=" + strconv.Itoa(SQLiteTimeout) + "; OpenMode=ReadOnly;"
+func MakeSqliteDefaultReadOnly(sqlitePath string) string {
+	return "Database=" + sqlitePath + "; Timeout=" + strconv.Itoa(SQLiteTimeout) + "; OpenMode=ReadOnly;"
 }
 
 // Convert SQLite connection string into "sqlite3" format and delete existing db.slite file if required.

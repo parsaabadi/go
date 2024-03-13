@@ -344,7 +344,7 @@ var theCfg = struct {
 	isNoMicrodata:   false,   // by default do full model dump, including microdata
 	isNoZeroCsv:     false,   // by default do write zero values into output tables .csv files
 	isNoNullCsv:     false,   // by default dot write NULL values into output tables .csv files
-	doubleFmt:       "%.15g", // default format to convert float or daouble values to string
+	doubleFmt:       "%.15g", // default format to convert float or double values to string
 	encodingName:    "",      // by default detect utf-8 encoding or use OS-specific default: windows-1252 on Windowds and utf-8 outside
 	isWriteUtf8Bom:  false,   // do not write BOM by default
 }
