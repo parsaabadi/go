@@ -11,9 +11,6 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"io"
-	"os"
-	"regexp"
 	"strings"
 	"time"
 	"unicode"
@@ -186,12 +183,6 @@ func FromUnderscoreTimeStamp(src string) string {
 	return dst
 }
 
-// CleanPath replace special file path characters: "'`:*?><|$}{@&^;/\ by _ underscore
-func CleanPath(src string) string {
-	re := regexp.MustCompile("[\"'`:*?><|$}{@&^;/\\\\]")
-	return re.ReplaceAllString(src, "_")
-}
-
 // ToAlphaNumeric replace all non [A-Z,a-z,0-9] by _ underscore and remove repetitive underscores
 func ToAlphaNumeric(src string) string {
 
@@ -281,21 +272,6 @@ func Gcd(src []int) int {
 	   src d:  [12 2 2 4 8] 2
 	   src d:  [44 16 20 12 16 4 8] 4
 	*/
-}
-
-// SaveTo copy all from source reader into new outPath file. File truncated if already exists.
-func SaveTo(outPath string, rd io.Reader) error {
-
-	// create or truncate output file
-	f, err := os.OpenFile(outPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	// copy request body into the file
-	_, err = io.Copy(f, rd)
-	return err
 }
 
 // DeepCopy using gob to make a deep copy from src into dst, both src and dst expected to be a pointers

@@ -93,7 +93,7 @@ func ToJsonIndentFile(jsonPath string, src interface{}) error {
 	enc := json.NewEncoder(f)
 	enc.SetIndent("", "  ")
 
-	enc.Encode(src)
+	err = enc.Encode(src)
 	if err != nil {
 		return errors.New("json encode error: " + err.Error())
 	}

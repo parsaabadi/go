@@ -473,15 +473,11 @@ func moveActiveJobToHistory(activePath, status string, submitStamp, modelName, m
 		if theCfg.isJobPast { // copy to the shadow history path
 
 			pastDir, monthDir, fn := jobPastPath(status, submitStamp, modelName, modelDigest, runStamp)
-			if monthDir == "" {
-				fileCopy(false, hst, filepath.Join(pastDir, fn))
-			} else {
-				d := filepath.Join(pastDir, monthDir)
-				if dirCreateIfNotExist(d) == nil {
-					fileCopy(false, hst, filepath.Join(d, fn))
-				}
-			}
+			d := filepath.Join(pastDir, monthDir)
 
+			if os.MkdirAll(d, 0750) == nil {
+				fileCopy(false, hst, filepath.Join(d, fn))
+			}
 		}
 	}
 
@@ -516,13 +512,10 @@ func moveJobQueueToFailed(queuePath string, submitStamp, modelName, modelDigest,
 		if theCfg.isJobPast { // copy to the shadow history path
 
 			pastDir, monthDir, fn := jobPastPath(db.ErrorRunStatus, submitStamp, modelName, modelDigest, runStamp)
-			if monthDir == "" {
-				fileCopy(false, hst, filepath.Join(pastDir, fn))
-			} else {
-				d := filepath.Join(pastDir, monthDir)
-				if dirCreateIfNotExist(d) == nil {
-					fileCopy(false, hst, filepath.Join(d, fn))
-				}
+			d := filepath.Join(pastDir, monthDir)
+
+			if os.MkdirAll(d, 0750) == nil {
+				fileCopy(false, hst, filepath.Join(d, fn))
 			}
 		}
 	}
