@@ -88,6 +88,37 @@ func parseAggrCalculation(
 		nextExprArr:    []aggrExprColumn{},
 	}
 
+	// return error if this is a top level and any all aggregation column exist in source expression.
+	errorIfAnyAggrCol := func(src string) error {
+
+		if nLevel > 1 || src == "" {
+			return nil
+		}
+		var err error
+
+		nStart := 0
+		for nEnd := 0; nStart >= 0 && nEnd >= 0; {
+
+			nStart, nEnd, err = nextUnquoted(src, nStart)
+			if err != nil {
+				return err
+			}
+			if nStart < 0 || nEnd < 0 { // end of source formula
+				break
+			}
+
+			//  for each accumulator name check if name exist in that unquoted part of sql
+			for k := 0; k < len(aggrCols); k++ {
+
+				if findNamePos(src[nStart:nEnd], aggrCols[k].name) >= 0 {
+					return errors.New("error: top level columns must be inside of aggregation function: " + aggrCols[k].name + " : " + calculateExpr)
+				}
+			}
+			nStart = nEnd // to the next 'unquoted part' of calculation string
+		}
+		return nil
+	}
+
 	// until any function expressions exist on current level repeat translation:
 	//
 	//	OM_SUM(acc0 - 0.5 * OM_AVG(acc0))
@@ -103,30 +134,45 @@ func parseAggrCalculation(
 		for nL := range lps.exprArr {
 
 			// parse until source expression not completed
-			sqlExpr := lps.exprArr[nL].srcExpr
+			sqlExpr := ""
 
-			for {
+			for src := lps.exprArr[nL].srcExpr; len(src) > 0; {
+
 				// find most left (top level) aggregation function
-				fncName, namePos, arg, nAfter, err := findFirstFnc(sqlExpr, aggrFncLst)
+				fncName, namePos, arg, nAfter, err := findFirstFnc(src, aggrFncLst)
 				if err != nil {
 					return []levelDef{}, err
 				}
-				if fncName == "" { // all done: no any functions found
+				if fncName == "" { // no any functions found, done with with this source expression
+
+					// if this is the first level then it should be aggregation columns (accumulators) outside of aggregation functions
+					if nLevel <= 1 {
+						if err = errorIfAnyAggrCol(src); err != nil {
+							return []levelDef{}, err
+						}
+					}
+					sqlExpr += src // copy source expression into output
 					break
 				}
 
 				// translate (substitute) aggregation function by sql fragment
-				t, err := lps.translateAggregationFnc(fncName, arg, sqlExpr)
+				t, err := lps.translateAggregationFnc(fncName, arg, src)
 				if err != nil {
 					return []levelDef{}, err
 				}
 
-				// replace source
-				if nAfter >= len(sqlExpr) {
-					sqlExpr = sqlExpr[:namePos] + t
-				} else {
-					sqlExpr = sqlExpr[:namePos] + t + sqlExpr[nAfter:]
+				// if this is the first level then it should be aggregation columns (accumulators) outside of aggregation functions
+				if nLevel <= 1 && namePos > 0 {
+					if err = errorIfAnyAggrCol(src[:namePos]); err != nil {
+						return []levelDef{}, err
+					}
 				}
+				// replace source
+				sqlExpr += src[:namePos] + t
+				if nAfter >= len(src) {
+					break // done with source expression
+				}
+				src = src[nAfter:]
 			}
 			lps.exprArr[nL].sqlExpr = sqlExpr
 

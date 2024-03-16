@@ -12,7 +12,7 @@ import (
 )
 
 // clean source comparison expression:
-// replace cr or lf with space
+// replace cr or lf with space and
 // replace all special sql ' quote characters with normal ' sql quote
 func cleanSourceExpr(src string) string {
 
@@ -30,7 +30,7 @@ func cleanSourceExpr(src string) string {
 	return sb.String()
 }
 
-// find name position in source expression or return -1 if not found
+// find name position in source expression or return -1 if not found.
 // name must be delimited by space or left and right delimeters
 func findNamePos(expr string, name string) int {
 
@@ -52,7 +52,7 @@ func findNamePos(expr string, name string) int {
 	return n
 }
 
-// return error if sql contains unsafe sql keyword, semicolon ;  or -- comment or \ escape
+// return error if sql contains unsafe sql keyword, semicolon ;  or -- comment or \ escape.
 // unsafe sql keyword outside of 'quotes', for example:
 // DELETE INSERT UPDATE CREATE DROP ALTER MERGE EXEC EXECUTE CALL GO
 func errorIfUnsafeSqlOrComment(sql string) error {
