@@ -372,7 +372,7 @@ func TestCalculateMicrodata(t *testing.T) {
 		t.Log("Read layout Offset Size IsFullPage IsLastPage:", rdLt.Offset, rdLt.Size, rdLt.IsFullPage, rdLt.IsLastPage)
 
 		// create new output directory and csv file
-		csvDir := filepath.Join("testdata", "TestCalculateMicrodata-"+helper.MakeTimeStamp(time.Now()))
+		csvDir := filepath.Join(kvIni["CalculateMicrodata.CsvOutDir"], "TestCalculateMicrodata-"+helper.MakeTimeStamp(time.Now()))
 		err = os.MkdirAll(csvDir, 0750)
 		if err != nil {
 			t.Fatal(err)
