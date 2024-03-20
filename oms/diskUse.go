@@ -59,7 +59,7 @@ func scanDisk(doneC <-chan bool, refreshC <-chan bool) {
 
 	// if disk use file does not updated more than 3 times of scan interval (and minimum 1 minute) then oms instance is dead
 	// disk use file: disk-#-_4040-#-size-#-100-#-status-#-ok-#-2022_07_08_23_45_12_123-#-125678.json
-	diskUsePtrn := filepath.Join(theCfg.jobDir, "state", "disk-#-"+theCfg.omsName+"-#-size-#-*-#-status-#-*-#-*-#-*.json")
+	diskUsePtrn := filepath.Join(theCfg.jobDir, "state", "disk-#-*-#-size-#-*-#-status-#-*-#-*-#-*.json")
 
 	// path to disk.ini: storage quotas and configuration
 	diskIniPath := filepath.Join(theCfg.jobDir, "disk.ini")
