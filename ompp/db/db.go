@@ -108,7 +108,7 @@ func Open(dbConnStr, dbDriver string, isFacetRequired bool) (*sql.DB, Facet, err
 	return dbConn, facet, nil
 }
 
-// IfEmptyMakeDefault return SQLite connection string and driver name based on model name:
+// return SQLite connection string and driver name based on model name:
 //
 //	Database=modelName.sqlite; Timeout=86400; OpenMode=ReadWrite;
 func IfEmptyMakeDefault(modelName, sqlitePath, dbConnStr, dbDriver string) (string, string) {
@@ -125,7 +125,7 @@ func IfEmptyMakeDefault(modelName, sqlitePath, dbConnStr, dbDriver string) (stri
 	return dbConnStr, dbDriver
 }
 
-// IfEmptyMakeDefaultReadOnly return read-only SQLite connection string and driver name based on model name:
+// return read-only SQLite connection string and driver name based on model name:
 //
 //	Database=modelName.sqlite; Timeout=86400; OpenMode=ReadWrite;
 func IfEmptyMakeDefaultReadOnly(modelName, sqlitePath, dbConnStr, dbDriver string) (string, string) {
@@ -142,14 +142,14 @@ func IfEmptyMakeDefaultReadOnly(modelName, sqlitePath, dbConnStr, dbDriver strin
 	return dbConnStr, dbDriver
 }
 
-// MakeSqliteDefault return default SQLite connection string based on model.sqlite file path:
+// return default SQLite connection string based on model.sqlite file path:
 //
 //	Database=model.sqlite; Timeout=86400; OpenMode=ReadWrite;
 func MakeSqliteDefault(sqlitePath string) string {
 	return "Database=" + sqlitePath + "; Timeout=" + strconv.Itoa(SQLiteTimeout) + "; OpenMode=ReadWrite;"
 }
 
-// MakeSqliteDefaultReadOnly return default read-only SQLite connection string based on model.sqlite file path:
+// return default read-only SQLite connection string based on model.sqlite file path:
 //
 //	Database=model.sqlite; Timeout=86400; OpenMode=ReadOnly;
 func MakeSqliteDefaultReadOnly(sqlitePath string) string {
