@@ -75,7 +75,7 @@ func scanOuterJobs(doneC <-chan bool) {
 			}
 
 			// get submission stamp, model name, digest and process id from active job file name
-			stamp, _, mn, dgst, _, _, _, pid := parseActivePath(fLst[k][nActive+1:])
+			stamp, _, mn, dgst, _, _, _, _, pid := parseActivePath(fLst[k][nActive+1:])
 			if stamp == "" || mn == "" || dgst == "" || pid <= 0 {
 				continue // file name is not an active job file name
 			}

@@ -42,7 +42,7 @@ func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, string, hostIni, []c
 		jc, ok := rsc.queueJobs[qKey]
 
 		if !ok || jc.isError || jc.IsOverLimit || jc.isPaused || !jc.isFirst {
-			continue // skip invalid job, paused job, job resources exceeding limits or it is npot the first job in queue
+			continue // skip invalid job, paused job, job resources exceeding limits or it is not the first job in queue
 		}
 
 		isSel := false

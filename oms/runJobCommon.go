@@ -37,8 +37,8 @@ func jobDirValid(jobDir string) (bool, bool, bool, error) {
 }
 
 // Return job control file path if model is running now.
-// For example: 2022_07_08_23_03_27_555-#-_4040-#-RiskPaths-#-d90e1e9a-#-mpi-#-cpu-#-8-#-mem-#-4-#-8888.json
-func jobActivePath(submitStamp, modelName, modelDigest string, isMpi bool, pid int, cpu int, mem int) string {
+// For example: 2022_07_08_23_03_27_555-#-_4040-#-RiskPaths-#-d90e1e9a-#-2022_07_04_20_06_10_818-#-mpi-#-cpu-#-8-#-mem-#-4-#-8888.json
+func jobActivePath(submitStamp, modelName, modelDigest string, runStamp string, isMpi bool, pid int, cpu int, mem int) string {
 
 	ml := "local"
 	if isMpi {
@@ -47,7 +47,7 @@ func jobActivePath(submitStamp, modelName, modelDigest string, isMpi bool, pid i
 	return filepath.Join(
 		theCfg.jobDir,
 		"active",
-		submitStamp+"-#-"+theCfg.omsName+"-#-"+modelName+"-#-"+modelDigest+"-#-"+ml+"-#-cpu-#-"+strconv.Itoa(cpu)+"-#-mem-#-"+strconv.Itoa(mem)+"-#-"+strconv.Itoa(pid)+".json")
+		submitStamp+"-#-"+theCfg.omsName+"-#-"+modelName+"-#-"+modelDigest+"-#-"+runStamp+"-#-"+ml+"-#-cpu-#-"+strconv.Itoa(cpu)+"-#-mem-#-"+strconv.Itoa(mem)+"-#-"+strconv.Itoa(pid)+".json")
 }
 
 // Return path job control file path if model run standing is queue.
@@ -75,7 +75,7 @@ func jobHistoryPath(status, submitStamp, modelName, modelDigest, runStamp string
 		submitStamp+"-#-"+theCfg.omsName+"-#-"+modelName+"-#-"+modelDigest+"-#-"+runStamp+"-#-"+db.NameOfRunStatus(status)+".json")
 }
 
-// Return parts of job control shadow history file path: past folde, month sub-folder and file name.
+// Return parts of job control shadow history file path: past folder, month sub-folder and file name.
 // For example: job/past, 2022_07, 2022_07_04_20_06_10_817-#-_4040-#-RiskPaths-#-d90e1e9a-#-2022_07_04_20_06_10_818-#-success.json
 func jobPastPath(status, submitStamp, modelName, modelDigest, runStamp string) (string, string, string) {
 
@@ -160,43 +160,44 @@ func parseJobPath(srcPath string) (string, string, string, string, string) {
 }
 
 // Parse active file path or active file name.
-// Return submission stamp, oms instance name, model name, digest, MPI or local, cpu count, memory size and process id.
-// For example: 2022_07_08_23_03_27_555-#-_4040-#-RiskPaths-#-d90e1e9a-#-mpi-#-cpu-#-8-#-mem-#-4-#-8888.json
-func parseActivePath(srcPath string) (string, string, string, string, bool, int, int, int) {
+// Return submission stamp, oms instance name, model name, digest, run stamp, MPI or local, cpu count, memory size and process id.
+// For example: 2022_07_08_23_03_27_555-#-_4040-#-RiskPaths-#-d90e1e9a-#-2022_07_04_20_06_10_818-#-mpi-#-cpu-#-8-#-mem-#-4-#-8888.json
+func parseActivePath(srcPath string) (string, string, string, string, string, bool, int, int, int) {
 
 	// parse common job file part
 	subStamp, oms, mn, dgst, p := parseJobPath(srcPath)
 
 	if subStamp == "" || oms == "" || mn == "" || dgst == "" || p == "" {
-		return subStamp, oms, "", "", false, 0, 0, 0 // source file path is not active or queue job file
+		return subStamp, oms, "", "", "", false, 0, 0, 0 // source file path is not active or queue job file
 	}
 
 	// parse cpu count and memory size, 6 parts expected
 	sp := strings.Split(p, "-#-")
-	if len(sp) != 6 ||
-		(sp[0] != "mpi" && sp[0] != "local") ||
-		sp[1] != "cpu" || sp[2] == "" ||
-		sp[3] != "mem" || sp[4] == "" ||
-		sp[5] == "" {
-		return subStamp, oms, "", "", false, 0, 0, 0 // source file path is not active or queue job file
+	if len(sp) != 7 ||
+		!helper.IsUnderscoreTimeStamp(sp[0]) ||
+		(sp[1] != "mpi" && sp[1] != "local") ||
+		sp[2] != "cpu" || sp[3] == "" ||
+		sp[4] != "mem" || sp[5] == "" ||
+		sp[6] == "" {
+		return subStamp, oms, "", "", "", false, 0, 0, 0 // source file path is not active or queue job file
 	}
-	isMpi := sp[0] == "mpi"
+	isMpi := sp[1] == "mpi"
 
 	// parse and convert cpu count, memory size and process pid
-	cpu, err := strconv.Atoi(sp[2])
+	cpu, err := strconv.Atoi(sp[3])
 	if err != nil || cpu <= 0 {
-		return subStamp, oms, "", "", false, 0, 0, 0 // cpu count must be positive integer
+		return subStamp, oms, "", "", "", false, 0, 0, 0 // cpu count must be positive integer
 	}
-	mem, err := strconv.Atoi(sp[4])
+	mem, err := strconv.Atoi(sp[5])
 	if err != nil || mem < 0 {
-		return subStamp, oms, "", "", false, 0, 0, 0 // memory size must be non-negative integer
+		return subStamp, oms, "", "", "", false, 0, 0, 0 // memory size must be non-negative integer
 	}
-	pid, err := strconv.Atoi(sp[5])
+	pid, err := strconv.Atoi(sp[6])
 	if err != nil || pid <= 0 {
-		return subStamp, oms, "", "", false, 0, 0, 0 // process pid must be positive integer
+		return subStamp, oms, "", "", "", false, 0, 0, 0 // process pid must be positive integer
 	}
 
-	return subStamp, oms, mn, dgst, isMpi, cpu, mem, pid
+	return subStamp, oms, mn, dgst, sp[0], isMpi, cpu, mem, pid
 }
 
 // Parse queue file path or queue file name.
@@ -270,25 +271,38 @@ func parseHistoryPath(srcPath string) (string, string, string, string, string, s
 	return subStamp, oms, mn, dgst, sp[0], sp[1]
 }
 
-// Parse oms heart beat tick file path: job/state/oms-#-_4040-#-2022_07_08_23_45_12_123-#-1257894000000
-// Return oms instance name time stamp and clock ticks.
-func parseOmsTickPath(srcPath string) (string, string, int64) {
+// Parse oms heart beat tick file path: job/state/oms-#-_4040-#-2022_07_08_23_45_12_123-#-1257894000000-#-2022_08_17_21_56_34_321
+// Return oms instance name time stamp, clock ticks and last run stamp.
+// If oms instance file does not have last run stamp then use current date-time stamp
+func parseOmsTickPath(srcPath string) (string, string, int64, string) {
 
 	p := filepath.Base(srcPath) // remove job state directory
 
-	// split file name and check result: it must be 4 non-empty parts with time stamp
+	// split file name and check result: it must be 5 non-empty parts with time stamp and last run stamp
 	sp := strings.Split(p, "-#-")
-	if len(sp) != 4 || sp[0] != "oms" || sp[1] == "" || sp[3] == "" || !helper.IsUnderscoreTimeStamp(sp[2]) {
-		return "", "", 0 // source file path is not job file
+	if len(sp) < 4 || sp[0] != "oms" ||
+		sp[1] == "" || !helper.IsUnderscoreTimeStamp(sp[2]) || sp[3] == "" {
+		return "", "", 0, "" // source file path is not job file
+	}
+
+	// check if there last run satmp in file name, use current dat-time stamp if not
+	lastRunStamp := ""
+	if len(sp) == 5 {
+		if !helper.IsUnderscoreTimeStamp(sp[4]) {
+			return "", "", 0, "" // source file path is not job file
+		}
+		lastRunStamp = sp[4]
+	} else {
+		lastRunStamp = helper.MakeTimeStamp(time.Now())
 	}
 
 	// convert clock ticks
 	tickMs, err := strconv.ParseInt(sp[3], 10, 64)
 	if err != nil || tickMs <= minJobTickMs {
-		return "", "", 0 // clock ticks must after 2020-08-17 23:45:59
+		return "", "", 0, "" // clock ticks must after 2020-08-17 23:45:59
 	}
 
-	return sp[1], sp[2], tickMs
+	return sp[1], sp[2], tickMs, lastRunStamp
 }
 
 // Parse oms instance job queue paused file path e.g.: job/state/jobs.queue-#-_4040-#-paused
@@ -443,7 +457,7 @@ func moveJobToActive(queueJobPath string, rState *RunState, res RunRes, runStamp
 	jc.LogFileName = rState.LogFileName
 	jc.LogPath = rState.logPath
 
-	dst := jobActivePath(rState.SubmitStamp, rState.ModelName, rState.ModelDigest, jc.IsMpi, rState.pid, jc.Res.Cpu, jc.Res.Mem)
+	dst := jobActivePath(rState.SubmitStamp, rState.ModelName, rState.ModelDigest, runStamp, jc.IsMpi, rState.pid, jc.Res.Cpu, jc.Res.Mem)
 
 	fileDeleteAndLog(false, queueJobPath) // remove job control file from queue
 
@@ -570,15 +584,19 @@ func getJobRunTitle(filePath string) string {
 	return wsName
 }
 
-// Remove all existing oms heart beat tick files and create new oms heart beat tick file with current timestamp.
+// Remove all existing oms heart beat tick files and create new oms heart beat tick file with current timestamp and last run stamp.
 // Return oms heart beat file path and true is file created successfully.
-// For example: job/state/oms-#-_4040-#-2022_07_08_23_45_12_123-#-1257894000000
-func makeOmsTick() (string, bool) {
+// For example: job/state/oms-#-_4040-#-2022_07_08_23_45_12_123-#-1257894000000-#-2022_08_17_21_56_34_321
+func makeOmsTick(lastRunStamp string) (string, bool) {
 
 	// create new oms heart beat tick file
 	p := filepath.Join(theCfg.jobDir, "state", "oms-#-"+theCfg.omsName)
-	ts := time.Now()
-	fnow := p + "-#-" + helper.MakeTimeStamp(ts) + "-#-" + strconv.FormatInt(ts.UnixMilli(), 10)
+	tNow := time.Now()
+	ts := helper.MakeTimeStamp(tNow)
+	if lastRunStamp == "" {
+		lastRunStamp = ts
+	}
+	fnow := p + "-#-" + ts + "-#-" + strconv.FormatInt(tNow.UnixMilli(), 10) + "-#-" + lastRunStamp
 
 	isOk := fileCreateEmpty(false, fnow)
 

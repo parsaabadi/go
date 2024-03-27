@@ -20,7 +20,7 @@ func scanStateJobs(doneC <-chan bool) {
 		return // job control disabled
 	}
 
-	omsTickPath, _ := makeOmsTick() // job processing started at this oms instance
+	omsTickPath, _ := makeOmsTick(helper.MakeTimeStamp(time.Now())) // job processing started at this oms instance
 	nTick := 0
 
 	// path to job.ini: available resources limits and computational servers configuration
@@ -28,12 +28,13 @@ func scanStateJobs(doneC <-chan bool) {
 
 	// model run files in queue, active runs, run history
 	queuePtrn := filepath.Join(theCfg.jobDir, "queue") + string(filepath.Separator) + "*-#-*-#-*-#-*-#-*-#-cpu-#-*-#-mem-#-*.json"
-	activePtrn := filepath.Join(theCfg.jobDir, "active") + string(filepath.Separator) + "*-#-*-#-*-#-*-#-*-#-cpu-#-*-#-mem-#-*.json"
+	activePtrn := filepath.Join(theCfg.jobDir, "active") + string(filepath.Separator) + "*-#-*-#-*-#-*-#-*-#-*-#-cpu-#-*-#-mem-#-*.json"
 	historyPtrn := filepath.Join(theCfg.jobDir, "history") + string(filepath.Separator) + "*-#-" + theCfg.omsName + "-#-*.json"
 
 	// oms instances heart beat and oms instance queue paused files:
 	// if oms instance file does not updated more than 1 minute then oms instance is dead
-	// oms instance heart beat tick:  oms-#-_4040-#-2022_07_08_23_45_12_123-#-1257894000000
+	// if oms instance file does not have last run stamp then use current date-time stamp
+	// oms instance heart beat tick:  oms-#-_4040-#-2022_07_08_23_45_12_123-#-1257894000000-#-2022_08_17_21_56_34_321
 	// oms instance job queue paused: jobs.queue-#-_4040-#-paused
 	omsTickPtrn := filepath.Join(theCfg.jobDir, "state") + string(filepath.Separator) + "oms-#-*-#-*-#-*"
 	omsPausedPtrn := filepath.Join(theCfg.jobDir, "state") + string(filepath.Separator) + "jobs.queue-#-*-#-paused"
@@ -53,7 +54,7 @@ func scanStateJobs(doneC <-chan bool) {
 	queueJobs := map[string]queueJobFile{}
 	activeJobs := map[string]runJobFile{}
 	historyJobs := map[string]historyJobFile{}
-	omsActive := map[string]int64{}
+	omsActive := map[string]string{}
 	omsPaused := map[string]bool{}
 	computeState := map[string]computeItem{}
 	hostByCpu := []string{} // names of computational servers or clusters sorted by available CPU cores
@@ -87,14 +88,16 @@ func scanStateJobs(doneC <-chan bool) {
 
 		for _, fp := range omsTickFiles {
 
-			oms, _, ts := parseOmsTickPath(fp)
+			oms, _, ts, rStamp := parseOmsTickPath(fp)
 			if oms == "" {
 				continue // skip: invalid active run job state file path
 			}
 
 			if ts > minOmsStateTs {
-				omsActive[oms] = ts // oms instance is alive
-
+				lastStamp, ok := omsActive[oms]
+				if !ok || rStamp > lastStamp {
+					omsActive[oms] = rStamp // oms instance is alive
+				}
 				if leaderName == "" || leaderName > oms {
 					leaderName = oms
 				}
@@ -295,7 +298,7 @@ func scanStateJobs(doneC <-chan bool) {
 		// update oms heart beat file
 		nTick++
 		if nTick%7 == 0 {
-			omsTickPath, _ = makeOmsTick()
+			omsTickPath, _ = makeOmsTick(omsActive[theCfg.omsName])
 		}
 
 		// wait for doneC or sleep
@@ -307,8 +310,9 @@ func scanStateJobs(doneC <-chan bool) {
 	fileDeleteAndLog(true, omsTickPath) // try to remove oms heart beat file, this code may never be executed due to race at shutdown
 }
 
-// insert run job into job map: map job file submission stamp to file content (run job)
-func updateActiveJobs(fLst []string, jobMap map[string]runJobFile, omsActive map[string]int64) ([]string, ComputeRes, ComputeRes, ComputeRes) {
+// insert run job into job map: map job file submission stamp to file content (run job).
+// update last run stamp for oms instances.
+func updateActiveJobs(fLst []string, jobMap map[string]runJobFile, omsActive map[string]string) ([]string, ComputeRes, ComputeRes, ComputeRes) {
 
 	subStamps := make([]string, 0, len(fLst)) // list of submission stamps
 	totalRes := ComputeRes{}
@@ -318,12 +322,16 @@ func updateActiveJobs(fLst []string, jobMap map[string]runJobFile, omsActive map
 	for _, f := range fLst {
 
 		// get submission stamp, oms instance and resources
-		stamp, oms, mn, dgst, isMpi, cpu, mem, _ := parseActivePath(f)
+		stamp, oms, mn, dgst, rStamp, isMpi, cpu, mem, _ := parseActivePath(f)
 		if stamp == "" || oms == "" || mn == "" || dgst == "" {
 			continue // file name is not a job file name
 		}
-		if _, ok := omsActive[oms]; !ok {
+		if lastStamp, ok := omsActive[oms]; !ok {
 			continue // skip: oms instance inactive
+		} else {
+			if rStamp > lastStamp {
+				omsActive[oms] = rStamp
+			}
 		}
 
 		// collect total resource usage
@@ -382,7 +390,7 @@ func updateQueueJobs(
 	hostByCpu []string,
 	hostByMem []string,
 	computeState map[string]computeItem,
-	omsActive map[string]int64,
+	omsActive map[string]string,
 	isAllPaused bool,
 	omsPaused map[string]bool,
 ) (
@@ -405,8 +413,8 @@ func updateQueueJobs(
 		isFirst  bool   // if true the it is the first job in global queue
 	}
 	type omsQ struct {
-		top int        // current top queue file index
-		q   []qFileHdr // instance queue files
+		lastRunStamp string     // oms last run stamp
+		q            []qFileHdr // instance queue files
 	}
 	qAll := make(map[string]omsQ, nFiles) // queue for each oms instance
 
@@ -427,7 +435,8 @@ func updateQueueJobs(
 		if !isMpi {
 			continue // this is not MPI cluster job
 		}
-		if _, ok := omsActive[oms]; !ok {
+		rStamp, isOk := omsActive[oms]
+		if !isOk {
 			continue // skip: oms instance inactive
 		}
 		cpu := procCount * thCount
@@ -455,7 +464,10 @@ func updateQueueJobs(
 		// append to the instance queue
 		qOms, ok := qAll[oms]
 		if !ok {
-			qOms = omsQ{q: make([]qFileHdr, 0, nFiles)}
+			qOms = omsQ{
+				lastRunStamp: rStamp,
+				q:            make([]qFileHdr, 0, nFiles),
+			}
 		}
 		qOms.q = append(qOms.q, qFileHdr{
 			fileIdx:  k,
@@ -485,7 +497,7 @@ func updateQueueJobs(
 		})
 	}
 
-	// sort oms instance names
+	// sort oms instance names by last run stamp and by oms insatnce name
 	nOms := len(qAll)
 	omsKeys := make([]string, nOms)
 	n := 0
@@ -493,98 +505,71 @@ func updateQueueJobs(
 		omsKeys[n] = oms
 		n++
 	}
-	sort.Strings(omsKeys)
+	sort.SliceStable(omsKeys, func(i, j int) bool {
+		iStamp := qAll[omsKeys[i]].lastRunStamp
+		jStamp := qAll[omsKeys[j]].lastRunStamp
+		return iStamp < jStamp || (iStamp == jStamp && omsKeys[i] < omsKeys[j])
+	})
 
-	// order combined queue jobs by:
-	// position in the queue (position which user can adjust), by submission stamp and by instance name
-	// inside of each oms instance queue jobs are ordered by position and submission stamps
-	// for example, two queues of oms instances _4040 and _8080:
-	//   _4040 [ {1234, 2022_08_17}, {4567, 2022_08_12} ]
-	//   _8080 [ {1212, 2022_08_17}, {3434, 2022_08_16} ]
-	// merged global queue result:
-	//   [ {_4040, 1234, 2022_08_17}, {_8080, 1212, 2022_08_17}, {_4040, 4567, 2022_08_12}, {_8080, 3434, 2022_08_16} ]
+	// order combined queue jobs by: oms instance last run stamp
+	// and inside of each oms instance queue jobs are ordered by:
+	//   position in the queue (position which user can adjust)
+	//   submission stamp
 
 	totalRes := ComputeRes{} // total resources required to serve all queues
 	nextQueueIdx := 0        // global queue index position
 	isFirstJob := true
 	firstHostUse := jobHostUse{hostUse: []computeUse{}}
 
-	for isAll := false; !isAll; {
+	for iOms := 0; iOms < nOms; iOms++ {
 
-		// find oms instance where curent job has minimal submission stamp
-		// if there is the same stamp in multiple instances then use minimal oms instance name
-		topStamp := ""
-		topOms := ""
-		isAll = true
+		qOms := qAll[omsKeys[iOms]]
 
-		for k := 0; k < nOms; k++ {
+		for jq := 0; jq < len(qOms.q); jq++ {
 
-			qOms := qAll[omsKeys[k]]
-			if qOms.top >= len(qOms.q) {
-				continue // all jobs in that queue are already processed
-			}
-			isAll = false
+			// collect total resource usage
+			// if current top job is not exceeding available resources then assign global queue index position
+			if !qOms.q[jq].isOver {
 
-			if topOms == "" {
-				topOms = omsKeys[k]
-				topStamp = qOms.q[qOms.top].stamp
-			} else {
-				if qOms.q[qOms.top].stamp < topStamp {
-					topOms = omsKeys[k]
-					topStamp = qOms.q[qOms.top].stamp
-				}
-			}
-		}
-		if isAll {
-			break // all jobs in all queues are sorted
-		}
+				totalRes.Cpu = totalRes.Cpu + qOms.q[jq].res.Cpu
+				totalRes.Mem = totalRes.Mem + qOms.q[jq].res.Mem
 
-		qOms := qAll[topOms] // this queue contains minimal submission stamp at current queue top position
+				// check if there are any server(s) exists to run the job
+				srcJhu := jobHostUse{oms: omsKeys[iOms], stamp: qOms.q[jq].stamp, res: qOms.q[jq].res, hostUse: []computeUse{}}
 
-		// collect total resource usage
-		// if current top job is not exceeding available resources then assign global queue index position
-		if !qOms.q[qOms.top].isOver {
-
-			totalRes.Cpu = totalRes.Cpu + qOms.q[qOms.top].res.Cpu
-			totalRes.Mem = totalRes.Mem + qOms.q[qOms.top].res.Mem
-
-			// check if there are any server(s) exists to run the job
-			srcJhu := jobHostUse{oms: topOms, stamp: topStamp, res: qOms.q[qOms.top].res, hostUse: []computeUse{}}
-
-			if qOms.q[qOms.top].res.Mem > 0 {
-				qOms.q[qOms.top].isOver, _ = findComputeRes(srcJhu, false, mpiMaxTh, hostByMem, computeState)
-			} else {
-				qOms.q[qOms.top].isOver, _ = findComputeRes(srcJhu, false, mpiMaxTh, hostByCpu, computeState)
-			}
-
-			// if job queue not paused then allocate job to the servers and add servers to startup list
-			if !qOms.q[qOms.top].isOver && !qOms.q[qOms.top].isPaused {
-
-				isOver := false
-				var dst jobHostUse
-				if qOms.q[qOms.top].res.Mem > 0 {
-					isOver, dst = findComputeRes(srcJhu, true, mpiMaxTh, hostByMem, computeState)
+				if qOms.q[jq].res.Mem > 0 {
+					qOms.q[jq].isOver, _ = findComputeRes(srcJhu, false, mpiMaxTh, hostByMem, computeState)
 				} else {
-					isOver, dst = findComputeRes(srcJhu, true, mpiMaxTh, hostByCpu, computeState)
+					qOms.q[jq].isOver, _ = findComputeRes(srcJhu, false, mpiMaxTh, hostByCpu, computeState)
 				}
 
-				// if this is the first job in global queue then save host ini servers
-				if !isOver && isFirstJob {
-					isFirstJob = false
-					qOms.q[qOms.top].isFirst = true
-					firstHostUse = dst
-				}
-			}
+				// if job queue not paused then allocate job to the servers and add servers to startup list
+				if !qOms.q[jq].isOver && !qOms.q[jq].isPaused {
 
-			if !qOms.q[qOms.top].isOver {
-				nextQueueIdx++
-				qOms.q[qOms.top].allQPos = nextQueueIdx // one based index in global queue
+					isOver := false
+					var dst jobHostUse
+					if qOms.q[jq].res.Mem > 0 {
+						isOver, dst = findComputeRes(srcJhu, true, mpiMaxTh, hostByMem, computeState)
+					} else {
+						isOver, dst = findComputeRes(srcJhu, true, mpiMaxTh, hostByCpu, computeState)
+					}
+
+					// if this is the first job in global queue then save host ini servers
+					if !isOver && isFirstJob {
+						isFirstJob = false
+						qOms.q[jq].isFirst = true
+						firstHostUse = dst
+					}
+				}
+
+				if !qOms.q[jq].isOver {
+					nextQueueIdx++
+					qOms.q[jq].allQPos = nextQueueIdx // one based index in global queue
+				}
 			}
 		}
 
-		// move top of this queue to the next position and update current top job
-		qOms.top++
-		qAll[topOms] = qOms
+		qAll[omsKeys[iOms]] = qOms
 	}
 
 	// update current instance job map, queue files and resources
@@ -1014,7 +999,7 @@ func initJobComputeState(jobIniPath string, updateTs time.Time, computeState map
 // total computational resources (cpu and memory), used resources and avaliable resources.
 func updateComputeState(
 	computeState map[string]computeItem,
-	omsActive map[string]int64,
+	omsActive map[string]string,
 	nowTs int64,
 	maxStartTime int64,
 	maxStopTime int64,
