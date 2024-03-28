@@ -46,19 +46,22 @@ func findRun(srcDb *sql.DB, modelId int, rdsn string, runId int, isFirst, isLast
 	return "last model run", r, e
 }
 
-// compare model runs microdata and run results into csv or json files
-func microdataCompare(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
+// compare model runs microdata or aggregate microdata and write run results into csv or json files.
+func microdataAggregate(srcDb *sql.DB, modelId int, isCompare bool, runOpts *config.RunOptions) error {
 
 	// find base model run
 	msg, baseRun, err := findRun(srcDb, modelId, runOpts.String(runArgKey), runOpts.Int(runIdArgKey, 0), runOpts.Bool(runFirstArgKey), runOpts.Bool(runLastArgKey))
 	if err != nil {
 		return errors.New("Error at get base model run: " + msg + " " + err.Error())
 	}
-	if baseRun == nil {
-		return errors.New("Error: base model run not found: " + msg)
-	}
-	if baseRun.Status != db.DoneRunStatus {
-		return errors.New("Error: base model run not completed successfully: " + msg)
+	if baseRun != nil {
+		if baseRun.Status != db.DoneRunStatus {
+			return errors.New("Error: base model run not completed successfully: " + msg)
+		}
+	} else {
+		if runOpts.String(runArgKey) != "" || runOpts.Int(runIdArgKey, 0) != 0 || runOpts.Bool(runFirstArgKey) || runOpts.Bool(runLastArgKey) {
+			return errors.New("Error: base model run not found")
+		}
 	}
 
 	// make list of variant model runs
@@ -68,14 +71,20 @@ func microdataCompare(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) er
 	pushToVar := func(src string, m string, r *db.RunRow) error {
 
 		if src != "" && r == nil {
-			return errors.New("Error: variant model run not found: " + src)
+			return errors.New("Error: model run not found: " + src)
 		}
 		if r.Status != db.DoneRunStatus {
-			return errors.New("Error: variant model run not completed successfully: " + m)
+			return errors.New("Error: model run not completed successfully: " + m)
 		}
-		if r.RunDigest == baseRun.RunDigest {
-			omppLog.Log("Warning: skip variant run, it is the same as base run: ", src)
+		if baseRun == nil { // if base run not specified then use first run as base run
+			baseRun = r
 			return nil
+		}
+		// else: add to the list of variant runs
+		if r.RunDigest == baseRun.RunDigest {
+			omppLog.Log("Warning: skip this model run, it is the same as base run: ", src)
+			return nil
+
 		}
 
 		// check if variant not already exist in the list of variants
@@ -90,13 +99,13 @@ func microdataCompare(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) er
 	}
 
 	// get variant runs from comma separarted list of digest, stamp or name
-	if rdsnLst := helper.ParseCsvLine(runOpts.String(toRunsArgKey), ','); len(rdsnLst) > 0 {
+	if rdsnLst := helper.ParseCsvLine(runOpts.String(withRunsArgKey), ','); len(rdsnLst) > 0 {
 
 		for _, rdsn := range rdsnLst {
 
 			m, r, e := findRun(srcDb, modelId, rdsn, 0, false, false)
 			if e != nil {
-				return errors.New("Error at get variant model run: " + m + " " + e.Error())
+				return errors.New("Error at get model run: " + m + " " + e.Error())
 			}
 			if e = pushToVar(rdsn, m, r); e != nil {
 				return e
@@ -104,7 +113,7 @@ func microdataCompare(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) er
 		}
 	}
 	// get variant runs from comma separarted list of run id's
-	if idLst := helper.ParseCsvLine(runOpts.String(toRunIdsArgKey), ','); len(idLst) > 0 {
+	if idLst := helper.ParseCsvLine(runOpts.String(withRunIdsArgKey), ','); len(idLst) > 0 {
 
 		for _, sId := range idLst {
 
@@ -113,12 +122,12 @@ func microdataCompare(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) er
 			}
 			rId, e := strconv.Atoi(sId)
 			if e != nil || rId <= 0 {
-				return errors.New("Invalid variant model run id: " + sId)
+				return errors.New("Invalid model run id: " + sId)
 			}
 
 			m, r, e := findRun(srcDb, modelId, "", rId, false, false)
 			if e != nil {
-				return errors.New("Error at get variant model run: " + m + " " + e.Error())
+				return errors.New("Error at get model run: " + m + " " + e.Error())
 			}
 			if e = pushToVar(sId, m, r); e != nil {
 				return e
@@ -126,7 +135,7 @@ func microdataCompare(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) er
 		}
 	}
 	// check if first run must be used as variant run
-	if runOpts.Bool(toRunFirstArgKey) {
+	if runOpts.Bool(withRunFirstArgKey) {
 
 		m, r, e := findRun(srcDb, modelId, "", 0, true, false)
 		if e != nil {
@@ -137,7 +146,7 @@ func microdataCompare(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) er
 		}
 	}
 	// check if last run must be used as variant run
-	if runOpts.Bool(toRunLastArgKey) {
+	if runOpts.Bool(withRunLastArgKey) {
 
 		m, r, e := findRun(srcDb, modelId, "", 0, false, true)
 		if e != nil {
@@ -148,7 +157,15 @@ func microdataCompare(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) er
 		}
 	}
 
-	// get microdata entity, group by attributes and comparison calcultion(s)
+	// check: base model run must exist
+	if baseRun == nil {
+		return errors.New("Error: base model run not found")
+	}
+	if isCompare && len(varRunLst) <= 0 {
+		return errors.New("Error: at least one variant model run is required")
+	}
+
+	// get microdata entity, group by attributes and calcultion expression(s)
 	entityName := runOpts.String(entityArgKey)
 	if entityName == "" {
 		return errors.New("Invalid (empty) microdata entity name")
@@ -159,7 +176,7 @@ func microdataCompare(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) er
 	}
 	cLst := helper.ParseCsvLine(runOpts.String(calcArgKey), ',')
 	if len(cLst) <= 0 {
-		return errors.New("Invalid (empty) microdata comparison calculation(s)")
+		return errors.New("Invalid (empty) microdata calculation expression(s)")
 	}
 
 	// set aggregation expressions
@@ -331,10 +348,11 @@ func microdataCompare(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) er
 	}
 
 	if theCfg.isNoFile {
-		omppLog.Log("Do model-list")
+		omppLog.Log("Do ", theCfg.action)
 	} else {
-		omppLog.Log("Do model-list: " + fp)
+		omppLog.Log("Do ", theCfg.action, ": "+fp)
 	}
+
 	// create csv file
 	isFile := fp != ""
 	var f *os.File
@@ -387,7 +405,7 @@ func microdataCompare(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) er
 	// read microdata values page
 	_, err = db.ReadMicrodataCalculateTo(srcDb, meta, &microLt, &calcLt, runIds, cvtWr)
 	if err != nil {
-		return errors.New("Error at microdata run comparison: " + entityName + ": " + microLt.GenDigest + ": " + err.Error())
+		return errors.New("Error at microdata run calculation output: " + entityName + ": " + microLt.GenDigest + ": " + err.Error())
 	}
 
 	csvWr.Flush() // flush csv to response

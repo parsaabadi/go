@@ -8,14 +8,34 @@ Get list of the models from database:
 
 	dbget -db modelOne.sqlite -do model-list
 
-Compare microdata run values:
+Aggregate microdata run values:
 
-	dbget -db modelOne.sqlite -do microdata-compare -m modelOne
-	  -dbget.RunId 219
-	  -dbget.ToRunIds 221
+	dbget -db test\modelOne.sqlite -do microdata-aggregate
+	  -m modelOne
+	  -dbget.WithRunIds 219,221
 	  -dbget.Entity Other
 	  -dbget.GroupBy AgeGroup
+	  -dbget.Calc OM_AVG(Income)
+
+Compare microdata run values:
+
+	dbget -db modelOne.sqlite -do microdata-compare
+	  -m modelOne
+	  -dbget.RunId 219
+	  -dbget.WithRunIds 221
+	  -dbget.Entity Person
+	  -dbget.GroupBy AgeGroup
 	  -dbget.Calc OM_AVG(Income[base]-Income[variant])
+
+Aggregate and compare microdata run values:
+
+	dbget -db test\modelOne.sqlite -do microdata-aggregate
+	  -m modelOne
+	  -dbget.RunId 219
+	  -dbget.WithRunIds 221
+	  -dbget.Entity Other
+	  -dbget.GroupBy AgeGroup
+	  -dbget.Calc OM_AVG(Income),OM_AVG(Income[base]-Income[variant])
 */
 package main
 
@@ -56,10 +76,10 @@ const (
 	runIdArgKey         = "dbget.RunId"          // model run id
 	runFirstArgKey      = "dbget.FirstRun"       // use first model run
 	runLastArgKey       = "dbget.LastRun"        // use last model run
-	toRunsArgKey        = "dbget.ToRuns"         // variant run(s): list of model run digests, stamps or names
-	toRunIdsArgKey      = "dbget.ToRunIds"       // variant run(s): list model run id's
-	toRunFirstArgKey    = "dbget.ToFirstRun"     // variant run: first model run
-	toRunLastArgKey     = "dbget.ToLastRun"      // variant run: last model run
+	withRunsArgKey      = "dbget.WithRuns"       // with model run digests, stamps or names (variant runs)
+	withRunIdsArgKey    = "dbget.WithRunIds"     // with list model run id's (variant runs)
+	withRunFirstArgKey  = "dbget.WithFirstRun"   // with first model run (with first run as variant)
+	withRunLastArgKey   = "dbget.WithLastRun"    // with last model run (with last run as variant)
 	entityArgKey        = "dbget.Entity"         // microdata entity name
 	groupByArgKey       = "dbget.GroupBy"        // microdata group by attributes
 	calcArgKey          = "dbget.Calc"           // calculation(s) expressions to compare or aggregate
@@ -128,10 +148,10 @@ func mainBody(args []string) error {
 	_ = flag.Int(runIdArgKey, 0, "model run id")
 	_ = flag.Bool(runFirstArgKey, false, "if true then use first model run")
 	_ = flag.Bool(runLastArgKey, false, "if true then use last model run")
-	_ = flag.String(toRunsArgKey, "", "variant runs: list of model run digests, stamps or names")
-	_ = flag.String(toRunIdsArgKey, "", "variant runs: list model run id's")
-	_ = flag.Bool(toRunFirstArgKey, false, "if true then use first model run as variant run")
-	_ = flag.Bool(toRunLastArgKey, false, "if true then use last model run as variant run")
+	_ = flag.String(withRunsArgKey, "", "with model run digests, stamps or names (variant runs)")
+	_ = flag.String(withRunIdsArgKey, "", "with list model run id's (variant runs)")
+	_ = flag.Bool(withRunFirstArgKey, false, "if true then use first model run (use as variant run)")
+	_ = flag.Bool(withRunLastArgKey, false, "if true then use last model run (use as variant run)")
 	_ = flag.String(entityArgKey, "", "microdata entity name")
 	_ = flag.String(groupByArgKey, "", "list of microdata group by attributes")
 	_ = flag.String(calcArgKey, "", "list of calculation(s) expressions to compare or aggregate")
@@ -225,8 +245,10 @@ func mainBody(args []string) error {
 	switch theCfg.action {
 	case "model-list":
 		return modelList(srcDb, runOpts)
+	case "microdata-aggregate":
+		return microdataAggregate(srcDb, modelId, false, runOpts)
 	case "microdata-compare":
-		return microdataCompare(srcDb, modelId, runOpts)
+		return microdataAggregate(srcDb, modelId, true, runOpts)
 	}
 	return errors.New("invalid action argument: " + theCfg.action)
 }
