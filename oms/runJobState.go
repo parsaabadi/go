@@ -14,6 +14,12 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
+// oms instance last run stamp and resorce usage
+type omsUsage struct {
+	lastStamp  string // last run stamp
+	ComputeRes        // MPI resources used by this instance
+}
+
 // scan job control directories to read and update job lists: queue, active and history
 func scanStateJobs(doneC <-chan bool) {
 	if !theCfg.isJobControl {
@@ -54,7 +60,7 @@ func scanStateJobs(doneC <-chan bool) {
 	queueJobs := map[string]queueJobFile{}
 	activeJobs := map[string]runJobFile{}
 	historyJobs := map[string]historyJobFile{}
-	omsActive := map[string]string{}
+	omsActive := map[string]omsUsage{}
 	omsPaused := map[string]bool{}
 	computeState := map[string]computeItem{}
 	hostByCpu := []string{} // names of computational servers or clusters sorted by available CPU cores
@@ -94,9 +100,9 @@ func scanStateJobs(doneC <-chan bool) {
 			}
 
 			if ts > minOmsStateTs {
-				lastStamp, ok := omsActive[oms]
-				if !ok || rStamp > lastStamp {
-					omsActive[oms] = rStamp // oms instance is alive
+				u, ok := omsActive[oms]
+				if !ok || rStamp > u.lastStamp {
+					omsActive[oms] = omsUsage{lastStamp: rStamp, ComputeRes: u.ComputeRes} // oms instance is alive
 				}
 				if leaderName == "" || leaderName > oms {
 					leaderName = oms
@@ -298,7 +304,7 @@ func scanStateJobs(doneC <-chan bool) {
 		// update oms heart beat file
 		nTick++
 		if nTick%7 == 0 {
-			omsTickPath, _ = makeOmsTick(omsActive[theCfg.omsName])
+			omsTickPath, _ = makeOmsTick(omsActive[theCfg.omsName].lastStamp)
 		}
 
 		// wait for doneC or sleep
@@ -312,13 +318,22 @@ func scanStateJobs(doneC <-chan bool) {
 
 // insert run job into job map: map job file submission stamp to file content (run job).
 // update last run stamp for oms instances.
-func updateActiveJobs(fLst []string, jobMap map[string]runJobFile, omsActive map[string]string) ([]string, ComputeRes, ComputeRes, ComputeRes) {
+func updateActiveJobs(fLst []string, jobMap map[string]runJobFile, omsActive map[string]omsUsage) ([]string, ComputeRes, ComputeRes, ComputeRes) {
 
 	subStamps := make([]string, 0, len(fLst)) // list of submission stamps
 	totalRes := ComputeRes{}
 	ownRes := ComputeRes{}
 	localOwnRes := ComputeRes{}
 
+	// clean oms cpu and memory usage
+	for oms, u := range omsActive {
+		u.Cpu = 0
+		u.Mem = 0
+		omsActive[oms] = u
+	}
+
+	// parse active files, collect jobs for current oms instance
+	// and for all instances update last run stamp and active MPI resource usage (cpu and memory)
 	for _, f := range fLst {
 
 		// get submission stamp, oms instance and resources
@@ -326,15 +341,23 @@ func updateActiveJobs(fLst []string, jobMap map[string]runJobFile, omsActive map
 		if stamp == "" || oms == "" || mn == "" || dgst == "" {
 			continue // file name is not a job file name
 		}
-		if lastStamp, ok := omsActive[oms]; !ok {
+
+		// update oms resource usage and last run stamp
+		if u, ok := omsActive[oms]; !ok {
 			continue // skip: oms instance inactive
 		} else {
-			if rStamp > lastStamp {
-				omsActive[oms] = rStamp
+
+			if rStamp > u.lastStamp {
+				u.lastStamp = rStamp
 			}
+			if isMpi {
+				u.Cpu += cpu
+				u.Mem += mem
+			}
+			omsActive[oms] = u
 		}
 
-		// collect total resource usage
+		// collect total resource usage and oms resource usage
 		if isMpi {
 			totalRes.Cpu = totalRes.Cpu + cpu
 			totalRes.Mem = totalRes.Mem + mem
@@ -390,7 +413,7 @@ func updateQueueJobs(
 	hostByCpu []string,
 	hostByMem []string,
 	computeState map[string]computeItem,
-	omsActive map[string]string,
+	omsActive map[string]omsUsage,
 	isAllPaused bool,
 	omsPaused map[string]bool,
 ) (
@@ -413,8 +436,8 @@ func updateQueueJobs(
 		isFirst  bool   // if true the it is the first job in global queue
 	}
 	type omsQ struct {
-		lastRunStamp string     // oms last run stamp
-		q            []qFileHdr // instance queue files
+		omsUsage            // oms last run stamp and resource usage
+		q        []qFileHdr // instance queue files
 	}
 	qAll := make(map[string]omsQ, nFiles) // queue for each oms instance
 
@@ -435,7 +458,7 @@ func updateQueueJobs(
 		if !isMpi {
 			continue // this is not MPI cluster job
 		}
-		rStamp, isOk := omsActive[oms]
+		u, isOk := omsActive[oms]
 		if !isOk {
 			continue // skip: oms instance inactive
 		}
@@ -465,8 +488,8 @@ func updateQueueJobs(
 		qOms, ok := qAll[oms]
 		if !ok {
 			qOms = omsQ{
-				lastRunStamp: rStamp,
-				q:            make([]qFileHdr, 0, nFiles),
+				omsUsage: u,
+				q:        make([]qFileHdr, 0, nFiles),
 			}
 		}
 		qOms.q = append(qOms.q, qFileHdr{
@@ -497,8 +520,28 @@ func updateQueueJobs(
 		})
 	}
 
-	// sort oms instance names by last run stamp and by oms insatnce name
+	// sort oms instance names by:
+	//   split instances in two categories depending if current active CPUs is less than quota or not
+	//   move forward oms instances where usages less than quota
+	// inside of each category sort oms instances by:
+	//   last run stamp and oms instance name
 	nOms := len(qAll)
+	nc := 0 // cpu quota for each oms instance: eqully divide number of CPUs avaliable
+
+	if nOms > 0 && isMpiLimit && mpiTotalRes.Cpu > 0 {
+
+		nc = mpiTotalRes.Cpu / nOms
+		if mpiTotalRes.Cpu%nOms > 0 {
+			nc++
+		}
+		if nc < mpiMaxTh {
+			nc = mpiMaxTh
+		}
+		if nc < 1 {
+			nc = 1
+		}
+	}
+
 	omsKeys := make([]string, nOms)
 	n := 0
 	for oms := range qAll {
@@ -506,13 +549,22 @@ func updateQueueJobs(
 		n++
 	}
 	sort.SliceStable(omsKeys, func(i, j int) bool {
-		iStamp := qAll[omsKeys[i]].lastRunStamp
-		jStamp := qAll[omsKeys[j]].lastRunStamp
-		return iStamp < jStamp || (iStamp == jStamp && omsKeys[i] < omsKeys[j])
+
+		iUse := qAll[omsKeys[i]].omsUsage
+		jUse := qAll[omsKeys[j]].omsUsage
+
+		if iUse.Cpu < nc && jUse.Cpu >= nc {
+			return true
+		}
+		if iUse.Cpu >= nc && jUse.Cpu < nc {
+			return false
+		}
+		return iUse.lastStamp < jUse.lastStamp || (iUse.lastStamp == jUse.lastStamp && omsKeys[i] < omsKeys[j])
 	})
 
-	// order combined queue jobs by: oms instance last run stamp
-	// and inside of each oms instance queue jobs are ordered by:
+	// order combined queue jobs by:
+	//   oms instance last run stamp
+	// inside of each oms instance queue jobs are ordered by:
 	//   position in the queue (position which user can adjust)
 	//   submission stamp
 
@@ -999,7 +1051,7 @@ func initJobComputeState(jobIniPath string, updateTs time.Time, computeState map
 // total computational resources (cpu and memory), used resources and avaliable resources.
 func updateComputeState(
 	computeState map[string]computeItem,
-	omsActive map[string]string,
+	omsActive map[string]omsUsage,
 	nowTs int64,
 	maxStartTime int64,
 	maxStopTime int64,
