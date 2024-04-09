@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/openmpp/go/ompp/config"
 	"github.com/openmpp/go/ompp/db"
@@ -659,11 +660,15 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 	return nil
 }
 
-// toCsvFile write into csvDir/fileName.csv file.
+// toCsvFile write into csvDir/fileName.csv or into csvDir/fileName.tsv file.
+// if isTsv is true then output into TSV else into CSV
 func toCsvFile(
 	csvDir string, fileName string, columnNames []string, lineCvt lineCsvConverter) error {
 
 	// create csv file
+	if theCfg.isTsv && strings.HasSuffix(fileName, ".csv") {
+		fileName = fileName[:len(fileName)-4] + ".tsv"
+	}
 	f, err := os.OpenFile(filepath.Join(csvDir, fileName), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
@@ -677,6 +682,9 @@ func toCsvFile(
 	}
 
 	wr := csv.NewWriter(f)
+	if theCfg.isTsv {
+		wr.Comma = '\t'
+	}
 
 	// write header line: column names, if provided
 	if len(columnNames) > 0 {

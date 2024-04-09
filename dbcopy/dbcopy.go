@@ -6,11 +6,11 @@ dbcopy is command line tool for import-export OpenM++ model metadata, input para
 
 Dbcopy support 5 possible -dbcopy.To directions:
 
-	"text":    copy from database to .json and .csv files (this is default)
+	"text":    copy from database to .json and .csv or .tsv files (this is default)
 	"db":      copy from .json and .csv files to database
 	"db2db":   copy from one database to other
-	"csv":     copy from databse to .csv files
-	"csv-all": copy from databse to .csv files
+	"csv":     copy from databse to .csv or .tsv files
+	"csv-all": copy from databse to .csv or .tsv files
 
 Dbcopy also can delete entire model or model run results, set of input parameters or modeling task from database (see dbcopy.Delete below).
 Dbcopy also can rename model run results, set of input parameters or modeling task in database (see dbcopy.Rename below).
@@ -34,9 +34,12 @@ To display list of the models in SQLite database file use:
 
 	dbcopy -ls path/to/file.sqlite
 
-Copy to "text": read from database and save into metadata .json and .csv values (parameters and output tables):
+To produce TSV output files instead of CSV use -dbcopy.IntoTsv option.
+
+Copy to "text": read from database and save into metadata .json and .csv or .tsv values (parameters and output tables):
 
 	dbcopy -m modelOne
+	dbcopy -m modelOne -dbcopy.IntoTsv
 
 Copy to "db": read from metadata .json and .csv values and insert or update database:
 
@@ -46,18 +49,20 @@ Copy to "db2db": direct copy between two databases:
 
 	dbcopy -m modelOne -dbcopy.To db2db -dbcopy.ToSqlite modelOne.sqlite
 
-Copy to "csv": read entire model from database and save .csv files:
+Copy to "csv": read entire model from database and save into .csv or .tsv files:
 
 	dbcopy -m modelOne -dbcopy.To csv
+	dbcopy -m modelOne -dbcopy.To csv -dbcopy.IntoTsv
 
 Separate sub-directory created for each input set and each model run results.
 
-Copy to "csv-all": read entire model from database and save .csv files:
+Copy to "csv-all": read entire model from database and save into .csv or .tsv files:
 
 	dbcopy -m modelOne -dbcopy.To csv-all
+	dbcopy -m modelOne -dbcopy.To csv-all -dbcopy.IntoTsv
 
-It dumps all input parameters sets into all_input_sets/parameterName.csv files.
-And for all model runs input parameters and output tables saved into all_model_runs/tableName.csv files.
+It dumps all input parameters sets into all_input_sets/parameterName.csv (or .tsv) files.
+And for all model runs input parameters and output tables saved into all_model_runs/tableName.csv (or .tsv) files.
 
 By default if output directory already exist then dbdopy delete it first to create a clean output results.
 If you want to keep existing output directory then use  -dbcopy.KeepOutputDir true:
@@ -303,6 +308,7 @@ const (
 	paramDirArgKey      = "dbcopy.ParamDir"          // path to workset parameters directory
 	paramDirShortKey    = "p"                        // path to workset parameters directory (short form)
 	zipArgKey           = "dbcopy.Zip"               // create output or use as input model.zip
+	intoTsvArgKey       = "dbcopy.IntoTsv"           // if true then create .tsv output files instead of .csv by default
 	useIdCsvArgKey      = "dbcopy.IdCsv"             // if true then create csv files with enum id's default: enum code
 	useIdNamesArgKey    = "dbcopy.IdOutputNames"     // if true then always use id's in output directory and file names, false never use it
 	noDigestCheckArgKey = "dbcopy.NoDigestCheck"     // if true then ignore input model digest, use model name only
@@ -328,6 +334,7 @@ const (
 var theCfg = struct {
 	isKeepOutputDir bool   // if true then keep existing output directory
 	isNoDigestCheck bool   // if true then ignore input model digest, use model name only to load values from csv
+	isTsv           bool   // if true then create .tsv output files instead of .csv by default
 	isIdCsv         bool   // if true then create csv files with enum id's default: enum code
 	isNoAccCsv      bool   // if true then do not create accumulators .csv files
 	isNoMicrodata   bool   // if true then suppress microdata output
@@ -337,16 +344,8 @@ var theCfg = struct {
 	encodingName    string // code page for converting source files, e.g. windows-1252
 	isWriteUtf8Bom  bool   // if true then write utf-8 BOM into csv file
 }{
-	isKeepOutputDir: false,   // remove existing out directoris by default
-	isNoDigestCheck: false,   // by default check model digest
-	isIdCsv:         false,   // by default use create enum codes in csv files
-	isNoAccCsv:      false,   // by default do full model dump: create accumulators .csv files
-	isNoMicrodata:   false,   // by default do full model dump, including microdata
-	isNoZeroCsv:     false,   // by default do write zero values into output tables .csv files
-	isNoNullCsv:     false,   // by default dot write NULL values into output tables .csv files
-	doubleFmt:       "%.15g", // default format to convert float or double values to string
-	encodingName:    "",      // by default detect utf-8 encoding or use OS-specific default: windows-1252 on Windowds and utf-8 outside
-	isWriteUtf8Bom:  false,   // do not write BOM by default
+	doubleFmt:    "%.15g", // default format to convert float or double values to string
+	encodingName: "",      // by default detect utf-8 encoding or use OS-specific default: windows-1252 on Windowds and utf-8 outside
 }
 
 func main() {
@@ -395,6 +394,7 @@ func mainBody(args []string) error {
 	_ = flag.String(paramDirArgKey, "", "path to parameters directory (input parameters set directory)")
 	_ = flag.String(paramDirShortKey, "", "path to parameters directory (short of "+paramDirArgKey+")")
 	_ = flag.Bool(zipArgKey, false, "create output model.zip or use model.zip as input")
+	_ = flag.Bool(intoTsvArgKey, theCfg.isTsv, "if true then create .tsv output files instead of .csv by default")
 	_ = flag.Bool(useIdNamesArgKey, false, "if true then always use id's in output directory names, false never use. Default for csv: only if name conflict")
 	_ = flag.Bool(useIdCsvArgKey, false, "if true then create csv files with enum id's default: enum code")
 	_ = flag.Bool(noDigestCheckArgKey, theCfg.isNoDigestCheck, "if true then ignore input model digest, use model name only")
@@ -447,6 +447,7 @@ func mainBody(args []string) error {
 	theCfg.isNoMicrodata = runOpts.Bool(noMicrodataArgKey)
 	theCfg.isNoZeroCsv = runOpts.Bool(noZeroArgKey)
 	theCfg.isNoNullCsv = runOpts.Bool(noNullArgKey)
+	theCfg.isTsv = runOpts.Bool(intoTsvArgKey)
 	theCfg.doubleFmt = runOpts.String(doubleFormatArgKey)
 	theCfg.encodingName = runOpts.String(encodingArgKey)
 	theCfg.isWriteUtf8Bom = runOpts.Bool(useUtf8CsvArgKey)

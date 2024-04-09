@@ -9,6 +9,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/openmpp/go/ompp/config"
 	"github.com/openmpp/go/ompp/db"
@@ -144,8 +145,9 @@ func toModelJson(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 	return nil
 }
 
-// toCellCsvFile convert parameter, output table values or microdata and write into csvDir/fileName.csv file.
+// toCellCsvFile convert parameter, output table values or microdata and write into csvDir/fileName.csv or csvDir/fileName.tsv file.
 // if IsIdCsv is true then csv contains enum id's, default: enum code
+// if isTsv is true then output into TSV else into CSV
 func toCellCsvFile(
 	dbConn *sql.DB,
 	modelDef *db.ModelMeta,
@@ -173,6 +175,9 @@ func toCellCsvFile(
 	if err != nil {
 		return err
 	}
+	if theCfg.isTsv && strings.HasSuffix(fn, ".csv") {
+		fn = fn[:len(fn)-4] + ".tsv"
+	}
 	p := filepath.Join(csvDir, fn)
 	_, isAppend := fileCreated[p]
 
@@ -195,6 +200,9 @@ func toCellCsvFile(
 	}
 
 	wr := csv.NewWriter(f)
+	if theCfg.isTsv {
+		wr.Comma = '\t'
+	}
 
 	// if not append to already existing csv file then write header line: column names
 	cs, err := csvCvt.CsvHeader()
