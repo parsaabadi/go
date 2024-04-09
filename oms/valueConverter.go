@@ -22,14 +22,14 @@ func (mc *ModelCatalog) ParameterCellConverter(
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
-		omppLog.Log("Warning: invalid (empty) model digest and name")
+		omppLog.Log("Error: invalid (empty) model digest and name")
 		return nil, false
 	}
 
 	// get model metadata and database connection
 	meta, _, ok := mc.modelMeta(dn)
 	if !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
+		omppLog.Log("Error: model digest or name not found: ", dn)
 		return nil, false // return empty result: model not found or error
 	}
 
@@ -66,14 +66,14 @@ func (mc *ModelCatalog) TableToCodeCellConverter(dn string, name string, isAcc, 
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
-		omppLog.Log("Warning: invalid (empty) model digest and name")
+		omppLog.Log("Error: invalid (empty) model digest and name")
 		return nil, false
 	}
 
 	// get model metadata and database connection
 	meta, _, ok := mc.modelMeta(dn)
 	if !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
+		omppLog.Log("Error: model digest or name not found: ", dn)
 		return nil, false // return empty result: model not found or error
 	}
 
@@ -128,14 +128,14 @@ func (mc *ModelCatalog) TableToCodeCalcCellConverter(
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
-		omppLog.Log("Warning: invalid (empty) model digest and name")
+		omppLog.Log("Error: invalid (empty) model digest and name")
 		return nil, 0, nil, false
 	}
 
 	// get model metadata and database connection
 	meta, _, ok := mc.modelMeta(dn)
 	if !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
+		omppLog.Log("Error: model digest or name not found: ", dn)
 		return nil, 0, nil, false // return empty result: model not found or error
 	}
 
@@ -231,14 +231,14 @@ func (mc *ModelCatalog) TableAggrExprCalculateLayout(dn string, name string, agg
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
-		omppLog.Log("Warning: invalid (empty) model digest and name")
+		omppLog.Log("Error: invalid (empty) model digest and name")
 		return []db.CalculateTableLayout{}, false
 	}
 
 	// get model metadata and database connection
 	meta, _, ok := mc.modelMeta(dn)
 	if !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
+		omppLog.Log("Error: model digest or name not found: ", dn)
 		return []db.CalculateTableLayout{}, false // return empty result: model not found or error
 	}
 
@@ -340,14 +340,14 @@ func (mc *ModelCatalog) TableExprCompareLayout(dn string, name string, cmp strin
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
-		omppLog.Log("Warning: invalid (empty) model digest and name")
+		omppLog.Log("Error: invalid (empty) model digest and name")
 		return []db.CalculateTableLayout{}, false
 	}
 
 	// get model metadata and database connection
 	meta, _, ok := mc.modelMeta(dn)
 	if !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
+		omppLog.Log("Error: model digest or name not found: ", dn)
 		return []db.CalculateTableLayout{}, false // return empty result: model not found or error
 	}
 
@@ -463,22 +463,22 @@ func (mc *ModelCatalog) MicrodataCellConverter(
 
 	// validate parameters and return empty results on empty input
 	if dn == "" {
-		omppLog.Log("Warning: invalid (empty) model digest and name")
+		omppLog.Log("Error: invalid (empty) model digest and name")
 		return 0, "", nil, false
 	}
 	if rdsn == "" {
-		omppLog.Log("Warning: invalid (empty) model run digest, stamp and name")
+		omppLog.Log("Error: invalid (empty) model run digest, stamp and name")
 		return 0, "", nil, false
 	}
 	if name == "" {
-		omppLog.Log("Warning: invalid (empty) model entity name")
+		omppLog.Log("Error: invalid (empty) model entity name")
 		return 0, "", nil, false
 	}
 
 	// get model metadata and database connection
 	meta, _, ok := mc.modelMeta(dn)
 	if !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
+		omppLog.Log("Error: model digest or name not found: ", dn)
 		return 0, "", nil, false // return empty result: model not found or error
 	}
 
@@ -488,7 +488,7 @@ func (mc *ModelCatalog) MicrodataCellConverter(
 		return 0, "", nil, false // run not found or not completed
 	}
 	if r.Status != db.DoneRunStatus {
-		omppLog.Log("Warning: model run not completed successfully: ", rdsn, ": ", r.Status)
+		omppLog.Log("Error: model run not completed successfully: ", rdsn, ": ", r.Status)
 		return 0, "", nil, false
 	}
 
@@ -527,14 +527,14 @@ func (mc *ModelCatalog) ParameterToCsvConverter(dn string, isCode bool, name str
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
-		omppLog.Log("Warning: invalid (empty) model digest and name")
+		omppLog.Log("Error: invalid (empty) model digest and name")
 		return []string{}, nil, false
 	}
 
 	// get model metadata and database connection
 	meta, _, ok := mc.modelMeta(dn)
 	if !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
+		omppLog.Log("Error: model digest or name not found: ", dn)
 		return []string{}, nil, false // return empty result: model not found or error
 	}
 
@@ -579,14 +579,14 @@ func (mc *ModelCatalog) TableToCsvConverter(dn string, isCode bool, name string,
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
-		omppLog.Log("Warning: invalid (empty) model digest and name")
+		omppLog.Log("Error: invalid (empty) model digest and name")
 		return []string{}, nil, false
 	}
 
 	// get model metadata and database connection
 	meta, _, ok := mc.modelMeta(dn)
 	if !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
+		omppLog.Log("Error: model digest or name not found: ", dn)
 		return []string{}, nil, false // return empty result: model not found or error
 	}
 
@@ -653,14 +653,14 @@ func (mc *ModelCatalog) TableToCalcCsvConverter(
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
-		omppLog.Log("Warning: invalid (empty) model digest and name")
+		omppLog.Log("Error: invalid (empty) model digest and name")
 		return []string{}, nil, 0, nil, false
 	}
 
 	// get model metadata and database connection
 	meta, _, ok := mc.modelMeta(dn)
 	if !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
+		omppLog.Log("Error: model digest or name not found: ", dn)
 		return []string{}, nil, 0, nil, false // return empty result: model not found or error
 	}
 
@@ -726,22 +726,22 @@ func (mc *ModelCatalog) MicrodataToCsvConverter(
 
 	// validate parameters and return empty results on empty input
 	if dn == "" {
-		omppLog.Log("Warning: invalid (empty) model digest and name")
+		omppLog.Log("Error: invalid (empty) model digest and name")
 		return 0, "", []string{}, nil, false
 	}
 	if rdsn == "" {
-		omppLog.Log("Warning: invalid (empty) model run digest, stamp and name")
+		omppLog.Log("Error: invalid (empty) model run digest, stamp and name")
 		return 0, "", []string{}, nil, false
 	}
 	if name == "" {
-		omppLog.Log("Warning: invalid (empty) model entity name")
+		omppLog.Log("Error: invalid (empty) model entity name")
 		return 0, "", []string{}, nil, false
 	}
 
 	// get model metadata and database connection
 	meta, _, ok := mc.modelMeta(dn)
 	if !ok {
-		omppLog.Log("Warning: model digest or name not found: ", dn)
+		omppLog.Log("Error: model digest or name not found: ", dn)
 		return 0, "", []string{}, nil, false // return empty result: model not found or error
 	}
 
@@ -751,7 +751,7 @@ func (mc *ModelCatalog) MicrodataToCsvConverter(
 		return 0, "", []string{}, nil, false // run not found or not completed
 	}
 	if r.Status != db.DoneRunStatus {
-		omppLog.Log("Warning: model run not completed successfully: ", rdsn, ": ", r.Status)
+		omppLog.Log("Error: model run not completed successfully: ", rdsn, ": ", r.Status)
 		return r.RunId, "", []string{}, nil, false
 	}
 
