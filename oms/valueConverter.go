@@ -810,6 +810,12 @@ func (mc *ModelCatalog) MicrodataCalcToCsvConverter(
 	if entityName == "" {
 		return 0, []int{}, "", nil, errors.New("Error: invalid (empty) model entity name")
 	}
+	if len(calcLt.GroupBy) <= 0 {
+		return 0, []int{}, "", nil, errors.New("Error: invalid (empty) microdata group by attributes: " + dn + ": " + entityName)
+	}
+	if len(calcLt.Calculation) <= 0 {
+		return 0, []int{}, "", nil, errors.New("Error: invalid (empty) microdata calculation expression(s): " + dn + ": " + entityName)
+	}
 
 	// get model metadata and database connection
 	meta, _, ok := mc.modelMeta(dn)

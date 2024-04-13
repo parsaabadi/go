@@ -20,7 +20,7 @@ func ReadOutputTableTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLay
 		return nil, errors.New("invalid (empty) model metadata, look like model not found")
 	}
 	if layout == nil {
-		return nil, errors.New("invalid (empty) page layout")
+		return nil, errors.New("invalid (empty) output table read layout")
 	}
 	if layout.Name == "" {
 		return nil, errors.New("invalid (empty) output table name")
@@ -423,7 +423,7 @@ func ReadOutputTableCalculteTo(
 		return nil, errors.New("invalid (empty) model metadata, look like model not found")
 	}
 	if layout == nil {
-		return nil, errors.New("invalid (empty) page layout")
+		return nil, errors.New("invalid (empty) output table read layout")
 	}
 	if layout.Name == "" {
 		return nil, errors.New("invalid (empty) output table name")

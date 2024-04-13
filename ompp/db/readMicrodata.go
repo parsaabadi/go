@@ -17,7 +17,7 @@ func ReadMicrodataTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadMicroLayou
 		return nil, errors.New("invalid (empty) model metadata, look like model not found")
 	}
 	if layout == nil {
-		return nil, errors.New("invalid (empty) page layout")
+		return nil, errors.New("invalid (empty) microdata read layout")
 	}
 	if layout.Name == "" {
 		return nil, errors.New("invalid (empty) parameter name")
@@ -399,12 +399,18 @@ func ReadMicrodataCalculateTo(
 		return nil, errors.New("invalid (empty) model metadata, look like model not found")
 	}
 	if layout == nil {
-		return nil, errors.New("invalid (empty) page layout")
+		return nil, errors.New("invalid (empty) microdata read layout")
 	}
 	if layout.Name == "" {
 		return nil, errors.New("invalid (empty) parameter name")
 	}
-	if calcLt == nil {
+	if calcLt == nil || len(calcLt.Calculation) <= 0 {
+		return nil, errors.New("invalid (empty) microdata calculation layout: " + layout.Name)
+	}
+	if len(calcLt.GroupBy) <= 0 {
+		return nil, errors.New("invalid (empty) microdata group by attributes: " + layout.Name)
+	}
+	if len(calcLt.Calculation) <= 0 {
 		return nil, errors.New("invalid (empty) microdata calculation expression(s): " + layout.Name)
 	}
 

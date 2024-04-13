@@ -17,7 +17,7 @@ func ReadParameterTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayou
 		return nil, errors.New("invalid (empty) model metadata, look like model not found")
 	}
 	if layout == nil {
-		return nil, errors.New("invalid (empty) page layout")
+		return nil, errors.New("invalid (empty) parameter read layout")
 	}
 	if layout.Name == "" {
 		return nil, errors.New("invalid (empty) parameter name")

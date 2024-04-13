@@ -18,7 +18,11 @@ func (mc *ModelCatalog) ReadParameterTo(dn, src string, layout *db.ReadParamLayo
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
-		omppLog.Log("Warning: invalid (empty) model digest and name")
+		omppLog.Log("Error: invalid (empty) model digest and name")
+		return nil, false
+	}
+	if layout.Name == "" {
+		omppLog.Log("Error: invalid (empty) output table name")
 		return nil, false
 	}
 
@@ -81,7 +85,11 @@ func (mc *ModelCatalog) ReadOutTableTo(dn, rdsn string, layout *db.ReadTableLayo
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
-		omppLog.Log("Warning: invalid (empty) model digest and name")
+		omppLog.Log("Error: invalid (empty) model digest and name")
+		return nil, false
+	}
+	if layout.Name == "" {
+		omppLog.Log("Error: invalid (empty) output table name")
 		return nil, false
 	}
 
@@ -134,8 +142,22 @@ func (mc *ModelCatalog) ReadOutTableCalculateTo(
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
-		omppLog.Log("Warning: invalid (empty) model digest and name")
+		omppLog.Log("Error: invalid (empty) model digest and name")
 		return nil, false
+	}
+	if layout.Name == "" {
+		omppLog.Log("Error: invalid (empty) output table name")
+		return nil, false
+	}
+	if len(calcLt) <= 0 {
+		omppLog.Log("Error: invalid (empty) output table calculation expression(s): ", layout.Name)
+		return nil, false
+	}
+	for k := range calcLt {
+		if len(calcLt[k].Calculate) <= 0 {
+			omppLog.Log("Error: invalid (empty) output table calculation expression(s): ", layout.Name)
+			return nil, false
+		}
 	}
 
 	// get model metadata and database connection
@@ -181,11 +203,11 @@ func (mc *ModelCatalog) ReadMicrodataTo(dn, rdsn string, layout *db.ReadMicroLay
 
 	// validate parameters and return empty results on empty input
 	if dn == "" {
-		omppLog.Log("Warning: invalid (empty) model digest and name")
+		omppLog.Log("Error: invalid (empty) model digest and name")
 		return nil, false
 	}
 	if layout.Name == "" {
-		omppLog.Log("Warning: invalid (empty) model entity name")
+		omppLog.Log("Error: invalid (empty) model entity name")
 		return nil, false
 	}
 
@@ -248,11 +270,19 @@ func (mc *ModelCatalog) ReadMicrodataCalculateTo(
 
 	// validate parameters and return empty results on empty input
 	if dn == "" {
-		omppLog.Log("Warning: invalid (empty) model digest and name")
+		omppLog.Log("Error: invalid (empty) model digest and name")
 		return nil, false
 	}
 	if layout.Name == "" {
-		omppLog.Log("Warning: invalid (empty) model entity name")
+		omppLog.Log("Error: invalid (empty) model entity name")
+		return nil, false
+	}
+	if len(calcLt.GroupBy) <= 0 {
+		omppLog.Log("Error: invalid (empty) microdata group by attributes: ", dn, ": ", layout.Name)
+		return nil, false
+	}
+	if len(calcLt.Calculation) <= 0 {
+		omppLog.Log("Error: invalid (empty) microdata calculation expression(s): ", dn, ": ", layout.Name)
 		return nil, false
 	}
 

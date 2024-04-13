@@ -932,6 +932,20 @@ func runMicrodataCalcIdPageReadHandler(w http.ResponseWriter, r *http.Request) {
 // Enum-based microdata attributes returned as enum codes or enum id's.
 func doReadMicrodataCalcPageHandler(w http.ResponseWriter, r *http.Request, dn string, rdsn string, layout *db.ReadCalculteMicroLayout, varLst []string, isCode bool) {
 
+	// return error if microdata disabled
+	if !theCfg.isMicrodata {
+		http.Error(w, "Error: microdata not allowed: "+dn+" "+rdsn, http.StatusBadRequest)
+		return
+	}
+	if len(layout.GroupBy) <= 0 {
+		http.Error(w, "Invalid (empty) microdata group by attributes: "+dn+": "+layout.Name, http.StatusBadRequest)
+		return
+	}
+	if len(layout.Calculation) <= 0 {
+		http.Error(w, "Invalid (empty) microdata calculation expression(s): "+dn+": "+layout.Name, http.StatusBadRequest)
+		return
+	}
+
 	// get base run id, run variants, entity generation digest and microdata cell converter
 	baseRunId, runIds, genDigest, cvtMicro, err := theCatalog.MicrodataCalcToCsvConverter(dn, isCode, rdsn, varLst, layout.Name, &layout.CalculateMicroLayout)
 	if err != nil {
