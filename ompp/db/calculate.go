@@ -11,7 +11,7 @@ import (
 	"strconv"
 )
 
-const CALCULATED_ID_OFFSET = 1200 // calculated exprssion id offset, for example for Expr1 calculated expression id is 1201
+const CALCULATED_ID_OFFSET = 12000 // calculated exprssion id offset, for example for Expr1 calculated expression id is 12001
 
 // CalculateOutputTable read output table page (dimensions and values) and calculate extra measure(s).
 //

@@ -156,7 +156,7 @@ type CalculateTableLayout struct {
 // It can be comparison calculation for multiple model runs, ex.: Expr0[base] - Expr0[variant].
 type CalculateLayout struct {
 	Calculate string // expression to calculate, ex.: Expr0[base] - Expr0[variant]
-	CalcId    int    // calculated expression id, calc_id column in csv,     ex.: 0, 1200, 2400
+	CalcId    int    // calculated expression id, calc_id column in csv,     ex.: 0, 12001, 24001
 	Name      string // calculated expression name, calc_name column in csv, ex.: Expr0, AVG_Expr0, RATIO_Expro0
 }
 
