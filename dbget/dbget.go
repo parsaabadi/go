@@ -45,6 +45,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/jeandeaual/go-locale"
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/openmpp/go/ompp/config"
@@ -156,8 +157,8 @@ func mainBody(args []string) error {
 	_ = flag.String(groupByArgKey, "", "list of microdata group by attributes")
 	_ = flag.String(calcArgKey, "", "list of calculation(s) expressions to compare or aggregate")
 	_ = flag.String(doubleFormatArgKey, theCfg.doubleFmt, "convert to string format for float and double")
-	_ = flag.String(langArgKey, "theCfg.lang", "prefered output language")
-	_ = flag.String(langShortKey, "theCfg.lang", "prefered output language (short of "+langArgKey+")")
+	_ = flag.String(langArgKey, theCfg.lang, "prefered output language")
+	_ = flag.String(langShortKey, theCfg.lang, "prefered output language (short of "+langArgKey+")")
 	_ = flag.String(encodingArgKey, theCfg.encodingName, "code page to convert source file into utf-8, e.g.: windows-1252")
 	_ = flag.Bool(useUtf8ArgKey, theCfg.isWriteUtf8Bom, "if true then write utf-8 BOM into output")
 
@@ -198,6 +199,15 @@ func mainBody(args []string) error {
 	if theCfg.isNoFile && !theCfg.isConsole {
 		omppLog.Log("Warning: empty result, output to file and to console is disabled")
 		return nil
+	}
+
+	// get default user language
+	if theCfg.lang == "" {
+		if ln, e := locale.GetLocale(); e == nil {
+			theCfg.lang = ln
+		} else {
+			omppLog.Log("Warning: unable to get user default language")
+		}
 	}
 
 	// open source database connection and check is it valid
