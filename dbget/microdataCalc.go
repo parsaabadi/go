@@ -19,33 +19,6 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
-// find model run row by digest, stamp or name, if rdsn is not "" empty, or by run id, if id > 0, or by first or last bool flag
-func findRun(srcDb *sql.DB, modelId int, rdsn string, runId int, isFirst, isLast bool) (string, *db.RunRow, error) {
-
-	if rdsn == "" && runId <= 0 && !isFirst && !isLast {
-		return "", nil, nil
-	}
-	if rdsn != "" {
-		r, e := db.GetRunByDigestStampName(srcDb, modelId, rdsn)
-		return rdsn, r, e
-	}
-	if runId > 0 {
-		r, e := db.GetRun(srcDb, runId)
-
-		if e == nil && r != nil && r.ModelId != modelId {
-			return "", nil, errors.New("Error: model run not found by id: " + strconv.Itoa(runId))
-		}
-		return strconv.Itoa(runId), r, e
-	}
-	if isFirst {
-		r, e := db.GetFirstRun(srcDb, modelId)
-		return "first model run", r, e
-	}
-	// else: must be last model run
-	r, e := db.GetLastRun(srcDb, modelId)
-	return "last model run", r, e
-}
-
 // compare model runs microdata or aggregate microdata and write run results into csv or json files.
 func microdataAggregate(srcDb *sql.DB, modelId int, isCompare bool, runOpts *config.RunOptions) error {
 
@@ -335,21 +308,16 @@ func microdataAggregate(srcDb *sql.DB, modelId int, isCompare bool, runOpts *con
 
 	// use specified file name or make default
 	fp := ""
-	if !theCfg.isNoFile {
-		fp = theCfg.fileName
-		if fp == "" {
-			if theCfg.isJson {
-				fp = entityName + ".json"
-			} else {
-				fp = entityName + ".csv"
-			}
-		}
-		fp = filepath.Join(theCfg.dir, fp)
-	}
-
-	if theCfg.isNoFile {
+	if theCfg.isConsole {
 		omppLog.Log("Do ", theCfg.action)
 	} else {
+
+		fp = theCfg.fileName
+		if fp == "" {
+			fp = entityName + outputExt()
+		}
+		fp = filepath.Join(theCfg.dir, fp)
+
 		omppLog.Log("Do ", theCfg.action, ": "+fp)
 	}
 

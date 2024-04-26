@@ -8,7 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"runtime"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 
@@ -19,24 +21,23 @@ import (
 // return row []string or isEof = true
 type rowConverter func() (isEof bool, row []string, err error)
 
-// write into outputDir/file.json if jsonPath is not "" empty and/or to console
-func toJsonOutput(isConsole bool, jsonPath string, src interface{}) error {
+// write into outputDir/file.json if jsonPath is "" empty then write into stdout
+func toJsonOutput(jsonPath string, src interface{}) error {
 
-	if isConsole {
-		ce := json.NewEncoder(os.Stdout)
-		ce.SetIndent("", "  ")
-		if err := ce.Encode(src); err != nil {
-			return errors.New("json encode error: " + err.Error())
-		}
-	}
 	if jsonPath != "" {
 		return helper.ToJsonIndentFile(jsonPath, src)
+	}
+	// else output to console
+	ce := json.NewEncoder(os.Stdout)
+	ce.SetIndent("", "  ")
+	if err := ce.Encode(src); err != nil {
+		return errors.New("json encode error: " + err.Error())
 	}
 	return nil
 }
 
-// write into outputDir/file.csv if csvPath is not "" empty and/or to console
-func toCsvOutput(isConsole bool, csvPath string, columnNames []string, lineCvt rowConverter) error {
+// write into outputDir/file.csv if csvPath is "" empty then write into stdout
+func toCsvOutput(csvPath string, columnNames []string, lineCvt rowConverter) error {
 
 	// create csv file
 	isFile := csvPath != ""
@@ -54,7 +55,6 @@ func toCsvOutput(isConsole bool, csvPath string, columnNames []string, lineCvt r
 			f.Close()
 		}
 	}()
-
 	if isFile && theCfg.isWriteUtf8Bom { // if required then write utf-8 bom
 		if _, err = f.Write(helper.Utf8bom); err != nil {
 			return err
@@ -63,27 +63,22 @@ func toCsvOutput(isConsole bool, csvPath string, columnNames []string, lineCvt r
 
 	// create csv writes to file and/or to console
 	var wr *csv.Writer
-	var cw *csv.Writer
 	if isFile {
 		wr = csv.NewWriter(f)
-	}
-	if isConsole {
-		cw = csv.NewWriter(os.Stdout)
+	} else {
+		wr = csv.NewWriter(os.Stdout)
 		if runtime.GOOS == "windows" {
-			cw.UseCRLF = true
+			wr.UseCRLF = true
 		}
+	}
+	if theCfg.kind == asTsv {
+		wr.Comma = '\t'
 	}
 
 	// write header line: column names, if provided
 	if len(columnNames) > 0 {
-		if isConsole {
-			err = cw.Write(columnNames)
-			isConsole = err == nil
-		}
-		if isFile {
-			if err = wr.Write(columnNames); err != nil {
-				return err
-			}
+		if err = wr.Write(columnNames); err != nil {
+			return err
 		}
 	}
 
@@ -96,41 +91,26 @@ func toCsvOutput(isConsole bool, csvPath string, columnNames []string, lineCvt r
 		if isEof {
 			break
 		}
-		if isConsole {
-			err = cw.Write(row)
-			isConsole = err == nil
-			if !isConsole && !isFile {
-				return err
-			}
-		}
-		if isFile {
-			if err = wr.Write(row); err != nil {
-				return err
-			}
+		if err = wr.Write(row); err != nil {
+			return err
 		}
 	}
 
 	// flush and return error, if any
-	if isConsole {
-		cw.Flush()
-	}
-	if isFile {
-		wr.Flush()
-		return wr.Error()
-	}
-	return nil
+	wr.Flush()
+	return wr.Error()
 }
 
-// remove output directory if required, create output directory if not already exists
-func makeOutputDir() error {
+// if directory path not empty then create output directory if not already exists, remove existing directory if required
+func makeOutputDir(path string, isKeep bool) error {
 
-	if !theCfg.isNoFile && theCfg.dir != "" {
-		if !theCfg.isKeepOutputDir {
-			if isOk := dirDeleteAndLog(theCfg.dir); !isOk {
-				return errors.New("Error: unable to delete: " + theCfg.dir)
+	if path != "" {
+		if !isKeep {
+			if isOk := dirDeleteAndLog(path); !isOk {
+				return errors.New("Error: unable to delete: " + path)
 			}
 		}
-		if err := os.MkdirAll(theCfg.dir, 0750); err != nil {
+		if err := os.MkdirAll(path, 0750); err != nil {
 			return err
 		}
 	}
@@ -155,4 +135,28 @@ func dirDeleteAndLog(path string) bool {
 		return false // error: delete failed
 	}
 	return true // OK: deleted successfully
+}
+
+// return file extension: .csv .tsv or .json
+func outputExt() string {
+	switch theCfg.kind {
+	case asTsv:
+		return ".tsv"
+	case asJson:
+		return ".json"
+	}
+	return ".csv" // by default
+}
+
+// return kind of by file extension: .csv .tsv or .json
+func kindByExt(path string) outputAs {
+	if path != "" {
+		switch strings.ToLower(filepath.Ext(path)) {
+		case ".tsv":
+			return asTsv
+		case ".json":
+			return asJson
+		}
+	}
+	return asCsv // by default
 }

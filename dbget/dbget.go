@@ -8,9 +8,21 @@ Get list of the models from database:
 
 	dbget -db modelOne.sqlite -do model-list
 
+	dbget -m modelOne -do model-list -dbget.As csv
+	dbget -m modelOne -do model-list -dbget.As tsv
+	dbget -m modelOne -do model-list -dbget.As json
+
+	dbget -m modelOne -do model-list -csv  -dbget.ToConsole
+	dbget -m modelOne -do model-list -tsv  -dbget.ToConsole
+	dbget -m modelOne -do model-list -json -dbget.ToConsole
+
+	dbget -m modelOne -do model-list -dbget.Language EN
+	dbget -m modelOne -do model-list -lang fr-CA
+	dbget -m modelOne -do model-list -lang isl
+
 Aggregate microdata run values:
 
-	dbget -db test\modelOne.sqlite -do microdata-aggregate
+	dbget -db modelOne.sqlite -do microdata-aggregate
 	  -m modelOne
 	  -dbget.WithRunIds 219,221
 	  -dbget.Entity Other
@@ -29,7 +41,7 @@ Compare microdata run values:
 
 Aggregate and compare microdata run values:
 
-	dbget -db test\modelOne.sqlite -do microdata-aggregate
+	dbget -db modelOne.sqlite -do microdata-aggregate
 	  -m modelOne
 	  -dbget.RunId 219
 	  -dbget.WithRunIds 221
@@ -43,6 +55,7 @@ import (
 	"errors"
 	"flag"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/jeandeaual/go-locale"
@@ -57,14 +70,16 @@ import (
 const (
 	cmdArgKey           = "dbget.Do"             // action, what to do, for example: model-list
 	cmdShortKey         = "do"                   // action, what to do (short form)
+	asArgKey            = "dbget.As"             // output as csv, tsv or json, default: .csv
+	csvArgKey           = "csv"                  // short form of: dbget.As csv
+	tsvArgKey           = "tsv"                  // short form of: dbget.As tsv
+	jsonArgKey          = "json"                 // short form of: dbget.As json
 	outputFileArgKey    = "dbget.File"           // output file name, default: action-name.csv, e.g.: model-list.csv
 	outputFileShortKey  = "f"                    // output file name (short form)
-	noFileArgKey        = "dbget.NoFile"         // if true then do not write into output files
 	outputDirArgKey     = "dbget.Dir"            // output directory to write .csv or .json files
 	outputDirShortKey   = "dir"                  // output directory (short form)
 	keepOutputDirArgKey = "dbget.KeepOutputDir"  // keep output directory if it is already exist
-	toConsoleArgKey     = "dbget.ToConsole"      // if true then write output to console
-	toJsonArgKey        = "dbget.ToJson"         // if true then output to .json files, default: .csv
+	consoleArgKey       = "dbget.ToConsole"      // if true then use stdout and do not create file(s)
 	sqliteArgKey        = "dbget.Sqlite"         // input db SQLite path
 	sqliteShortKey      = "db"                   // input db SQLite path (short form)
 	dbConnStrArgKey     = "dbget.Database"       // db connection string
@@ -85,28 +100,40 @@ const (
 	groupByArgKey       = "dbget.GroupBy"        // microdata group by attributes
 	calcArgKey          = "dbget.Calc"           // calculation(s) expressions to compare or aggregate
 	doubleFormatArgKey  = "dbget.DoubleFormat"   // convert to string format for float and double
+	noteArgKey          = "dbget.Notes"          // if true then output notes into .md files
 	langArgKey          = "dbget.Language"       // prefered output language: fr-CA
 	langShortKey        = "lang"                 // prefered output language (short form)
 	encodingArgKey      = "dbget.CodePage"       // code page for converting source files, e.g. windows-1252
 	useUtf8ArgKey       = "dbget.Utf8Bom"        // if true then write utf-8 BOM into output
 )
 
+// output format: csv by default, or tsv or json
+type outputAs int
+
+const (
+	asCsv outputAs = iota
+	asTsv
+	asJson
+)
+
 // run options
 var theCfg = struct {
-	action          string // action name (what to do)
-	fileName        string // output file name, default: action-name.csv
-	dir             string // output directory
-	isKeepOutputDir bool   // if true then keep existing output directory
-	isNoFile        bool   // if true then do not write into output files
-	isConsole       bool   // if true then output to console
-	isJson          bool   // if true then output is .json files, default: .csv
-	modelName       string // model name
-	modelDigest     string // model digest
-	doubleFmt       string // format to convert float or double value to string
-	lang            string // prefered output language: fr-CA
-	encodingName    string // "code page" to convert source file into utf-8, for example: windows-1252
-	isWriteUtf8Bom  bool   // if true then write utf-8 BOM into csv file
+	action          string   // action name (what to do)
+	kind            outputAs // output as csv, tsv or json
+	fileName        string   // output file name, default: action-name.csv
+	dir             string   // output directory
+	isKeepOutputDir bool     // if true then keep existing output directory
+	isConsole       bool     // if true then write into stdout
+	modelName       string   // model name
+	modelDigest     string   // model digest
+	isNote          bool     // if true then output notes into .md files
+	doubleFmt       string   // format to convert float or double value to string
+	userLang        string   // prefered output language: fr-CA
+	lang            string   // model language matched to user language
+	encodingName    string   // "code page" to convert source file into utf-8, for example: windows-1252
+	isWriteUtf8Bom  bool     // if true then write utf-8 BOM into csv file
 }{
+	kind:           asCsv,   // by default output as as .csv
 	doubleFmt:      "%.15g", // default format to convert float or double values to string
 	encodingName:   "",      // by default detect utf-8 encoding or use OS-specific default: windows-1252 on Windowds and utf-8 outside
 	isWriteUtf8Bom: false,   // do not write BOM by default
@@ -129,14 +156,16 @@ func mainBody(args []string) error {
 
 	_ = flag.String(cmdArgKey, "", "action, what to do, for example: model-list")
 	_ = flag.String(cmdShortKey, "", "action, what to do (short of "+cmdArgKey+")")
+	_ = flag.String(asArgKey, "", "output as .csv, .tsv or .json, default: .csv")
+	_ = flag.Bool(csvArgKey, true, "output as .csv (short of "+asArgKey+" csv)")
+	_ = flag.Bool(tsvArgKey, false, "output as .tsv (short of "+asArgKey+" tsv)")
+	_ = flag.Bool(jsonArgKey, false, "output as .json (short of "+asArgKey+" json)")
 	_ = flag.String(outputFileArgKey, theCfg.fileName, "output file name, default depends on action")
 	_ = flag.String(outputFileShortKey, theCfg.fileName, "output file name (short of "+outputFileArgKey+")")
-	_ = flag.Bool(noFileArgKey, theCfg.isNoFile, "if true then do not write into output files")
 	_ = flag.String(outputDirArgKey, theCfg.dir, "output directory for model .json or .csv files")
 	_ = flag.String(outputDirShortKey, theCfg.dir, "output directory (short of "+outputDirArgKey+")")
 	_ = flag.Bool(keepOutputDirArgKey, theCfg.isKeepOutputDir, "keep (do not delete) existing output directory")
-	_ = flag.Bool(toConsoleArgKey, theCfg.isConsole, "if true then write output to console")
-	_ = flag.Bool(toJsonArgKey, theCfg.isJson, "if true then output to .json files, default: .csv")
+	_ = flag.Bool(consoleArgKey, theCfg.isConsole, "if true then write into standard output instead of file(s)")
 	_ = flag.String(sqliteArgKey, "", "input database SQLite file path")
 	_ = flag.String(sqliteShortKey, "", "model name (short of "+sqliteArgKey+")")
 	_ = flag.String(dbConnStrArgKey, "", "input database connection string")
@@ -156,9 +185,10 @@ func mainBody(args []string) error {
 	_ = flag.String(entityArgKey, "", "microdata entity name")
 	_ = flag.String(groupByArgKey, "", "list of microdata group by attributes")
 	_ = flag.String(calcArgKey, "", "list of calculation(s) expressions to compare or aggregate")
+	_ = flag.Bool(noteArgKey, theCfg.isNote, "if true then write notes into .md files")
 	_ = flag.String(doubleFormatArgKey, theCfg.doubleFmt, "convert to string format for float and double")
-	_ = flag.String(langArgKey, theCfg.lang, "prefered output language")
-	_ = flag.String(langShortKey, theCfg.lang, "prefered output language (short of "+langArgKey+")")
+	_ = flag.String(langArgKey, theCfg.userLang, "prefered output language")
+	_ = flag.String(langShortKey, theCfg.userLang, "prefered output language (short of "+langArgKey+")")
 	_ = flag.String(encodingArgKey, theCfg.encodingName, "code page to convert source file into utf-8, e.g.: windows-1252")
 	_ = flag.Bool(useUtf8ArgKey, theCfg.isWriteUtf8Bom, "if true then write utf-8 BOM into output")
 
@@ -186,25 +216,67 @@ func mainBody(args []string) error {
 	// get common run options
 	theCfg.action = runOpts.String(cmdArgKey)
 	theCfg.fileName = runOpts.String(outputFileArgKey)
-	theCfg.isNoFile = runOpts.Bool(noFileArgKey)
 	theCfg.dir = runOpts.String(outputDirArgKey)
 	theCfg.isKeepOutputDir = runOpts.Bool(keepOutputDirArgKey)
-	theCfg.isConsole = runOpts.Bool(toConsoleArgKey)
-	theCfg.isJson = runOpts.Bool(toJsonArgKey)
-	theCfg.lang = runOpts.String(langArgKey)
+	theCfg.isConsole = runOpts.Bool(consoleArgKey)
+	theCfg.userLang = runOpts.String(langArgKey)
+	theCfg.isNote = runOpts.Bool(noteArgKey)
 	theCfg.doubleFmt = runOpts.String(doubleFormatArgKey)
 	theCfg.encodingName = runOpts.String(encodingArgKey)
 	theCfg.isWriteUtf8Bom = runOpts.Bool(useUtf8ArgKey)
 
-	if theCfg.isNoFile && !theCfg.isConsole {
-		omppLog.Log("Warning: empty result, output to file and to console is disabled")
-		return nil
+	// get output format: cv, tsv or json
+	if a := runOpts.String(asArgKey); a != "" {
+
+		if runOpts.IsExist(csvArgKey) || runOpts.IsExist(tsvArgKey) || runOpts.IsExist(jsonArgKey) {
+			return errors.New("invalid arguments: " + csvArgKey + " or " + tsvArgKey + " or " + jsonArgKey)
+		}
+		switch strings.ToLower(a) {
+		case "csv":
+			theCfg.kind = asCsv
+		case "tsv":
+			theCfg.kind = asTsv
+		case "json":
+			theCfg.kind = asJson
+		default:
+			return errors.New("invalid arguments: " + asArgKey + " " + a)
+		}
+	} else {
+		if runOpts.IsExist(csvArgKey) && (runOpts.IsExist(tsvArgKey) || runOpts.IsExist(jsonArgKey)) ||
+			runOpts.IsExist(tsvArgKey) && (runOpts.IsExist(csvArgKey) || runOpts.IsExist(jsonArgKey)) ||
+			runOpts.IsExist(jsonArgKey) && (runOpts.IsExist(csvArgKey) || runOpts.IsExist(tsvArgKey)) {
+			return errors.New("invalid arguments: " + csvArgKey + " or " + tsvArgKey + " or " + jsonArgKey)
+		}
+		switch {
+		case runOpts.IsExist(csvArgKey) && runOpts.Bool(csvArgKey):
+			theCfg.kind = asCsv
+		case runOpts.IsExist(tsvArgKey) && runOpts.Bool(tsvArgKey):
+			theCfg.kind = asTsv
+		case runOpts.IsExist(jsonArgKey) && runOpts.Bool(jsonArgKey):
+			theCfg.kind = asJson
+		// if there is no dbget.As argument and there is no dbget.csv, dbget.tsv, dbget.json
+		// then use output file name extension to detect kind of output
+		case !runOpts.IsExist(csvArgKey) && !runOpts.IsExist(tsvArgKey) && !runOpts.IsExist(jsonArgKey):
+			// if file name is empty then result is csv by default
+			theCfg.kind = kindByExt(theCfg.fileName)
+		default:
+			return errors.New("invalid arguments: " + csvArgKey + " or " + tsvArgKey + " or " + jsonArgKey)
+		}
 	}
 
+	/* TBD
+	// output to json supported only model metadata
+	if theCfg.kind == asJson {
+		if theCfg.action != "model-list" {
+			return errors.New("JSON output not allowed for: " + theCfg.action)
+		}
+	}
+	*/
+
 	// get default user language
-	if theCfg.lang == "" {
+	if theCfg.userLang == "" {
 		if ln, e := locale.GetLocale(); e == nil {
-			theCfg.lang = ln
+			theCfg.userLang = ln
 		} else {
 			omppLog.Log("Warning: unable to get user default language")
 		}
@@ -224,7 +296,9 @@ func mainBody(args []string) error {
 		return err
 	}
 
-	// model name or digest required if it is not a model-list
+	// if it is not a model-list then required:
+	//   model name or digest
+	//   match model language to user language
 	modelId := 0
 	if theCfg.action != "model-list" {
 
@@ -244,17 +318,39 @@ func mainBody(args []string) error {
 		if !ok {
 			return errors.New("model " + theCfg.modelName + " " + theCfg.modelDigest + " not found")
 		}
+		mdRow, err := db.GetModelRow(srcDb, modelId)
+		if err != nil {
+			return err
+		}
+		if mdRow == nil {
+			return errors.New("model not found by Id: " + strconv.Itoa(modelId))
+		}
+
+		// match user language to model language, use default model language if there are no match
+		if theCfg.userLang != "" {
+			theCfg.lang, err = matchUserLang(srcDb, *mdRow)
+			if err != nil {
+				return err
+			}
+			if theCfg.lang == "" {
+				omppLog.Log("Warning: unable to match user language: ", theCfg.userLang)
+			}
+		}
+		if theCfg.lang == "" {
+			theCfg.lang = mdRow.DefaultLangCode
+			omppLog.Log("Warning: using default model language: ", theCfg.lang)
+		}
 	}
 
 	// remove output directory if required, create output directory if not already exists
-	if err := makeOutputDir(); err != nil {
+	if err := makeOutputDir(theCfg.dir, theCfg.isKeepOutputDir); err != nil {
 		return err
 	}
 
 	// dispatch the command
 	switch theCfg.action {
 	case "model-list":
-		return modelList(srcDb, runOpts)
+		return modelList(srcDb)
 	case "microdata-aggregate":
 		return microdataAggregate(srcDb, modelId, false, runOpts)
 	case "microdata-compare":
