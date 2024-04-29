@@ -65,7 +65,7 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 		wDir = filepath.Join(binRoot, job.Dir)
 	}
 
-	binDir, err := filepath.Rel(wDir, binDir)
+	binDir, err := filepath.Abs(binDir) // relative to work dir fails on Windows if models are at \\UNC\path
 	if err != nil {
 		binDir = binRoot
 	}

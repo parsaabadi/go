@@ -60,7 +60,7 @@ func makeModelDownloadCommand(mb modelBasic, logPath string, isNoAcc bool, isNoM
 	}
 
 	// make relative path arguments to dbcopy work directory: to a model bin directory
-	downDir, dbPathRel, dbcopyRel, err := makeRelDbCopyArgs(mb.binDir, theCfg.downloadDir, mb.dbPath)
+	downDir, dbPathRel, err := makeRelDbCopyArgs(mb.binDir, theCfg.downloadDir, mb.dbPath)
 	if err != nil {
 		renameToDownloadErrorLog(logPath, "Error at starting "+cmdMsg, err)
 		return nil, cmdMsg
@@ -78,7 +78,7 @@ func makeModelDownloadCommand(mb modelBasic, logPath string, isNoAcc bool, isNoM
 		cArgs = append(cArgs, "-dbcopy.Utf8BomIntoCsv")
 	}
 
-	cmd := exec.Command(dbcopyRel, cArgs...)
+	cmd := exec.Command(theCfg.dbcopyPath, cArgs...)
 	cmd.Dir = mb.binDir // dbcopy work directory is a model bin directory
 
 	return cmd, cmdMsg
@@ -104,7 +104,7 @@ func makeRunDownloadCommand(mb modelBasic, runId int, logPath string, isNoAcc bo
 	}
 
 	// make relative path arguments to dbcopy work directory: to a model bin directory
-	downDir, dbPathRel, dbcopyRel, err := makeRelDbCopyArgs(mb.binDir, theCfg.downloadDir, mb.dbPath)
+	downDir, dbPathRel, err := makeRelDbCopyArgs(mb.binDir, theCfg.downloadDir, mb.dbPath)
 	if err != nil {
 		renameToDownloadErrorLog(logPath, "Error at starting "+cmdMsg, err)
 		return nil, cmdMsg
@@ -129,7 +129,7 @@ func makeRunDownloadCommand(mb modelBasic, runId int, logPath string, isNoAcc bo
 		cArgs = append(cArgs, "-dbcopy.Utf8BomIntoCsv")
 	}
 
-	cmd := exec.Command(dbcopyRel, cArgs...)
+	cmd := exec.Command(theCfg.dbcopyPath, cArgs...)
 	cmd.Dir = mb.binDir // dbcopy work directory is a model bin directory
 
 	return cmd, cmdMsg
@@ -149,7 +149,7 @@ func makeWorksetDownloadCommand(mb modelBasic, setName string, logPath string, i
 	}
 
 	// make relative path arguments to dbcopy work directory: to a model bin directory
-	downDir, dbPathRel, dbcopyRel, err := makeRelDbCopyArgs(mb.binDir, theCfg.downloadDir, mb.dbPath)
+	downDir, dbPathRel, err := makeRelDbCopyArgs(mb.binDir, theCfg.downloadDir, mb.dbPath)
 	if err != nil {
 		renameToDownloadErrorLog(logPath, "Error at starting "+cmdMsg, err)
 		return nil, cmdMsg
@@ -168,7 +168,7 @@ func makeWorksetDownloadCommand(mb modelBasic, setName string, logPath string, i
 		cArgs = append(cArgs, "-dbcopy.Utf8BomIntoCsv")
 	}
 
-	cmd := exec.Command(dbcopyRel, cArgs...)
+	cmd := exec.Command(theCfg.dbcopyPath, cArgs...)
 	cmd.Dir = mb.binDir // dbcopy work directory is a model bin directory
 
 	return cmd, cmdMsg
@@ -186,7 +186,7 @@ func makeRunUploadCommand(mb modelBasic, runName string, logPath string) (*exec.
 		" -dbcopy.InputDir " + theCfg.uploadDir
 
 	// make relative path arguments to dbcopy work directory: to a model bin directory
-	upDir, dbPathRel, dbcopyRel, err := makeRelDbCopyArgs(mb.binDir, theCfg.uploadDir, mb.dbPath)
+	upDir, dbPathRel, err := makeRelDbCopyArgs(mb.binDir, theCfg.uploadDir, mb.dbPath)
 	if err != nil {
 		renameToUploadErrorLog(logPath, "Error at starting "+cmdMsg, err)
 		return nil, cmdMsg
@@ -203,7 +203,7 @@ func makeRunUploadCommand(mb modelBasic, runName string, logPath string) (*exec.
 		"-dbcopy.ToSqlite", dbPathRel,
 	}
 
-	cmd := exec.Command(dbcopyRel, cArgs...)
+	cmd := exec.Command(theCfg.dbcopyPath, cArgs...)
 	cmd.Dir = mb.binDir // dbcopy work directory is a model bin directory
 
 	return cmd, cmdMsg
@@ -224,7 +224,7 @@ func makeWorksetUploadCommand(mb modelBasic, setName string, logPath string, isN
 	}
 
 	// make relative path arguments to dbcopy work directory: to a model bin directory
-	upDir, dbPathRel, dbcopyRel, err := makeRelDbCopyArgs(mb.binDir, theCfg.uploadDir, mb.dbPath)
+	upDir, dbPathRel, err := makeRelDbCopyArgs(mb.binDir, theCfg.uploadDir, mb.dbPath)
 	if err != nil {
 		renameToUploadErrorLog(logPath, "Error at starting "+cmdMsg, err)
 		return nil, cmdMsg
@@ -244,36 +244,36 @@ func makeWorksetUploadCommand(mb modelBasic, setName string, logPath string, isN
 		cArgs = append(cArgs, "-dbcopy.NoDigestCheck")
 	}
 
-	cmd := exec.Command(dbcopyRel, cArgs...)
+	cmd := exec.Command(theCfg.dbcopyPath, cArgs...)
 	cmd.Dir = mb.binDir // dbcopy work directory is a model bin directory
 
 	return cmd, cmdMsg
 }
 
+/*
 // make relative to dbcopy work directory from targetPath, model db path and dbcopy path
 func makeRelDbCopyArgs(workDir, targetPath, dbPath string) (string, string, string, error) {
+*/
+// make relative to dbcopy work directory from targetPath and model db path
+func makeRelDbCopyArgs(workDir, targetPath, dbPath string) (string, string, error) {
 
 	wDir, err := filepath.Abs(workDir)
 	if err != nil {
-		return "", "", "", err
+		return "", "", err
 	}
 	aTarget, err := filepath.Abs(targetPath)
 	if err != nil {
-		return "", "", "", err
+		return "", "", err
 	}
 	relTarget, err := filepath.Rel(wDir, aTarget)
 	if err != nil {
-		return "", "", "", err
+		return "", "", err
 	}
 	relDbPath, err := filepath.Rel(wDir, dbPath)
 	if err != nil {
-		return "", "", "", err
+		return "", "", err
 	}
-	relDbcopy, err := filepath.Rel(wDir, theCfg.dbcopyPath)
-	if err != nil {
-		return "", "", "", err
-	}
-	return relTarget, relDbPath, relDbcopy, nil
+	return relTarget, relDbPath, nil
 }
 
 // makeDownload invoke dbcopy to create model download directory and .zip file:

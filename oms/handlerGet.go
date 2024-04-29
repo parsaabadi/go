@@ -33,8 +33,8 @@ func modelListHandler(w http.ResponseWriter, r *http.Request) {
 			ml = append(ml,
 				modelListItem{
 					Model:  m,
-					Dir:    filepath.Dir(b.relPath),
-					DbPath: b.relPath,
+					Dir:    filepath.ToSlash(filepath.Dir(b.relPath)),
+					DbPath: filepath.ToSlash(b.relPath),
 					Extra:  b.extra,
 				})
 		}
@@ -71,8 +71,8 @@ func modelTextListHandler(w http.ResponseWriter, r *http.Request) {
 			mtl = append(mtl,
 				modelTxtListItem{
 					ModelDicDescrNote: *mt,
-					Dir:               filepath.Dir(b.relPath),
-					DbPath:            b.relPath,
+					Dir:               filepath.ToSlash(filepath.Dir(b.relPath)),
+					DbPath:            filepath.ToSlash(b.relPath),
 					Extra:             b.extra,
 				})
 		}

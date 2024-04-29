@@ -321,7 +321,7 @@ func mainBody(args []string) error {
 		return errors.New("Error: unable to make absolute path to oms: " + err.Error())
 	}
 
-	theCfg.rootDir = runOpts.String(rootDirArgKey) // server root directory
+	theCfg.rootDir = filepath.Clean(runOpts.String(rootDirArgKey)) // server root directory
 
 	if theCfg.rootDir != "" && theCfg.rootDir != "." {
 		if err := os.Chdir(theCfg.rootDir); err != nil {
@@ -368,7 +368,7 @@ func mainBody(args []string) error {
 	}
 
 	// check if it is single user run mode and use of home directory enabled
-	if theCfg.homeDir = runOpts.String(homeDirArgKey); theCfg.homeDir != "" {
+	if theCfg.homeDir = filepath.Clean(runOpts.String(homeDirArgKey)); theCfg.homeDir != "" {
 		if !dirExist(theCfg.homeDir) {
 			omppLog.Log("Warning: user home directory not found: ", theCfg.homeDir)
 			theCfg.homeDir = ""
