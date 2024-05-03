@@ -433,7 +433,7 @@ func parseDiskUseStatePath(srcPath string) (string, int64, bool, string, int64) 
 }
 
 // move run job to active state from queue
-func moveJobToActive(queueJobPath string, rState *RunState, res RunRes, runStamp string) (string, bool) {
+func moveJobToActive(queueJobPath string, rState *RunState, res RunRes, runStamp, iniPath string) (string, bool) {
 	if !theCfg.isJobControl {
 		return "", true // job control disabled
 	}
@@ -456,6 +456,7 @@ func moveJobToActive(queueJobPath string, rState *RunState, res RunRes, runStamp
 	jc.Res = res
 	jc.LogFileName = rState.LogFileName
 	jc.LogPath = rState.logPath
+	jc.IniPath = iniPath
 
 	dst := jobActivePath(rState.SubmitStamp, rState.ModelName, rState.ModelDigest, runStamp, jc.IsMpi, rState.pid, jc.Res.Cpu, jc.Res.Mem)
 

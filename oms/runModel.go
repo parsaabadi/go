@@ -85,130 +85,13 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 		rs.logPath = filepath.Join(mb.logDir, rs.LogFileName)
 	}
 
-	// make model run command line arguments, starting from process run stamp and log options
-	mArgs := []string{}
-	mArgs = append(mArgs, "-OpenM.RunStamp", rStamp)
-	mArgs = append(mArgs, "-OpenM.LogToConsole", "true")
-	mArgs = append(mArgs, "-OpenM.LogToFile", "false")
-	iniPathArg := ""
-
-	importDbLcDot := strings.ToLower("-ImportDb.")
-	microdataLcDot := strings.ToLower("-Microdata.")
-	dotRunDescrLc := strings.ToLower(".RunDescription")
-
-	entAttrs := theCatalog.entityAttrsByDigest(rs.ModelDigest)
-	descrNotes := []db.DescrNote{}
-
-	// append model run options from run request
-	for krq, val := range job.Opts {
-
-		if len(krq) < 1 { // skip empty run options
-			continue
-		}
-
-		// command line argument key starts with "-" ex: "-OpenM.Threads"
-		key := krq
-		if krq[0] != '-' {
-			key = "-" + krq
-		}
-
-		// save run name and task run name to return as part of run state
-		if strings.EqualFold(key, "-OpenM.RunName") {
-			rs.RunName = val
-		}
-		if strings.EqualFold(key, "-OpenM.TaskRunName") {
-			rs.TaskRunName = val
-		}
-		// thread count MUST be specified using request Threads
-		if strings.EqualFold(key, "-OpenM.Threads") {
-			continue // skip number of threads option: use request Threads value instead
-		}
-		// MPI "not on root" flag
-		if strings.EqualFold(key, "-OpenM.NotOnRoot") {
-			continue // skip  MPI "not on root" flag: use request Mpi.IsNotOnRoot boolean instead
-		}
-		if strings.EqualFold(key, "-OpenM.LogToConsole") {
-			continue // skip log to console input run option: it is already on
-		}
-		if strings.EqualFold(key, "-OpenM.LogToFile") {
-			continue // skip log to file input run option: replaced by console output
-		}
-		if strings.EqualFold(key, "-OpenM.LogFilePath") {
-			continue // skip log file path input run option: replaced by console output
-		}
-		if strings.EqualFold(key, "-OpenM.Database") {
-			continue // database connection string not allowed as run option
-		}
-		if strings.EqualFold(key, "-OpenM.iniFile") || strings.EqualFold(key, "-ini") {
-			iniPathArg = val
-			continue // ini file path as run option: merge of ini content may be required
-		}
-		if strings.HasPrefix(strings.ToLower(key), importDbLcDot) {
-			continue // import database connection string not allowed as run option
-		}
-		if strings.HasSuffix(strings.ToLower(key), dotRunDescrLc) {
-
-			if 1+len(dotRunDescrLc) >= len(key) {
-				err = errors.New("Model run error: invalid run description key: " + key)
-				omppLog.Log(err)
-				moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest, rStamp)
-				rs.IsFinal = true
-				return rs, err // exit with error: microdata not allowed
-			}
-			lc := key[1:(len(key) - len(dotRunDescrLc))] // language code
-
-			idx := -1
-			for k := range descrNotes {
-				if descrNotes[k].LangCode == lc {
-					idx = k
-					break
-				}
-			}
-			if idx < 0 {
-				idx = len(descrNotes)
-				descrNotes = append(descrNotes, db.DescrNote{LangCode: lc})
-			}
-			descrNotes[idx].Descr = val
-
-			continue // use ini-file for run description
-		}
-
-		// if this is microdata run option then microdata must be enabled
-		// do not allow microdata options which are part of Microdata run request:
-		//   -Microdata.ToDb -Microdata.UseInternal
-		//   -Microdata.All  -Microdata.anyEntityName
-		if strings.HasPrefix(strings.ToLower(key), microdataLcDot) {
-
-			if !theCfg.isMicrodata {
-				err = errors.New("Model run error: microdata not allowed: " + rs.ModelName + ": " + rs.ModelDigest)
-				omppLog.Log(err)
-				moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest, rStamp)
-				rs.IsFinal = true
-				return rs, err // exit with error: microdata not allowed
-			}
-			subKey := key[len(microdataLcDot):]
-
-			if strings.EqualFold(subKey, "All") || strings.EqualFold(subKey, "ToDb") || strings.EqualFold(subKey, "UseInternal") {
-				err = errors.New("Model run error: incorrect use of run option: " + key + ": " + rs.ModelName + ": " + rs.ModelDigest)
-				omppLog.Log(err)
-				moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest, rStamp)
-				rs.IsFinal = true
-				return rs, err // exit with error: incorrect microdata option
-			}
-
-			for k := range entAttrs {
-
-				if subKey == entAttrs[k].Name {
-					err = errors.New("Model run error: incorrect use of run option: " + key + ": " + rs.ModelName + ": " + rs.ModelDigest)
-					omppLog.Log(err)
-					moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest, rStamp)
-					rs.IsFinal = true
-					return rs, err // exit with error: incorrect microdata option
-				}
-			}
-		}
-
-		mArgs = append(mArgs, key, val) // append command line argument key and value
+	// make model run argumets and create ini file if required
+	mArgs, iniPath, err := makeRunArgsIni(mb.binDir, wDir, mb.logDir, job, rs)
+	if err != nil {
+		omppLog.Log("Model run error: ", err)
+		moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest, rStamp)
+		rs.IsFinal = true
+		return rs, err
 	}
 
 	// use job control resources if not explicitly disabled and create hostfile
@@ -224,287 +107,6 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 			return rs, err
 		}
 	}
-
-	// append threads number if required
-	if job.Res.ThreadCount > 1 {
-		mArgs = append(mArgs, "-OpenM.Threads", strconv.Itoa(job.Res.ThreadCount))
-	}
-	if job.IsMpi && job.Mpi.IsNotOnRoot {
-		mArgs = append(mArgs, "-OpenM.NotOnRoot")
-	}
-
-	// create model run ini file if required to pass model run options
-	// merge ini file options with job model run options
-	//
-
-	// if list of tables to retain is not empty then put the list into ini-file:
-	//
-	//   [Tables]
-	//   Retain   = ageSexIncome, AdditionalTables
-	//
-	iniKeyVal := map[string]string{}
-
-	if len(job.Tables) > 0 {
-		iniKeyVal["Tables.Retain"] = strings.Join(job.Tables, ", ")
-	}
-
-	// if list of microdata to retain is not empty then put the list into ini-file:
-	//
-	//   [Microdata]
-	//   ToDb        = true
-	//   UseInternal = true
-	//   Person      = age,income
-	//   Other       = All
-	//
-	if !theCfg.isMicrodata { // microdata disabled: remove microdata from ini file
-
-		maps.DeleteFunc(iniKeyVal, func(key string, val string) bool { return strings.HasPrefix(strings.ToLower(key), "microdata.") })
-	} else {
-		if job.Microdata.IsToDb && len(entAttrs) > 0 && len(job.Microdata.Entity) > 0 {
-
-			iniKeyVal["Microdata.ToDb"] = "true"
-			if job.Microdata.IsInternal {
-				iniKeyVal["Microdata.UseInternal"] = "true"
-			}
-
-			// for each entity check if All attributes included or attributes must be specified as comma separated list
-			for k := range job.Microdata.Entity {
-
-				// find entity name in the list of model entities
-				eIdx := -1
-				for j := range entAttrs {
-					if entAttrs[j].Name == job.Microdata.Entity[k].Name {
-						eIdx = j
-						break
-					}
-				}
-				if eIdx < 0 || eIdx >= len(entAttrs) {
-					err = errors.New("Model run error: invalid microdata entity: " + job.Microdata.Entity[k].Name + ": " + rs.ModelName + ": " + rs.ModelDigest)
-					omppLog.Log(err)
-					moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest, rStamp)
-					rs.IsFinal = true
-					return rs, err // exit with error: microdata entity name not found
-				}
-
-				// check if all entity attributes included in run microdata
-				na := len(job.Microdata.Entity[k].Attr)
-				isAll := na == 1 && job.Microdata.Entity[k].Attr[0] == "All"
-
-				if !isAll {
-
-					attrs := make([]string, na)
-					copy(attrs, job.Microdata.Entity[k].Attr)
-					sort.Strings(attrs)
-
-					for j := range entAttrs[eIdx].Attr {
-
-						if !job.Microdata.IsInternal && entAttrs[eIdx].Attr[j].IsInternal {
-							continue // skip: this model run does not using internal attributes
-						}
-
-						n := sort.SearchStrings(attrs, entAttrs[eIdx].Attr[j].Name)
-						isAll = n >= 0 && n < na && attrs[n] == entAttrs[eIdx].Attr[j].Name
-						if !isAll {
-							break
-						}
-					}
-				}
-
-				// append entity attributes to ini file content: EntityName = All or EntityName = AttrA, AttrB
-				if isAll {
-					iniKeyVal["Microdata."+job.Microdata.Entity[k].Name] = "All"
-				} else {
-					iniKeyVal["Microdata."+job.Microdata.Entity[k].Name] = strings.Join(job.Microdata.Entity[k].Attr, ",")
-				}
-			}
-		}
-	}
-
-	// if run description or notes specified then use ini-file:
-	//
-	// [EN]
-	// RunDescription = "model run #7 with 50,000 cases"
-	// RunNotesPath   = run_notes-in-english.md
-	//
-
-	// save run notes into the file(s) and append that file path to the ini-file content
-	for _, rn := range job.RunNotes {
-		if rn.Note == "" {
-			continue
-		}
-		if !rs.IsLog {
-			e := errors.New("Unable to save run notes: " + rs.ModelName + ": " + rs.ModelDigest)
-			omppLog.Log("Model run error: ", e)
-			moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest, rStamp)
-			rs.IsFinal = true
-			return rs, e
-		}
-
-		p, e := filepath.Abs(filepath.Join(mb.logDir, rStamp+".run_notes."+rn.LangCode+".md"))
-		if e == nil {
-			e = os.WriteFile(p, []byte(rn.Note), 0644)
-		}
-		awd := ""
-		if e == nil {
-			if awd, e = filepath.Abs(wDir); e == nil {
-				p, e = filepath.Rel(awd, p)
-			}
-		}
-		if e != nil {
-			omppLog.Log("Model run error: ", e)
-			moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest, rStamp)
-			rs.IsFinal = true
-			return rs, e
-		}
-
-		// store path to notes .md file instead of actual notes
-		dnIdx := -1
-		for k := range descrNotes {
-			if descrNotes[k].LangCode == rn.LangCode {
-				dnIdx = k
-				break
-			}
-		}
-		if dnIdx < 0 {
-			dnIdx = len(descrNotes)
-			descrNotes = append(descrNotes, db.DescrNote{LangCode: rn.LangCode})
-		}
-		descrNotes[dnIdx].Note = p
-	}
-
-	// validate run description and notes language code
-	if len(descrNotes) > 0 {
-
-		langLst, _ := theCatalog.LangListByDigestOrName(rs.ModelDigest)
-
-		for k := range descrNotes {
-
-			isOk := false
-			for j := range langLst {
-				isOk = langLst[j].LangCode == descrNotes[k].LangCode
-				if isOk {
-					break
-				}
-			}
-			if !isOk {
-				err = errors.New("Model run error: invalid language code: " + descrNotes[k].LangCode + ": " + rs.ModelName + ": " + rs.ModelDigest)
-				omppLog.Log(err)
-				moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest, rStamp)
-				rs.IsFinal = true
-				return rs, err // exit with error: language code not found
-			}
-
-			if descrNotes[k].Descr != "" {
-				iniKeyVal[descrNotes[k].LangCode+".RunDescription"] = helper.QuoteForIni(descrNotes[k].Descr)
-			}
-			if descrNotes[k].Note != "" {
-				iniKeyVal[descrNotes[k].LangCode+".RunNotesPath"] = descrNotes[k].Note // path to notes .md file
-			}
-		}
-	}
-
-	// if ini file file path specified as run option then read ini file and merge with other run options
-	if iniPathArg != "" {
-
-		if len(iniKeyVal) <= 0 { // nothing to merge, add ini file model run option
-
-			mArgs = append(mArgs, "-OpenM.iniFile", iniPathArg) // append ini file path to command line arguments
-
-		} else { // else merge ini file content
-
-			kv := map[string]string{}
-
-			p, e := filepath.Abs(filepath.Join(mb.binDir, iniPathArg))
-			if e == nil {
-				kv, e = config.NewIni(p, theCfg.codePage)
-			}
-			if e == nil {
-				for key, val := range kv {
-					if _, ok := iniKeyVal[key]; !ok {
-						iniKeyVal[key] = val
-					}
-				}
-			}
-
-			if e != nil {
-				omppLog.Log("Model run error: ", e)
-				moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest, rStamp)
-				rs.IsFinal = true
-				return rs, e
-			}
-		}
-	}
-
-	// create ini file and append -ini fileName.ini to model run options
-	if len(iniKeyVal) > 0 {
-
-		sl := []string{} // list of ini file sections
-		iniContent := ""
-
-		for {
-
-			// find next section
-			c := ""
-			for key, val := range iniKeyVal {
-
-				if key == "" || val == "" {
-					continue
-				}
-				sck := strings.SplitN(key, ".", 2) // expected section.key
-				if len(sck) < 2 || sck[0] == "" || sck[1] == "" {
-					omppLog.Log("Warning: invalid ini file section.key: ", key)
-					continue
-				}
-				if !slices.Contains(sl, sck[0]) {
-					c = sck[0]
-					sl = append(sl, sck[0])
-					break
-				}
-			}
-			if c == "" { // no new sections
-				break
-			}
-
-			// append [section] and all key = values for that section
-			iniContent += "[" + c + "]\n"
-
-			for key, val := range iniKeyVal {
-
-				if key == "" || val == "" {
-					continue
-				}
-				sck := strings.SplitN(key, ".", 2) // expected section.key
-				if len(sck) < 2 || sck[0] == "" || sck[1] == "" {
-					continue
-				}
-				if !strings.EqualFold(sck[0], c) { // different section: skip
-					continue
-				}
-
-				iniContent += sck[1] + " = " + val + "\n"
-			}
-		}
-
-		p, e := filepath.Abs(filepath.Join(mb.logDir, rStamp+"."+mb.model.Name+".ini"))
-		if e == nil {
-			e = os.WriteFile(p, []byte(iniContent), 0644)
-		}
-		awd := ""
-		if e == nil {
-			if awd, e = filepath.Abs(wDir); e == nil {
-				p, e = filepath.Rel(awd, p)
-			}
-		}
-		if e != nil {
-			omppLog.Log("Model run error: ", e)
-			moveJobQueueToFailed(queueJobPath, rs.SubmitStamp, rs.ModelName, rs.ModelDigest, rStamp)
-			rs.IsFinal = true
-			return rs, e
-		}
-		mArgs = append(mArgs, "-ini", p) // append ini file path to command line arguments
-	}
-	//
-	// done with model run ini file
 
 	// cleanup helpers
 	delComputeUse := func(cuLst []computeUse) {
@@ -603,7 +205,7 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 	rsc.updateRunStateProcess(rs, false)
 
 	// move job file form queue to active
-	activeJobPath, _ := moveJobToActive(queueJobPath, rs, job.Res, rs.RunStamp)
+	activeJobPath, _ := moveJobToActive(queueJobPath, rs, job.Res, rs.RunStamp, iniPath)
 
 	//  wait until run completed or terminated
 	go func(rState *RunState, cmd *exec.Cmd, jobPath string, cuLst []computeUse) {
@@ -832,4 +434,380 @@ func (rsc *RunCatalog) stopModelRun(modelDigest string, stamp string) (bool, str
 	rsl.IsFinal = true
 
 	return true, rsl.SubmitStamp, jobPath, false
+}
+
+// make model run command line arguments and create ini file if required
+func makeRunArgsIni(binDir, workDir, logDir string, job *RunJob, rs *RunState) ([]string, string, error) {
+
+	// make model run command line arguments, starting from process run stamp and log options
+	mArgs := []string{}
+	mArgs = append(mArgs, "-OpenM.RunStamp", rs.RunStamp)
+	mArgs = append(mArgs, "-OpenM.LogToConsole", "true")
+	mArgs = append(mArgs, "-OpenM.LogToFile", "false")
+	iniPath := ""
+
+	importDbLcDot := strings.ToLower("-ImportDb.")
+	microdataLcDot := strings.ToLower("-Microdata.")
+	dotRunDescrLc := strings.ToLower(".RunDescription")
+
+	entAttrs := theCatalog.entityAttrsByDigest(rs.ModelDigest)
+	descrNotes := []db.DescrNote{}
+
+	// append model run options from run request
+	for krq, val := range job.Opts {
+
+		if len(krq) < 1 { // skip empty run options
+			continue
+		}
+
+		// command line argument key starts with "-" ex: "-OpenM.Threads"
+		key := krq
+		if krq[0] != '-' {
+			key = "-" + krq
+		}
+
+		// save run name and task run name to return as part of run state
+		if strings.EqualFold(key, "-OpenM.RunName") {
+			rs.RunName = val
+		}
+		if strings.EqualFold(key, "-OpenM.TaskRunName") {
+			rs.TaskRunName = val
+		}
+		// thread count MUST be specified using request Threads
+		if strings.EqualFold(key, "-OpenM.Threads") {
+			continue // skip number of threads option: use request Threads value instead
+		}
+		// MPI "not on root" flag
+		if strings.EqualFold(key, "-OpenM.NotOnRoot") {
+			continue // skip  MPI "not on root" flag: use request Mpi.IsNotOnRoot boolean instead
+		}
+		if strings.EqualFold(key, "-OpenM.LogToConsole") {
+			continue // skip log to console input run option: it is already on
+		}
+		if strings.EqualFold(key, "-OpenM.LogToFile") {
+			continue // skip log to file input run option: replaced by console output
+		}
+		if strings.EqualFold(key, "-OpenM.LogFilePath") {
+			continue // skip log file path input run option: replaced by console output
+		}
+		if strings.EqualFold(key, "-OpenM.Database") {
+			continue // database connection string not allowed as run option
+		}
+		if strings.EqualFold(key, "-OpenM.iniFile") || strings.EqualFold(key, "-ini") {
+			iniPath = val
+			continue // ini file path as run option: merge of ini content may be required
+		}
+		if strings.HasPrefix(strings.ToLower(key), importDbLcDot) {
+			continue // import database connection string not allowed as run option
+		}
+		if strings.HasSuffix(strings.ToLower(key), dotRunDescrLc) {
+
+			if 1+len(dotRunDescrLc) >= len(key) {
+				return []string{}, "", errors.New("invalid run description key: " + key)
+			}
+			lc := key[1:(len(key) - len(dotRunDescrLc))] // language code
+
+			idx := -1
+			for k := range descrNotes {
+				if descrNotes[k].LangCode == lc {
+					idx = k
+					break
+				}
+			}
+			if idx < 0 {
+				idx = len(descrNotes)
+				descrNotes = append(descrNotes, db.DescrNote{LangCode: lc})
+			}
+			descrNotes[idx].Descr = val
+
+			continue // use ini-file for run description
+		}
+
+		// if this is microdata run option then microdata must be enabled
+		// do not allow microdata options which are part of Microdata run request:
+		//   -Microdata.ToDb -Microdata.UseInternal
+		//   -Microdata.All  -Microdata.anyEntityName
+		if strings.HasPrefix(strings.ToLower(key), microdataLcDot) {
+
+			if !theCfg.isMicrodata {
+				return []string{}, "", errors.New("microdata not allowed: " + rs.ModelName + ": " + rs.ModelDigest)
+			}
+			subKey := key[len(microdataLcDot):]
+
+			if strings.EqualFold(subKey, "All") || strings.EqualFold(subKey, "ToDb") || strings.EqualFold(subKey, "UseInternal") {
+				return []string{}, "", errors.New("incorrect use of run option: " + key + ": " + rs.ModelName + ": " + rs.ModelDigest)
+			}
+
+			for k := range entAttrs {
+
+				if subKey == entAttrs[k].Name {
+					return []string{}, "", errors.New("incorrect use of run option: " + key + ": " + rs.ModelName + ": " + rs.ModelDigest)
+				}
+			}
+		}
+
+		mArgs = append(mArgs, key, val) // append command line argument key and value
+	}
+
+	// append threads number if required
+	if job.Res.ThreadCount > 1 {
+		mArgs = append(mArgs, "-OpenM.Threads", strconv.Itoa(job.Res.ThreadCount))
+	}
+	if job.IsMpi && job.Mpi.IsNotOnRoot {
+		mArgs = append(mArgs, "-OpenM.NotOnRoot")
+	}
+
+	// create model run ini file if required to pass model run options
+	// merge ini file options with job model run options
+	//
+
+	// if list of tables to retain is not empty then put the list into ini-file:
+	//
+	//   [Tables]
+	//   Retain   = ageSexIncome, AdditionalTables
+	//
+	iniKeyVal := map[string]string{}
+
+	if len(job.Tables) > 0 {
+		iniKeyVal["Tables.Retain"] = strings.Join(job.Tables, ", ")
+	}
+
+	// if list of microdata to retain is not empty then put the list into ini-file:
+	//
+	//   [Microdata]
+	//   ToDb        = true
+	//   UseInternal = true
+	//   Person      = age,income
+	//   Other       = All
+	//
+	if !theCfg.isMicrodata { // microdata disabled: remove microdata from ini file
+
+		maps.DeleteFunc(iniKeyVal, func(key string, val string) bool { return strings.HasPrefix(strings.ToLower(key), "microdata.") })
+	} else {
+		if job.Microdata.IsToDb && len(entAttrs) > 0 && len(job.Microdata.Entity) > 0 {
+
+			iniKeyVal["Microdata.ToDb"] = "true"
+			if job.Microdata.IsInternal {
+				iniKeyVal["Microdata.UseInternal"] = "true"
+			}
+
+			// for each entity check if All attributes included or attributes must be specified as comma separated list
+			for k := range job.Microdata.Entity {
+
+				// find entity name in the list of model entities
+				eIdx := -1
+				for j := range entAttrs {
+					if entAttrs[j].Name == job.Microdata.Entity[k].Name {
+						eIdx = j
+						break
+					}
+				}
+				if eIdx < 0 || eIdx >= len(entAttrs) {
+					return []string{}, "", errors.New("invalid microdata entity: " + job.Microdata.Entity[k].Name + ": " + rs.ModelName + ": " + rs.ModelDigest)
+				}
+
+				// check if all entity attributes included in run microdata
+				na := len(job.Microdata.Entity[k].Attr)
+				isAll := na == 1 && job.Microdata.Entity[k].Attr[0] == "All"
+
+				if !isAll {
+
+					attrs := make([]string, na)
+					copy(attrs, job.Microdata.Entity[k].Attr)
+					sort.Strings(attrs)
+
+					for j := range entAttrs[eIdx].Attr {
+
+						if !job.Microdata.IsInternal && entAttrs[eIdx].Attr[j].IsInternal {
+							continue // skip: this model run does not using internal attributes
+						}
+
+						n := sort.SearchStrings(attrs, entAttrs[eIdx].Attr[j].Name)
+						isAll = n >= 0 && n < na && attrs[n] == entAttrs[eIdx].Attr[j].Name
+						if !isAll {
+							break
+						}
+					}
+				}
+
+				// append entity attributes to ini file content: EntityName = All or EntityName = AttrA, AttrB
+				if isAll {
+					iniKeyVal["Microdata."+job.Microdata.Entity[k].Name] = "All"
+				} else {
+					iniKeyVal["Microdata."+job.Microdata.Entity[k].Name] = strings.Join(job.Microdata.Entity[k].Attr, ",")
+				}
+			}
+		}
+	}
+
+	// if run description or notes specified then use ini-file:
+	//
+	// [EN]
+	// RunDescription = "model run #7 with 50,000 cases"
+	// RunNotesPath   = run_notes-in-english.md
+	//
+
+	// save run notes into the file(s) and append that file path to the ini-file content
+	for _, rn := range job.RunNotes {
+		if rn.Note == "" {
+			continue
+		}
+		if !rs.IsLog {
+			return []string{}, "", errors.New("Unable to save run notes: " + rs.ModelName + ": " + rs.ModelDigest)
+		}
+
+		p, e := filepath.Abs(filepath.Join(logDir, rs.RunStamp+".run_notes."+rn.LangCode+".md"))
+		if e == nil {
+			e = os.WriteFile(p, []byte(rn.Note), 0644)
+		}
+		awd := ""
+		if e == nil {
+			if awd, e = filepath.Abs(workDir); e == nil {
+				p, e = filepath.Rel(awd, p)
+			}
+		}
+		if e != nil {
+			return []string{}, "", e
+		}
+
+		// store path to notes .md file instead of actual notes
+		dnIdx := -1
+		for k := range descrNotes {
+			if descrNotes[k].LangCode == rn.LangCode {
+				dnIdx = k
+				break
+			}
+		}
+		if dnIdx < 0 {
+			dnIdx = len(descrNotes)
+			descrNotes = append(descrNotes, db.DescrNote{LangCode: rn.LangCode})
+		}
+		descrNotes[dnIdx].Note = p
+	}
+
+	// validate run description and notes language code
+	if len(descrNotes) > 0 {
+
+		langLst, _ := theCatalog.LangListByDigestOrName(rs.ModelDigest)
+
+		for k := range descrNotes {
+
+			isOk := false
+			for j := range langLst {
+				isOk = langLst[j].LangCode == descrNotes[k].LangCode
+				if isOk {
+					break
+				}
+			}
+			if !isOk {
+				return []string{}, "", errors.New("invalid language code: " + descrNotes[k].LangCode + ": " + rs.ModelName + ": " + rs.ModelDigest)
+			}
+
+			if descrNotes[k].Descr != "" {
+				iniKeyVal[descrNotes[k].LangCode+".RunDescription"] = helper.QuoteForIni(descrNotes[k].Descr)
+			}
+			if descrNotes[k].Note != "" {
+				iniKeyVal[descrNotes[k].LangCode+".RunNotesPath"] = descrNotes[k].Note // path to notes .md file
+			}
+		}
+	}
+
+	// if ini file file path specified as run option then read ini file and merge with other run options
+	if iniPath != "" {
+
+		if len(iniKeyVal) <= 0 { // nothing to merge, add ini file model run option
+
+			mArgs = append(mArgs, "-OpenM.iniFile", iniPath) // append ini file path to command line arguments
+
+		} else { // else merge ini file content
+
+			kv := map[string]string{}
+
+			p, e := filepath.Abs(filepath.Join(binDir, iniPath))
+			if e == nil {
+				kv, e = config.NewIni(p, theCfg.codePage)
+			}
+			if e == nil {
+				for key, val := range kv {
+					if _, ok := iniKeyVal[key]; !ok {
+						iniKeyVal[key] = val
+					}
+				}
+			}
+
+			if e != nil {
+				return []string{}, "", e
+			}
+		}
+	}
+
+	// create ini file and append -ini fileName.ini to model run options
+	if len(iniKeyVal) > 0 {
+
+		sl := []string{} // list of ini file sections
+		iniContent := ""
+
+		for {
+
+			// find next section
+			c := ""
+			for key, val := range iniKeyVal {
+
+				if key == "" || val == "" {
+					continue
+				}
+				sck := strings.SplitN(key, ".", 2) // expected section.key
+				if len(sck) < 2 || sck[0] == "" || sck[1] == "" {
+					omppLog.Log("Warning: invalid ini file section.key: ", key)
+					continue
+				}
+				if !slices.Contains(sl, sck[0]) {
+					c = sck[0]
+					sl = append(sl, sck[0])
+					break
+				}
+			}
+			if c == "" { // no new sections
+				break
+			}
+
+			// append [section] and all key = values for that section
+			iniContent += "[" + c + "]\n"
+
+			for key, val := range iniKeyVal {
+
+				if key == "" || val == "" {
+					continue
+				}
+				sck := strings.SplitN(key, ".", 2) // expected section.key
+				if len(sck) < 2 || sck[0] == "" || sck[1] == "" {
+					continue
+				}
+				if !strings.EqualFold(sck[0], c) { // different section: skip
+					continue
+				}
+
+				iniContent += sck[1] + " = " + val + "\n"
+			}
+		}
+
+		iniPath = rs.RunStamp + "." + rs.ModelName + ".ini" // new ini file path, relative to log directory
+
+		p, e := filepath.Abs(filepath.Join(logDir, iniPath))
+		if e == nil {
+			e = os.WriteFile(p, []byte(iniContent), 0644)
+		}
+		awd := ""
+		if e == nil {
+			if awd, e = filepath.Abs(workDir); e == nil {
+				p, e = filepath.Rel(awd, p)
+			}
+		}
+		if e != nil {
+			return []string{}, "", e
+		}
+		mArgs = append(mArgs, "-ini", p) // append ini file path to command line arguments
+	}
+
+	return mArgs, iniPath, nil
 }

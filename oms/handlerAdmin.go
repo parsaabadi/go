@@ -112,7 +112,7 @@ func modelOpenDbFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	dbPath = strings.ReplaceAll(dbPath, "*", "/") // restore slashed / path
 
-	// make db path realtive to models/bin root
+	// make db path relative to models/bin root
 	// and check if model database file is already open: it should not be in the list of model db files
 	mbinDir, _ := theCatalog.getModelDir()
 	srcPath := path.Join(mbinDir, dbPath)

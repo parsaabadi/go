@@ -104,6 +104,7 @@ type RunJob struct {
 	QueuePos    int    // one-based position of MPI job in global queue or any (MPI or non-MPI) job in localhost queue
 	LogFileName string // log file name
 	LogPath     string // log file path: log/dir/modelName.RunStamp.console.log
+	IniPath     string // if not empty then actual ini file path, may be relative to log directory
 }
 
 // RunRes is model run computational resources
