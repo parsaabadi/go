@@ -20,6 +20,10 @@ Get list of the models from database:
 	dbget -m modelOne -do model-list -lang fr-CA
 	dbget -m modelOne -do model-list -lang isl
 
+	dbget -m modelOne -do model-list -dbget.Notes -lang en-CA
+	dbget -m modelOne -do model-list -dbget.Notes -lang fr-CA
+	dbget -m modelOne -do model-list -dbget.Notes -lang isl
+
 Aggregate microdata run values:
 
 	dbget -db modelOne.sqlite -do microdata-aggregate
