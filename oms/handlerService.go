@@ -419,3 +419,46 @@ func jobHistoryDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	// job history file deleted or job history not found
 	w.Header().Set("Content-Location", "/api/service/job/delete/history/"+submitStamp)
 }
+
+// delete all successful jobs history json files, it does not delete model runs.
+//
+//	DELETE /api/service/job/delete/history-all-success
+func jobHistoryAllSuccessDeleteHandler(w http.ResponseWriter, r *http.Request) {
+	doJobHistoryAllDelete(true, w)
+}
+
+// delete all not successful jobs history json files, it does not delete model runs.
+//
+//	DELETE /api/service/job/delete/history-all-not-success
+func jobHistoryAllNotSuccessDeleteHandler(w http.ResponseWriter, r *http.Request) {
+	doJobHistoryAllDelete(false, w)
+}
+
+// delete all successful or not successful jobs history json files, it does not delete model runs.
+func doJobHistoryAllDelete(isSuccess bool, w http.ResponseWriter) {
+
+	nDel := 0
+	if theCfg.isJobControl {
+
+		_, _, _, _, _, hKeys, hJobs, _ := theRunCatalog.getRunJobs()
+
+		for k := range hKeys {
+
+			if isSuccess && hJobs[k].JobStatus != "success" || !isSuccess && hJobs[k].JobStatus == "success" {
+				continue
+			}
+			if isOk := fileDeleteAndLog(true, hJobs[k].filePath); !isOk {
+				http.Error(w, "Unable to delete job file "+hJobs[k].SubmitStamp, http.StatusInternalServerError)
+				return
+			}
+			nDel++
+		}
+	}
+
+	// all job history file deleted
+	if isSuccess {
+		w.Header().Set("Content-Location", "/api/service/job/delete/history-all-success/"+strconv.Itoa(nDel))
+		return
+	} // else
+	w.Header().Set("Content-Location", "/api/service/job/delete/history-all-not-success/"+strconv.Itoa(nDel))
+}

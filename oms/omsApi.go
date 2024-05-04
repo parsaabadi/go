@@ -784,8 +784,13 @@ func apiServiceRoutes(router *vestigo.Router) {
 	router.Put("/api/service/job/move/", http.NotFound)
 
 	// DELETE /api/service/job/delete/history/:job
+	// DELETE /api/service/job/delete/history-all-success
+	// DELETE /api/service/job/delete/history-all-not-success
 	router.Delete("/api/service/job/delete/history/:job", jobHistoryDeleteHandler, logRequest)
 	router.Delete("/api/service/job/delete/history/", http.NotFound)
+
+	router.Delete("/api/service/job/delete/history-all-success", jobHistoryAllSuccessDeleteHandler, logRequest)
+	router.Delete("/api/service/job/delete/history-all-not-success", jobHistoryAllNotSuccessDeleteHandler, logRequest)
 }
 
 // add web-service /api routes for oms instance administrative tasks
