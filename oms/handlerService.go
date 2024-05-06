@@ -420,18 +420,21 @@ func jobHistoryDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Location", "/api/service/job/delete/history/"+submitStamp)
 }
 
-// delete all successful jobs history json files, it does not delete model runs.
+// delete all successful or not successful jobs history json files.
+// it does not delete model runs.
 //
-//	DELETE /api/service/job/delete/history-all-success
-func jobHistoryAllSuccessDeleteHandler(w http.ResponseWriter, r *http.Request) {
-	doJobHistoryAllDelete(true, w)
-}
+//	DELETE /api/service/job/delete/history-all/:success
+func jobHistoryAllDeleteHandler(w http.ResponseWriter, r *http.Request) {
 
-// delete all not successful jobs history json files, it does not delete model runs.
-//
-//	DELETE /api/service/job/delete/history-all-not-success
-func jobHistoryAllNotSuccessDeleteHandler(w http.ResponseWriter, r *http.Request) {
-	doJobHistoryAllDelete(false, w)
+	// url or query parameters: successful or not boolean flag
+	sp := getRequestParam(r, "success")
+	isSuccess, err := strconv.ParseBool(sp)
+	if sp == "" || err != nil {
+		http.Error(w, "Invalid (or empty) history delete flag, expected true or false", http.StatusBadRequest)
+		return
+	}
+
+	doJobHistoryAllDelete(isSuccess, w)
 }
 
 // delete all successful or not successful jobs history json files, it does not delete model runs.
