@@ -63,12 +63,83 @@ func iniKey(section, key string) string { return section + "." + key }
 // Parse ini-file content into strings map of (section.key)=>value
 func loadIni(iniContent string) (map[string]string, error) {
 
-	kvIni := make(map[string]string)
+    // We're trying to hack a parser extension without doing too many changes.
+    // Try to parse out all line continuation characters and merge all continuated lines.
+    // Then pass off the result to the existing code.
+
+    // Value can take multiple lines with \ at the end of the line for continuation.
+    // Comments are optional and can start from either semicolon or hash sign at any position of the line. 
+    // You can escape comment separator by putting value in single 'apostrophes' or double "quotes".
+    // No rules are mentioned regarding line continuation character occurring in comments. 
+
+    // Complication: For values not contained inside double or single quotes, 
+    // leading whitespace before a line continuation character must be truncated.
+
+    // Another complication: We may be inside a quote block that was initiated on a previous line.
+    // So we need to carry over any parity checks on quotes from preceeding lines over to current line.
+
+    // First split input into seperate lines.
+    lines := strings.Split(iniContent, "\n")
+
+    // Use corresponding slice to mark if line is being continued.
+    continuations := make([]bool, len(lines))
+
+    // And to record parity of single and double quotes.
+    singleQuoteParity := make([]int, len(lines))
+    doubleQuoteParity := make([]int, len(lines))
+
+    for ix, line := range lines {
+        // Split line on first occurrence of a line continuation character. 
+        line, _, isContinued := strings.Cut(line, "\\")
+
+        // If line is not continued:
+        if !isContinued {
+            // Set continuations and quote parities to false and 0.
+            continuations[ix] = false
+            singleQuoteParity[ix] = 0
+            doubleQuoteParity[ix] = 0
+
+            // And move on to next line.
+            continue
+        }
+
+        // Otherwise:
+        continuations[ix] = true
+
+        // Determine if line continuation character is inside an open quote block.
+        // Count the number of occurrences of single and double quotes in prefix.
+        singleQuoteParity[ix] = strings.Count(line, "\'") % 2
+        doubleQuoteParity[ix] = strings.Count(line, "\"") % 2
+
+        // If it's not the first line then account for parity of previous line.
+        if ix > 0 {
+            singleQuoteParity[ix] = (singleQuoteParity[ix] + singleQuoteParity[ix - 1]) % 2
+            doubleQuoteParity[ix] = (doubleQuoteParity[ix] + doubleQuoteParity[ix - 1]) % 2
+        }
+
+        // If line continuation character was outside of quotation blocks then
+        // remove contiguous whitespace leading the line continuation character.
+        if singleQuoteParity[ix] % 2 && doubleQuoteParity[ix] % 2 {
+            line = strings.TrimRight(line, "\t ")
+        }
+
+        // * If it doesn't allow us to update lines in place then create another slice *
+        lines[ix] = line
+    }
+
+    // Concatenate continuated lines into single lines.
+
+
+    // Finally fold the slice of lines into a single string again and pass on to the existing logic.
+
+
+
+
+    kvIni := make(map[string]string)
 	var section, key, val string
 
 	for nLine, nStart := 0, 0; nStart < len(iniContent); {
-
-		// get current line and move to next
+        // get current line and move to next
 		nextPos := strings.IndexAny(iniContent[nStart:], "\r\n")
 		if nextPos < 0 {
 			nextPos = len(iniContent)
