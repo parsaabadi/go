@@ -9,6 +9,8 @@ import (
 	"strconv"
 
 	"github.com/openmpp/go/ompp/helper"
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
 )
 
 // CellParam is value of input parameter.
@@ -31,6 +33,14 @@ type CellParamConverter struct {
 	IsIdCsv   bool       // if true then use enum id's else use enum codes
 	DoubleFmt string     // if not empty then format string is used to sprintf if value type is float, double, long double
 	theParam  *ParamMeta // if not nil then parameter found
+}
+
+// Converter for input parameter to implement CsvLocaleConverter interface.
+type CellParamLocaleConverter struct {
+	CellParamConverter
+	Lang     string           // language code, expected to compatible with BCP 47 language tag
+	LangMeta                  // language metadata to find translations
+	EnumTxt  []TypeEnumTxtRow // type enum text rows: type_enum_txt join to model_type_dic
 }
 
 // return true if csv converter is using enum id's for dimensions
@@ -246,12 +256,129 @@ func (cellCvt *CellParamConverter) ToCsvRow() (func(interface{}, []string) (bool
 	return cvt, nil
 }
 
+// Return converter from parameter cell (sub id, dimensions, value) to language-specific csv []string row of enum labels and value.
+//
+// Converter return isNotEmpty flag, it is always true if there were no error during conversion.
+// Converter will return error if len(row) not equal to number of fields in csv record.
+// If dimension type is enum based then csv row is enum label.
+// If parameter type is enum based then csv row value is enum label.
+// Value and dimesions of built-in types converted to locale-specific strings, e.g.: 1234.56 => 1 234,56
+func (cellCvt *CellParamLocaleConverter) ToCsvRow() (func(interface{}, []string) (bool, error), error) {
+
+	// find parameter by name
+	param, err := cellCvt.paramByName()
+	if err != nil {
+		return nil, err
+	}
+
+	// for each dimension create converter from item id to label
+	fd := make([]func(itemId int) (string, error), param.Rank)
+
+	for k := 0; k < param.Rank; k++ {
+		f, err := param.Dim[k].typeOf.itemIdToLabel(cellCvt.Lang, cellCvt.EnumTxt, cellCvt.LangMeta, cellCvt.Name+"."+param.Dim[k].Name, false)
+		if err != nil {
+			return nil, err
+		}
+		fd[k] = f
+	}
+
+	// if parameter value type is float then use format, if not empty
+	isUseFmt := param.typeOf.IsFloat() && cellCvt.DoubleFmt != ""
+
+	// if parameter value type is enum-based then convert from enum id to label
+	isUseEnum := !param.typeOf.IsBuiltIn()
+	isUseBool := param.typeOf.IsBool()
+
+	var fv func(itemId int) (string, error)
+
+	if isUseEnum || isUseBool {
+		f, err := param.typeOf.itemIdToLabel(cellCvt.Lang, cellCvt.EnumTxt, cellCvt.LangMeta, cellCvt.Name, false)
+		if err != nil {
+			return nil, err
+		}
+		fv = f
+	}
+
+	prt := message.NewPrinter(language.Make(cellCvt.Lang)) // printer to format built-in types
+
+	cvt := func(src interface{}, row []string) (bool, error) {
+
+		cell, ok := src.(CellParam)
+		if !ok {
+			return false, errors.New("invalid type, expected: parameter cell (internal error): " + cellCvt.Name)
+		}
+
+		n := len(cell.DimIds)
+		if len(row) != n+2 {
+			return false, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.Name)
+		}
+
+		row[0] = prt.Sprint(cell.SubId)
+
+		// convert dimension item id to code
+		for k, e := range cell.DimIds {
+			v, err := fd[k](e)
+			if err != nil {
+				return false, err
+			}
+			row[k+1] = v
+		}
+
+		// convert cell value:
+		// if float then use format, if enum then find code by id, default: Sprint(value)
+		// use "null" string for db NULL values and format for model float types
+		switch {
+		case cell.IsNull:
+			row[n+1] = "null"
+
+		case isUseFmt:
+			row[n+1] = prt.Sprintf(cellCvt.DoubleFmt, cell.Value)
+
+		case isUseEnum:
+			// depending on sql + driver it can be different type
+			iv, ok := helper.ToIntValue(cell.Value)
+			if !ok {
+				return false, errors.New("invalid parameter value type, expected: integer enum: " + cellCvt.Name)
+			}
+
+			v, err := fv(int(iv))
+			if err != nil {
+				return false, err
+			}
+			row[n+1] = v
+
+		case isUseBool:
+			isVal, ok := cell.Value.(bool)
+			if !ok {
+				return false, errors.New("invalid parameter value type, expected: boolean value: " + cellCvt.Name)
+			}
+			var iv int
+			if isVal {
+				iv = 1
+			}
+
+			v, err := fv(iv)
+			if err != nil {
+				return false, err
+			}
+			row[n+1] = v
+
+		default:
+			row[n+1] = prt.Sprint(cell.Value)
+		}
+
+		return true, nil
+	}
+
+	return cvt, nil
+}
+
 // CsvToCell return closure to convert csv row []string to parameter cell (sub id, dimensions, value).
 //
 // It does return error if len(row) not equal to number of fields in cell db-record.
 // If dimension type is enum based then csv row is enum code and it is converted into cell.DimIds (into dimension type type enum ids).
 // If parameter type is enum based then csv row value is enum code and it is converted into value enum id.
-func (cellCvt *CellParamConverter) CsvToCell() (func(row []string) (interface{}, error), error) {
+func (cellCvt *CellParamConverter) ToCell() (func(row []string) (interface{}, error), error) {
 
 	// find parameter by name
 	param, err := cellCvt.paramByName()

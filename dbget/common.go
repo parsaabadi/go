@@ -40,40 +40,17 @@ func toJsonOutput(jsonPath string, src interface{}) error {
 func toCsvOutput(csvPath string, columnNames []string, lineCvt rowConverter) error {
 
 	// create csv file
-	isFile := csvPath != ""
-	var f *os.File
-	var err error
-
-	if isFile {
-		f, err = os.OpenFile(csvPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
-		if err != nil {
-			return err
-		}
+	f, wr, err := createCsvWriter(csvPath)
+	if err != nil {
+		return err
 	}
+	isFile := f != nil
+
 	defer func() {
 		if isFile {
 			f.Close()
 		}
 	}()
-	if isFile && theCfg.isWriteUtf8Bom { // if required then write utf-8 bom
-		if _, err = f.Write(helper.Utf8bom); err != nil {
-			return err
-		}
-	}
-
-	// create csv writes to file and/or to console
-	var wr *csv.Writer
-	if isFile {
-		wr = csv.NewWriter(f)
-	} else {
-		wr = csv.NewWriter(os.Stdout)
-		if runtime.GOOS == "windows" {
-			wr.UseCRLF = true
-		}
-	}
-	if theCfg.kind == asTsv {
-		wr.Comma = '\t'
-	}
 
 	// write header line: column names, if provided
 	if len(columnNames) > 0 {
@@ -99,6 +76,74 @@ func toCsvOutput(csvPath string, columnNames []string, lineCvt rowConverter) err
 	// flush and return error, if any
 	wr.Flush()
 	return wr.Error()
+}
+
+// create csv or tsv output writer and display action message
+func startCsvWrite(srcName string) (*os.File, *csv.Writer, error) {
+
+	// use specified file name or make default
+	fp := ""
+	if theCfg.isConsole {
+		omppLog.Log("Do ", theCfg.action)
+	} else {
+
+		fp = theCfg.fileName
+		if fp == "" {
+			fp = srcName + outputExt()
+		}
+		fp = filepath.Join(theCfg.dir, fp)
+
+		omppLog.Log("Do ", theCfg.action, ": "+fp)
+	}
+
+	return createCsvWriter(fp)
+}
+
+// create csv or tsv output writer
+func createCsvWriter(csvPath string) (*os.File, *csv.Writer, error) {
+
+	// create csv file
+	isFile := csvPath != ""
+	var f *os.File
+	var err error
+	isClose := false
+
+	if isFile {
+		f, err = os.OpenFile(csvPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+		if err != nil {
+			return nil, nil, err
+		}
+		isClose = true
+	}
+	defer func() {
+		if isClose {
+			f.Close()
+		}
+	}()
+
+	if isFile && theCfg.isWriteUtf8Bom { // if required then write utf-8 bom
+		if _, err = f.Write(helper.Utf8bom); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	// create csv writes to file and/or to console
+	var csvWr *csv.Writer
+	if isFile {
+		csvWr = csv.NewWriter(f)
+	} else {
+		csvWr = csv.NewWriter(os.Stdout)
+		if runtime.GOOS == "windows" {
+			csvWr.UseCRLF = true
+		}
+	}
+	if theCfg.kind == asTsv {
+		csvWr.Comma = '\t'
+	}
+
+	isClose = false // return open file to upper level
+
+	return f, csvWr, nil
 }
 
 // if directory path not empty then create output directory if not already exists, remove existing directory if required

@@ -26,7 +26,7 @@ func writeParamFromCsvFile(
 ) error {
 
 	// converter from csv row []string to db cell
-	cvt, err := csvCvt.CsvToCell()
+	cvt, err := csvCvt.ToCell()
 	if err != nil {
 		return errors.New("invalid converter from csv row: " + err.Error())
 	}
@@ -73,7 +73,7 @@ func writeTableFromCsvFiles(
 	cvtAcc db.CellAccConverter) error {
 
 	// accumulator converter from csv row []string to db cell
-	aToCell, err := cvtAcc.CsvToCell()
+	aToCell, err := cvtAcc.ToCell()
 	if err != nil {
 		return errors.New("invalid converter from accumulators csv row: " + err.Error())
 	}
@@ -101,7 +101,7 @@ func writeTableFromCsvFiles(
 	}
 
 	// expression converter from csv row []string to db cell
-	eToCell, err := cvtExpr.CsvToCell()
+	eToCell, err := cvtExpr.ToCell()
 	if err != nil {
 		return errors.New("invalid converter from expressions csv row: " + err.Error())
 	}
@@ -150,7 +150,7 @@ func writeMicroFromCsvFile(
 ) error {
 
 	// converter from csv row []string to db cell
-	cvt, err := csvCvt.CsvToCell()
+	cvt, err := csvCvt.ToCell()
 	if err != nil {
 		return errors.New("invalid converter from csv row: " + err.Error())
 	}
