@@ -1,0 +1,25 @@
+Test.same | Multi line   text with spaces
+escape. key "" 'quoted' here  | some value
+Test.multi1 | DSN='server'; UID='user'; PWD='secret';
+escape.dsn | DSN='server'; UID='user'; PWD='pas#word';
+Test.non | 
+General.UseSparse | true
+Test.multi2 | new value of "the # quick" fox "jumps # over"
+first test.rem | 
+escape.qts | " allow ' unbalanced quotes
+Test.lst | new value of "the # quick" fox 'jumps # over'
+first test.val | no comment
+first test.nul | 
+replace.k | 4
+escape.t w | the "# quick #" brown 'fox ; jumps' over
+Test.keep | Multi line   text with spaces
+General.StartingSeed | 16807
+escape.end | 
+Test.rem | 
+Test.trim | Aname,Bname,Cname,DName
+General.Subsamples | 8
+General.Cases | 5000
+General.SimulationEnd | 100
+Test.val | new value of no comments
+Test.dsn | new value of UID='user'; PWD='secret';
+Test.unb | "unbalanced quote                           ; this is not a comment: it is a value started from " quote

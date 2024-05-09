@@ -18,10 +18,9 @@ It is very light and able to parse:
 
 	dsn = "DSN='server'; UID='user'; PWD='pas#word';"   ; comments are # here
 
-Section and key are trimed and cannot contain comments ; or # chars inside.
-Key and values trimed and "unquoted".
+Section and key are trimmed and cannot contain comments ; or # chars inside.
+Key and values trimmed and "unquoted".
 Key or value escaped with "double" or 'single' quotes can include spaces or ; or # chars
-Multi-line values are NOT supported, no line continuation.
 
 Example:
 
@@ -49,6 +48,9 @@ func NewIni(iniPath string, encodingName string) (map[string]string, error) {
 		return nil, errors.New("reading ini-file to utf-8 failed: " + err.Error())
 	}
 
+    // Join values spanning multiple lines into single lines.
+    s = JoinMultiLineValues(s)
+
 	// parse ini-file into strings map of (section.key)=>value
 	kvIni, err := loadIni(s)
 	if err != nil {
@@ -60,14 +62,12 @@ func NewIni(iniPath string, encodingName string) (map[string]string, error) {
 // iniKey return ini-file key as concatenation: section.key
 func iniKey(section, key string) string { return section + "." + key }
 
-
-// Convert multi-line values in input string into equivalent single line values.
+// Join multi-line values in input string into equivalent single line values.
 func JoinMultiLineValues(input string) string {
 
     // Split input into separate lines on line breaks.
     lines := strings.Split(input, "\n")
 
-    // Use some auxiliary slices to keep track of line related info. 
     // Record which lines are to be continued in here.
     // All boolean entries are initialized to false.
     lineIsContinued := make([]bool, len(lines))
@@ -90,7 +90,7 @@ func JoinMultiLineValues(input string) string {
 
         // If it is not the first line and the previous line is being continued
         // initialize quote parity counts to those of the previous line. 
-        if ix > 0 || lineIsContinued[ix - 1] {
+        if ix > 0 && lineIsContinued[ix - 1] {
             singleQuoteCount[ix] = singleQuoteCount[ix - 1]
             doubleQuoteCount[ix] = doubleQuoteCount[ix - 1]
         }
@@ -125,21 +125,25 @@ func JoinMultiLineValues(input string) string {
             } else if char == '\\' {
                 lineIsContinued[ix] = true
                 break
-
-            // If it's any other character then move to the next character.
-            } else {
-                continue
             }
         }
 
-        // If current line is being continued and the continuation character was outside of quote
-        // blocks then we must remove contiguous whitespace leading the line continuation character.
-        if lineIsContinued[ix] && singleQuoteCount[ix] % 2 == 0 && doubleQuoteCount[ix] % 2 == 0 {
-            // If line is being continued, it will be on the first occurrence of 
-            // the line continuation character so we can just use Cut and discard the rest.
+        // If current line is being continued then it will be on the first occurrence of
+        // the line continuation character so we can just use Cut and discard the rest.
+        if lineIsContinued[ix] {
             line, _, _ = strings.Cut(line, "\\")
-            // And now trim any leading and trailing whitespace from that.
-            line = strings.Trim(line, "\t ")
+        }
+
+        // If the continuation character was outside of quote blocks then we must 
+        // remove contiguous whitespace leading the line continuation character.
+        if singleQuoteCount[ix] % 2 == 0 && doubleQuoteCount[ix] % 2 == 0 {
+            line = strings.TrimRight(line, "\t ")
+        }
+
+        // If previous line is being continued and current line
+        // has leading whitespace then remove that whitespace.
+        if ix > 0 && lineIsContinued[ix - 1] {
+            line = strings.TrimLeft(line, "\t ")
         }
 
         updatedLines[ix] = line
@@ -150,7 +154,7 @@ func JoinMultiLineValues(input string) string {
     for ix, line := range updatedLines {
         accumulator += line
         if !lineIsContinued[ix] {
-            // Append the concatenated line stored in the accumulator.
+            // Append the line stored in the accumulator.
             concatenatedLines = append(concatenatedLines, accumulator)
             // Reset accumulator.
             accumulator = ""
@@ -160,7 +164,6 @@ func JoinMultiLineValues(input string) string {
     // Fold the slice of lines into a single string again and return.
     return strings.Join(concatenatedLines, "\n")
 }
-
 
 // Parse ini-file content into strings map of (section.key)=>value
 func loadIni(iniContent string) (map[string]string, error) {
