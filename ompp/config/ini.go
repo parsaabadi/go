@@ -60,81 +60,110 @@ func NewIni(iniPath string, encodingName string) (map[string]string, error) {
 // iniKey return ini-file key as concatenation: section.key
 func iniKey(section, key string) string { return section + "." + key }
 
-// Parse ini-file content into strings map of (section.key)=>value
-func loadIni(iniContent string) (map[string]string, error) {
 
-    // We're trying to hack a parser extension without doing too many changes.
-    // Try to parse out all line continuation characters and merge all continuated lines.
-    // Then pass off the result to the existing code.
+// Convert multi-line values in input string into equivalent single line values.
+func JoinMultiLineValues(input string) string {
 
-    // Value can take multiple lines with \ at the end of the line for continuation.
-    // Comments are optional and can start from either semicolon or hash sign at any position of the line. 
-    // You can escape comment separator by putting value in single 'apostrophes' or double "quotes".
-    // No rules are mentioned regarding line continuation character occurring in comments. 
+    // Split input into separate lines on line breaks.
+    lines := strings.Split(input, "\n")
 
-    // Complication: For values not contained inside double or single quotes, 
-    // leading whitespace before a line continuation character must be truncated.
+    // Use some auxiliary slices to keep track of line related info. 
+    // Record which lines are to be continued in here.
+    // All boolean entries are initialized to false.
+    lineIsContinued := make([]bool, len(lines))
 
-    // Another complication: We may be inside a quote block that was initiated on a previous line.
-    // So we need to carry over any parity checks on quotes from preceeding lines over to current line.
+    // Keep track of parity of single and double quotes.
+    // All integer entries are initialized to zero.
+    singleQuoteCount := make([]int, len(lines))
+    doubleQuoteCount := make([]int, len(lines))
 
-    // First split input into seperate lines.
-    lines := strings.Split(iniContent, "\n")
+    // Store updated lines here.
+    updatedLines := make([]string, len(lines))
 
-    // Use corresponding slice to mark if line is being continued.
-    continuations := make([]bool, len(lines))
-
-    // And to record parity of single and double quotes.
-    singleQuoteParity := make([]int, len(lines))
-    doubleQuoteParity := make([]int, len(lines))
+    // And store concatenated lines here.
+    var concatenatedLines []string
 
     for ix, line := range lines {
-        // Split line on first occurrence of a line continuation character. 
-        line, _, isContinued := strings.Cut(line, "\\")
+        // Initialize quote parity counts for current line.
+        // If it's the first line or if previous line is not being 
+        // continued then they're already set correctly to 0.
 
-        // If line is not continued:
-        if !isContinued {
-            // Set continuations and quote parities to false and 0.
-            continuations[ix] = false
-            singleQuoteParity[ix] = 0
-            doubleQuoteParity[ix] = 0
-
-            // And move on to next line.
-            continue
+        // If it is not the first line and the previous line is being continued
+        // initialize quote parity counts to those of the previous line. 
+        if ix > 0 || lineIsContinued[ix - 1] {
+            singleQuoteCount[ix] = singleQuoteCount[ix - 1]
+            doubleQuoteCount[ix] = doubleQuoteCount[ix - 1]
         }
 
-        // Otherwise:
-        continuations[ix] = true
+        // Iterate through characters in current line.
+        for _, char := range line {
+            // If it's a comment starting character.
+            if char == '#' || char == ';' {
+                // And if we're outside a quote block.
+                if singleQuoteCount[ix] % 2 == 0 && doubleQuoteCount[ix] % 2 == 0 {
+                    // Then it's the start of a comment and no line continuation character
+                    // was encountered before it. So line is not continued. Break out of loop.
+                    break
 
-        // Determine if line continuation character is inside an open quote block.
-        // Count the number of occurrences of single and double quotes in prefix.
-        singleQuoteParity[ix] = strings.Count(line, "\'") % 2
-        doubleQuoteParity[ix] = strings.Count(line, "\"") % 2
+                // And if we're inside a quote block.
+                } else {
+                    // Then treat the comment starting character as part 
+                    // of the quote and move to the next character.
+                    continue
+                }
 
-        // If it's not the first line then account for parity of previous line.
-        if ix > 0 {
-            singleQuoteParity[ix] = (singleQuoteParity[ix] + singleQuoteParity[ix - 1]) % 2
-            doubleQuoteParity[ix] = (doubleQuoteParity[ix] + doubleQuoteParity[ix - 1]) % 2
+            // If it's a single quote then update single quote count.
+            } else if char == '\'' {
+                singleQuoteCount[ix] += 1
+
+            // If it's a double quote then update double quote count.
+            } else if char == '"' {
+                doubleQuoteCount[ix] += 1
+
+            // If it's the line continuation character then mark that 
+            // line as being continued and break out of character loop.
+            } else if char == '\\' {
+                lineIsContinued[ix] = true
+                break
+
+            // If it's any other character then move to the next character.
+            } else {
+                continue
+            }
         }
 
-        // If line continuation character was outside of quotation blocks then
-        // remove contiguous whitespace leading the line continuation character.
-        if singleQuoteParity[ix] % 2 && doubleQuoteParity[ix] % 2 {
-            line = strings.TrimRight(line, "\t ")
+        // If current line is being continued and the continuation character was outside of quote
+        // blocks then we must remove contiguous whitespace leading the line continuation character.
+        if lineIsContinued[ix] && singleQuoteCount[ix] % 2 == 0 && doubleQuoteCount[ix] % 2 == 0 {
+            // If line is being continued, it will be on the first occurrence of 
+            // the line continuation character so we can just use Cut and discard the rest.
+            line, _, _ = strings.Cut(line, "\\")
+            // And now trim any leading and trailing whitespace from that.
+            line = strings.Trim(line, "\t ")
         }
 
-        // * If it doesn't allow us to update lines in place then create another slice *
-        lines[ix] = line
+        updatedLines[ix] = line
     }
 
-    // Concatenate continuated lines into single lines.
+    // Concatenate continued lines into single lines.
+    var accumulator string
+    for ix, line := range updatedLines {
+        accumulator += line
+        if !lineIsContinued[ix] {
+            // Append the concatenated line stored in the accumulator.
+            concatenatedLines = append(concatenatedLines, accumulator)
+            // Reset accumulator.
+            accumulator = ""
+        }
+    }
+
+    // Fold the slice of lines into a single string again and return.
+    return strings.Join(concatenatedLines, "\n")
+}
 
 
-    // Finally fold the slice of lines into a single string again and pass on to the existing logic.
-
-
-
-
+// Parse ini-file content into strings map of (section.key)=>value
+func loadIni(iniContent string) (map[string]string, error) {
     kvIni := make(map[string]string)
 	var section, key, val string
 
