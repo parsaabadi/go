@@ -139,24 +139,35 @@ func ReadParameterTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadParamLayou
 	// append dimension enum code filters, if specified
 	for k := range layout.Filter {
 
-		// find dimension index by name
-		dix := -1
-		for j := range param.Dim {
-			if param.Dim[j].Name == layout.Filter[k].Name {
-				dix = j
-				break
+		// filter parameter value or find dimension index by name
+		var err error
+		f := ""
+
+		if layout.Filter[k].Name == "param_value" {
+
+			f, err = makeWhereValueFilter(
+				&layout.Filter[k], "", "param_value", "", 0, param.typeOf, "param_value", "parameter "+param.Name)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+
+			dix := -1
+			for j := range param.Dim {
+				if param.Dim[j].Name == layout.Filter[k].Name {
+					dix = j
+					break
+				}
+			}
+			if dix < 0 {
+				return nil, errors.New("parameter " + param.Name + " does not have dimension " + layout.Filter[k].Name)
+			}
+			f, err = makeWhereFilter(
+				&layout.Filter[k], "", param.Dim[dix].colName, param.Dim[dix].typeOf, false, param.Dim[dix].Name, "parameter "+param.Name)
+			if err != nil {
+				return nil, err
 			}
 		}
-		if dix < 0 {
-			return nil, errors.New("parameter " + param.Name + " does not have dimension " + layout.Filter[k].Name)
-		}
-
-		f, err := makeWhereFilter(
-			&layout.Filter[k], "", param.Dim[dix].colName, param.Dim[dix].typeOf, false, param.Dim[dix].Name, "parameter "+param.Name)
-		if err != nil {
-			return nil, err
-		}
-
 		q += " AND " + f
 	}
 

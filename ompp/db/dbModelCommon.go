@@ -120,6 +120,17 @@ func (modelDef *ModelMeta) TypeByKey(typeId int) (int, bool) {
 	return k, (k >= 0 && k < n && modelDef.Type[k].TypeId == typeId)
 }
 
+// return index of output table value: double type index
+func (modelDef *ModelMeta) TypeOfTableValue() (int, bool) {
+
+	for k := range modelDef.Type {
+		if modelDef.Type[k].Digest == "_double_" {
+			return k, true
+		}
+	}
+	return len(modelDef.Type), false
+}
+
 // ParamByKey return index of parameter by key: paramId
 func (modelDef *ModelMeta) ParamByKey(paramId int) (int, bool) {
 
