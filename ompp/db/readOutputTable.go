@@ -201,13 +201,14 @@ func ReadOutputTableTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLay
 	}
 
 	// append dimension enum code filters, if specified
+	iDbl, ok := modelDef.TypeOfDouble()
+	if !ok {
+		return nil, errors.New("double type not found, output table " + table.Name)
+	}
+
 	for k := range layout.Filter {
 
 		// filter by expression value or accumulator value or find dimension index by name
-		tvIdx, ok := modelDef.TypeOfTableValue()
-		if !ok {
-			return nil, errors.New("double type not found, output table " + table.Name)
-		}
 		var err error
 		f := ""
 
@@ -222,7 +223,7 @@ func ReadOutputTableTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLay
 			}
 			if eix >= 0 {
 				f, err = makeWhereValueFilter(
-					&layout.Filter[k], "", "expr_value", "expr_id", table.Expr[eix].ExprId, &modelDef.Type[tvIdx], layout.Filter[k].Name, "output table "+table.Name)
+					&layout.Filter[k], "", "expr_value", "expr_id", table.Expr[eix].ExprId, &modelDef.Type[iDbl], layout.Filter[k].Name, "output table "+table.Name)
 				if err != nil {
 					return nil, err
 				}
@@ -240,14 +241,14 @@ func ReadOutputTableTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLay
 				if !layout.IsAllAccum {
 
 					f, err = makeWhereValueFilter(
-						&layout.Filter[k], "", "acc_value", "acc_id", table.Acc[aix].AccId, &modelDef.Type[tvIdx], layout.Filter[k].Name, "output table "+table.Name)
+						&layout.Filter[k], "", "acc_value", "acc_id", table.Acc[aix].AccId, &modelDef.Type[iDbl], layout.Filter[k].Name, "output table "+table.Name)
 					if err != nil {
 						return nil, err
 					}
 				} else {
 
 					f, err = makeWhereFilter(
-						&layout.Filter[k], "", table.Acc[aix].Name, &modelDef.Type[tvIdx], false, layout.Filter[k].Name, "output table "+table.Name)
+						&layout.Filter[k], "", table.Acc[aix].Name, &modelDef.Type[iDbl], false, layout.Filter[k].Name, "output table "+table.Name)
 					if err != nil {
 						return nil, err
 					}

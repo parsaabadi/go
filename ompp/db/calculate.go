@@ -268,7 +268,7 @@ func CalculateMicrodata(dbConn *sql.DB, modelDef *ModelMeta, microLt *ReadCalcul
 	}
 
 	// translate calculation to sql
-	q, err := translateMicroToSql(entity, entityGen, modelDef.Param, &microLt.ReadLayout, &microLt.CalculateMicroLayout, runIds)
+	q, err := translateMicroToSql(modelDef, entity, entityGen, &microLt.ReadLayout, &microLt.CalculateMicroLayout, runIds)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -308,7 +308,7 @@ func CalculateMicrodata(dbConn *sql.DB, modelDef *ModelMeta, microLt *ReadCalcul
 // Translate all microdata aggregations to sql query, apply group by, dimension filters, selected run id's and order by.
 // It can be a multiple runs comparison and base run id is layout.FromId.
 // Or simple aggreagtion inside of single run, in that case layout.FromId and runIds[] are merged.
-func translateMicroToSql(entity *EntityMeta, entityGen *EntityGenMeta, paramMeta []ParamMeta, readLt *ReadLayout, calcLt *CalculateMicroLayout, runIds []int) (string, error) {
+func translateMicroToSql(modelDef *ModelMeta, entity *EntityMeta, entityGen *EntityGenMeta, readLt *ReadLayout, calcLt *CalculateMicroLayout, runIds []int) (string, error) {
 
 	// translate each calculation to sql: CTE and main sql query
 	mainSql := []string{}
@@ -317,11 +317,27 @@ func translateMicroToSql(entity *EntityMeta, entityGen *EntityGenMeta, paramMeta
 	if err != nil {
 		return "", err
 	}
-	paramCols := makeParamCols(paramMeta)
+	paramCols := makeParamCols(modelDef.Param)
 
+	// validate filter names: it must be name of attribute or name of calculated column
+	for k := range readLt.Filter {
+
+		isOk := false
+		for j := 0; !isOk && j < len(calcLt.Calculation); j++ {
+			isOk = calcLt.Calculation[j].Name == readLt.Filter[k].Name
+		}
+		for j := 0; !isOk && j < len(entity.Attr); j++ {
+			isOk = entity.Attr[j].Name == readLt.Filter[k].Name
+		}
+		if !isOk {
+			return "", errors.New("Error: entity " + entity.Name + " does not have attribute " + readLt.Filter[k].Name)
+		}
+	}
+
+	// translate all calculations to sql
 	for k := range calcLt.Calculation {
 
-		mSql, _, err := partialTranslateToMicroSql(entity, entityGen, aggrCols, paramCols, readLt, &calcLt.Calculation[k], runIds)
+		mSql, _, err := partialTranslateToMicroSql(modelDef, entity, entityGen, aggrCols, paramCols, readLt, &calcLt.Calculation[k], runIds)
 		if err != nil {
 			return "", err
 		}

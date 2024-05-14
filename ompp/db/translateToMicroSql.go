@@ -11,7 +11,7 @@ import (
 
 // Translate microdata aggregation into sql query.
 func translateToMicroAggrSql(
-	entity *EntityMeta, entityGen *EntityGenMeta, paramMeta []ParamMeta, readLt *ReadLayout, calcLt *CalculateLayout, groupBy []string, runIds []int,
+	modelDef *ModelMeta, entity *EntityMeta, entityGen *EntityGenMeta, readLt *ReadLayout, calcLt *CalculateLayout, groupBy []string, runIds []int,
 ) (string, error) {
 
 	// make sql:
@@ -26,9 +26,23 @@ func translateToMicroAggrSql(
 	if err != nil {
 		return "", err
 	}
-	paramCols := makeParamCols(paramMeta)
+	paramCols := makeParamCols(modelDef.Param)
 
-	mainSql, _, err := partialTranslateToMicroSql(entity, entityGen, aggrCols, paramCols, readLt, calcLt, runIds)
+	// validate filter names: it must be name of attribute or name of calculated column
+	for k := range readLt.Filter {
+
+		isOk := calcLt.Name == readLt.Filter[k].Name
+
+		for j := 0; !isOk && j < len(entity.Attr); j++ {
+			isOk = entity.Attr[j].Name == readLt.Filter[k].Name
+		}
+		if !isOk {
+			return "", errors.New("Error: entity " + entity.Name + " does not have attribute " + readLt.Filter[k].Name)
+		}
+	}
+
+	// translate calculation to sql
+	mainSql, _, err := partialTranslateToMicroSql(modelDef, entity, entityGen, aggrCols, paramCols, readLt, calcLt, runIds)
 	if err != nil {
 		return "", err
 	}
@@ -97,7 +111,7 @@ func makeMicroAggrCols(entity *EntityMeta, entityGen *EntityGenMeta, groupBy []s
 // Or simple expression calculation inside of single run, in that case layout.FromId and runIds[] are merged.
 // Only simple functions allowed in expression calculation.
 func partialTranslateToMicroSql(
-	entity *EntityMeta, entityGen *EntityGenMeta, aggrCols []aggrColumn, paramCols map[string]paramColumn, readLt *ReadLayout, calcLt *CalculateLayout, runIds []int,
+	modelDef *ModelMeta, entity *EntityMeta, entityGen *EntityGenMeta, aggrCols []aggrColumn, paramCols map[string]paramColumn, readLt *ReadLayout, calcLt *CalculateLayout, runIds []int,
 ) (
 	string, bool, error,
 ) {
@@ -149,33 +163,53 @@ func partialTranslateToMicroSql(
 		return "", false, errors.New("Error at " + entity.Name + " " + calcLt.Calculate + ": " + err.Error())
 	}
 
-	// append attribute enum code filters, if specified: A.attr1 =....
+	iDbl, ok := modelDef.TypeOfDouble()
+	if !ok {
+		return "", false, errors.New("double type not found, entity " + entity.Name)
+	}
+
+	// append attribute enum code filters and value filters, if specified: A.attr1 = 'M' AND (A.calc_value < 1234 AND A.calc_id = 12001)
 	where := ""
 
 	for k := range readLt.Filter {
 
-		// find attribute index by name
-		aix := -1
-		for j := range entity.Attr {
-			if entity.Attr[j].Name == readLt.Filter[k].Name {
-				aix = j
-				break
+		var err error
+		f := ""
+
+		if calcLt.Name == readLt.Filter[k].Name { // check if this is a filter by calculated value
+
+			f, err = makeWhereValueFilter(
+				&readLt.Filter[k], "", "calc_value", "calc_id", calcLt.CalcId, &modelDef.Type[iDbl], readLt.Filter[k].Name, "entity "+entity.Name)
+			if err != nil {
+				return "", false, err
 			}
 		}
-		if aix < 0 {
-			return "", false, errors.New("Error at " + entity.Name + " " + calcLt.Calculate + ": entity " + entity.Name + " does not have attribute " + readLt.Filter[k].Name)
-		}
+		if f == "" { // if not a filter by value then it can be filter by dimension
 
-		f, err := makeWhereFilter(
-			&readLt.Filter[k], "A", entity.Attr[aix].colName, entity.Attr[aix].typeOf, false, entity.Attr[aix].Name, "entity "+entity.Name)
-		if err != nil {
-			return "", false, errors.New("Error at " + entity.Name + " " + calcLt.Calculate + ": " + err.Error())
-		}
+			// find attribute index by name
+			aix := -1
+			for j := range entity.Attr {
+				if entity.Attr[j].Name == readLt.Filter[k].Name {
+					aix = j
+					break
+				}
+			}
+			if aix >= 0 {
 
-		if where == "" {
-			where = f
-		} else {
-			where += " AND " + f
+				f, err = makeWhereFilter(
+					&readLt.Filter[k], "A", entity.Attr[aix].colName, entity.Attr[aix].typeOf, false, entity.Attr[aix].Name, "entity "+entity.Name)
+				if err != nil {
+					return "", false, errors.New("Error at " + entity.Name + " " + calcLt.Calculate + ": " + err.Error())
+				}
+			}
+		}
+		// skip filter: it is not a filter by attribute name or current calculated column name
+		if f != "" {
+			if where == "" {
+				where = f
+			} else {
+				where += " AND " + f
+			}
 		}
 	}
 
