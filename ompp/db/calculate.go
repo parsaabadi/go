@@ -41,7 +41,7 @@ func CalculateOutputTable(dbConn *sql.DB, modelDef *ModelMeta, tableLt *ReadCalc
 	}
 
 	// translate calculation to sql
-	q, err := translateTableCalcToSql(table, modelDef.Param, &tableLt.ReadLayout, tableLt.Calculation, runIds)
+	q, err := translateTableCalcToSql(modelDef, table, &tableLt.ReadLayout, tableLt.Calculation, runIds)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -95,13 +95,29 @@ func CalculateOutputTable(dbConn *sql.DB, modelDef *ModelMeta, tableLt *ReadCalc
 // It can be a multiple runs comparison and base run id is layout.FromId.
 // Or simple expression calculation inside of single run or accumulators aggregation inside of single run,
 // in that case layout.FromId and runIds[] are merged.
-func translateTableCalcToSql(table *TableMeta, paramMeta []ParamMeta, readLt *ReadLayout, calcLt []CalculateTableLayout, runIds []int) (string, error) {
+func translateTableCalcToSql(modelDef *ModelMeta, table *TableMeta, readLt *ReadLayout, calcLt []CalculateTableLayout, runIds []int) (string, error) {
 
 	// translate each calculation to sql: CTE and main sql query
 	cteSql := []string{}
 	mainSql := []string{}
-	paramCols := makeParamCols(paramMeta)
+	paramCols := makeParamCols(modelDef.Param)
 
+	// validate filter names: it must be name of dimension or name of calculated expression
+	for k := range readLt.Filter {
+
+		isOk := false
+		for j := 0; !isOk && j < len(calcLt); j++ {
+			isOk = calcLt[j].Name == readLt.Filter[k].Name
+		}
+		for j := 0; !isOk && j < len(table.Dim); j++ {
+			isOk = table.Dim[j].Name == readLt.Filter[k].Name
+		}
+		if !isOk {
+			return "", errors.New("Error: output table " + table.Name + " does not have dimension " + readLt.Filter[k].Name)
+		}
+	}
+
+	// translate all calculations to sql
 	for k := range calcLt {
 
 		cte := []string{}
@@ -110,9 +126,9 @@ func translateTableCalcToSql(table *TableMeta, paramMeta []ParamMeta, readLt *Re
 		var err error
 
 		if !calcLt[k].IsAggr {
-			cte, mSql, _, err = partialTranslateToExprSql(table, paramCols, readLt, &calcLt[k].CalculateLayout, runIds)
+			cte, mSql, _, err = partialTranslateToExprSql(modelDef, table, paramCols, readLt, &calcLt[k].CalculateLayout, runIds)
 		} else {
-			cteAcc, mSql, err = partialTranslateToAccSql(table, paramCols, readLt, &calcLt[k].CalculateLayout, runIds)
+			cteAcc, mSql, err = partialTranslateToAccSql(modelDef, table, paramCols, readLt, &calcLt[k].CalculateLayout, runIds)
 			if err == nil {
 				cte = []string{cteAcc}
 			}
@@ -319,7 +335,7 @@ func translateMicroToSql(modelDef *ModelMeta, entity *EntityMeta, entityGen *Ent
 	}
 	paramCols := makeParamCols(modelDef.Param)
 
-	// validate filter names: it must be name of attribute or name of calculated column
+	// validate filter names: it must be name of attribute or name of calculated attribute
 	for k := range readLt.Filter {
 
 		isOk := false

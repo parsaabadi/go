@@ -28,7 +28,7 @@ func translateToMicroAggrSql(
 	}
 	paramCols := makeParamCols(modelDef.Param)
 
-	// validate filter names: it must be name of attribute or name of calculated column
+	// validate filter names: it must be name of attribute or name of calculated attribute
 	for k := range readLt.Filter {
 
 		isOk := calcLt.Name == readLt.Filter[k].Name
@@ -168,7 +168,7 @@ func partialTranslateToMicroSql(
 		return "", false, errors.New("double type not found, entity " + entity.Name)
 	}
 
-	// append attribute enum code filters and value filters, if specified: A.attr1 = 'M' AND (A.calc_value < 1234 AND A.calc_id = 12001)
+	// append attribute enum code filters and value filters, if specified: A.attr1 = 'M' AND (calc_value < 1234 AND calc_id = 12001)
 	where := ""
 
 	for k := range readLt.Filter {
@@ -186,7 +186,6 @@ func partialTranslateToMicroSql(
 		}
 		if f == "" { // if not a filter by value then it can be filter by dimension
 
-			// find attribute index by name
 			aix := -1
 			for j := range entity.Attr {
 				if entity.Attr[j].Name == readLt.Filter[k].Name {
@@ -203,7 +202,7 @@ func partialTranslateToMicroSql(
 				}
 			}
 		}
-		// skip filter: it is not a filter by attribute name or current calculated column name
+		// use filter: it is a filter by attribute name or by current calculated column name
 		if f != "" {
 			if where == "" {
 				where = f
