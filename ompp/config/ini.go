@@ -7,6 +7,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+    "unicode"
 
 	"github.com/openmpp/go/ompp/helper"
 )
@@ -95,36 +96,38 @@ func JoinMultiLineValues(input string) string {
             doubleQuoteCount[ix] = doubleQuoteCount[ix - 1]
         }
 
+        lineLoop:
         // Iterate through characters in current line.
         for _, char := range line {
+            switch char {
             // If it's a comment starting character.
-            if char == '#' || char == ';' {
+            case '#', ';':
                 // And if we're outside a quote block.
                 if singleQuoteCount[ix] % 2 == 0 && doubleQuoteCount[ix] % 2 == 0 {
                     // Then it's the start of a comment and no line continuation character
                     // was encountered before it. So line is not continued. Break out of loop.
-                    break
+                    break lineLoop
 
                 // And if we're inside a quote block.
                 } else {
                     // Then treat the comment starting character as part 
                     // of the quote and move to the next character.
-                    continue
+                    continue lineLoop
                 }
 
-            // If it's a single quote then update single quote count.
-            } else if char == '\'' {
+            // If it's a single quote then update single quote count:
+            case '\'':
                 singleQuoteCount[ix] += 1
 
-            // If it's a double quote then update double quote count.
-            } else if char == '"' {
+            // If it's a double quote then update double quote count:
+            case '\"':
                 doubleQuoteCount[ix] += 1
 
             // If it's the line continuation character then mark that 
             // line as being continued and break out of character loop.
-            } else if char == '\\' {
+            case '\\':
                 lineIsContinued[ix] = true
-                break
+                break lineLoop
             }
         }
 
@@ -137,13 +140,13 @@ func JoinMultiLineValues(input string) string {
         // If the continuation character was outside of quote blocks then we must 
         // remove contiguous whitespace leading the line continuation character.
         if singleQuoteCount[ix] % 2 == 0 && doubleQuoteCount[ix] % 2 == 0 {
-            line = strings.TrimRight(line, "\t ")
+            line = strings.TrimRightFunc(line, unicode.IsSpace)
         }
 
         // If previous line is being continued and current line
         // has leading whitespace then remove that whitespace.
         if ix > 0 && lineIsContinued[ix - 1] {
-            line = strings.TrimLeft(line, "\t ")
+            line = strings.TrimLeftFunc(line, unicode.IsSpace)
         }
 
         updatedLines[ix] = line
