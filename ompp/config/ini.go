@@ -120,7 +120,7 @@ func JoinMultiLineValues(input string) string {
                 singleQuoteCount[ix] += 1
 
             // If it's a double quote then update double quote count:
-            case '\"':
+            case '"':
                 doubleQuoteCount[ix] += 1
 
             // If it's the line continuation character then mark that 
