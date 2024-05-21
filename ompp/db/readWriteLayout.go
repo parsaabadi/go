@@ -79,7 +79,7 @@ type ReadLayout struct {
 	Name           string           // parameter name, output table name or entity microdata name
 	FromId         int              // run id or set id to select input parameter, output table values or microdata from
 	ReadPageLayout                  // read page first row offset, size and last page flag
-	Filter         []FilterColumn   // dimension or attribute filters, final WHERE does join all filters by AND
+	Filter         []FilterColumn   // dimension or attribute or value filters, final WHERE does join all filters by AND
 	FilterById     []FilterIdColumn // dimension or attribute filters by enum ids, final WHERE does join filters by AND
 	OrderBy        []OrderByColumn  // order by columnns, if empty then dimension id ascending order is used
 }
@@ -298,14 +298,21 @@ func makeWhereFilter(
 
 		return makeWhereIdFilter(&fltId, alias, colName, typeOf, msgName, msgParent)
 	}
+
 	// else make filter for other types: int, float, strings
+	return makeCodeWhereFiler(alias, colName, typeOf.IsString(), flt, msgName, msgParent)
+}
+
+// return filter by enum code or value comparison, e.g.: E.attr4 < 1234 or E.dim0 IN ('a', 'b', 'c')
+func makeCodeWhereFiler(alias, colName string, isStrType bool, flt *FilterColumn, msgName, msgParent string) (string, error) {
 
 	// use sql-quotes for string type
-	vals := make([]string, nFlt)
+	var vals []string
 
-	if !typeOf.IsString() {
-		copy(vals, flt.Values)
+	if !isStrType {
+		vals = flt.Values
 	} else {
+		vals = make([]string, len(flt.Values))
 		for k := range flt.Values {
 			vals[k] = ToQuoted(flt.Values[k])
 		}
@@ -337,6 +344,74 @@ func makeWhereFilter(
 	default:
 		return "", errors.New("invalid filter operation to read " + msgParent + " " + msgName)
 	}
+	return q, nil
+
+}
+
+// return filter by value of parameter, expression, accumulator or attribute, eg: (E.expr_value < 2 AND E.expr_id = 1)
+func makeWhereValueFilter(
+	flt *FilterColumn, alias string, colName string, idColName string, idValue int, typeOf *TypeMeta, msgName string, msgParent string,
+) (string, error) {
+
+	// if there is no id column then result is identical to regular where filter
+	if idColName == "" {
+		return makeWhereFilter(flt, alias, colName, typeOf, false, msgName, msgParent)
+	}
+	// else: it is (expr_value and expr_id) or (acc_value and acc_id)
+
+	// validate number of enum ids in enum list
+	nFlt := len(flt.Values)
+	if nFlt <= 0 ||
+		nFlt != 1 && (flt.Op == EqOpFilter || flt.Op == NeOpFilter || flt.Op == GtOpFilter || flt.Op == GeOpFilter || flt.Op == LtOpFilter || flt.Op == LeOpFilter) ||
+		nFlt != 2 && flt.Op == BetweenOpFilter {
+		return "", errors.New("invalid number of arguments to filter " + msgParent + " " + msgName + ": " + strconv.Itoa(nFlt))
+	}
+
+	// for boolean or enum-based parameters or attributes make filter by id
+	q := "("
+
+	if typeOf.IsBool() || !typeOf.IsBuiltIn() {
+
+		// convert enum codes to ids
+		cvt, err := typeOf.itemCodeToId(msgName, false)
+		if err != nil {
+			return "", err
+		}
+		fltId := FilterIdColumn{
+			Name:    flt.Name,
+			Op:      flt.Op,
+			EnumIds: make([]int, nFlt),
+		}
+		for k := range flt.Values {
+			id, err := cvt(flt.Values[k])
+			if err != nil {
+				return "", err
+			}
+			fltId.EnumIds[k] = id
+		}
+
+		c, err := makeWhereIdFilter(&fltId, alias, colName, typeOf, msgName, msgParent)
+		if err != nil {
+			return "", err
+		}
+		q += c
+
+	} else { // make filter for other types: int, float, strings
+
+		c, err := makeCodeWhereFiler(alias, colName, typeOf.IsString(), flt, msgName, msgParent)
+		if err != nil {
+			return "", err
+		}
+		q += c
+	}
+
+	// append id column condition: AND E.expr_id = 1)
+	q += " AND "
+	if alias != "" {
+		q += alias + "."
+	}
+	q += idColName + " = " + strconv.Itoa(idValue) + ")"
+
 	return q, nil
 }
 

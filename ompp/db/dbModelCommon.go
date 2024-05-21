@@ -120,6 +120,17 @@ func (modelDef *ModelMeta) TypeByKey(typeId int) (int, bool) {
 	return k, (k >= 0 && k < n && modelDef.Type[k].TypeId == typeId)
 }
 
+// return double type index, it sia type of output value table and calculated value
+func (modelDef *ModelMeta) TypeOfDouble() (int, bool) {
+
+	for k := range modelDef.Type {
+		if modelDef.Type[k].Digest == "_double_" {
+			return k, true
+		}
+	}
+	return len(modelDef.Type), false
+}
+
 // ParamByKey return index of parameter by key: paramId
 func (modelDef *ModelMeta) ParamByKey(paramId int) (int, bool) {
 
@@ -451,67 +462,6 @@ func (typeOf *TypeMeta) itemCodeToId(msgName string, isTotalEnabled bool) (func(
 				return 0, errors.New("invalid value: " + src + " of: " + msgName)
 			}
 			return i, nil
-		}
-
-	default:
-		return nil, errors.New("invalid (not supported) type: " + typeOf.Name + " of: " + msgName)
-	}
-
-	return cvt, nil
-}
-
-// itemIdToCode return converter from dimension item id to code.
-// It is also used for parameter values if parameter type is enum-based.
-// If dimension is enum-based then from enum id to enum code or to the "all" total enum code;
-// If dimension is simple integer type then use Itoa(integer id) as code;
-// If dimension is boolean then 0=>false, (1 or -1)=>true else error
-func (typeOf *TypeMeta) itemIdToCode(msgName string, isTotalEnabled bool) (func(itemId int) (string, error), error) {
-
-	var cvt func(itemId int) (string, error)
-
-	switch {
-	case !typeOf.IsBuiltIn(): // enum dimension: find enum code by id
-
-		cvt = func(itemId int) (string, error) {
-
-			if isTotalEnabled && itemId == typeOf.TotalEnumId { // check is it total item
-				return TotalEnumCode, nil
-			}
-			if !typeOf.IsRange { // enum dimension: find enum code by id
-
-				for j := range typeOf.Enum {
-					if itemId == typeOf.Enum[j].EnumId {
-						return typeOf.Enum[j].Name, nil
-					}
-				}
-			} else { // range dimension: item id the same as code
-
-				if typeOf.MinEnumId <= itemId && itemId <= typeOf.MaxEnumId {
-					return strconv.Itoa(itemId), nil
-				}
-			}
-			return "", errors.New("invalid value: " + strconv.Itoa(itemId) + " of: " + msgName)
-		}
-
-	case typeOf.IsBool(): // boolean dimension: 0=>false, (1 or -1)=>true else error
-
-		cvt = func(itemId int) (string, error) {
-			switch itemId {
-			case 0:
-				return "false", nil
-			case 1, -1:
-				return "true", nil
-			}
-			if isTotalEnabled && itemId == typeOf.TotalEnumId { // check is it total item
-				return TotalEnumCode, nil
-			}
-			return "", errors.New("invalid value: " + strconv.Itoa(itemId) + " of: " + msgName)
-		}
-
-	case typeOf.IsInt(): // integer dimension
-
-		cvt = func(itemId int) (string, error) {
-			return strconv.Itoa(itemId), nil
 		}
 
 	default:

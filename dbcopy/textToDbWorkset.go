@@ -394,7 +394,7 @@ func updateWorksetParamFromCsvFile(
 ) error {
 
 	// converter from csv row []string to db cell
-	cvt, err := csvCvt.CsvToCell()
+	cvt, err := csvCvt.ToCell()
 	if err != nil {
 		return errors.New("invalid converter from csv row: " + err.Error())
 	}

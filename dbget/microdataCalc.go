@@ -5,13 +5,8 @@ package main
 
 import (
 	"database/sql"
-	"encoding/csv"
 	"errors"
-	"os"
-	"path/filepath"
 	"strconv"
-
-	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/openmpp/go/ompp/config"
 	"github.com/openmpp/go/ompp/db"
@@ -306,51 +301,25 @@ func microdataAggregate(srcDb *sql.DB, modelId int, isCompare bool, runOpts *con
 		return errors.New("Failed to create microdata converter to csv: " + entityName + ": " + err.Error())
 	}
 
-	// use specified file name or make default
-	fp := ""
-	if theCfg.isConsole {
-		omppLog.Log("Do ", theCfg.action)
-	} else {
-
-		fp = theCfg.fileName
-		if fp == "" {
-			fp = entityName + outputExt()
-		}
-		fp = filepath.Join(theCfg.dir, fp)
-
-		omppLog.Log("Do ", theCfg.action, ": "+fp)
+	// start csv output to file or console
+	f, csvWr, err := startCsvWrite(entityName)
+	if err != nil {
+		return err
 	}
+	isFile := f != nil
 
-	// create csv file
-	isFile := fp != ""
-	var f *os.File
-
-	if isFile {
-		f, err = os.OpenFile(fp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
-		if err != nil {
-			return err
-		}
-	}
 	defer func() {
 		if isFile {
 			f.Close()
 		}
 	}()
 
-	if isFile && theCfg.isWriteUtf8Bom { // if required then write utf-8 bom
-		if _, err = f.Write(helper.Utf8bom); err != nil {
-			return err
-		}
-	}
-
 	// write csv header
-	csvWr := csv.NewWriter(f)
-
 	if err := csvWr.Write(hdr); err != nil {
 		return errors.New("Error at csv write: " + entityName + ": " + err.Error())
 	}
 
-	// convert output table cell into []string and write line into csv file
+	// convert microdata cell into []string and write line into csv file
 	cs := make([]string, len(hdr))
 
 	cvtWr := func(c interface{}) (bool, error) {

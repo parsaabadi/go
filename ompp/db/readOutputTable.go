@@ -201,24 +201,78 @@ func ReadOutputTableTo(dbConn *sql.DB, modelDef *ModelMeta, layout *ReadTableLay
 	}
 
 	// append dimension enum code filters, if specified
+	iDbl, ok := modelDef.TypeOfDouble()
+	if !ok {
+		return nil, errors.New("double type not found, output table " + table.Name)
+	}
+
 	for k := range layout.Filter {
 
-		// find dimension index by name
-		dix := -1
-		for j := range table.Dim {
-			if table.Dim[j].Name == layout.Filter[k].Name {
-				dix = j
-				break
+		// filter by expression value or accumulator value or find dimension index by name
+		var err error
+		f := ""
+
+		if !layout.IsAccum {
+
+			eix := -1
+			for j := range table.Expr {
+				if table.Expr[j].Name == layout.Filter[k].Name {
+					eix = j
+					break
+				}
+			}
+			if eix >= 0 {
+				f, err = makeWhereValueFilter(
+					&layout.Filter[k], "", "expr_value", "expr_id", table.Expr[eix].ExprId, &modelDef.Type[iDbl], layout.Filter[k].Name, "output table "+table.Name)
+				if err != nil {
+					return nil, err
+				}
+			}
+		} else {
+
+			aix := -1
+			for j := range table.Acc {
+				if (!table.Acc[j].IsDerived || layout.IsAllAccum) && table.Acc[j].Name == layout.Filter[k].Name {
+					aix = j
+					break
+				}
+			}
+			if aix >= 0 {
+				if !layout.IsAllAccum {
+
+					f, err = makeWhereValueFilter(
+						&layout.Filter[k], "", "acc_value", "acc_id", table.Acc[aix].AccId, &modelDef.Type[iDbl], layout.Filter[k].Name, "output table "+table.Name)
+					if err != nil {
+						return nil, err
+					}
+				} else {
+
+					f, err = makeWhereFilter(
+						&layout.Filter[k], "", table.Acc[aix].Name, &modelDef.Type[iDbl], false, layout.Filter[k].Name, "output table "+table.Name)
+					if err != nil {
+						return nil, err
+					}
+				}
 			}
 		}
-		if dix < 0 {
-			return nil, errors.New("output table " + table.Name + " does not have dimension " + layout.Filter[k].Name)
-		}
+		if f == "" { // if not a filter by value then it must be filter by dimension
 
-		f, err := makeWhereFilter(
-			&layout.Filter[k], "", table.Dim[dix].colName, table.Dim[dix].typeOf, table.Dim[dix].IsTotal, table.Dim[dix].Name, "output table "+table.Name)
-		if err != nil {
-			return nil, err
+			dix := -1
+			for j := range table.Dim {
+				if table.Dim[j].Name == layout.Filter[k].Name {
+					dix = j
+					break
+				}
+			}
+			if dix < 0 {
+				return nil, errors.New("output table " + table.Name + " does not have dimension " + layout.Filter[k].Name)
+			}
+
+			f, err = makeWhereFilter(
+				&layout.Filter[k], "", table.Dim[dix].colName, table.Dim[dix].typeOf, table.Dim[dix].IsTotal, table.Dim[dix].Name, "output table "+table.Name)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		q += " AND " + f
@@ -441,7 +495,7 @@ func ReadOutputTableCalculteTo(
 	}
 
 	// make sql to select calculated output table expression(s) from model run(s)
-	q, err := translateTableCalcToSql(table, modelDef.Param, &layout.ReadLayout, calcLt, runIds)
+	q, err := translateTableCalcToSql(modelDef, table, &layout.ReadLayout, calcLt, runIds)
 	if err != nil {
 		return nil, err
 	}

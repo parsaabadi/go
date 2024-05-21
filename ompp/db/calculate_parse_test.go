@@ -242,7 +242,7 @@ func TestTranslateToExprSql(t *testing.T) {
 		}
 		cmpLt := CalculateLayout{Calculate: cmpExpr}
 
-		sql, err := translateToExprSql(table, modelDef.Param, readLt, &cmpLt, runIds)
+		sql, err := translateToExprSql(modelDef, table, readLt, &cmpLt, runIds)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -10,7 +10,7 @@ import (
 )
 
 // Translate output table accumulators calculation into sql query.
-func translateToAccSql(table *TableMeta, paramMeta []ParamMeta, readLt *ReadLayout, calcLt *CalculateLayout, runIds []int) (string, error) {
+func translateToAccSql(modelDef *ModelMeta, table *TableMeta, paramMeta []ParamMeta, readLt *ReadLayout, calcLt *CalculateLayout, runIds []int) (string, error) {
 
 	// make sql:
 	// WITH cte
@@ -20,7 +20,21 @@ func translateToAccSql(table *TableMeta, paramMeta []ParamMeta, readLt *ReadLayo
 	// ORDER BY 1, 2,....
 	paramCols := makeParamCols(paramMeta)
 
-	cteSql, mainSql, err := partialTranslateToAccSql(table, paramCols, readLt, calcLt, runIds)
+	// validate filter names: it must be name of dimension or name of calculated expression
+	for k := range readLt.Filter {
+
+		isOk := calcLt.Name == readLt.Filter[k].Name
+
+		for j := 0; !isOk && j < len(table.Dim); j++ {
+			isOk = table.Dim[j].Name == readLt.Filter[k].Name
+		}
+		if !isOk {
+			return "", errors.New("Error: output table " + table.Name + " does not have dimension " + readLt.Filter[k].Name)
+		}
+	}
+
+	// translate calculation to sql
+	cteSql, mainSql, err := partialTranslateToAccSql(modelDef, table, paramCols, readLt, calcLt, runIds)
 	if err != nil {
 		return "", err
 	}
@@ -42,7 +56,11 @@ func translateToAccSql(table *TableMeta, paramMeta []ParamMeta, readLt *ReadLayo
 
 // Translate output table accumulators aggregation to sql query, apply dimension filters and selected run id's.
 // Return list of CTE sql's and main sql's.
-func partialTranslateToAccSql(table *TableMeta, paramCols map[string]paramColumn, readLt *ReadLayout, calcLt *CalculateLayout, runIds []int) (string, string, error) {
+func partialTranslateToAccSql(
+	modelDef *ModelMeta, table *TableMeta, paramCols map[string]paramColumn, readLt *ReadLayout, calcLt *CalculateLayout, runIds []int,
+) (
+	string, string, error,
+) {
 
 	// translate output table aggregation expression into sql query:
 	//   WITH asrc (run_id, acc_id, sub_id, dim0, dim1, acc_value ) AS
@@ -100,27 +118,47 @@ func partialTranslateToAccSql(table *TableMeta, paramCols map[string]paramColumn
 	}
 	where += ")"
 
-	// append dimension enum code filters, if specified
+	// append dimension enum code filters and value filter, if specified: A.dim1 = 'M' AND (calc_value < 1234 AND calc_id = 12001)
+	iDbl, ok := modelDef.TypeOfDouble()
+	if !ok {
+		return "", "", errors.New("double type not found, output table " + table.Name)
+	}
+
 	for k := range readLt.Filter {
 
-		// find dimension index by name
-		dix := -1
-		for j := range table.Dim {
-			if table.Dim[j].Name == readLt.Filter[k].Name {
-				dix = j
-				break
+		var err error
+		f := ""
+
+		if calcLt.Name == readLt.Filter[k].Name { // check if this is a filter by calculated value
+
+			f, err = makeWhereValueFilter(
+				&readLt.Filter[k], "", "calc_value", "calc_id", calcLt.CalcId, &modelDef.Type[iDbl], readLt.Filter[k].Name, "output table "+table.Name)
+			if err != nil {
+				return "", "", err
 			}
 		}
-		if dix < 0 {
-			return "", "", errors.New("Error at " + table.Name + " " + calcLt.Calculate + ": output table " + table.Name + " does not have dimension " + readLt.Filter[k].Name)
-		}
+		if f == "" { // if not a filter by value then it can be filter by dimension
 
-		f, err := makeWhereFilter(
-			&readLt.Filter[k], "A", table.Dim[dix].colName, table.Dim[dix].typeOf, table.Dim[dix].IsTotal, table.Dim[dix].Name, "output table "+table.Name)
-		if err != nil {
-			return "", "", errors.New("Error at " + table.Name + " " + calcLt.Calculate + ": " + err.Error())
+			dix := -1
+			for j := range table.Dim {
+				if table.Dim[j].Name == readLt.Filter[k].Name {
+					dix = j
+					break
+				}
+			}
+			if dix >= 0 {
+
+				f, err = makeWhereFilter(
+					&readLt.Filter[k], "A", table.Dim[dix].colName, table.Dim[dix].typeOf, table.Dim[dix].IsTotal, table.Dim[dix].Name, "output table "+table.Name)
+				if err != nil {
+					return "", "", errors.New("Error at " + table.Name + " " + calcLt.Calculate + ": " + err.Error())
+				}
+			}
 		}
-		where += " AND " + f
+		// use filter: it is a filter by dimension name or by current calculated column name
+		if f != "" {
+			where += " AND " + f
+		}
 	}
 
 	// append dimension enum id filters, if specified

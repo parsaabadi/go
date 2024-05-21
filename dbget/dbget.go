@@ -15,6 +15,7 @@ Get list of the models from database:
 	dbget -m modelOne -do model-list -csv  -dbget.ToConsole
 	dbget -m modelOne -do model-list -tsv  -dbget.ToConsole
 	dbget -m modelOne -do model-list -json -dbget.ToConsole
+	dbget -m modelOne -do model-list -tsv  -pipe
 
 	dbget -m modelOne -do model-list -dbget.Language EN
 	dbget -m modelOne -do model-list -lang fr-CA
@@ -23,35 +24,41 @@ Get list of the models from database:
 	dbget -m modelOne -do model-list -dbget.Notes -lang en-CA
 	dbget -m modelOne -do model-list -dbget.Notes -lang fr-CA
 	dbget -m modelOne -do model-list -dbget.Notes -lang isl
+	dbget -m modelOne -do model-list -dbget.NoLanguage
 
-Aggregate microdata run values:
+Get parameter run values:
 
-	dbget -db modelOne.sqlite -do microdata-aggregate
-	  -m modelOne
-	  -dbget.WithRunIds 219,221
+	dbget -m modelOne -do parameter -dbget.Run Default -dbget.Parameter ageSex -pipe
+
+	dbget -m modelOne -dbget.Run Default -parameter ageSex
+	dbget -m modelOne -dbget.Run Default -parameter ageSex -lang FR
+	dbget -m modelOne -dbget.Run Default -parameter ageSex -lang fr-CA
+	dbget -m modelOne -dbget.Run Default -parameter ageSex -lang isl
+	dbget -m modelOne -dbget.Run Default -parameter ageSex -dbget.NoLanguage
+
+	dbget -m modelOne -dbget.Run Default -parameter ageSex -tsv
+
+Aggregate and compare microdata run values:
+
+	dbget -m modelOne -do microdata-aggregate
+	  -dbget.RunId 219
 	  -dbget.Entity Other
 	  -dbget.GroupBy AgeGroup
 	  -dbget.Calc OM_AVG(Income)
 
-Compare microdata run values:
-
-	dbget -db modelOne.sqlite -do microdata-compare
-	  -m modelOne
-	  -dbget.RunId 219
-	  -dbget.WithRunIds 221
-	  -dbget.Entity Person
-	  -dbget.GroupBy AgeGroup
-	  -dbget.Calc OM_AVG(Income[base]-Income[variant])
-
-Aggregate and compare microdata run values:
-
-	dbget -db modelOne.sqlite -do microdata-aggregate
-	  -m modelOne
+	dbget -m modelOne -do microdata-aggregate
 	  -dbget.RunId 219
 	  -dbget.WithRunIds 221
 	  -dbget.Entity Other
 	  -dbget.GroupBy AgeGroup
 	  -dbget.Calc OM_AVG(Income),OM_AVG(Income[base]-Income[variant])
+
+	dbget -m modelOne -do microdata-compare
+	  -dbget.RunId 219
+	  -dbget.WithRunIds 221
+	  -dbget.Entity Person
+	  -dbget.GroupBy AgeGroup
+	  -dbget.Calc OM_AVG(Income[base]-Income[variant])
 */
 package main
 
@@ -84,6 +91,14 @@ const (
 	outputDirShortKey   = "dir"                  // output directory (short form)
 	keepOutputDirArgKey = "dbget.KeepOutputDir"  // keep output directory if it is already exist
 	consoleArgKey       = "dbget.ToConsole"      // if true then use stdout and do not create file(s)
+	consoleShortKey     = "pipe"                 // short form of: -dbget.ToConsole -OpenM.LogToConsole=false
+	langArgKey          = "dbget.Language"       // prefered output language: fr-CA
+	langShortKey        = "lang"                 // prefered output language (short form)
+	noLangArgKey        = "dbget.NoLanguage"     // if true then do language-neutral output: enum codes and "C" formats
+	encodingArgKey      = "dbget.CodePage"       // code page for converting source files, e.g. windows-1252
+	useUtf8ArgKey       = "dbget.Utf8Bom"        // if true then write utf-8 BOM into output
+	noteArgKey          = "dbget.Notes"          // if true then output notes into .md files
+	doubleFormatArgKey  = "dbget.DoubleFormat"   // convert to string format for float and double
 	sqliteArgKey        = "dbget.Sqlite"         // input db SQLite path
 	sqliteShortKey      = "db"                   // input db SQLite path (short form)
 	dbConnStrArgKey     = "dbget.Database"       // db connection string
@@ -100,15 +115,11 @@ const (
 	withRunIdsArgKey    = "dbget.WithRunIds"     // with list model run id's (variant runs)
 	withRunFirstArgKey  = "dbget.WithFirstRun"   // with first model run (with first run as variant)
 	withRunLastArgKey   = "dbget.WithLastRun"    // with last model run (with last run as variant)
+	paramArgKey         = "dbget.Parameter"      // parameter name
+	paramShortKey       = "parameter"            // short form of: -dbget.do parameter -dbget.Parameter Name
 	entityArgKey        = "dbget.Entity"         // microdata entity name
 	groupByArgKey       = "dbget.GroupBy"        // microdata group by attributes
 	calcArgKey          = "dbget.Calc"           // calculation(s) expressions to compare or aggregate
-	doubleFormatArgKey  = "dbget.DoubleFormat"   // convert to string format for float and double
-	noteArgKey          = "dbget.Notes"          // if true then output notes into .md files
-	langArgKey          = "dbget.Language"       // prefered output language: fr-CA
-	langShortKey        = "lang"                 // prefered output language (short form)
-	encodingArgKey      = "dbget.CodePage"       // code page for converting source files, e.g. windows-1252
-	useUtf8ArgKey       = "dbget.Utf8Bom"        // if true then write utf-8 BOM into output
 )
 
 // output format: csv by default, or tsv or json
@@ -130,17 +141,18 @@ var theCfg = struct {
 	isConsole       bool     // if true then write into stdout
 	modelName       string   // model name
 	modelDigest     string   // model digest
-	isNote          bool     // if true then output notes into .md files
 	doubleFmt       string   // format to convert float or double value to string
 	userLang        string   // prefered output language: fr-CA
 	lang            string   // model language matched to user language
+	isNoLang        bool     // if true then do language-neutral output: enum codes and "C" formats
 	encodingName    string   // "code page" to convert source file into utf-8, for example: windows-1252
 	isWriteUtf8Bom  bool     // if true then write utf-8 BOM into csv file
+	isNote          bool     // if true then output notes into .md files
 }{
 	kind:           asCsv,   // by default output as as .csv
-	doubleFmt:      "%.15g", // default format to convert float or double values to string
 	encodingName:   "",      // by default detect utf-8 encoding or use OS-specific default: windows-1252 on Windowds and utf-8 outside
 	isWriteUtf8Bom: false,   // do not write BOM by default
+	doubleFmt:      "%.15g", // default format to convert float or double values to string
 }
 
 // main entry point: wrapper to handle errors
@@ -158,6 +170,8 @@ func main() {
 // actual main body
 func mainBody(args []string) error {
 
+	isPipe := false
+	doParamName := ""
 	_ = flag.String(cmdArgKey, "", "action, what to do, for example: model-list")
 	_ = flag.String(cmdShortKey, "", "action, what to do (short of "+cmdArgKey+")")
 	_ = flag.String(asArgKey, "", "output as .csv, .tsv or .json, default: .csv")
@@ -170,6 +184,14 @@ func mainBody(args []string) error {
 	_ = flag.String(outputDirShortKey, theCfg.dir, "output directory (short of "+outputDirArgKey+")")
 	_ = flag.Bool(keepOutputDirArgKey, theCfg.isKeepOutputDir, "keep (do not delete) existing output directory")
 	_ = flag.Bool(consoleArgKey, theCfg.isConsole, "if true then write into standard output instead of file(s)")
+	flag.BoolVar(&isPipe, consoleShortKey, theCfg.isConsole, "short form of: -"+consoleArgKey+" -"+config.LogToConsoleArgKey+"=false")
+	_ = flag.String(langArgKey, theCfg.userLang, "prefered output language")
+	_ = flag.String(langShortKey, theCfg.userLang, "prefered output language (short of "+langArgKey+")")
+	_ = flag.Bool(noLangArgKey, theCfg.isNoLang, "if true then do language-neutral output: enum codes and 'C' formats")
+	_ = flag.String(encodingArgKey, theCfg.encodingName, "code page to convert source file into utf-8, e.g.: windows-1252")
+	_ = flag.Bool(useUtf8ArgKey, theCfg.isWriteUtf8Bom, "if true then write utf-8 BOM into output")
+	_ = flag.Bool(noteArgKey, theCfg.isNote, "if true then write notes into .md files")
+	_ = flag.String(doubleFormatArgKey, theCfg.doubleFmt, "convert to string format for float and double")
 	_ = flag.String(sqliteArgKey, "", "input database SQLite file path")
 	_ = flag.String(sqliteShortKey, "", "model name (short of "+sqliteArgKey+")")
 	_ = flag.String(dbConnStrArgKey, "", "input database connection string")
@@ -186,15 +208,11 @@ func mainBody(args []string) error {
 	_ = flag.String(withRunIdsArgKey, "", "with list model run id's (variant runs)")
 	_ = flag.Bool(withRunFirstArgKey, false, "if true then use first model run (use as variant run)")
 	_ = flag.Bool(withRunLastArgKey, false, "if true then use last model run (use as variant run)")
+	_ = flag.String(paramArgKey, "", "parameter name")
+	flag.StringVar(&doParamName, paramShortKey, "", "short form of: -"+cmdArgKey+" parameter -"+paramArgKey+" Name")
 	_ = flag.String(entityArgKey, "", "microdata entity name")
 	_ = flag.String(groupByArgKey, "", "list of microdata group by attributes")
 	_ = flag.String(calcArgKey, "", "list of calculation(s) expressions to compare or aggregate")
-	_ = flag.Bool(noteArgKey, theCfg.isNote, "if true then write notes into .md files")
-	_ = flag.String(doubleFormatArgKey, theCfg.doubleFmt, "convert to string format for float and double")
-	_ = flag.String(langArgKey, theCfg.userLang, "prefered output language")
-	_ = flag.String(langShortKey, theCfg.userLang, "prefered output language (short of "+langArgKey+")")
-	_ = flag.String(encodingArgKey, theCfg.encodingName, "code page to convert source file into utf-8, e.g.: windows-1252")
-	_ = flag.Bool(useUtf8ArgKey, theCfg.isWriteUtf8Bom, "if true then write utf-8 BOM into output")
 
 	// pairs of full and short argument names to map short name to full name
 	var optFs = []config.FullShort{
@@ -204,7 +222,9 @@ func mainBody(args []string) error {
 		{Full: runArgKey, Short: runShortKey},
 		{Full: outputFileArgKey, Short: outputFileShortKey},
 		{Full: outputDirArgKey, Short: outputDirShortKey},
+		{Full: consoleArgKey, Short: consoleShortKey},
 		{Full: langArgKey, Short: langShortKey},
+		{Full: paramArgKey, Short: paramShortKey},
 	}
 
 	// parse command line arguments and ini-file
@@ -215,6 +235,9 @@ func mainBody(args []string) error {
 	if len(extraArgs) > 0 {
 		return errors.New("invalid arguments: " + strings.Join(extraArgs, " "))
 	}
+	if isPipe {
+		logOpts.IsConsole = false
+	}
 	omppLog.New(logOpts) // adjust log options according to command line arguments or ini-values
 
 	// get common run options
@@ -224,10 +247,11 @@ func mainBody(args []string) error {
 	theCfg.isKeepOutputDir = runOpts.Bool(keepOutputDirArgKey)
 	theCfg.isConsole = runOpts.Bool(consoleArgKey)
 	theCfg.userLang = runOpts.String(langArgKey)
-	theCfg.isNote = runOpts.Bool(noteArgKey)
-	theCfg.doubleFmt = runOpts.String(doubleFormatArgKey)
+	theCfg.isNoLang = runOpts.Bool(noLangArgKey)
 	theCfg.encodingName = runOpts.String(encodingArgKey)
 	theCfg.isWriteUtf8Bom = runOpts.Bool(useUtf8ArgKey)
+	theCfg.isNote = runOpts.Bool(noteArgKey)
+	theCfg.doubleFmt = runOpts.String(doubleFormatArgKey)
 
 	// get output format: cv, tsv or json
 	if a := runOpts.String(asArgKey); a != "" {
@@ -268,7 +292,7 @@ func mainBody(args []string) error {
 		}
 	}
 
-	/* TBD
+	/* TBD:
 	// output to json supported only model metadata
 	if theCfg.kind == asJson {
 		if theCfg.action != "model-list" {
@@ -278,7 +302,7 @@ func mainBody(args []string) error {
 	*/
 
 	// get default user language
-	if theCfg.userLang == "" {
+	if !theCfg.isNoLang && theCfg.userLang == "" {
 		if ln, e := locale.GetLocale(); e == nil {
 			theCfg.userLang = ln
 		} else {
@@ -331,7 +355,7 @@ func mainBody(args []string) error {
 		}
 
 		// match user language to model language, use default model language if there are no match
-		if theCfg.userLang != "" {
+		if !theCfg.isNoLang && theCfg.userLang != "" {
 			theCfg.lang, err = matchUserLang(srcDb, *mdRow)
 			if err != nil {
 				return err
@@ -340,9 +364,9 @@ func mainBody(args []string) error {
 				omppLog.Log("Warning: unable to match user language: ", theCfg.userLang)
 			}
 		}
-		if theCfg.lang == "" {
+		if theCfg.isNoLang || theCfg.lang == "" {
 			theCfg.lang = mdRow.DefaultLangCode
-			omppLog.Log("Warning: using default model language: ", theCfg.lang)
+			omppLog.Log("Using default model language: ", theCfg.lang)
 		}
 	}
 
@@ -351,10 +375,19 @@ func mainBody(args []string) error {
 		return err
 	}
 
+	if doParamName != "" {
+		if runOpts.IsExist(cmdArgKey) && theCfg.action != "parameter" {
+			return errors.New("invalid action argument: " + theCfg.action)
+		}
+		theCfg.action = "parameter"
+	}
+
 	// dispatch the command
 	switch theCfg.action {
 	case "model-list":
 		return modelList(srcDb)
+	case "parameter":
+		return parameterValue(srcDb, modelId, runOpts)
 	case "microdata-aggregate":
 		return microdataAggregate(srcDb, modelId, false, runOpts)
 	case "microdata-compare":
