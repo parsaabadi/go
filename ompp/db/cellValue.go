@@ -3,6 +3,14 @@
 
 package db
 
+import (
+	"errors"
+	"strconv"
+
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
+)
+
 // cellIdValue is dimensions item as id and value of input parameter or output table.
 type cellIdValue struct {
 	DimIds []int       // dimensions enum ids or int values if dimension type simple
@@ -18,7 +26,7 @@ type cellCodeValue struct {
 	Value  interface{} // value: int64, bool, float64 or string
 }
 
-// map between runs digest and id and calculations name and id
+// calculation maps between runs digest and id and calculations name and id
 type CalcMaps struct {
 	IdToDigest   map[int]string // map of run id's to run digests
 	DigestToId   map[string]int // map of run digests to run id's
@@ -36,9 +44,9 @@ func EmptyCalcMaps() CalcMaps {
 	}
 }
 
-// CsvConverter provide methods to convert parameters or output table data from or to row []string for csv file.
+// CsvConverter provide methods to convert parameters or output table data to row []string for csv file.
 type CsvIntKeysConverter interface {
-	CsvConverter // convert parameter row or output table row from or to row []string for csv file
+	CsvConverter // convert parameter row or output table row to row []string for csv file
 	CellIntKeys  // provide a method to get row keys as []int, for example, get sub id and dimension ids
 }
 
@@ -68,9 +76,12 @@ type CsvConverter interface {
 	// if this is a enum-based parameter value then it is also converted to enum code.
 	// converter return isNotEmpty flag if cell value is not empty.
 	ToCsvRow() (func(interface{}, []string) (bool, error), error)
+}
 
+// Convert from csv row []string to parameter, output table or microdata cell (dimensions and value or microdata key and attributes value).
+type CsvToCellConverter interface {
 	// return converter from csv row []string to parameter, output table or microdata cell (dimensions and value or microdata key and attributes value)
-	CsvToCell() (func(row []string) (interface{}, error), error)
+	ToCell() (func(row []string) (interface{}, error), error)
 }
 
 // CellIntKeys provide method to get a copy of cell keys as []int for parameter or output table row,
@@ -108,4 +119,150 @@ type CellToIdConverter interface {
 	// Cell is dimensions and value of parameter or output table.
 	// It does convert from enum code to id for all dimensions and enum-based parameter value.
 	CodeToIdCell(modelDef *ModelMeta, name string) (func(interface{}) (interface{}, error), error)
+}
+
+// itemIdToCode return converter from dimension item id to code.
+// It is also used for parameter values if parameter type is enum-based.
+// If dimension is enum-based then from enum id to enum code or to the "all" total enum code;
+// If dimension is simple integer type then use Itoa(integer id) as code;
+// If dimension is boolean then 0=>false, (1 or -1)=>true else error
+func (typeOf *TypeMeta) itemIdToCode(msgName string, isTotalEnabled bool) (func(itemId int) (string, error), error) {
+
+	var cvt func(itemId int) (string, error)
+
+	switch {
+	case !typeOf.IsBuiltIn(): // enum dimension: find enum code by id
+
+		cvt = func(itemId int) (string, error) {
+
+			if isTotalEnabled && itemId == typeOf.TotalEnumId { // check is it total item
+				return TotalEnumCode, nil
+			}
+			if !typeOf.IsRange { // enum dimension: find enum code by id
+
+				for j := range typeOf.Enum {
+					if itemId == typeOf.Enum[j].EnumId {
+						return typeOf.Enum[j].Name, nil
+					}
+				}
+			} else { // range dimension: item id the same as code
+
+				if typeOf.MinEnumId <= itemId && itemId <= typeOf.MaxEnumId {
+					return strconv.Itoa(itemId), nil
+				}
+			}
+			return "", errors.New("invalid value: " + strconv.Itoa(itemId) + " of: " + msgName)
+		}
+
+	case typeOf.IsBool(): // boolean dimension: 0=>false, (1 or -1)=>true else error
+
+		cvt = func(itemId int) (string, error) {
+			switch itemId {
+			case 0:
+				return "false", nil
+			case 1, -1:
+				return "true", nil
+			}
+			if isTotalEnabled && itemId == typeOf.TotalEnumId { // check is it total item
+				return TotalEnumCode, nil
+			}
+			return "", errors.New("invalid value: " + strconv.Itoa(itemId) + " of: " + msgName)
+		}
+
+	case typeOf.IsInt(): // integer dimension
+
+		cvt = func(itemId int) (string, error) {
+			return strconv.Itoa(itemId), nil
+		}
+
+	default:
+		return nil, errors.New("invalid (not supported) type: " + typeOf.Name + " of: " + msgName)
+	}
+
+	return cvt, nil
+}
+
+// Return converter from dimension item id to language-specific label.
+// If language code is empty then it returns itemIdToCode converter from item id to item code
+// It is also used for parameter values if parameter type is enum-based.
+// If dimension is enum-based then from enum id to enum description or to the "all" total enum label;
+// If dimension is simple integer type then use Itoa(integer id) as code;
+// If dimension is boolean then 0=>false, (1 or -1)=>true else error
+func (typeOf *TypeMeta) itemIdToLabel(lang string, enumTxt []TypeEnumTxtRow, langMeta LangMeta, msgName string, isTotalEnabled bool) (func(itemId int) (string, error), error) {
+
+	if lang == "" {
+		return typeOf.itemIdToCode(msgName, isTotalEnabled) // language is empty: retrun converter from id to enum code
+	}
+	var cvt func(itemId int) (string, error)
+
+	// for boolean type or enum based types which are not ranges create map of enum id to label
+	labelMap := make(map[int]string, len(typeOf.Enum))
+
+	if typeOf.IsBool() || !typeOf.IsBuiltIn() && !typeOf.IsRange {
+
+		// add item code into map as default label
+		for j := range typeOf.Enum {
+			labelMap[typeOf.Enum[j].EnumId] = typeOf.Enum[j].Name
+		}
+		// replace labels: use description where exists for specified language
+		for j := range enumTxt {
+			if enumTxt[j].ModelId == typeOf.ModelId && enumTxt[j].TypeId == typeOf.TypeId && enumTxt[j].LangCode == lang {
+				labelMap[enumTxt[j].EnumId] = enumTxt[j].Descr
+			}
+		}
+	}
+
+	// if total item enabled in dimension then find language-specific total label
+	allLabel := TotalEnumCode
+
+	if isTotalEnabled {
+		for j := range langMeta.Lang {
+			if langMeta.Lang[j].LangCode == lang {
+				if lbl, ok := langMeta.Lang[j].Words[TotalEnumCode]; ok {
+					allLabel = lbl
+				}
+			}
+		}
+	}
+
+	prt := message.NewPrinter(language.Make(lang)) // printer to format built-in types
+
+	switch {
+	case typeOf.IsBool() || !typeOf.IsBuiltIn() && !typeOf.IsRange: // boolean or enum dimension: find label by enum id
+
+		cvt = func(itemId int) (string, error) {
+
+			if lbl, ok := labelMap[itemId]; ok {
+				return lbl, nil
+			}
+			if isTotalEnabled && itemId == typeOf.TotalEnumId { // check is it total item
+				return allLabel, nil
+			}
+			return "", errors.New("invalid value: " + strconv.Itoa(itemId) + " of: " + msgName)
+		}
+
+	case typeOf.IsRange: // range dimension: item id the same as label
+
+		cvt = func(itemId int) (string, error) {
+
+			if typeOf.MinEnumId <= itemId && itemId <= typeOf.MaxEnumId {
+				return prt.Sprintf("%d", itemId), nil
+			}
+			if isTotalEnabled && itemId == typeOf.TotalEnumId { // check is it total item
+				return allLabel, nil
+			}
+			return "", errors.New("invalid value: " + strconv.Itoa(itemId) + " of: " + msgName)
+		}
+
+	case typeOf.IsInt(): // integer dimension
+
+		cvt = func(itemId int) (string, error) {
+			return prt.Sprintf("%d", itemId), nil
+		}
+
+	default:
+		return nil, errors.New("invalid (not supported) type: " + typeOf.Name + " of: " + msgName)
+	}
+
+	return cvt, nil
 }

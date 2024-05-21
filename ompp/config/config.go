@@ -23,22 +23,26 @@ const (
 	IniFileShort = "ini"           // ini-file path (short form)
 )
 
-/* Log config keys.
+/*
+Log config keys.
 Log can be enabled/disabled for two independent streams:
-    console  => standard output stream
-    log file => log file, truncated on every run, (optional) unique "stamped" name
+
+	console  => standard output stream
+	log file => log file, truncated on every run, (optional) unique "stamped" name
+
 "Stamped" file name produced by adding time-stamp and/or pid-stamp, i.e.:
-    exeName.log => exeName.2012_08_17_16_04_59_148.123.log
+
+	exeName.log => exeName.2012_08_17_16_04_59_148.123.log
 */
 const (
-	LogToConsole      = "OpenM.LogToConsole"     // if true then log to standard output
-	LogToConsoleShort = "v"                      // if true then log to standard output (short form)
-	LogToFile         = "OpenM.LogToFile"        // if true then log to file
-	LogFilePath       = "OpenM.LogFilePath"      // log file path, default = current/dir/exeName.log
-	LogUseTs          = "OpenM.LogUseTimeStamp"  // if true then use time-stamp in log file name
-	LogUsePid         = "OpenM.LogUsePidStamp"   // if true then use pid-stamp in log file name
-	LogUseDaily       = "OpenM.LogUseDailyStamp" // if true then use daily-stamp in log file name
-	LogSql            = "OpenM.LogSql"           // if true then log sql statements into log file
+	LogToConsoleArgKey   = "OpenM.LogToConsole"     // if true then log to standard output
+	LogToConsoleShortKey = "v"                      // if true then log to standard output (short form)
+	LogToFileArgKey      = "OpenM.LogToFile"        // if true then log to file
+	LogFilePathArgKey    = "OpenM.LogFilePath"      // log file path, default = current/dir/exeName.log
+	LogUseTsArgKey       = "OpenM.LogUseTimeStamp"  // if true then use time-stamp in log file name
+	LogUsePidArgKey      = "OpenM.LogUsePidStamp"   // if true then use pid-stamp in log file name
+	LogUseDailyArgKey    = "OpenM.LogUseDailyStamp" // if true then use daily-stamp in log file name
+	LogSqlArgKey         = "OpenM.LogSql"           // if true then log sql statements into log file
 )
 
 // RunOptions is (key,value) map of command line arguments and ini-file.
@@ -118,8 +122,8 @@ func New(encodingKey string, optFs []FullShort) (*RunOptions, *LogOptions, []str
 			runOpts.KeyValue[IniFile] = runOpts.iniPath
 			return
 		}
-		if f.Name == LogToConsole || f.Name == LogToConsoleShort {
-			runOpts.KeyValue[LogToConsole] = strconv.FormatBool(logOpts.IsConsole)
+		if f.Name == LogToConsoleArgKey || f.Name == LogToConsoleShortKey {
+			runOpts.KeyValue[LogToConsoleArgKey] = strconv.FormatBool(logOpts.IsConsole)
 			return
 		}
 		for _, fs := range optFs {
@@ -140,8 +144,8 @@ func New(encodingKey string, optFs []FullShort) (*RunOptions, *LogOptions, []str
 		if n == IniFileShort {
 			n = IniFile
 		}
-		if n == LogToConsoleShort {
-			n = LogToConsole
+		if n == LogToConsoleShortKey {
+			n = LogToConsoleArgKey
 		}
 		for _, fs := range optFs {
 			if n == fs.Short {
@@ -293,32 +297,33 @@ func addStandardFlags(runOpts *RunOptions, logOpts *LogOptions) {
 	flag.StringVar(&runOpts.iniPath, IniFileShort, "", "path to `ini-file` (short of "+IniFile+")")
 
 	// add log options to command line arguments
-	flag.BoolVar(&logOpts.IsConsole, LogToConsole, true, "if true then log to standard output")
-	flag.BoolVar(&logOpts.IsConsole, LogToConsoleShort, true, "if true then log to standard output (short of "+LogToConsole+")")
-	flag.BoolVar(&logOpts.IsFile, LogToFile, false, "if true then log to file")
-	flag.StringVar(&logOpts.LogPath, LogFilePath, "", "path to log file")
-	_ = flag.Bool(LogUseTs, false, "if true then use time-stamp in log file name")
-	_ = flag.Bool(LogUsePid, false, "if true then use pid-stamp in log file name")
-	_ = flag.Bool(LogUseDaily, false, "if true then use daily-stamp in log file name")
-	flag.BoolVar(&logOpts.IsLogSql, LogSql, false, "if true then log sql statements into log file")
+	flag.BoolVar(&logOpts.IsConsole, LogToConsoleArgKey, true, "if true then log to standard output")
+	flag.BoolVar(&logOpts.IsConsole, LogToConsoleShortKey, true, "if true then log to standard output (short of "+LogToConsoleArgKey+")")
+	flag.BoolVar(&logOpts.IsFile, LogToFileArgKey, false, "if true then log to file")
+	flag.StringVar(&logOpts.LogPath, LogFilePathArgKey, "", "path to log file")
+	_ = flag.Bool(LogUseTsArgKey, false, "if true then use time-stamp in log file name")
+	_ = flag.Bool(LogUsePidArgKey, false, "if true then use pid-stamp in log file name")
+	_ = flag.Bool(LogUseDailyArgKey, false, "if true then use daily-stamp in log file name")
+	flag.BoolVar(&logOpts.IsLogSql, LogSqlArgKey, false, "if true then log sql statements into log file")
 }
 
 // adjust log settings by merging command line arguments and ini-file options
 // make sure if LogToFile then log file path is defined and vice versa
 // make "stamped" log file name, if required, by adding time-stamp and/or pid-stamp, i.e.:
-//   exeName.log => exeName.2012_08_17_16_04_59_148.123.log
+//
+//	exeName.log => exeName.2012_08_17_16_04_59_148.123.log
 func adjustLogOptions(runOpts *RunOptions, logOpts *LogOptions) {
 
 	// if log file path is not empty then LogToFile must be true
-	if logOpts.LogPath != "" || logOpts.IsFile || runOpts.Bool(LogToFile) || runOpts.Bool(LogSql) {
+	if logOpts.LogPath != "" || logOpts.IsFile || runOpts.Bool(LogToFileArgKey) || runOpts.Bool(LogSqlArgKey) {
 		logOpts.IsFile = true
-		runOpts.KeyValue[LogToFile] = strconv.FormatBool(logOpts.IsFile)
+		runOpts.KeyValue[LogToFileArgKey] = strconv.FormatBool(logOpts.IsFile)
 	}
 
 	// if LogToFile is true then log file path must not be empty
 	if logOpts.IsFile && logOpts.LogPath == "" {
 
-		logOpts.LogPath = runOpts.String(LogFilePath) // use log file path from ini-file
+		logOpts.LogPath = runOpts.String(LogFilePathArgKey) // use log file path from ini-file
 
 		// use exeName.log as default
 		if logOpts.LogPath == "" {
@@ -332,13 +337,13 @@ func adjustLogOptions(runOpts *RunOptions, logOpts *LogOptions) {
 	}
 
 	// update log settings from merged command line arguments and ini-file
-	logOpts.IsConsole = !runOpts.IsExist(LogToConsole) || runOpts.Bool(LogToConsole)
-	logOpts.IsLogSql = runOpts.Bool(LogSql)
+	logOpts.IsConsole = !runOpts.IsExist(LogToConsoleArgKey) || runOpts.Bool(LogToConsoleArgKey)
+	logOpts.IsLogSql = runOpts.Bool(LogSqlArgKey)
 
 	// update file name with time stamp and pid stamp, if required:
 	// exeName.log => exeName.2012_08_17_16_04_59_148.123.log
-	isTs := logOpts.IsFile && runOpts.Bool(LogUseTs)
-	isPid := logOpts.IsFile && runOpts.Bool(LogUsePid)
+	isTs := logOpts.IsFile && runOpts.Bool(LogUseTsArgKey)
+	isPid := logOpts.IsFile && runOpts.Bool(LogUsePidArgKey)
 
 	if isTs || isPid {
 
@@ -355,8 +360,8 @@ func adjustLogOptions(runOpts *RunOptions, logOpts *LogOptions) {
 		}
 		logOpts.LogPath = filepath.Join(dir, fName+ext)
 	}
-	runOpts.KeyValue[LogFilePath] = logOpts.LogPath // update value of log file name in run options
+	runOpts.KeyValue[LogFilePathArgKey] = logOpts.LogPath // update value of log file name in run options
 
 	// log daily option: enabled only if file log enabled and no time-stamp
-	logOpts.IsDaily = logOpts.IsFile && !isTs && runOpts.Bool(LogUseDaily)
+	logOpts.IsDaily = logOpts.IsFile && !isTs && runOpts.Bool(LogUseDailyArgKey)
 }

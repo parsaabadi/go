@@ -414,7 +414,7 @@ func (mc *ModelCatalog) UpdateWorksetParameterCsv(
 			Name:      param.Name,
 			DoubleFmt: theCfg.doubleFmt,
 		}
-		cvt, err := csvCvt.CsvToCell()
+		cvt, err := csvCvt.ToCell()
 		if err != nil {
 			return false, errors.New("invalid converter from csv row: " + err.Error())
 		}

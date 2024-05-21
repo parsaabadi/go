@@ -231,7 +231,7 @@ func TestTranslateTableCalcToSql(t *testing.T) {
 			tableLt.FromId = baseRunId
 		}
 
-		sql, e := translateTableCalcToSql(table, modelDef.Param, &tableLt.ReadLayout, calcLt, runIds)
+		sql, e := translateTableCalcToSql(modelDef, table, &tableLt.ReadLayout, calcLt, runIds)
 		if e != nil {
 			t.Fatal(e)
 		}

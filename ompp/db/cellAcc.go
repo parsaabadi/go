@@ -242,7 +242,7 @@ func (cellCvt *CellAccConverter) ToCsvRow() (func(interface{}, []string) (bool, 
 //
 // It does return error if len(row) not equal to number of fields in cell db-record.
 // If dimension type is enum based then csv row is enum code and it is converted into cell.DimIds (into dimension type type enum ids).
-func (cellCvt *CellAccConverter) CsvToCell() (func(row []string) (interface{}, error), error) {
+func (cellCvt *CellAccConverter) ToCell() (func(row []string) (interface{}, error), error) {
 
 	// find output table by name
 	table, err := cellCvt.tableByName()

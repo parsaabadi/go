@@ -293,7 +293,7 @@ func (cellCvt *CellMicroConverter) isAllEmpty(cell CellMicro, attrs []EntityAttr
 // If attribute type is enum based then csv row contains enum code and it is converted into cell attribute enum id.
 // It does return error if len(row) not equal to number of fields in cell db-record.
 // Converter will return error if len(row) not equal to number of fields in csv record.
-func (cellCvt *CellMicroConverter) CsvToCell() (func(row []string) (interface{}, error), error) {
+func (cellCvt *CellMicroConverter) ToCell() (func(row []string) (interface{}, error), error) {
 
 	// find entity metadata by entity name and attributes by generation Hid
 	_, attrs, err := cellCvt.entityAttrs()

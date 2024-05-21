@@ -50,6 +50,7 @@ func GetModelTextRowById(dbConn *sql.DB, modelId int, langCode string) ([]ModelT
 
 // GetModelText return model text metadata: description and notes.
 // If langCode not empty then only specified language selected else all languages.
+// If isPack is true then return empty text metadata for range types
 func GetModelText(dbConn *sql.DB, modelId int, langCode string, isPack bool) (*ModelTxtMeta, error) {
 
 	// select model name and digest by id

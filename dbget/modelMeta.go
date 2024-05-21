@@ -63,16 +63,16 @@ func modelList(srcDb *sql.DB) error {
 
 			// append description and notes if any exist
 			lc := ""
-			if theCfg.userLang != "" {
+			if !theCfg.isNoLang && theCfg.userLang != "" {
 
 				lc, err = matchUserLang(srcDb, mLst[k])
 				if err != nil {
 					return err
 				}
 			}
-			if lc == "" {
+			if theCfg.isNoLang || lc == "" {
 				lc = mLst[k].DefaultLangCode
-				omppLog.Log("Warning: using default model language: ", lc)
+				omppLog.Log("Using default model language: ", lc)
 			}
 			if lc != "" {
 				txt, e := db.GetModelTextRowById(srcDb, mLst[k].ModelId, lc)
@@ -121,16 +121,16 @@ func modelList(srcDb *sql.DB) error {
 				// append description to the row and save notes if any exist
 				lc := ""
 				var e error
-				if theCfg.userLang != "" {
+				if !theCfg.isNoLang && theCfg.userLang != "" {
 
 					lc, e = matchUserLang(srcDb, mLst[idx])
 					if e != nil {
 						return true, row, e // error at language match or lang_dic select
 					}
 				}
-				if lc == "" {
+				if theCfg.isNoLang || lc == "" {
 					lc = mLst[idx].DefaultLangCode
-					omppLog.Log("Warning: using default model language: ", lc)
+					omppLog.Log("Using default model language: ", lc)
 				}
 				if lc != "" {
 					txt, e := db.GetModelTextRowById(srcDb, mLst[idx].ModelId, lc)
