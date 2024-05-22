@@ -43,6 +43,7 @@ func TestIni(t *testing.T) {
 	checkString(`multi`, `same`, `Multi line   text with spaces`)
 	checkString(`multi`, `multi1`, `DSN='server'; UID='user'; PWD='secret';`)
 	checkString(`multi`, `multi2`, `new value of "the # quick" fox "jumps # over"`)
+	checkString(`multi`, `c-prog`, `C:\Program Files \ Windows`)
 
 	vKeep, _ := kvIni[iniKey("multi", "keep")]
 	vSame, _ := kvIni[iniKey("multi", "same")]
@@ -77,6 +78,7 @@ func TestIni(t *testing.T) {
 		`multi.same`,
 		`multi.multi1`,
 		`multi.multi2`,
+		`multi.c-prog`,
 		`replace.k`,
 		`escape.dsn`,
 		`escape.t w`,
