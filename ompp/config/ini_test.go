@@ -43,13 +43,24 @@ func TestIni(t *testing.T) {
 	checkString(`multi`, `same`, `Multi line   text with spaces`)
 	checkString(`multi`, `multi1`, `DSN='server'; UID='user'; PWD='secret';`)
 	checkString(`multi`, `multi2`, `new value of "the # quick" fox "jumps # over"`)
-	checkString(`multi`, `c-prog`, `C:\Program Files \ Windows`)
+	checkString(`multi`, `c-prog`, `C:\Program Files \Windows`)
+	checkString(`multi`, `c-prog-win`, `C:\Program Files \Windows`)
 
-	vKeep, _ := kvIni[iniKey("multi", "keep")]
-	vSame, _ := kvIni[iniKey("multi", "same")]
-	if vKeep != vSame {
-		t.Errorf("multi.keep :%s: NOT multi.same :%s:", vKeep, vSame)
+	checkTheSame := func(section, key, keySame string) {
+		v, ok := kvIni[iniKey(section, key)]
+		if !ok {
+			t.Errorf("not found [%s]:%s:", section, key)
+		}
+		vSame, ok := kvIni[iniKey(section, keySame)]
+		if !ok {
+			t.Errorf("not found [%s]:%s:", section, keySame)
+		}
+		if v != vSame {
+			t.Errorf("NOT equal: [%s].%s and [%s].%s :%s: :%s:", section, key, section, keySame, v, vSame)
+		}
 	}
+	checkTheSame(`multi`, `keep`, `same`)
+	checkTheSame(`multi`, `c-prog`, `c-prog-win`)
 
 	checkString(`replace`, `k`, `4`)
 
@@ -79,6 +90,7 @@ func TestIni(t *testing.T) {
 		`multi.multi1`,
 		`multi.multi2`,
 		`multi.c-prog`,
+		`multi.c-prog-win`,
 		`replace.k`,
 		`escape.dsn`,
 		`escape.t w`,
