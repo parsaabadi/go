@@ -31,7 +31,7 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 
 	// make model process run stamp, if not specified then use timestamp by default
 	ts, tNow := theCatalog.getNewTimeStamp()
-	rStamp := helper.CleanPath(job.RunStamp)
+	rStamp := helper.CleanFileName(job.RunStamp)
 	if rStamp == "" {
 		rStamp = ts
 	}
@@ -125,7 +125,7 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 	}
 
 	// assume model exe name is the same as model name
-	mExe := helper.CleanPath(rs.ModelName)
+	mExe := helper.CleanFileName(rs.ModelName)
 
 	cmd, err := rsc.makeCommand(mExe, binDir, wDir, mb.dbPath, mArgs, job.RunRequest, job.Res.ProcessCount, hfPath)
 	if err != nil {

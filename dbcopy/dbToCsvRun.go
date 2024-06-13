@@ -38,9 +38,9 @@ func toRunCsv(
 		csvTop = filepath.Join(outDir, "all_model_runs")
 	} else {
 		if !isUseIdNames {
-			csvTop = filepath.Join(outDir, "run."+helper.CleanPath(meta.Run.Name))
+			csvTop = filepath.Join(outDir, "run."+helper.CleanFileName(meta.Run.Name))
 		} else {
-			csvTop = filepath.Join(outDir, "run."+strconv.Itoa(runId)+"."+helper.CleanPath(meta.Run.Name))
+			csvTop = filepath.Join(outDir, "run."+strconv.Itoa(runId)+"."+helper.CleanFileName(meta.Run.Name))
 		}
 	}
 	dirSuffix := ""

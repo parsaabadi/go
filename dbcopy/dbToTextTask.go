@@ -311,9 +311,9 @@ func toTaskJson(dbConn *sql.DB, modelDef *db.ModelMeta, meta *db.TaskMeta, outDi
 	// save modeling task metadata into json
 	var fname string
 	if !isUseIdNames {
-		fname = modelDef.Model.Name + ".task." + helper.CleanPath(meta.Task.Name) + ".json"
+		fname = modelDef.Model.Name + ".task." + helper.CleanFileName(meta.Task.Name) + ".json"
 	} else {
-		fname = modelDef.Model.Name + ".task." + strconv.Itoa(meta.Task.TaskId) + "." + helper.CleanPath(meta.Task.Name) + ".json"
+		fname = modelDef.Model.Name + ".task." + strconv.Itoa(meta.Task.TaskId) + "." + helper.CleanFileName(meta.Task.Name) + ".json"
 	}
 
 	return helper.ToJsonFile(filepath.Join(outDir, fname), pub)

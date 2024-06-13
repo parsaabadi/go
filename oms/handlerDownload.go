@@ -160,7 +160,7 @@ func runDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// base part of: output directory name, .zip file name and log file name
-	baseName := mb.model.Name + ".run." + helper.CleanPath(r0.Name)
+	baseName := mb.model.Name + ".run." + helper.CleanFileName(r0.Name)
 	omppLog.Log("Download of: ", baseName)
 
 	// if download.progress.log file exist the retun error: download in progress
@@ -254,7 +254,7 @@ func worksetDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// base part of: output directory name, .zip file name and log file name
-	baseName := mb.model.Name + ".set." + helper.CleanPath(ws.Name)
+	baseName := mb.model.Name + ".set." + helper.CleanFileName(ws.Name)
 	omppLog.Log("Download of: ", baseName)
 
 	// if download.progress.log file exist the retun error: download in progress

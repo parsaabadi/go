@@ -112,7 +112,7 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Model run submission failed: "+dn, http.StatusBadRequest)
 		return
 	}
-	rStamp := helper.CleanPath(job.RunStamp)
+	rStamp := helper.CleanFileName(job.RunStamp)
 
 	w.Header().Set("Content-Location", "/api/model/"+job.ModelDigest+"/run/"+rStamp)
 	jsonResponse(w, r,

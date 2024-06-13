@@ -13,8 +13,10 @@ import (
 	"regexp"
 )
 
-// CleanPath replace special file path characters: "'`:*?><|$}{@&^;/\ by _ underscore
-func CleanPath(src string) string {
+const InvalidFileNameChars = "\"'`:*?><|$}{@&^;"
+
+// replace special file name characters: "'`:*?><|$}{@&^;/\ by _ underscore
+func CleanFileName(src string) string {
 	re := regexp.MustCompile("[\"'`:*?><|$}{@&^;/\\\\]")
 	return re.ReplaceAllString(src, "_")
 }

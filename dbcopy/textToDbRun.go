@@ -44,10 +44,10 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 	case runId > 0:
 		inpDir = filepath.Join(runOpts.String(inputDirArgKey), modelName+".run."+strconv.Itoa(runId))
 	case runDigest != "":
-		inpDir = filepath.Join(runOpts.String(inputDirArgKey), modelName+".run."+helper.CleanPath(runDigest))
+		inpDir = filepath.Join(runOpts.String(inputDirArgKey), modelName+".run."+helper.CleanFileName(runDigest))
 	default:
 		// if not run id and not digest then run name
-		inpDir = filepath.Join(runOpts.String(inputDirArgKey), modelName+".run."+helper.CleanPath(runName))
+		inpDir = filepath.Join(runOpts.String(inputDirArgKey), modelName+".run."+helper.CleanFileName(runName))
 	}
 
 	// unzip if required and use unzipped directory as "root" input directory
@@ -71,7 +71,7 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 	if runOpts.IsExist(runNameArgKey) && runOpts.IsExist(runIdArgKey) { // both: run id and name
 
 		metaPath = filepath.Join(inpDir,
-			modelName+".run."+strconv.Itoa(runId)+"."+helper.CleanPath(runName)+".json")
+			modelName+".run."+strconv.Itoa(runId)+"."+helper.CleanFileName(runName)+".json")
 
 	} else { // only run id or run name and/or run digest
 
@@ -79,7 +79,7 @@ func textToDbRun(modelName string, modelDigest string, runOpts *config.RunOption
 		var mp string
 		switch {
 		case runOpts.IsExist(runNameArgKey) && !runOpts.IsExist(runIdArgKey): // run name and not run id
-			mp = modelName + ".run.*" + helper.CleanPath(runName) + ".json"
+			mp = modelName + ".run.*" + helper.CleanFileName(runName) + ".json"
 		case !runOpts.IsExist(runNameArgKey) && runOpts.IsExist(runIdArgKey): // run id and not run name
 			mp = modelName + ".run." + strconv.Itoa(runId) + ".*.json"
 		default:

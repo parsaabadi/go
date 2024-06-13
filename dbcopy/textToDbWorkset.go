@@ -70,14 +70,14 @@ func textToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 	if runOpts.IsExist(setNameArgKey) && runOpts.IsExist(setIdArgKey) { // both: set id and name
 
 		metaPath = filepath.Join(inpDir,
-			modelName+".set."+strconv.Itoa(setId)+"."+helper.CleanPath(setName)+".json")
+			modelName+".set."+strconv.Itoa(setId)+"."+helper.CleanFileName(setName)+".json")
 
 		if _, err := os.Stat(metaPath); err != nil { // clear path to indicate metadata json file does not exist
 			metaPath = ""
 		}
 
 		csvDir = filepath.Join(inpDir,
-			"set."+strconv.Itoa(setId)+"."+helper.CleanPath(setName))
+			"set."+strconv.Itoa(setId)+"."+helper.CleanFileName(setName))
 
 		if _, err := os.Stat(csvDir); err != nil { // clear path to indicate csv directory does not exist
 			csvDir = ""
@@ -88,7 +88,7 @@ func textToDbWorkset(modelName string, modelDigest string, runOpts *config.RunOp
 		// make path search patterns for metadata json and csv directory
 		var cp string
 		if runOpts.IsExist(setNameArgKey) && !runOpts.IsExist(setIdArgKey) { // set name only
-			cp = "set.*" + helper.CleanPath(setName)
+			cp = "set.*" + helper.CleanFileName(setName)
 		}
 		if !runOpts.IsExist(setNameArgKey) && runOpts.IsExist(setIdArgKey) { // set id only
 			cp = "set." + strconv.Itoa(setId) + ".*"

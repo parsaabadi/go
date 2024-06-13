@@ -10,6 +10,7 @@ git clone https://github.com/openmpp/go ompp-go
 cd ompp-go
 go install -tags sqlite_math_functions,sqlite_omit_load_extension ./dbcopy
 go install -tags sqlite_math_functions,sqlite_omit_load_extension ./oms
+go install -tags sqlite_math_functions,sqlite_omit_load_extension ./dbget
 ```
 
 On Windows you may need to use MinGW or similar tools to make sure there is `gcc` in the `PATH`.

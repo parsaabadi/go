@@ -84,7 +84,7 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 	case runId > 0 && isUseIdNames: // run id and use id's in directory names (it is by default)
 		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".run."+strconv.Itoa(runId))
 	case runDigest != "":
-		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".run."+helper.CleanPath(runDigest))
+		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".run."+helper.CleanFileName(runDigest))
 	case runName == "" && isFirst:
 		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".first.run")
 		csvName = "first.run"
@@ -94,7 +94,7 @@ func dbToTextRun(modelName string, modelDigest string, runOpts *config.RunOption
 	default:
 		// if not run id and not digest then run name
 		// it is also if run id specified and user expicitly disable id's in directory names: IdOutputNames=false
-		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".run."+helper.CleanPath(runRow.Name))
+		outDir = filepath.Join(runOpts.String(outputDirArgKey), modelName+".run."+helper.CleanFileName(runRow.Name))
 	}
 
 	if !theCfg.isKeepOutputDir {
@@ -197,9 +197,9 @@ func toRunText(
 	// create run subdir under model dir
 	switch {
 	case csvName == "" && !isUseIdNames:
-		csvName = "run." + helper.CleanPath(pub.Name)
+		csvName = "run." + helper.CleanFileName(pub.Name)
 	case csvName == "" && isUseIdNames:
-		csvName = "run." + strconv.Itoa(runId) + "." + helper.CleanPath(pub.Name)
+		csvName = "run." + strconv.Itoa(runId) + "." + helper.CleanFileName(pub.Name)
 	}
 	paramCsvDir := filepath.Join(outDir, csvName, "parameters")
 	tableCsvDir := filepath.Join(outDir, csvName, "output-tables")

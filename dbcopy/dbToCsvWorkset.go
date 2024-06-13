@@ -238,9 +238,9 @@ func toWorksetCsv(
 		csvDir = filepath.Join(outDir, "all_input_sets")
 	} else {
 		if !isUseIdNames {
-			csvDir = filepath.Join(outDir, "set."+helper.CleanPath(meta.Set.Name))
+			csvDir = filepath.Join(outDir, "set."+helper.CleanFileName(meta.Set.Name))
 		} else {
-			csvDir = filepath.Join(outDir, "set."+strconv.Itoa(setId)+"."+helper.CleanPath(meta.Set.Name))
+			csvDir = filepath.Join(outDir, "set."+strconv.Itoa(setId)+"."+helper.CleanFileName(meta.Set.Name))
 		}
 	}
 

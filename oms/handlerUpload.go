@@ -69,7 +69,7 @@ func runUploadPostHandler(w http.ResponseWriter, r *http.Request) {
 
 	if baseName == "" || baseName == "." || baseName == ".." ||
 		runName == "" || runName == "." || runName == ".." ||
-		fName != helper.CleanPath(fName) {
+		fName != helper.CleanFileName(fName) {
 		http.Error(w, "Error: invalid (or empty) file name: "+fName, http.StatusBadRequest)
 		return
 	}
@@ -226,7 +226,7 @@ func worksetUploadPostHandler(w http.ResponseWriter, r *http.Request) {
 
 	if baseName == "" || baseName == "." || baseName == ".." ||
 		setName == "" || setName == "." || setName == ".." ||
-		fName != helper.CleanPath(fName) {
+		fName != helper.CleanFileName(fName) {
 		http.Error(w, "Error: invalid (or empty) file name: "+fName, http.StatusBadRequest)
 		return
 	}

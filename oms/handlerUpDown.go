@@ -5,7 +5,6 @@ package main
 
 import (
 	"errors"
-	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -44,7 +43,7 @@ func fileLogUpDownGet(upDown string, upDownDir string, w http.ResponseWriter, r 
 	fileName := getRequestParam(r, "name")
 
 	// validate name: it must be a file name only, it cannot be any directory
-	if fileName == "" || !strings.HasSuffix(fileName, "."+upDown+".log") || fileName != filepath.Base(helper.CleanPath(fileName)) {
+	if fileName == "" || !strings.HasSuffix(fileName, "."+upDown+".log") || fileName != filepath.Base(helper.CleanFileName(fileName)) {
 		http.Error(w, "Log file name invalid (or empty): "+fileName, http.StatusBadRequest)
 		return
 	}
@@ -80,7 +79,7 @@ func allLogDownloadGetHandler(w http.ResponseWriter, r *http.Request) {
 	allLogUpDownGet("download", theCfg.downloadDir, w, r)
 }
 
-// return all .upload.log files and download status.
+// return all .upload.log files and upload status.
 //
 //	GET /api/upload/log-all
 //
@@ -124,7 +123,7 @@ func modelLogUploadGetHandler(w http.ResponseWriter, r *http.Request) {
 	modelLogUpDownGet("upload", theCfg.uploadDir, w, r)
 }
 
-// return model .up-or-down.log files and status.
+// return model .download.log or .upload.log files and status.
 // Status is one of: progress ready error or "" if unknown
 func modelLogUpDownGet(upDown string, upDownDir string, w http.ResponseWriter, r *http.Request) {
 
@@ -138,7 +137,7 @@ func modelLogUpDownGet(upDown string, upDownDir string, w http.ResponseWriter, r
 		mName = mb.model.Name
 	}
 
-	// find all .up-or-down.log files
+	// find all .download.log or .upload.log files
 	fLst, err := os.ReadDir(upDownDir)
 	if err != nil {
 		http.Error(w, "Error at reading log directory", http.StatusBadRequest)
@@ -155,56 +154,14 @@ func modelLogUpDownGet(upDown string, upDownDir string, w http.ResponseWriter, r
 //
 //	GET /api/download/file-tree/:folder
 func fileTreeDownloadGetHandler(w http.ResponseWriter, r *http.Request) {
-	fileTreeUpDownGet(theCfg.downloadDir, w, r)
+	doFileTreeGet(theCfg.downloadDir, false, "folder", w, r)
 }
 
 // return file tree (file path, size, modification time) by folder name.
 //
 //	GET /api/upload/file-tree/:folder
 func fileTreeUploadGetHandler(w http.ResponseWriter, r *http.Request) {
-	fileTreeUpDownGet(theCfg.uploadDir, w, r)
-}
-
-// return file tree (file path, size, modification time) by folder name.
-func fileTreeUpDownGet(upDownDir string, w http.ResponseWriter, r *http.Request) {
-
-	// url or query parameters
-	folder := getRequestParam(r, "folder")
-	if folder == "" || folder != filepath.Base(helper.CleanPath(folder)) {
-		http.Error(w, "Folder name invalid (or empty): "+folder, http.StatusBadRequest)
-		return
-	}
-
-	folderPath := filepath.Join(upDownDir, folder)
-	if !dirExist(folderPath) {
-		http.Error(w, "Folder not found: "+folder, http.StatusBadRequest)
-		return
-	}
-	dp := filepath.ToSlash(upDownDir) + "/"
-
-	// get list of files under up-or-down/folder
-	treeLst := []PathItem{}
-	err := filepath.Walk(folderPath, func(path string, fi fs.FileInfo, err error) error {
-		if err != nil {
-			omppLog.Log("Error at directory walk: ", path, " : ", err.Error())
-			return err
-		}
-		p := strings.TrimPrefix(filepath.ToSlash(path), dp)
-		treeLst = append(treeLst, PathItem{
-			Path:    filepath.ToSlash(p),
-			IsDir:   fi.IsDir(),
-			Size:    fi.Size(),
-			ModTime: fi.ModTime().UnixMilli(),
-		})
-		return nil
-	})
-	if err != nil {
-		omppLog.Log("Error at directory walk: ", err.Error())
-		http.Error(w, "Error at folder scan: "+folder, http.StatusBadRequest)
-		return
-	}
-
-	jsonResponse(w, r, treeLst)
+	doFileTreeGet(theCfg.uploadDir, false, "folder", w, r)
 }
 
 // delete download files by folder name.
@@ -399,7 +356,7 @@ func upDownDelete(upDown string, upDownDir string, isAsync bool, w http.Response
 // if isAsync is true then start delete on separate thread
 func doDeleteUpDown(upDown string, upDownDir string, isAsync bool, folder string) error {
 
-	if folder == "" || folder != filepath.Base(helper.CleanPath(folder)) {
+	if folder == "" || folder != filepath.Base(helper.CleanFileName(folder)) {
 		return errors.New("Folder name invalid (or empty): " + folder)
 	}
 	omppLog.Log("Delete: ", upDown, " ", folder)

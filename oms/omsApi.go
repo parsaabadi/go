@@ -15,15 +15,27 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	setContentType(http.FileServer(http.Dir(theCfg.htmlDir))).ServeHTTP(w, r)
 }
 
-// downloadHandler is static file download handler from user home/io/download and home/io/upload folders.
-// Files served from home/io directory URLs are:
+// static file download handler from user home/io/download or home/io/upload and subfolders.
+// URLs served from home/io directory are:
 //
 //	https://domain.name/download/file.name
 //	https://domain.name/upload/file.name
 //
 // Only GET requests expected.
 func downloadHandler(w http.ResponseWriter, r *http.Request) {
-	setContentType(http.FileServer(http.Dir(theCfg.inOutDir))).ServeHTTP(w, r)
+	http.FileServer(http.Dir(theCfg.inOutDir)).ServeHTTP(w, r)
+}
+
+// static file download handler from user files directory and subfolders, if userhome specified then it is home/io.
+// URLs served from home/io directory are:
+//
+//	https://domain.name/files/file.name
+//	https://domain.name/files/download/file.name
+//	https://domain.name/files/upload/file.name
+//
+// Only GET requests expected.
+func filesHandler(w http.ResponseWriter, r *http.Request) {
+	http.StripPrefix("/files/", http.FileServer(http.Dir(theCfg.filesDir))).ServeHTTP(w, r)
 }
 
 // modelDocHandler is static pages handler for model documentation served /doc URLs.
@@ -40,7 +52,7 @@ func downloadHandler(w http.ResponseWriter, r *http.Request) {
 //
 // Only GET requests expected.
 func modelDocHandler(w http.ResponseWriter, r *http.Request) {
-	setContentType(http.FileServer(http.Dir(theCfg.docParentDir))).ServeHTTP(w, r)
+	setContentType(http.StripPrefix("/doc/", http.FileServer(http.Dir(theCfg.docDir)))).ServeHTTP(w, r)
 }
 
 // add http GET web-service /api routes to get metadata
@@ -715,26 +727,29 @@ func apiUploadRoutes(router *vestigo.Router) {
 	router.Delete("/api/upload/start/delete-all/", http.NotFound)
 }
 
-// add http web-service /api routes to upload, download and manage files at home/io/files folder
+// add http web-service /api routes to upload, download and manage user files
 func apiFilesRoutes(router *vestigo.Router) {
 
-	// GET /api/files/list/:folder
-	// router.Get("/api/files/list/:path", fileListGetHandler, logRequest)
-
-	// GET /api/files/file/:path
-	// router.Get("/api/files/file/:path", fileDownloadGetHandler, logRequest)
+	// GET /api/files/file-tree/:path
+	// GET /api/files/file-tree/
+	// GET /api/files/file-tree
+	router.Get("/api/files/file-tree/:path", filesTreeGetHandler, logRequest)
+	router.Get("/api/files/file-tree/", filesTreeGetHandler, logRequest)
+	router.Get("/api/files/file-tree", filesTreeGetHandler, logRequest)
 
 	// POST /api/files/file/:path
-	// router.Post("/api/files/file/:path", fileUploadPostHandler, logRequest)
+	// POST /api/files/file?path=....
+	router.Post("/api/files/file/:path", filesFileUploadPostHandler, logRequest)
+	router.Post("/api/files/file", filesFileUploadPostHandler, logRequest)
 
-	// DELETE /api/files/file/:path
-	// router.Delete("/api/files/file/:path", fileDeleteHandler, logRequest)
+	// PUT /api/files/folder/:path
+	router.Put("/api/files/folder/:path", filesFolderCreatePutHandler, logRequest)
 
-	// POST /api/files/folder/:path
-	// router.Post("/api/files/folder/:path", folderCreatePostHandler, logRequest)
+	// DELETE /api/files/delete/:path
+	router.Delete("/api/files/delete/:path", filesDeleteHandler, logRequest)
 
-	// DELETE /api/files/folder/:path
-	// router.Delete("/api/files/folder/:path", folderDeleteHandler, logRequest)
+	// DELETE /api/files/delete-all
+	router.Delete("/api/files/delete-all", filesAllDeleteHandler, logRequest)
 }
 
 // add web-service /api routes for user-specific request

@@ -46,7 +46,6 @@ Following arguments supporetd by oms:
 -oms.ModelDocDir models/doc
 
 	models documentation directory, default: models/doc, if relative then must be relative to oms root directory
-	UI expect it ends /doc subdirectory, for example: C:\any\dir\doc
 
 -oms.HtmlDir html
 
@@ -84,6 +83,12 @@ Following arguments supporetd by oms:
 -oms.AllowUpload false
 
 	if true then allow upload to user home/io/upload directory.
+
+-oms.FilesDir
+
+	user files directory, where user can store, upload and download ini-files or CSV files.
+	If relative then must be relative to oms root directory.
+	If user home directory specified then user files directory by default is home/io.
 
 -oms.AllowMicrodata
 
@@ -174,6 +179,7 @@ const (
 	homeDirArgKey      = "oms.HomeDir"        // user personal home directory, if relative then must be relative to oms root directory
 	isDownloadArgKey   = "oms.AllowDownload"  // if true then allow download from user home sub-directory: home/io/download
 	isUploadArgKey     = "oms.AllowUpload"    // if true then allow upload to user home sub-directory: home/io/upload
+	filesDirArgKey     = "oms.FilesDir"       // user files directory, if relative then must be relative to oms root directory, if user home exists then: home/io
 	isMicrodataArgKey  = "oms.AllowMicrodata" // if true then allow model run microdata
 	logRequestArgKey   = "oms.LogRequest"     // if true then log http request
 	apiOnlyArgKey      = "oms.ApiOnly"        // if true then API only web-service, no web UI
@@ -194,10 +200,10 @@ var theCfg = struct {
 	homeDir      string            // user home directory
 	downloadDir  string            // if download allowed then it is home/io/download directory
 	uploadDir    string            // if upload allowed then it is home/io/upload directory
-	inOutDir     string            // if download or upload allowed then it is home/io directory
+	inOutDir     string            // if download or upload or user files allowed then it is home/io directory
+	filesDir     string            // user files directory, if home directory specified then default is: home/io
 	isMicrodata  bool              // if true then allow model run microdata
-	isModelDoc   bool              // if true then model documentation enabled and models/doc is exist
-	docParentDir string            // parent of models documentation directory, default: models
+	docDir       string            // if not empty then models documentation directory, default: models/doc
 	isJobControl bool              // if true then do job control: model run queue and resource allocation
 	isJobPast    bool              // if true then do job history shadow copy
 	isDiskUse    bool              // if true then storage usage control enabled
@@ -214,7 +220,8 @@ var theCfg = struct {
 	homeDir:      "",
 	downloadDir:  "",
 	uploadDir:    "",
-	isModelDoc:   false,
+	filesDir:     "",
+	docDir:       "",
 	isJobControl: false,
 	jobDir:       "",
 	omsName:      "",
@@ -258,6 +265,7 @@ func mainBody(args []string) error {
 	_ = flag.String(homeDirArgKey, "", "user personal home directory, if relative then must be relative to root directory")
 	_ = flag.Bool(isDownloadArgKey, false, "if true then allow download from user home/io/download directory")
 	_ = flag.Bool(isUploadArgKey, false, "if true then allow upload to user home/io/upload directory")
+	_ = flag.String(filesDirArgKey, "", "user files directory, if home directory path specified then files directory is home/io")
 	_ = flag.Bool(isMicrodataArgKey, false, "if true then allow model run microdata")
 	_ = flag.String(jobDirArgKey, "", "job control directory, if relative then must be relative to root directory")
 	_ = flag.String(omsNameArgKey, "", "instance name, automatically generated if empty")
@@ -337,6 +345,7 @@ func mainBody(args []string) error {
 	// model directory required to build initial list of model sqlite files
 	modelDir := filepath.Clean(runOpts.String(modelDirArgKey))
 	if modelDir == "" || modelDir == "." {
+		modelDir = ""
 		return errors.New("Error: model directory argument cannot be empty or . dot")
 	}
 	omppLog.Log("Models directory:     ", modelDir)
@@ -345,6 +354,8 @@ func mainBody(args []string) error {
 	modelLogDir = strings.TrimSuffix(modelLogDir, string(filepath.Separator))
 	if modelLogDir != "" && modelLogDir != "." && dirExist(modelLogDir) {
 		omppLog.Log("Models log directory: ", modelLogDir)
+	} else {
+		modelLogDir = "" // dot . log directory does not allowed
 	}
 
 	if err := theCatalog.refreshSqlite(modelDir, modelLogDir); err != nil {
@@ -352,54 +363,51 @@ func mainBody(args []string) error {
 	}
 
 	// check if model documentation directory exists
-	docDir := filepath.Clean(runOpts.String(modelDocDirArgKey))
-	docDir = strings.TrimSuffix(docDir, string(filepath.Separator))
+	if runOpts.IsExist(modelDocDirArgKey) {
 
-	theCfg.docParentDir = filepath.Dir(docDir)
-	theCfg.isModelDoc = dirExist(docDir) && dirExist(theCfg.docParentDir)
+		theCfg.docDir = filepath.Clean(runOpts.String(modelDocDirArgKey))
+		theCfg.docDir = strings.TrimSuffix(theCfg.docDir, string(filepath.Separator))
 
-	if theCfg.isModelDoc {
-
-		omppLog.Log("Models documentation: ", docDir)
-
-		if filepath.Base(docDir) != "doc" {
-			omppLog.Log("Warning: UI expect model documentation directory ends with 'doc', for example: /any/dir/doc")
+		if theCfg.docDir == "." || !dirExist(theCfg.docDir) {
+			omppLog.Log("Warning: model documentation directory not found or invalid: ", theCfg.docDir)
+			theCfg.docDir = ""
+		} else {
+			omppLog.Log("Models documentation: ", theCfg.docDir)
 		}
 	}
 
 	// check if it is single user run mode and use of home directory enabled
-	if theCfg.homeDir = filepath.Clean(runOpts.String(homeDirArgKey)); theCfg.homeDir != "" {
-		if !dirExist(theCfg.homeDir) {
-			omppLog.Log("Warning: user home directory not found: ", theCfg.homeDir)
+	if runOpts.IsExist(homeDirArgKey) {
+
+		theCfg.homeDir = filepath.Clean(runOpts.String(homeDirArgKey))
+		theCfg.homeDir = strings.TrimSuffix(theCfg.homeDir, string(filepath.Separator))
+
+		if theCfg.homeDir == "." || !dirExist(theCfg.homeDir) {
+			omppLog.Log("Warning: user home directory not found or invalid: ", theCfg.homeDir)
 			theCfg.homeDir = ""
 		}
 		theCfg.isHome = theCfg.homeDir != ""
+
 		if theCfg.isHome {
-			omppLog.Log("User directory:       ", theCfg.homeDir)
+			omppLog.Log("User Home directory:  ", theCfg.homeDir)
+
+			theCfg.inOutDir = filepath.Join(theCfg.homeDir, "io") // download and upload directory for web-server, to serve static content
+
+			if theCfg.inOutDir == "." || !dirExist(theCfg.inOutDir) {
+				theCfg.inOutDir = ""
+			}
 		}
 	}
 
 	// check download and upload options:
 	// home/io/download or home/io/upload directory must exist and dbcopy.exe must exist
-	isInOut := runOpts.Bool(isDownloadArgKey) || runOpts.Bool(isUploadArgKey)
 	isDownload := false
 	isUpload := false
 
 	theCfg.dbcopyPath = dbcopyPath(omsAbsPath)
-	isDbCopy := theCfg.dbcopyPath != ""
 
-	if isInOut {
-		if theCfg.homeDir != "" {
-			theCfg.inOutDir = filepath.Join(theCfg.homeDir, "io") // download and upload directory for web-server, to serve static content
-		}
-		isInOut = theCfg.inOutDir != "" && isDbCopy
-		if !isInOut {
-			theCfg.inOutDir = ""
-			theCfg.dbcopyPath = ""
-		}
-	}
 	if runOpts.Bool(isDownloadArgKey) {
-		if isInOut && theCfg.inOutDir != "" {
+		if theCfg.inOutDir != "" && theCfg.dbcopyPath != "" {
 
 			theCfg.downloadDir = filepath.Join(theCfg.inOutDir, "download") // download directory UI
 
@@ -407,7 +415,7 @@ func mainBody(args []string) error {
 				theCfg.downloadDir = ""
 			}
 		}
-		isDownload = isInOut && theCfg.downloadDir != ""
+		isDownload = theCfg.downloadDir != ""
 		if !isDownload {
 			theCfg.downloadDir = ""
 			omppLog.Log("Warning: user home download directory not found or dbcopy not found, download disabled")
@@ -416,7 +424,7 @@ func mainBody(args []string) error {
 		}
 	}
 	if runOpts.Bool(isUploadArgKey) {
-		if isInOut && theCfg.inOutDir != "" {
+		if theCfg.inOutDir != "" && theCfg.dbcopyPath != "" {
 
 			theCfg.uploadDir = filepath.Join(theCfg.inOutDir, "upload") // upload directory UI
 
@@ -424,13 +432,35 @@ func mainBody(args []string) error {
 				theCfg.uploadDir = ""
 			}
 		}
-		isUpload = isInOut && theCfg.uploadDir != ""
+		isUpload = theCfg.uploadDir != ""
 		if !isUpload {
 			theCfg.uploadDir = ""
 			omppLog.Log("Warning: user home upload directory not found or dbcopy not found, upload disabled")
 		} else {
 			omppLog.Log("Upload directory:     ", theCfg.uploadDir)
 		}
+	}
+	if theCfg.inOutDir == "" || (!isDownload && !isUpload) { // dbcopy can be used only for download or upload
+		theCfg.dbcopyPath = ""
+	}
+
+	// user files directory can be explicitly specified or be the home/io
+	if runOpts.IsExist(filesDirArgKey) {
+
+		theCfg.filesDir = filepath.Clean(runOpts.String(filesDirArgKey))
+		theCfg.filesDir = strings.TrimSuffix(theCfg.filesDir, string(filepath.Separator))
+
+		if theCfg.filesDir == "." || !dirExist(theCfg.filesDir) {
+			omppLog.Log("Warning: user files directory not found or invalid: ", theCfg.filesDir)
+			theCfg.filesDir = ""
+		}
+	} else {
+		if theCfg.inOutDir != "" {
+			theCfg.filesDir = theCfg.inOutDir
+		}
+	}
+	if theCfg.filesDir != "" {
+		omppLog.Log("User Files directory: ", theCfg.filesDir)
 	}
 
 	// if UI required then server root directory must have html subdir
@@ -470,7 +500,7 @@ func mainBody(args []string) error {
 	if theCfg.omsName == "" {
 		theCfg.omsName = runOpts.String(listenArgKey)
 	}
-	theCfg.omsName = helper.CleanPath(theCfg.omsName)
+	theCfg.omsName = helper.CleanFileName(theCfg.omsName)
 	omppLog.Log("Oms instance name:    ", theCfg.omsName)
 
 	// refresh run state catalog and start scanning model log files
@@ -515,6 +545,10 @@ func mainBody(args []string) error {
 	if isUpload {
 		apiUploadRoutes(router) // web-service /api routes to upload and manage files at home/io/upload folder
 	}
+	if theCfg.filesDir != "" {
+		router.Get("/files/*", filesHandler, logRequest) // serve static content at /files/ url from user files folders, default: home/io
+		apiFilesRoutes(router)                           // web-service /api routes to upload and manage files at home/io/upload folder
+	}
 	apiUpdateRoutes(router)   // web-service /api routes to update metadata
 	apiRunModelRoutes(router) // web-service /api routes to run the model
 	apiUserRoutes(router)     // web-service /api routes for user-specific requests
@@ -523,7 +557,7 @@ func mainBody(args []string) error {
 		apiAdminRoutes(isAdminAll, router) // web-service /api routes for oms instance administrative tasks
 	}
 
-	// serve static content from home/io/download folder
+	// serve static content from home/io/download, home/io/upload, models/doc and user files folders
 	if isDownload {
 		router.Get("/download/*", downloadHandler, logRequest)
 	}
@@ -532,7 +566,7 @@ func mainBody(args []string) error {
 		router.Get("/upload/*", downloadHandler, logRequest)
 	}
 	// serve static content from models/doc folder
-	if theCfg.isModelDoc {
+	if theCfg.docDir != "" {
 		router.Get("/doc/*", modelDocHandler, logRequest)
 	}
 
