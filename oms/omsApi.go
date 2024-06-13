@@ -731,10 +731,8 @@ func apiUploadRoutes(router *vestigo.Router) {
 func apiFilesRoutes(router *vestigo.Router) {
 
 	// GET /api/files/file-tree/:path
-	// GET /api/files/file-tree/
 	// GET /api/files/file-tree
 	router.Get("/api/files/file-tree/:path", filesTreeGetHandler, logRequest)
-	router.Get("/api/files/file-tree/", filesTreeGetHandler, logRequest)
 	router.Get("/api/files/file-tree", filesTreeGetHandler, logRequest)
 
 	// POST /api/files/file/:path
@@ -743,10 +741,14 @@ func apiFilesRoutes(router *vestigo.Router) {
 	router.Post("/api/files/file", filesFileUploadPostHandler, logRequest)
 
 	// PUT /api/files/folder/:path
+	// PUT /api/files/folder?path=....
 	router.Put("/api/files/folder/:path", filesFolderCreatePutHandler, logRequest)
+	router.Put("/api/files/folder", filesFolderCreatePutHandler, logRequest)
 
 	// DELETE /api/files/delete/:path
+	// DELETE /api/files/delete?path=....
 	router.Delete("/api/files/delete/:path", filesDeleteHandler, logRequest)
+	router.Delete("/api/files/delete", filesDeleteHandler, logRequest)
 
 	// DELETE /api/files/delete-all
 	router.Delete("/api/files/delete-all", filesAllDeleteHandler, logRequest)
