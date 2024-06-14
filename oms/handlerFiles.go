@@ -94,25 +94,42 @@ func filesFileUploadPostHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Location", "/api/files/file/"+src)
 }
 
-// return file tree (file path, size, modification time) by folder name or user files root tree if folder name is empty.
+// return file tree (file path, size, modification time) in user files by extension, underscore _ or * extension means any.
 //
-//	GET /api/files/file-tree/:path
-//	GET /api/files/file-tree/
-//	GET /api/files/file-tree
+//	GET /api/files/file-tree/:ext/path/:path
+//	GET /api/files/file-tree/:ext/path/
+//	GET /api/files/file-tree/:ext/path
+//	GET /api/files/file-tree/:ext/path?path=....
 func filesTreeGetHandler(w http.ResponseWriter, r *http.Request) {
-	doFileTreeGet(theCfg.filesDir, true, "path", w, r)
+	doFileTreeGet(theCfg.filesDir, true, "path", true, w, r)
 }
 
-// return file tree (file path, size, modification time) by folder name.
-func doFileTreeGet(rootDir string, isAllowEmptyFolder bool, paramName string, w http.ResponseWriter, r *http.Request) {
+// return file tree (file path, size, modification time) by sub-folder name.
+func doFileTreeGet(rootDir string, isAllowEmptyFolder bool, pathParam string, isExt bool, w http.ResponseWriter, r *http.Request) {
 
-	// url or query parameter folder can be optional
-	src := getRequestParam(r, paramName)
-	if paramName == "" || src == "" && !isAllowEmptyFolder || src == "." || src == ".." {
+	// optional url or query parameters: sub-folder path and files extension
+	src := getRequestParam(r, pathParam)
+	if pathParam == "" || src == "" && !isAllowEmptyFolder || src == "." || src == ".." {
 		http.Error(w, "Folder name invalid (or empty): "+src, http.StatusBadRequest)
 		return
 	}
 	folder := src
+
+	ext := ""
+	if isExt {
+		ext = getRequestParam(r, "ext")
+		if ext == "" || ext == "." || ext == ".." {
+			http.Error(w, "Files extension invalid (or empty): "+ext, http.StatusBadRequest)
+			return
+		}
+		if ext == "_" || ext == "*" { // _ extension means * any extension
+			ext = ""
+		}
+		if strings.ContainsAny(ext, helper.InvalidFileNameChars) {
+			http.Error(w, "Files extension invalid (or empty): "+ext, http.StatusBadRequest)
+			return
+		}
+	}
 
 	// if folder path specified then it must be local path, not absolute and should not contain invalid characters
 	if folder != "" {
@@ -124,17 +141,36 @@ func doFileTreeGet(rootDir string, isAllowEmptyFolder bool, paramName string, w 
 		}
 
 		// folder path should not contain invalid characters
-		if strings.ContainsAny(folder, helper.InvalidFileNameChars) {
+		if strings.ContainsAny(folder, helper.InvalidFilePathChars) {
 			http.Error(w, "Folder name invalid (or empty): "+src, http.StatusBadRequest)
 			return
 		}
 	}
 
+	// get files tree
+	treeLst, err := filesWalk(rootDir, folder, ext)
+	if err != nil {
+		omppLog.Log("Error: ", err.Error())
+		http.Error(w, "Error at folder scan: "+folder, http.StatusBadRequest)
+		return
+	}
+
+	jsonResponse(w, r, treeLst)
+}
+
+// return files list under rootDir / folder, if ext is not empty then filtered by extension
+func filesWalk(rootDir, folder string, ext string) ([]PathItem, error) {
+
+	// extension specified then do lower case comparison
+	lcExt := strings.ToLower(ext)
+	if lcExt != "" && lcExt[0] != '.' {
+		lcExt = "." + lcExt
+	}
+
 	// check if folder path exist under the root dir
 	folderPath := filepath.Join(rootDir, folder)
 	if !dirExist(folderPath) {
-		http.Error(w, "Folder not found: "+folder, http.StatusBadRequest)
-		return
+		return nil, errors.New("Folder not found: " + folder)
 	}
 	dp := filepath.ToSlash(rootDir)
 	dps := dp + "/"
@@ -152,6 +188,9 @@ func doFileTreeGet(rootDir string, isAllowEmptyFolder bool, paramName string, w 
 		} else {
 			p = strings.TrimPrefix(p, dps)
 		}
+		if lcExt != "" && lcExt != strings.ToLower(filepath.Ext(p)) {
+			return nil
+		}
 		treeLst = append(treeLst, PathItem{
 			Path:    p,
 			IsDir:   fi.IsDir(),
@@ -160,13 +199,7 @@ func doFileTreeGet(rootDir string, isAllowEmptyFolder bool, paramName string, w 
 		})
 		return nil
 	})
-	if err != nil {
-		omppLog.Log("Error at directory walk: ", err.Error())
-		http.Error(w, "Error at folder scan: "+folder, http.StatusBadRequest)
-		return
-	}
-
-	jsonResponse(w, r, treeLst)
+	return treeLst, err
 }
 
 // create folder under user files directory.
@@ -274,7 +307,7 @@ func getFilesPathParam(r *http.Request, name string) (string, string, error) {
 	if folder == "." || folder == ".." || !filepath.IsLocal(folder) {
 		return "", src, errors.New("Folder name invalid (or empty): " + src)
 	}
-	if strings.ContainsAny(folder, helper.InvalidFileNameChars) {
+	if strings.ContainsAny(folder, helper.InvalidFilePathChars) {
 		return "", src, errors.New("Folder name invalid (or empty): " + src)
 	}
 

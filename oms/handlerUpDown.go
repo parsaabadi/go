@@ -154,14 +154,14 @@ func modelLogUpDownGet(upDown string, upDownDir string, w http.ResponseWriter, r
 //
 //	GET /api/download/file-tree/:folder
 func fileTreeDownloadGetHandler(w http.ResponseWriter, r *http.Request) {
-	doFileTreeGet(theCfg.downloadDir, false, "folder", w, r)
+	doFileTreeGet(theCfg.downloadDir, false, "folder", false, w, r)
 }
 
 // return file tree (file path, size, modification time) by folder name.
 //
 //	GET /api/upload/file-tree/:folder
 func fileTreeUploadGetHandler(w http.ResponseWriter, r *http.Request) {
-	doFileTreeGet(theCfg.uploadDir, false, "folder", w, r)
+	doFileTreeGet(theCfg.uploadDir, false, "folder", false, w, r)
 }
 
 // delete download files by folder name.

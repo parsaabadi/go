@@ -730,10 +730,13 @@ func apiUploadRoutes(router *vestigo.Router) {
 // add http web-service /api routes to upload, download and manage user files
 func apiFilesRoutes(router *vestigo.Router) {
 
-	// GET /api/files/file-tree/:path
-	// GET /api/files/file-tree
-	router.Get("/api/files/file-tree/:path", filesTreeGetHandler, logRequest)
-	router.Get("/api/files/file-tree", filesTreeGetHandler, logRequest)
+	// GET /api/files/file-tree/:ext/path/:path
+	// GET /api/files/file-tree/:ext/path/
+	// GET /api/files/file-tree/:ext/path
+	// GET /api/files/file-tree/:ext/path?path=....
+	router.Get("/api/files/file-tree/:ext/path/:path", filesTreeGetHandler, logRequest)
+	router.Get("/api/files/file-tree/:ext/path/", filesTreeGetHandler, logRequest)
+	router.Get("/api/files/file-tree/:ext/path", filesTreeGetHandler, logRequest)
 
 	// POST /api/files/file/:path
 	// POST /api/files/file?path=....

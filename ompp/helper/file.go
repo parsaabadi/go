@@ -13,7 +13,8 @@ import (
 	"regexp"
 )
 
-const InvalidFileNameChars = "\"'`:*?><|$}{@&^;"
+const InvalidFilePathChars = "\"'`:*?><|$}{@&^;"    // invalid or dangerous file path or URL characters
+const InvalidFileNameChars = "\"'`:*?><|$}{@&^;/\\" // invalid or dangerous file name or URL characters
 
 // replace special file name characters: "'`:*?><|$}{@&^;/\ by _ underscore
 func CleanFileName(src string) string {
