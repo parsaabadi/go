@@ -115,7 +115,7 @@ func (mc *ModelCatalog) loadModelDbFile(srcPath string) (int, error) {
 	mc.theLock.Lock()
 	defer mc.theLock.Unlock()
 
-	// check if any models are already exist in catalog close
+	// check if any models are already exist in the catalog
 	for k := range mc.modelLst {
 		for j := range mLst {
 			if mLst[j].meta.Model.Digest == mc.modelLst[k].meta.Model.Digest {
@@ -273,6 +273,7 @@ func modelsFromSqliteFile(srcPath string, dgstLst []string, modelDir string, isL
 			relPath:       filepath.ToSlash(dbRel),
 			logDir:        modelLogDir,
 			isLogDir:      isLogDir,
+			isIni:         fileExist(filepath.Join(dbDir, dicLst[idx].Name+".ini")),
 			meta:          meta,
 			isTxtMetaFull: false,
 			txtMeta:       mt,

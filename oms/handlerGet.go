@@ -23,6 +23,7 @@ func modelListHandler(w http.ResponseWriter, r *http.Request) {
 		Model  db.ModelDicRow // model_dic db row
 		Dir    string         // model directory, relative to model root and slashed: dir/sub
 		DbPath string         // path to model.sqlite, relative to model root and slashed: dir/sub/model.sqlite
+		IsIni  bool           // if true the default ini file exists: models/bin/dir/sub/modelName.ini
 		Extra  string         // if not empty then model extra content
 	}
 	ml := make([]modelListItem, 0, len(mbs))
@@ -35,6 +36,7 @@ func modelListHandler(w http.ResponseWriter, r *http.Request) {
 					Model:  m,
 					Dir:    filepath.ToSlash(filepath.Dir(b.relPath)),
 					DbPath: filepath.ToSlash(b.relPath),
+					IsIni:  b.isIni,
 					Extra:  b.extra,
 				})
 		}
@@ -61,6 +63,7 @@ func modelTextListHandler(w http.ResponseWriter, r *http.Request) {
 		ModelDicDescrNote        // model_dic db row and model_dic_txt row
 		Dir               string // model directory, relative to model root and slashed: dir/sub
 		DbPath            string // path to model.sqlite, relative to model root and slashed: dir/sub/model.sqlite
+		IsIni             bool   // if true the default ini file exists: models/bin/dir/sub/modelName.ini
 		Extra             string // if not empty then model extra content
 	}
 	mtl := make([]modelTxtListItem, 0, len(mbs))
@@ -73,6 +76,7 @@ func modelTextListHandler(w http.ResponseWriter, r *http.Request) {
 					ModelDicDescrNote: *mt,
 					Dir:               filepath.ToSlash(filepath.Dir(b.relPath)),
 					DbPath:            filepath.ToSlash(b.relPath),
+					IsIni:             b.isIni,
 					Extra:             b.extra,
 				})
 		}
@@ -82,20 +86,20 @@ func modelTextListHandler(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, r, mtl)
 }
 
-// If multiple models with same name exist only one is returned.
+// Get language-indepedent model metadata.
 //
 //	GET /api/model/:model
 //
-// Get language-indepedent model metadata.
+// If multiple models with same name exist only one is returned.
 func modelMetaHandler(w http.ResponseWriter, r *http.Request) {
 	doModelMetaHandler(w, r, false)
 }
 
-// If multiple models with same name exist only one is returned.
+// Get language-indepedent model metadata with packed range types.
 //
 //	GET /api/model/:model/pack
 //
-// Get language-indepedent model metadata with packed range types.
+// If multiple models with same name exist only one is returned.
 func modelMetaPackHandler(w http.ResponseWriter, r *http.Request) {
 	doModelMetaHandler(w, r, true)
 }

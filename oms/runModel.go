@@ -85,7 +85,7 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 		rs.logPath = filepath.Join(mb.logDir, rs.LogFileName)
 	}
 
-	// make model run argumets and create ini file if required
+	// make model run arguments and create ini file if required
 	mArgs, iniPath, err := makeRunArgsIni(mb.binDir, wDir, mb.logDir, job, rs)
 	if err != nil {
 		omppLog.Log("Model run error: ", err)
@@ -439,6 +439,11 @@ func (rsc *RunCatalog) stopModelRun(modelDigest string, stamp string) (bool, str
 // make model run command line arguments and create ini file if required
 func makeRunArgsIni(binDir, workDir, logDir string, job *RunJob, rs *RunState) ([]string, string, error) {
 
+	absWorkDir, err := filepath.Abs(workDir)
+	if err != nil {
+		return []string{}, "", err
+	}
+
 	// make model run command line arguments, starting from process run stamp and log options
 	mArgs := []string{}
 	mArgs = append(mArgs, "-OpenM.RunStamp", rs.RunStamp)
@@ -490,16 +495,71 @@ func makeRunArgsIni(binDir, workDir, logDir string, job *RunJob, rs *RunState) (
 		if strings.EqualFold(key, "-OpenM.LogFilePath") {
 			continue // skip log file path input run option: replaced by console output
 		}
-		if strings.EqualFold(key, "-OpenM.Database") {
+		if strings.EqualFold(key, "-OpenM.Database") || strings.EqualFold(key, "-db") ||
+			strings.EqualFold(key, "-OpenM.Sqlite") || strings.EqualFold(key, "-OpenM.SqliteFromBin") {
 			continue // database connection string not allowed as run option
-		}
-		if strings.EqualFold(key, "-OpenM.iniFile") || strings.EqualFold(key, "-ini") {
-			iniPath = val
-			continue // ini file path as run option: merge of ini content may be required
 		}
 		if strings.HasPrefix(strings.ToLower(key), importDbLcDot) {
 			continue // import database connection string not allowed as run option
 		}
+
+		// directory value: substitute OM_USER_FILES if requierd and sanitize: it must be relative to oms root
+		if strings.EqualFold(key, "-OpenM.iniFile") || strings.EqualFold(key, "-ini") ||
+			strings.EqualFold(key, "-OpenM.ParamDir") || strings.EqualFold(key, "-p") ||
+			strings.EqualFold(key, "-Microdata.CsvDir") {
+
+			if !filepath.IsLocal(val) {
+				return []string{}, "", errors.New("invalid directory: " + val)
+			}
+
+			if theCfg.filesDir != "" {
+
+				isUfd := true
+				switch {
+				case strings.HasPrefix(val, "OM_USER_FILES"):
+					val = strings.Replace(val, "OM_USER_FILES", theCfg.filesDir, 1)
+				case strings.HasPrefix(val, "$OM_USER_FILES"):
+					val = strings.Replace(val, "$OM_USER_FILES", theCfg.filesDir, 1)
+				case strings.HasPrefix(val, "{OM_USER_FILES}"):
+					val = strings.Replace(val, "{OM_USER_FILES}", theCfg.filesDir, 1)
+				case strings.HasPrefix(val, "${OM_USER_FILES}"):
+					val = strings.Replace(val, "${OM_USER_FILES}", theCfg.filesDir, 1)
+				case strings.HasPrefix(val, "%OM_USER_FILES%"):
+					val = strings.Replace(val, "%OM_USER_FILES%", theCfg.filesDir, 1)
+				default:
+					isUfd = false
+				}
+				// if directory is relative to user files directory then make it relative to working directory
+				if isUfd {
+
+					val, err = filepath.Abs(val)
+					if err != nil {
+						return []string{}, "", errors.New("invalid directory: " + val)
+					}
+					val, err = filepath.Rel(absWorkDir, val)
+					if err != nil {
+						return []string{}, "", errors.New("invalid directory: " + val)
+					}
+				}
+			}
+
+			// cleanup path
+			val = strings.Map(
+				func(r rune) rune {
+					if strings.ContainsRune(helper.InvalidFilePathChars, r) {
+						r = '_'
+					}
+					return r
+				},
+				val)
+		}
+
+		if strings.EqualFold(key, "-OpenM.iniFile") || strings.EqualFold(key, "-ini") {
+			iniPath = val
+			continue // ini file path as run option: merge of ini content may be required
+		}
+
+		// use ini file if run description specified
 		if strings.HasSuffix(strings.ToLower(key), dotRunDescrLc) {
 
 			if 1+len(dotRunDescrLc) >= len(key) {
@@ -660,11 +720,8 @@ func makeRunArgsIni(binDir, workDir, logDir string, job *RunJob, rs *RunState) (
 		if e == nil {
 			e = os.WriteFile(p, []byte(rn.Note), 0644)
 		}
-		awd := ""
 		if e == nil {
-			if awd, e = filepath.Abs(workDir); e == nil {
-				p, e = filepath.Rel(awd, p)
-			}
+			p, e = filepath.Rel(absWorkDir, p)
 		}
 		if e != nil {
 			return []string{}, "", e
@@ -797,11 +854,8 @@ func makeRunArgsIni(binDir, workDir, logDir string, job *RunJob, rs *RunState) (
 		if e == nil {
 			e = os.WriteFile(p, []byte(iniContent), 0644)
 		}
-		awd := ""
 		if e == nil {
-			if awd, e = filepath.Abs(workDir); e == nil {
-				p, e = filepath.Rel(awd, p)
-			}
+			p, e = filepath.Rel(absWorkDir, p)
 		}
 		if e != nil {
 			return []string{}, "", e

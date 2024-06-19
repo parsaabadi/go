@@ -63,6 +63,7 @@ func (mc *ModelCatalog) allModels() []modelBasic {
 			relPath:  mc.modelLst[idx].relPath,
 			logDir:   mc.modelLst[idx].logDir,
 			isLogDir: mc.modelLst[idx].isLogDir,
+			isIni:    mc.modelLst[idx].isIni,
 			extra:    mc.modelLst[idx].extra,
 		}
 
@@ -86,6 +87,7 @@ func (mc *ModelCatalog) modelBasicByDigestOrName(dn string) (modelBasic, bool) {
 			relPath:  mc.modelLst[idx].relPath,
 			logDir:   mc.modelLst[idx].logDir,
 			isLogDir: mc.modelLst[idx].isLogDir,
+			isIni:    mc.modelLst[idx].isIni,
 			extra:    mc.modelLst[idx].extra,
 		},
 		true

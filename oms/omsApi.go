@@ -730,31 +730,39 @@ func apiUploadRoutes(router *vestigo.Router) {
 // add http web-service /api routes to upload, download and manage user files
 func apiFilesRoutes(router *vestigo.Router) {
 
-	// GET /api/files/file-tree/:ext/path/:path
-	// GET /api/files/file-tree/:ext/path/
-	// GET /api/files/file-tree/:ext/path
-	// GET /api/files/file-tree/:ext/path?path=....
-	router.Get("/api/files/file-tree/:ext/path/:path", filesTreeGetHandler, logRequest)
-	router.Get("/api/files/file-tree/:ext/path/", filesTreeGetHandler, logRequest)
-	router.Get("/api/files/file-tree/:ext/path", filesTreeGetHandler, logRequest)
+	// disable user files downloads from home/io if download disabled
+	if theCfg.downloadDir != "" || theCfg.filesDir != theCfg.inOutDir {
 
-	// POST /api/files/file/:path
-	// POST /api/files/file?path=....
-	router.Post("/api/files/file/:path", filesFileUploadPostHandler, logRequest)
-	router.Post("/api/files/file", filesFileUploadPostHandler, logRequest)
+		// GET /api/files/file-tree/:ext/path/:path
+		// GET /api/files/file-tree/:ext/path/
+		// GET /api/files/file-tree/:ext/path
+		// GET /api/files/file-tree/:ext/path?path=....
+		router.Get("/api/files/file-tree/:ext/path/:path", filesTreeGetHandler, logRequest)
+		router.Get("/api/files/file-tree/:ext/path/", filesTreeGetHandler, logRequest)
+		router.Get("/api/files/file-tree/:ext/path", filesTreeGetHandler, logRequest)
+	}
 
-	// PUT /api/files/folder/:path
-	// PUT /api/files/folder?path=....
-	router.Put("/api/files/folder/:path", filesFolderCreatePutHandler, logRequest)
-	router.Put("/api/files/folder", filesFolderCreatePutHandler, logRequest)
+	// disable user files uploads into home/io if uploadload disabled
+	if theCfg.uploadDir != "" || theCfg.filesDir != theCfg.inOutDir {
 
-	// DELETE /api/files/delete/:path
-	// DELETE /api/files/delete?path=....
-	router.Delete("/api/files/delete/:path", filesDeleteHandler, logRequest)
-	router.Delete("/api/files/delete", filesDeleteHandler, logRequest)
+		// POST /api/files/file/:path
+		// POST /api/files/file?path=....
+		router.Post("/api/files/file/:path", filesFileUploadPostHandler, logRequest)
+		router.Post("/api/files/file", filesFileUploadPostHandler, logRequest)
 
-	// DELETE /api/files/delete-all
-	router.Delete("/api/files/delete-all", filesAllDeleteHandler, logRequest)
+		// PUT /api/files/folder/:path
+		// PUT /api/files/folder?path=....
+		router.Put("/api/files/folder/:path", filesFolderCreatePutHandler, logRequest)
+		router.Put("/api/files/folder", filesFolderCreatePutHandler, logRequest)
+
+		// DELETE /api/files/delete/:path
+		// DELETE /api/files/delete?path=....
+		router.Delete("/api/files/delete/:path", filesDeleteHandler, logRequest)
+		router.Delete("/api/files/delete", filesDeleteHandler, logRequest)
+
+		// DELETE /api/files/delete-all
+		router.Delete("/api/files/delete-all", filesAllDeleteHandler, logRequest)
+	}
 }
 
 // add web-service /api routes for user-specific request

@@ -260,7 +260,7 @@ func mainBody(args []string) error {
 	_ = flag.String(modelDirArgKey, "models/bin", "models directory, if relative then must be relative to root directory")
 	_ = flag.String(modelLogDirArgKey, "models/log", "models log directory, if relative then must be relative to root directory")
 	_ = flag.String(modelDocDirArgKey, "models/doc", "models documentation directory, if relative then must be relative to root directory")
-	_ = flag.String(etcDirArgKey, theCfg.etcDir, "configuration files directory, if relative then must be relative to oms root directory")
+	_ = flag.String(etcDirArgKey, theCfg.etcDir, "configuration files directory, if relative then must be relative to root directory")
 	_ = flag.String(htmlDirArgKey, theCfg.htmlDir, "front-end UI directory, if relative then must be relative to root directory")
 	_ = flag.String(homeDirArgKey, "", "user personal home directory, if relative then must be relative to root directory")
 	_ = flag.Bool(isDownloadArgKey, false, "if true then allow download from user home/io/download directory")
@@ -363,17 +363,14 @@ func mainBody(args []string) error {
 	}
 
 	// check if model documentation directory exists
-	if runOpts.IsExist(modelDocDirArgKey) {
+	theCfg.docDir = filepath.Clean(runOpts.String(modelDocDirArgKey))
+	theCfg.docDir = strings.TrimSuffix(theCfg.docDir, string(filepath.Separator))
 
-		theCfg.docDir = filepath.Clean(runOpts.String(modelDocDirArgKey))
-		theCfg.docDir = strings.TrimSuffix(theCfg.docDir, string(filepath.Separator))
-
-		if theCfg.docDir == "." || !dirExist(theCfg.docDir) {
-			omppLog.Log("Warning: model documentation directory not found or invalid: ", theCfg.docDir)
-			theCfg.docDir = ""
-		} else {
-			omppLog.Log("Models documentation: ", theCfg.docDir)
-		}
+	if theCfg.docDir == "." || !dirExist(theCfg.docDir) {
+		omppLog.Log("Warning: model documentation directory not found or invalid: ", theCfg.docDir)
+		theCfg.docDir = ""
+	} else {
+		omppLog.Log("Models documentation: ", theCfg.docDir)
 	}
 
 	// check if it is single user run mode and use of home directory enabled
@@ -455,7 +452,7 @@ func mainBody(args []string) error {
 			theCfg.filesDir = ""
 		}
 	} else {
-		if theCfg.inOutDir != "" {
+		if theCfg.inOutDir != "" && (isDownload || isUpload) {
 			theCfg.filesDir = theCfg.inOutDir
 		}
 	}
@@ -545,7 +542,9 @@ func mainBody(args []string) error {
 	if isUpload {
 		apiUploadRoutes(router) // web-service /api routes to upload and manage files at home/io/upload folder
 	}
-	if theCfg.filesDir != "" {
+	// disable user files downloads from home/io if download disabled
+	if theCfg.filesDir != "" && (isDownload || theCfg.filesDir != theCfg.inOutDir) {
+
 		router.Get("/files/*", filesHandler, logRequest) // serve static content at /files/ url from user files folders, default: home/io
 		apiFilesRoutes(router)                           // web-service /api routes to upload and manage files at home/io/upload folder
 	}

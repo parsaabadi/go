@@ -10,16 +10,22 @@ import (
 	"errors"
 	"io"
 	"os"
-	"regexp"
+	"strings"
 )
 
-const InvalidFilePathChars = "\"'`:*?><|$}{@&^;"    // invalid or dangerous file path or URL characters
-const InvalidFileNameChars = "\"'`:*?><|$}{@&^;/\\" // invalid or dangerous file name or URL characters
+const InvalidFilePathChars = "\"'`:*?><|$}{@&^;%"    // invalid or dangerous file path or URL characters
+const InvalidFileNameChars = "\"'`:*?><|$}{@&^;%/\\" // invalid or dangerous file name or URL characters
 
 // replace special file name characters: "'`:*?><|$}{@&^;/\ by _ underscore
 func CleanFileName(src string) string {
-	re := regexp.MustCompile("[\"'`:*?><|$}{@&^;/\\\\]")
-	return re.ReplaceAllString(src, "_")
+	return strings.Map(
+		func(r rune) rune {
+			if strings.ContainsRune("\"'`:*?><|$}{@&^;/\\\\", r) {
+				r = '_'
+			}
+			return r
+		},
+		src)
 }
 
 // SaveTo copy all from source reader into new outPath file. File truncated if already exists.

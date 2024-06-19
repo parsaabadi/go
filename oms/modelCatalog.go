@@ -42,6 +42,7 @@ type modelDef struct {
 	relPath       string            // relative path to sqlite database file: relative to model root and slashed: dir/sub/model.sqlite
 	logDir        string            // model log directory
 	isLogDir      bool              // if true then use model log directory for model run logs
+	isIni         bool              // if true the default ini file exists: models/bin/dir/sub/modelName.ini
 	meta          *db.ModelMeta     // model metadata, language-neutral part, should not be nil
 	isTxtMetaFull bool              // if true then ModelTxtMeta fully loaded else only []ModelTxtRow
 	txtMeta       *db.ModelTxtMeta  // if not nil then language-specific model metadata
@@ -60,6 +61,7 @@ type modelBasic struct {
 	relPath  string         // relative path to sqlite database file: relative to model root and slashed: dir/sub/model.sqlite
 	logDir   string         // model log directory
 	isLogDir bool           // if true then use model log directory for model run logs
+	isIni    bool           // if true the default ini file exists: models/bin/dir/sub/modelName.ini
 	extra    string         // if not empty then model extra content from models/bin/dir/model.extra.json
 }
 
