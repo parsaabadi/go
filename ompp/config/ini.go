@@ -50,7 +50,7 @@ func NewIni(iniPath string, encodingName string) (map[string]string, error) {
 	}
 
 	// Join values spanning multiple lines into single lines.
-	s = JoinMultiLineValues(s)
+	// s = JoinMultiLineValues(s)
 
 	// parse ini-file into strings map of (section.key)=>value
 	kvIni, err := loadIni(s)
