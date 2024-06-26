@@ -464,7 +464,7 @@ func runTableCompareCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
 // Variant runs can be a comma separated list of run digests or run stamps or run names.
 // If run name contains comma then name must be "double quoted" or 'single quoted'.
 // For example: "Year 1995, 1996", 'Age [30, 40]'
-// GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/csv/csv-id
+// GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/csv-id
 // Dimension(s) returned as enum id's.
 func runTableCompareIdCsvGetHandler(w http.ResponseWriter, r *http.Request) {
 	doTableCompareGetCsvHandler(w, r, false, false)
@@ -477,7 +477,7 @@ func runTableCompareIdCsvGetHandler(w http.ResponseWriter, r *http.Request) {
 // Variant runs can be a comma separated list of run digests or run stamps or run names.
 // If run name contains comma then name must be "double quoted" or 'single quoted'.
 // For example: "Year 1995, 1996", 'Age [30, 40]'
-// GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/csv/csv-id-bom
+// GET /api/model/:model/run/:run/table/:name/compare/:compare/variant/:variant/csv-id-bom
 // Dimension(s) returned as enum id's.
 // Response starts from utf-8 BOM bytes.
 func runTableCompareIdCsvBomGetHandler(w http.ResponseWriter, r *http.Request) {
