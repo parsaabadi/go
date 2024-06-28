@@ -28,14 +28,28 @@ Example:
 	; comments can start from ; or
 	# from # and empty lines are skipped
 
-	 [section test]  ; section comment
-	 val = no comment
-	 rem = ; comment only and empty value
-	 nul =
-	 dsn = "DSN='server'; UID='user'; PWD='pas#word';" ; quoted value
-	 t w = the "# quick #" brown 'fox ; jumps' over    ; escaped: ; and # chars
-	 " key "" 'quoted' here " = some value
-	 qts = " allow ' unbalanced quotes                 ; with comment
+	[section]  ; section comment
+	val = no comment
+	rem = ; comment only and empty value
+	nul =
+	dsn = "DSN='server'; UID='user'; PWD='pas#word';" ; quoted value
+	t w = the "# quick #" brown 'fox ; jumps' over    ; escaped: ; and # chars
+	" key "" 'quoted' here " = some value
+
+	[multi-line]
+	trim = Aname, \    ; multi-line value joined with spaces trimmed
+	Bname, \    ; result is:
+	CName       ; Aname,Bname,Cname
+
+	; multi-line value started with " quote or ' apostrophe
+	; right spaces before \ is not trimmed
+	; result is:
+	; Multi line   text with spaces
+	;
+	keep = "\
+	       Multi line   \
+	       text with spaces\
+	       "
 */
 func NewIni(iniPath string, encodingName string) (map[string]string, error) {
 
@@ -49,9 +63,6 @@ func NewIni(iniPath string, encodingName string) (map[string]string, error) {
 		return nil, errors.New("reading ini-file to utf-8 failed: " + err.Error())
 	}
 
-	// Join values spanning multiple lines into single lines.
-	// s = JoinMultiLineValues(s)
-
 	// parse ini-file into strings map of (section.key)=>value
 	kvIni, err := loadIni(s)
 	if err != nil {
@@ -60,165 +71,54 @@ func NewIni(iniPath string, encodingName string) (map[string]string, error) {
 	return kvIni, nil
 }
 
-// iniKey return ini-file key as concatenation: section.key
-func iniKey(section, key string) string { return section + "." + key }
-
-// Join multi-line values in input string into equivalent single line values.
-func JoinMultiLineValues(input string) string {
-
-	// Split input into separate lines on line breaks.
-	lines := strings.Split(input, "\n")
-
-	// Record which lines are to be continued in here.
-	// All boolean entries are initialized to false.
-	lineIsContinued := make([]bool, len(lines))
-
-	// Keep track of parity of single and double quotes.
-	// All integer entries are initialized to zero.
-	singleQuoteCount := make([]int, len(lines))
-	doubleQuoteCount := make([]int, len(lines))
-
-	// Store updated lines here.
-	updatedLines := make([]string, len(lines))
-
-	// And store concatenated lines here.
-	var concatenatedLines []string
-
-	for ix, line := range lines {
-		// Initialize quote parity counts for current line.
-		// If it's the first line or if previous line is not being
-		// continued then they're already set correctly to 0.
-
-		// If it is not the first line and the previous line is being continued
-		// initialize quote parity counts to those of the previous line.
-		if ix > 0 && lineIsContinued[ix-1] {
-			singleQuoteCount[ix] = singleQuoteCount[ix-1]
-			doubleQuoteCount[ix] = doubleQuoteCount[ix-1]
-		}
-
-	lineLoop:
-		// Iterate through characters in current line.
-		for _, char := range line {
-			switch char {
-			// If it's a comment starting character.
-			case '#', ';':
-				// And if we're outside a quote block.
-				if singleQuoteCount[ix]%2 == 0 && doubleQuoteCount[ix]%2 == 0 {
-					// Then it's the start of a comment and no line continuation character
-					// was encountered before it. So line is not continued. Break out of loop.
-					break lineLoop
-				}
-				// And if we're inside a quote block then treat the comment starting
-				// character as part of the quote and move to the next character.
-
-			// If it's a single quote then update single quote count:
-			case '\'':
-				singleQuoteCount[ix] += 1
-
-			// If it's a double quote then update double quote count:
-			case '"':
-				doubleQuoteCount[ix] += 1
-
-			// If it's the line continuation character then mark that
-			// line as being continued and break out of character loop.
-			case '\\':
-				lineIsContinued[ix] = true
-				break lineLoop
-			}
-		}
-
-		// If current line is being continued then it will be on the first occurrence of
-		// the line continuation character so we can just use Cut and discard the rest.
-		if lineIsContinued[ix] {
-			line, _, _ = strings.Cut(line, "\\")
-		}
-
-		// If the continuation character was outside of quote blocks then we must
-		// remove contiguous whitespace leading the line continuation character.
-		if singleQuoteCount[ix]%2 == 0 && doubleQuoteCount[ix]%2 == 0 {
-			line = strings.TrimRightFunc(line, unicode.IsSpace)
-		}
-
-		// If previous line is being continued and current line
-		// has leading whitespace then remove that whitespace.
-		if ix > 0 && lineIsContinued[ix-1] {
-			line = strings.TrimLeftFunc(line, unicode.IsSpace)
-		}
-
-		updatedLines[ix] = line
-	}
-
-	// Concatenate continued lines into single lines.
-	var accumulator string
-	for ix, line := range updatedLines {
-		accumulator += line
-		if !lineIsContinued[ix] {
-			// Append the line stored in the accumulator.
-			concatenatedLines = append(concatenatedLines, accumulator)
-			// Reset accumulator.
-			accumulator = ""
-		}
-	}
-
-	// Fold the slice of lines into a single string again and return.
-	return strings.Join(concatenatedLines, "\n")
-}
-
 // Parse ini-file content into strings map of (section.key)=>value
 func loadIni(iniContent string) (map[string]string, error) {
-	kvIni := make(map[string]string)
-	var section, key, val string
+
+	kvIni := map[string]string{}
+	var section, key, val, line string
+	var isContinue, isQuote bool
+	var cQuote rune
 
 	for nLine, nStart := 0, 0; nStart < len(iniContent); {
+
 		// get current line and move to next
 		nextPos := strings.IndexAny(iniContent[nStart:], "\r\n")
 		if nextPos < 0 {
 			nextPos = len(iniContent)
+		}
+		if nStart+nextPos < len(iniContent)-1 {
+			if iniContent[nStart+nextPos] == '\r' && iniContent[nStart+nextPos+1] == '\n' {
+				nextPos++
+			}
 		}
 		nextPos += 1 + nStart
 		if nextPos > len(iniContent) {
 			nextPos = len(iniContent)
 		}
 
-		line := strings.TrimSpace(iniContent[nStart:nextPos])
+		line = strings.TrimSpace(iniContent[nStart:nextPos])
 		nStart = nextPos
 		nLine++
 
-		// skip empty lines and ; comments and # Linux comments
-		// empty line: at least k= or [] section expected, ignore shorter lines
-		if len(line) < 1 || line[0] == ';' || line[0] == '#' {
-			continue
-		}
+		// skip empty line and if it is end of continuation \ value then push it into ini content
+		if len(line) <= 0 {
 
-		// error if line too short: at least k= or [] section expected
-		// error if no [section] found: only comments or empty lines can be before first section
-		if len(line) < 2 {
-			return nil, errors.New("line " + strconv.Itoa(nLine) + " too short")
-		}
-		if section == "" && line[0] != '[' {
-			return nil, errors.New("line " + strconv.Itoa(nLine) + ": only comments or empty lines can be before first section")
-		}
-
-		// check if this is [section] with optional ; comments
-		if line[0] == '[' {
-
-			nEnd := strings.IndexRune(line, ']')
-			nRem := strings.IndexAny(line, ";#")
-			if nEnd < 2 || nRem > 0 && nRem < nEnd {
-				return nil, errors.New("line " + strconv.Itoa(nLine) + ": invalid section name")
+			if key != "" {
+				kvIni[section+"."+key] = helper.UnQuote(val)
+				key, val, isContinue, isQuote, cQuote = "", "", false, false, 0 // reset state
 			}
-
-			section = strings.TrimSpace(line[1:nEnd])
-			continue // done with section header
-		}
-		if section == "" { // if no [section] found then skip until first section
-			continue
+			continue // skip empty line
 		}
 
-		// get key: find first = outside of "quote" or 'single quote'
-		isQuote := false
-		var cQuote rune
-		nEq := 0
+		// remove ; comments or # Linux comments:
+		//   comment starts with ; or # outside of "quote" or 'single quote'
+		// get the key:
+		//   find first = outside of "quote" or 'single quote'
+		// get value:
+		//    value can be after key= or entire line if it is a continuation \ value
+		nEq := len(line) + 1
+		nRem := len(line) + 1
+
 		for k, c := range line {
 
 			if !isQuote && (c == '"' || c == '\'') || isQuote && c == cQuote { // open or close quotes
@@ -230,57 +130,86 @@ func loadIni(iniContent string) (map[string]string, error) {
 				}
 				continue
 			}
-			if !isQuote && c == '=' { // if outside of quote: check key=
+			if !isQuote && c == '=' && (nEq < 0 || nEq >= len(line)) { // positions of first key= outside of quote
 				nEq = k
-				break // found end of key=
 			}
-			if !isQuote && (c == ';' || c == '#') { // comment outside of quotes
+			if !isQuote && (c == ';' || c == '#') { // start of comment outside of quotes
+				nRem = k
 				break
 			}
 		}
-		if nEq < 1 || nEq >= len(line) {
-			return nil, errors.New("line " + strconv.Itoa(nLine) + ": expected key=...")
+
+		// remove comment from the end of the line
+		if nRem < len(line) {
+			line = strings.TrimSpace(line[:nRem])
+		}
+		// skip line: it is a comment only line
+		// if it is end of continuation \ value then push it into ini content
+		if len(line) <= 0 {
+
+			if key != "" {
+				kvIni[section+"."+key] = helper.UnQuote(val)
+				key, val, isContinue, isQuote, cQuote = "", "", false, false, 0 // reset state
+			}
+			continue // skip line: it is a comment only line
 		}
 
-		// split key = and value ; with comment
-		key = helper.UnQuote(line[:nEq])
-		val = line[nEq+1:]
+		// check for the [section]
+		// section is not allowed after previous line \ continuation
+		// section cannot have empty [] name
+		if !isQuote {
 
-		// split value and ; optional # comment
-		isQuote = false
-		cQuote = 0
-		nQuote := 0
-		nRem := 0
-		for k, c := range val {
+			if line[0] == '[' {
 
-			if c == ';' || c == '#' { // potential comment started
-				nRem = k
-				if !isQuote {
-					break // comment outside of quotes
+				if len(line) < 3 || line[len(line)-1] != ']' {
+					return nil, errors.New("line " + strconv.Itoa(nLine) + ": " + "invalid section name")
 				}
-				// else comment inside of quotes or after unbalanced quote started
-			}
-
-			if !isQuote && (c == '"' || c == '\'') || isQuote && c == cQuote { // open or close quotes
-				isQuote = !isQuote
-				nQuote = k
-				if isQuote {
-					cQuote = c // opening quote
-				} else {
-					cQuote = 0 // quote closed
+				if isContinue {
+					return nil, errors.New("line " + strconv.Itoa(nLine) + ": " + "invalid section name as line continuation")
 				}
+
+				section = strings.TrimSpace(line[1 : len(line)-1]) // [section] found
 				continue
 			}
 		}
-		if nRem > nQuote { // if comment after 'value' or after "unbalanced quotes then remove comment
-			val = val[:nRem]
+		if section == "" {
+			return nil, errors.New("line " + strconv.Itoa(nLine) + ": " + "only comments or empty lines can be before first section")
 		}
 
-		// append result to the map, unquote "value" if quotes balanced
-		if section != "" && key != "" {
-			kvIni[iniKey(section, key)] = helper.UnQuote(val)
+		// line is not empty: it must start with key= or it can be continuation of previous line value
+		if key == "" {
+
+			if nEq < 1 || nEq >= len(line) {
+				return nil, errors.New("line " + strconv.Itoa(nLine) + ": " + "expected key=value")
+			}
+			key = helper.UnQuote(line[:nEq])
+			line = strings.TrimSpace(line[nEq+1:])
 		}
-		key, val = "", "" // reset state
+		if key == "" {
+			return nil, errors.New("line " + strconv.Itoa(nLine) + ": " + "expected key=value")
+		}
+
+		// if line end with continuation \ then append line to value
+		// else push key and value into ini content
+		isContinue = len(line) > 0 && line[len(line)-1] == '\\'
+
+		if isContinue {
+			if isQuote {
+				val = val + strings.TrimLeftFunc(line[:len(line)-1], unicode.IsSpace)
+			} else {
+				val = val + strings.TrimSpace(line[:len(line)-1])
+			}
+		} else {
+
+			val = val + line
+			kvIni[section+"."+key] = helper.UnQuote(val)
+			key, val, isContinue, isQuote, cQuote = "", "", false, false, 0 // reset state
+		}
+	}
+
+	// last line: continuation at last line without cr-lf
+	if isContinue && section != "" && key != "" {
+		kvIni[section+"."+key] = helper.UnQuote(val)
 	}
 
 	return kvIni, nil

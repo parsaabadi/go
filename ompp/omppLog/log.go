@@ -6,11 +6,13 @@ Package omppLog to println messages to standard output and log file.
 It is intended for progress or error logging and should not be used for profiling (it is slow).
 
 Log can be enabled/disabled for two independent streams:
-  console  => standard output stream
-  log file => log file, truncated on every run, (optional) unique "stamped" name
+
+	console  => standard output stream
+	log file => log file, truncated on every run, (optional) unique "stamped" name
 
 "Stamped" file name produced by adding time-stamp and/or pid-stamp, i.e.:
-  exeName.log => exeName.2012_08_17_16_04_59_148.123.log
+
+	exeName.log => exeName.2012_08_17_16_04_59_148.123.log
 */
 package omppLog
 
