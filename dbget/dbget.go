@@ -26,17 +26,37 @@ Get list of the models from database:
 	dbget -m modelOne -do model-list -dbget.Notes -lang isl
 	dbget -m modelOne -do model-list -dbget.NoLanguage
 
+	dbget -dbget.Sqlite modelOne.sqlite -dbget.Do model-list
+
+	dbget
+	  -dbget.Do model-list
+	  -dbget.Database "Database=modelName.sqlite; Timeout=86400; OpenMode=ReadWrite;"
+	  -dbget.DatabaseDriver SQLite
+
+Get compatibility model metadata (Modgen):
+
+	dbget -m modelOne -do old-model
+	dbget -m modelOne -do old-model -csv
+	dbget -m modelOne -do old-model -tsv
+	dbget -m modelOne -do old-model -json
+	dbget -m modelOne -do old-model -pipe
+
+	dbget -dbget.Sqlite modelOne.sqlite -dbget.Do old-model -dbget.As csv -dbget.ToConsole -dbget.Language FR
+
 Get parameter run values:
 
 	dbget -m modelOne -do parameter -dbget.Run Default -dbget.Parameter ageSex -pipe
 
-	dbget -m modelOne -dbget.Run Default -parameter ageSex
-	dbget -m modelOne -dbget.Run Default -parameter ageSex -lang FR
-	dbget -m modelOne -dbget.Run Default -parameter ageSex -lang fr-CA
-	dbget -m modelOne -dbget.Run Default -parameter ageSex -lang isl
-	dbget -m modelOne -dbget.Run Default -parameter ageSex -dbget.NoLanguage
+	dbget -m modelOne -r Default -parameter ageSex
+	dbget -m modelOne -r Default -parameter ageSex -lang FR
+	dbget -m modelOne -r Default -parameter ageSex -lang fr-CA
+	dbget -m modelOne -r Default -parameter ageSex -lang isl
+	dbget -m modelOne -r Default -parameter ageSex -dbget.NoLanguage
 
-	dbget -m modelOne -dbget.Run Default -parameter ageSex -tsv
+	dbget -m modelOne -dbget.FirstRun -parameter ageSex
+	dbget -m modelOne -dbget.LastRun  -parameter ageSex
+
+	dbget -m modelOne -r Default -parameter ageSex -tsv
 
 Aggregate and compare microdata run values:
 
@@ -47,8 +67,8 @@ Aggregate and compare microdata run values:
 	  -dbget.Calc OM_AVG(Income)
 
 	dbget -m modelOne -do microdata-aggregate
-	  -dbget.RunId 219
-	  -dbget.WithRunIds 221
+	  -dbget.FirstRun
+	  -dbget.WithLastRun
 	  -dbget.Entity Other
 	  -dbget.GroupBy AgeGroup
 	  -dbget.Calc OM_AVG(Income),OM_AVG(Income[base]-Income[variant])
@@ -236,7 +256,7 @@ func mainBody(args []string) error {
 		return errors.New("invalid arguments: " + strings.Join(extraArgs, " "))
 	}
 	if isPipe {
-		logOpts.IsConsole = false
+		logOpts.IsConsole = false // suppress log console output if -pipe required
 	}
 	omppLog.New(logOpts) // adjust log options according to command line arguments or ini-values
 
@@ -254,12 +274,12 @@ func mainBody(args []string) error {
 	theCfg.doubleFmt = runOpts.String(doubleFormatArgKey)
 
 	// get output format: cv, tsv or json
-	if a := runOpts.String(asArgKey); a != "" {
+	if f := runOpts.String(asArgKey); f != "" {
 
 		if runOpts.IsExist(csvArgKey) || runOpts.IsExist(tsvArgKey) || runOpts.IsExist(jsonArgKey) {
 			return errors.New("invalid arguments: " + csvArgKey + " or " + tsvArgKey + " or " + jsonArgKey)
 		}
-		switch strings.ToLower(a) {
+		switch strings.ToLower(f) {
 		case "csv":
 			theCfg.kind = asCsv
 		case "tsv":
@@ -267,7 +287,7 @@ func mainBody(args []string) error {
 		case "json":
 			theCfg.kind = asJson
 		default:
-			return errors.New("invalid arguments: " + asArgKey + " " + a)
+			return errors.New("invalid arguments: " + asArgKey + " " + f)
 		}
 	} else {
 		if runOpts.IsExist(csvArgKey) && (runOpts.IsExist(tsvArgKey) || runOpts.IsExist(jsonArgKey)) ||
@@ -285,21 +305,19 @@ func mainBody(args []string) error {
 		// if there is no dbget.As argument and there is no dbget.csv, dbget.tsv, dbget.json
 		// then use output file name extension to detect kind of output
 		case !runOpts.IsExist(csvArgKey) && !runOpts.IsExist(tsvArgKey) && !runOpts.IsExist(jsonArgKey):
-			// if file name is empty then result is csv by default
+			// if file name is empty or extension is unknown then result is csv by default
 			theCfg.kind = kindByExt(theCfg.fileName)
 		default:
 			return errors.New("invalid arguments: " + csvArgKey + " or " + tsvArgKey + " or " + jsonArgKey)
 		}
 	}
 
-	/* TBD:
-	// output to json supported only model metadata
+	// output to json supported only for model metadata
 	if theCfg.kind == asJson {
-		if theCfg.action != "model-list" {
+		if theCfg.action != "model-list" && theCfg.action != "old-model" {
 			return errors.New("JSON output not allowed for: " + theCfg.action)
 		}
 	}
-	*/
 
 	// get default user language
 	if !theCfg.isNoLang && theCfg.userLang == "" {
@@ -324,8 +342,8 @@ func mainBody(args []string) error {
 		return err
 	}
 
-	// if it is not a model-list then required:
-	//   model name or digest
+	// if it is not a model-list then
+	//   find by model name or digest
 	//   match model language to user language
 	modelId := 0
 	if theCfg.action != "model-list" {
@@ -386,6 +404,8 @@ func mainBody(args []string) error {
 	switch theCfg.action {
 	case "model-list":
 		return modelList(srcDb)
+	case "old-model":
+		return modelOldMeta(srcDb, modelId)
 	case "parameter":
 		return parameterValue(srcDb, modelId, runOpts)
 	case "microdata-aggregate":

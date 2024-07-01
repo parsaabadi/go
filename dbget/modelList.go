@@ -6,17 +6,16 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
-
-	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/openmpp/go/ompp/db"
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
-// write model list from database into text csv or json file
+// write model list from database into text csv, tsv or json file
 func modelList(srcDb *sql.DB) error {
 
 	// get model list
@@ -159,12 +158,16 @@ func modelList(srcDb *sql.DB) error {
 	// write notes into .md files
 	if theCfg.isNote {
 		for k := range noteLst {
-
-			p := filepath.Join(theCfg.dir, noteLst[k].name+"."+noteLst[k].lang+".md")
-
-			err = os.WriteFile(p, []byte(noteLst[k].note), 0644)
+			if theCfg.isConsole {
+				fmt.Println(noteLst[k].note)
+				continue
+			}
+			err = os.WriteFile(
+				filepath.Join(theCfg.dir, noteLst[k].name+"."+noteLst[k].lang+".md"),
+				[]byte(noteLst[k].note),
+				0644)
 			if err != nil {
-				return errors.New("failed to write model model notes " + err.Error())
+				return errors.New("failed to write model notes " + err.Error())
 			}
 		}
 	}

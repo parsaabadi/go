@@ -73,7 +73,7 @@ func (mc *ModelCatalog) ModelMetaByDigestOrName(dn string) (*db.ModelMeta, error
 }
 
 // ModelTextByDigest return model_dic_txt db row by model digest and preferred language tags.
-// It can be in preferred language, default model language or empty if no model model_dic_txt rows exist.
+// It can be in preferred language, default model language or empty if no model_dic_txt rows exist.
 func (mc *ModelCatalog) ModelTextByDigest(digest string, preferredLang []language.Tag) (*ModelDicDescrNote, bool) {
 
 	// if model digest is empty then return empty results

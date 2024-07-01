@@ -193,7 +193,8 @@ func outputExt() string {
 	return ".csv" // by default
 }
 
-// return kind of by file extension: .csv .tsv or .json
+// return kind of by file extension: .csv .tsv or .json,
+// if file path is empty or extension is unknown then return csv by default
 func kindByExt(path string) outputAs {
 	if path != "" {
 		switch strings.ToLower(filepath.Ext(path)) {
@@ -203,5 +204,5 @@ func kindByExt(path string) outputAs {
 			return asJson
 		}
 	}
-	return asCsv // by default
+	return asCsv // csv by default
 }
