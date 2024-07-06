@@ -12,8 +12,8 @@ import (
 	"github.com/openmpp/go/ompp/db"
 )
 
-// get model run paratemer values and write run results into csv or tsv files.
-func parameterValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
+// get output table values and write run results into csv or tsv files.
+func tableValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 
 	// find model run
 	msg, run, err := findRun(srcDb, modelId, runOpts.String(runArgKey), runOpts.Int(runIdArgKey, 0), runOpts.Bool(runFirstArgKey), runOpts.Bool(runLastArgKey))
@@ -30,15 +30,15 @@ func parameterValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) erro
 		return errors.New("Error at get model metadata by id: " + strconv.Itoa(modelId) + ": " + err.Error())
 	}
 
-	// write parameter values to csv or tsv file
-	return parameterRunValue(srcDb, meta, runOpts.String(paramArgKey), run, false, nil)
+	// write output table values to csv or tsv file
+	return tableRunValue(srcDb, meta, runOpts.String(tableArgKey), run, runOpts, false, nil)
 }
 
-// read model run paratemer values and write run results into csv or tsv file.
-// It can be compatibility view parameter csv file with header Dim0,Dim1,....,Value
-// or normal csv file: sub_id,dim0,dim1,param_value.
-// For compatibilty view parameter csv shold skip sub_id column
-func parameterRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRow, isOld bool, csvHdr []string) error {
+// read output table values and write run results into csv or tsv file.
+// It can be compatibility view output table csv file with header Dim0,Dim1,....,Value
+// or normal csv file: expr_name,dim0,dim1,expr_value.
+// For compatibilty view output table csv measure dimension column must last dimension, not first as expr_name
+func tableRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRow, runOpts *config.RunOptions, isOld bool, csvHdr []string) error {
 
 	if run == nil {
 		return errors.New("Error: model run not found")
@@ -47,15 +47,16 @@ func parameterRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.R
 		return errors.New("Error: model run not completed successfully: " + run.Name)
 	}
 	if name == "" {
-		return errors.New("Invalid (empty) parameter name")
+		return errors.New("Invalid (empty) output table name")
 	}
 	if meta == nil {
 		return errors.New("Invalid (empty) model metadata")
 	}
-	_, ok := meta.ParamByName(name)
+	idx, ok := meta.OutTableByName(name)
 	if !ok {
-		return errors.New("Error: model parameter not found: " + name)
+		return errors.New("Error: model output table not found: " + name)
 	}
+	rank := meta.Table[idx].Rank
 
 	// make csv header
 	// create converter from db cell into csv row []string
@@ -63,50 +64,58 @@ func parameterRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.R
 	hdr := []string{}
 	var cvtRow func(interface{}, []string) (bool, error)
 
-	cvtParam := &db.CellParamConverter{
-		ModelDef:  meta,
-		Name:      name,
-		IsIdCsv:   false,
-		DoubleFmt: theCfg.doubleFmt,
-	}
-	paramLt := db.ReadParamLayout{
-		IsFromSet: false,
+	cvtExpr := &db.CellExprConverter{CellTableConverter: db.CellTableConverter{
+		ModelDef:    meta,
+		Name:        name,
+		IsIdCsv:     false,
+		DoubleFmt:   theCfg.doubleFmt,
+		IsNoZeroCsv: runOpts.Bool(noZeroArgKey),
+		IsNoNullCsv: runOpts.Bool(noNullArgKey),
+	}}
+	tblLt := db.ReadTableLayout{
 		ReadLayout: db.ReadLayout{
 			Name:   name,
 			FromId: run.RunId,
-		}}
+		},
+	}
 
 	if theCfg.isNoLang {
 
-		hdr, err = cvtParam.CsvHeader()
+		hdr, err = cvtExpr.CsvHeader()
 		if err != nil {
-			return errors.New("Failed to make parameter csv header: " + name + ": " + err.Error())
+			return errors.New("Failed to make output table csv header: " + name + ": " + err.Error())
 		}
-		cvtRow, err = cvtParam.ToCsvRow()
+		cvtRow, err = cvtExpr.ToCsvRow()
 		if err != nil {
-			return errors.New("Failed to create parameter converter to csv: " + name + ": " + err.Error())
+			return errors.New("Failed to create output table converter to csv: " + name + ": " + err.Error())
 		}
 
 	} else { // get language-specific metadata
 
+		langDef, err := db.GetLanguages(srcDb)
+		if err != nil {
+			return errors.New("Error at get language-specific metadata: " + err.Error())
+		}
 		txt, err := db.GetModelText(srcDb, meta.Model.ModelId, theCfg.lang, true)
 		if err != nil {
 			return errors.New("Error at get model text metadata: " + err.Error())
 		}
 
-		cvtLoc := &db.CellParamLocaleConverter{
-			CellParamConverter: *cvtParam,
-			Lang:               theCfg.lang,
-			EnumTxt:            txt.TypeEnumTxt,
+		cvtLoc := &db.CellExprLocaleConverter{
+			CellExprConverter: *cvtExpr,
+			Lang:              theCfg.lang,
+			LangDef:           langDef,
+			EnumTxt:           txt.TypeEnumTxt,
+			ExprTxt:           txt.TableExprTxt,
 		}
 
 		hdr, err = cvtLoc.CsvHeader()
 		if err != nil {
-			return errors.New("Failed to make parameter csv header: " + name + ": " + err.Error())
+			return errors.New("Failed to make output table csv header: " + name + ": " + err.Error())
 		}
 		cvtRow, err = cvtLoc.ToCsvRow()
 		if err != nil {
-			return errors.New("Failed to create parameter converter to csv: " + name + ": " + err.Error())
+			return errors.New("Failed to create output table converter to csv: " + name + ": " + err.Error())
 		}
 	}
 
@@ -144,20 +153,30 @@ func parameterRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.R
 		if isNotEmpty, e2 = cvtRow(c, cs); e2 != nil {
 			return false, e2
 		}
-		if isNotEmpty {
-			if !isOld {
-				e2 = csvWr.Write(cs)
-			} else {
-				e2 = csvWr.Write(cs[1:]) // compatibility view: skip sub_id column
+		if !isNotEmpty {
+			return true, nil
+		}
+
+		if !isOld {
+			e2 = csvWr.Write(cs)
+		} else {
+			// compatibilty view: dimesions first, expression label after dimensions
+			if rank > 0 {
+				se := cs[0]
+				for k := 0; k < rank; k++ {
+					cs[k] = cs[k+1]
+				}
+				cs[rank] = se
 			}
+			e2 = csvWr.Write(cs)
 		}
 		return e2 == nil, e2
 	}
 
 	// read parameter values page
-	_, err = db.ReadParameterTo(srcDb, meta, &paramLt, cvtWr)
+	_, err = db.ReadOutputTableTo(srcDb, meta, &tblLt, cvtWr)
 	if err != nil {
-		return errors.New("Error at parameter output: " + name + ": " + err.Error())
+		return errors.New("Error at output table output: " + name + ": " + err.Error())
 	}
 
 	csvWr.Flush() // flush csv to response

@@ -33,30 +33,33 @@ Get list of the models from database:
 	  -dbget.Database "Database=modelName.sqlite; Timeout=86400; OpenMode=ReadWrite;"
 	  -dbget.DatabaseDriver SQLite
 
-Get compatibility model metadata (Modgen):
-
-	dbget -m modelOne -do old-model
-	dbget -m modelOne -do old-model -csv
-	dbget -m modelOne -do old-model -tsv
-	dbget -m modelOne -do old-model -json
-	dbget -m modelOne -do old-model -pipe
-
-	dbget -dbget.Sqlite modelOne.sqlite -dbget.Do old-model -dbget.As csv -dbget.ToConsole -dbget.Language FR
-
 Get parameter run values:
-
-	dbget -m modelOne -do parameter -dbget.Run Default -dbget.Parameter ageSex -pipe
 
 	dbget -m modelOne -r Default -parameter ageSex
 	dbget -m modelOne -r Default -parameter ageSex -lang FR
-	dbget -m modelOne -r Default -parameter ageSex -lang fr-CA
-	dbget -m modelOne -r Default -parameter ageSex -lang isl
 	dbget -m modelOne -r Default -parameter ageSex -dbget.NoLanguage
+	dbget -m modelOne -r Default -parameter ageSex -tsv
+	dbget -m modelOne -r Default -parameter ageSex -pipe
 
 	dbget -m modelOne -dbget.FirstRun -parameter ageSex
 	dbget -m modelOne -dbget.LastRun  -parameter ageSex
 
-	dbget -m modelOne -r Default -parameter ageSex -tsv
+	dbget -dbget.Sqlite modelOne.sqlite -dbget.Do parameter -dbget.Run Default -dbget.Parameter ageSex
+
+Get output table values:
+
+	dbget -m modelOne -r Default -table ageSexIncome
+	dbget -m modelOne -r Default -table ageSexIncome -lang FR
+	dbget -m modelOne -r Default -table ageSexIncome -dbget.NoLanguage
+	dbget -m modelOne -r Default -table ageSexIncome -tsv
+	dbget -m modelOne -r Default -table ageSexIncome -pipe
+	dbget -m modelOne -r Default -table ageSexIncome -dbget.NoZeroCsv
+	dbget -m modelOne -r Default -table ageSexIncome -dbget.NoNullCsv
+
+	dbget -m modelOne -dbget.FirstRun -table ageSexIncome
+	dbget -m modelOne -dbget.LastRun  -table ageSexIncome
+
+	dbget -dbget.Sqlite modelOne.sqlite -dbget.Do table -dbget.Run Default -dbget.Table ageSexIncome
 
 Aggregate and compare microdata run values:
 
@@ -79,6 +82,46 @@ Aggregate and compare microdata run values:
 	  -dbget.Entity Person
 	  -dbget.GroupBy AgeGroup
 	  -dbget.Calc OM_AVG(Income[base]-Income[variant])
+
+Get model metadata from compatibility (Modgen) views:
+
+	dbget -m modelOne -do old-model
+	dbget -m modelOne -do old-model -csv
+	dbget -m modelOne -do old-model -tsv
+	dbget -m modelOne -do old-model -json
+	dbget -m modelOne -do old-model -pipe
+
+	dbget -dbget.Sqlite modelOne.sqlite -dbget.Do old-model -dbget.As csv -dbget.ToConsole -dbget.Language FR
+
+Get model run parameters and out tables values from compatibility (Modgen) views:
+
+	dbget -m modelOne -do old-run
+	dbget -m modelOne -do old-run -csv
+	dbget -m modelOne -do old-run -tsv
+	dbget -m modelOne -do old-run -pipe
+
+	dbget -dbget.Sqlite modelOne.sqlite -dbget.Do old-run -dbget.As csv -dbget.ToConsole -dbget.Language FR
+
+Get parameter run values from compatibility (Modgen) views:
+
+	dbget -m modelOne -do old-parameter -dbget.FirstRun -dbget.Parameter ageSex
+	dbget -m modelOne -do old-parameter -dbget.FirstRun -dbget.Parameter ageSex -csv
+	dbget -m modelOne -do old-parameter -dbget.FirstRun -dbget.Parameter ageSex -tsv
+	dbget -m modelOne -do old-parameter -dbget.FirstRun -dbget.Parameter ageSex -pipe
+
+	dbget -dbget.Sqlite modelOne.sqlite -dbget.Do old-parameter -dbget.Parameter ageSex -dbget.As csv -dbget.ToConsole -dbget.Language FR
+
+Get output table values from compatibility (Modgen) views:
+
+	dbget -m modelOne -do old-table -dbget.FirstRun -dbget.Table salarySex
+	dbget -m modelOne -do old-table -dbget.FirstRun -dbget.Table salarySex -csv
+	dbget -m modelOne -do old-table -dbget.FirstRun -dbget.Table salarySex -tsv
+	dbget -m modelOne -do old-table -dbget.FirstRun -dbget.Table salarySex -lang FR
+	dbget -m modelOne -do old-table -dbget.FirstRun -dbget.Table salarySex -pipe
+	dbget -m modelOne -do old-table -dbget.FirstRun -dbget.Table salarySex -dbget.NoZeroCsv
+	dbget -m modelOne -do old-table -dbget.FirstRun -dbget.Table salarySex -dbget.NoNullCsv
+
+	dbget -dbget.Sqlite modelOne.sqlite -dbget.Do old-table -dbget.Table ageSexIncome -dbget.As csv -dbget.ToConsole -dbget.Language FR
 */
 package main
 
@@ -119,6 +162,8 @@ const (
 	useUtf8ArgKey       = "dbget.Utf8Bom"        // if true then write utf-8 BOM into output
 	noteArgKey          = "dbget.Notes"          // if true then output notes into .md files
 	doubleFormatArgKey  = "dbget.DoubleFormat"   // convert to string format for float and double
+	noZeroArgKey        = "dbget.NoZeroCsv"      // if true then do not write zero values into output tables or microdata csv
+	noNullArgKey        = "dbget.NoNullCsv"      // if true then do not write NULL values into output tables or microdata csv
 	sqliteArgKey        = "dbget.Sqlite"         // input db SQLite path
 	sqliteShortKey      = "db"                   // input db SQLite path (short form)
 	dbConnStrArgKey     = "dbget.Database"       // db connection string
@@ -137,6 +182,8 @@ const (
 	withRunLastArgKey   = "dbget.WithLastRun"    // with last model run (with last run as variant)
 	paramArgKey         = "dbget.Parameter"      // parameter name
 	paramShortKey       = "parameter"            // short form of: -dbget.do parameter -dbget.Parameter Name
+	tableArgKey         = "dbget.Table"          // output table name
+	tableShortKey       = "table"                // short form of: -dbget.do table -dbget.Table Name
 	entityArgKey        = "dbget.Entity"         // microdata entity name
 	groupByArgKey       = "dbget.GroupBy"        // microdata group by attributes
 	calcArgKey          = "dbget.Calc"           // calculation(s) expressions to compare or aggregate
@@ -192,6 +239,7 @@ func mainBody(args []string) error {
 
 	isPipe := false
 	doParamName := ""
+	doTableName := ""
 	_ = flag.String(cmdArgKey, "", "action, what to do, for example: model-list")
 	_ = flag.String(cmdShortKey, "", "action, what to do (short of "+cmdArgKey+")")
 	_ = flag.String(asArgKey, "", "output as .csv, .tsv or .json, default: .csv")
@@ -212,6 +260,8 @@ func mainBody(args []string) error {
 	_ = flag.Bool(useUtf8ArgKey, theCfg.isWriteUtf8Bom, "if true then write utf-8 BOM into output")
 	_ = flag.Bool(noteArgKey, theCfg.isNote, "if true then write notes into .md files")
 	_ = flag.String(doubleFormatArgKey, theCfg.doubleFmt, "convert to string format for float and double")
+	_ = flag.Bool(noZeroArgKey, false, "if true then do not write zero values into output tables .csv files")
+	_ = flag.Bool(noNullArgKey, false, "if true then do not write NULL values into output tables .csv files")
 	_ = flag.String(sqliteArgKey, "", "input database SQLite file path")
 	_ = flag.String(sqliteShortKey, "", "model name (short of "+sqliteArgKey+")")
 	_ = flag.String(dbConnStrArgKey, "", "input database connection string")
@@ -230,6 +280,8 @@ func mainBody(args []string) error {
 	_ = flag.Bool(withRunLastArgKey, false, "if true then use last model run (use as variant run)")
 	_ = flag.String(paramArgKey, "", "parameter name")
 	flag.StringVar(&doParamName, paramShortKey, "", "short form of: -"+cmdArgKey+" parameter -"+paramArgKey+" Name")
+	_ = flag.String(tableArgKey, "", "output table name")
+	flag.StringVar(&doTableName, tableShortKey, "", "short form of: -"+cmdArgKey+" table -"+tableArgKey+" Name")
 	_ = flag.String(entityArgKey, "", "microdata entity name")
 	_ = flag.String(groupByArgKey, "", "list of microdata group by attributes")
 	_ = flag.String(calcArgKey, "", "list of calculation(s) expressions to compare or aggregate")
@@ -245,6 +297,7 @@ func mainBody(args []string) error {
 		{Full: consoleArgKey, Short: consoleShortKey},
 		{Full: langArgKey, Short: langShortKey},
 		{Full: paramArgKey, Short: paramShortKey},
+		{Full: tableArgKey, Short: tableShortKey},
 	}
 
 	// parse command line arguments and ini-file
@@ -399,6 +452,12 @@ func mainBody(args []string) error {
 		}
 		theCfg.action = "parameter"
 	}
+	if doTableName != "" {
+		if runOpts.IsExist(cmdArgKey) && theCfg.action != "table" {
+			return errors.New("invalid action argument: " + theCfg.action)
+		}
+		theCfg.action = "table"
+	}
 
 	// dispatch the command
 	switch theCfg.action {
@@ -408,10 +467,18 @@ func mainBody(args []string) error {
 		return modelOldMeta(srcDb, modelId)
 	case "parameter":
 		return parameterValue(srcDb, modelId, runOpts)
+	case "table":
+		return tableValue(srcDb, modelId, runOpts)
 	case "microdata-aggregate":
 		return microdataAggregate(srcDb, modelId, false, runOpts)
 	case "microdata-compare":
 		return microdataAggregate(srcDb, modelId, true, runOpts)
+	case "old-run":
+		return runOldValue(srcDb, modelId)
+	case "old-parameter":
+		return parameterOldValue(srcDb, modelId, runOpts)
+	case "old-table":
+		return tableOldValue(srcDb, modelId, runOpts)
 	}
 	return errors.New("invalid action argument: " + theCfg.action)
 }

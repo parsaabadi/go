@@ -12,8 +12,6 @@ import (
 	"runtime"
 	"strings"
 
-	_ "github.com/mattn/go-sqlite3"
-
 	"github.com/openmpp/go/ompp/helper"
 	"github.com/openmpp/go/ompp/omppLog"
 )

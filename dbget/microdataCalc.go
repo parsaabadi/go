@@ -180,10 +180,12 @@ func microdataAggregate(srcDb *sql.DB, modelId int, isCompare bool, runOpts *con
 	// create cell conveter to csv
 	cvtMicro := db.CellMicroCalcConverter{
 		CellEntityConverter: db.CellEntityConverter{
-			ModelDef:  meta,
-			Name:      entityName,
-			IsIdCsv:   false, // use code, not id's
-			DoubleFmt: theCfg.doubleFmt,
+			ModelDef:    meta,
+			Name:        entityName,
+			IsIdCsv:     false, // use code, not id's
+			DoubleFmt:   theCfg.doubleFmt,
+			IsNoZeroCsv: runOpts.Bool(noZeroArgKey),
+			IsNoNullCsv: runOpts.Bool(noNullArgKey),
 		},
 		CalcMaps: db.EmptyCalcMaps(),
 		GroupBy:  calcLt.GroupBy,

@@ -7,6 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
 )
 
 // CellExpr is value of output table expression.
@@ -36,6 +39,15 @@ type CellTableConverter struct {
 // CellExprConverter is a converter for output table expression to implement CsvConverter interface.
 type CellExprConverter struct {
 	CellTableConverter // model metadata and output table name
+}
+
+// Converter for output table expression to implement CsvLocaleConverter interface.
+type CellExprLocaleConverter struct {
+	CellExprConverter
+	Lang    string            // language code, expected to compatible with BCP 47 language tag
+	LangDef *LangMeta         // language metadata to find translations
+	EnumTxt []TypeEnumTxtRow  // type enum text rows: type_enum_txt join to model_type_dic
+	ExprTxt []TableExprTxtRow // output table expression text rows: table_expr_txt join to model_table_dic
 }
 
 // return true if csv converter is using enum id's for dimensions
@@ -242,6 +254,90 @@ func (cellCvt *CellExprConverter) ToCsvRow() (func(interface{}, []string) (bool,
 	return cvt, nil
 }
 
+// Return converter from output table cell (expr_id, dimensions, value)
+// to language-specific csv []string row of enum labels and value.
+//
+// Converter return isNotEmpty flag, it return false if IsNoZero or IsNoNull is set and cell value is empty or zero.
+// Converter return error if len(row) not equal to number of fields in csv record.
+// If dimension type is enum based then csv row is enum label.
+// Value and dimesions of built-in types converted to locale-specific strings, e.g.: 1234.56 => 1 234,56
+func (cellCvt *CellExprLocaleConverter) ToCsvRow() (func(interface{}, []string) (bool, error), error) {
+
+	// find output table by name
+	table, err := cellCvt.tableByName()
+	if err != nil {
+		return nil, err
+	}
+
+	// for each dimension create converter from item id to label
+	fd := make([]func(itemId int) (string, error), table.Rank)
+
+	for k := 0; k < table.Rank; k++ {
+		f, err := table.Dim[k].typeOf.itemIdToLabel(cellCvt.Lang, cellCvt.EnumTxt, cellCvt.LangDef, cellCvt.Name+"."+table.Dim[k].Name, table.Dim[k].IsTotal)
+		if err != nil {
+			return nil, err
+		}
+		fd[k] = f
+	}
+
+	cvtExprId, err := cellCvt.exprIdToLabel() // converter from expression id to language-specific label
+
+	// format value locale-specific strings, e.g.: 1234.56 => 1 234,56
+	prt := message.NewPrinter(language.Make(cellCvt.Lang))
+
+	cvt := func(src interface{}, row []string) (bool, error) {
+
+		cell, ok := src.(CellExpr)
+		if !ok {
+			return false, errors.New("invalid type, expected: output table expression cell (internal error): " + cellCvt.Name)
+		}
+
+		n := len(cell.DimIds)
+		if len(row) != n+2 {
+			return false, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.Name)
+		}
+
+		row[0], err = cvtExprId(cell.ExprId)
+		if err != nil {
+			return false, err
+		}
+
+		// row[1] = prt.Sprint(cell.SubId) // convert sub-value id to local-specific string
+
+		// convert dimension item id to label
+		for k, e := range cell.DimIds {
+			v, err := fd[k](e)
+			if err != nil {
+				return false, err
+			}
+			row[k+1] = v
+		}
+
+		// use "null" string for db NULL values and format for model float types
+		isNotEmpty := true
+
+		if cell.IsNull {
+			row[n+1] = "null"
+			isNotEmpty = !cellCvt.IsNoNullCsv
+		} else {
+
+			if cellCvt.IsNoZeroCsv {
+				fv, ok := cell.Value.(float64)
+				isNotEmpty = ok && fv != 0
+			}
+
+			if cellCvt.DoubleFmt != "" {
+				row[n+1] = prt.Sprintf(cellCvt.DoubleFmt, cell.Value)
+			} else {
+				row[n+1] = prt.Sprint(cell.Value)
+			}
+		}
+		return isNotEmpty, nil
+	}
+
+	return cvt, nil
+}
+
 // CsvToCell return closure to convert csv row []string to output table expression cell (dimensions and value).
 //
 // Converter return error if len(row) not equal to number of fields in cell db-record.
@@ -397,4 +493,41 @@ func (cellCvt *CellTableConverter) tableByName() (*TableMeta, error) {
 	cellCvt.theTable = &cellCvt.ModelDef.Table[idx]
 
 	return cellCvt.theTable, nil
+}
+
+// Return converter from expression id to language-specific label.
+// Converter return expression description by expression id and language.
+// If language code or description is empty then converter expression name
+func (cellCvt *CellExprLocaleConverter) exprIdToLabel() (func(itemId int) (string, error), error) {
+
+	// find output table by name
+	table, err := cellCvt.tableByName()
+	if err != nil {
+		return nil, err
+	}
+	labelMap := make(map[int]string, len(table.Expr))
+
+	// add expression name into map as default label
+	for j := range table.Expr {
+		labelMap[table.Expr[j].ExprId] = table.Expr[j].Name
+	}
+
+	// replace labels: use description where exists for specified language
+	if cellCvt.Lang != "" {
+		for j := range cellCvt.ExprTxt {
+			if cellCvt.ExprTxt[j].ModelId == table.ModelId && cellCvt.ExprTxt[j].TableId == table.TableId && cellCvt.ExprTxt[j].LangCode == cellCvt.Lang {
+				labelMap[cellCvt.ExprTxt[j].ExprId] = cellCvt.ExprTxt[j].Descr
+			}
+		}
+	}
+
+	cvt := func(exprId int) (string, error) {
+
+		if lbl, ok := labelMap[exprId]; ok {
+			return lbl, nil
+		}
+		return "", errors.New("invalid value: " + strconv.Itoa(exprId) + " of: " + cellCvt.Name)
+	}
+
+	return cvt, nil
 }

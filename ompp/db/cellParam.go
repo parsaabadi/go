@@ -38,9 +38,8 @@ type CellParamConverter struct {
 // Converter for input parameter to implement CsvLocaleConverter interface.
 type CellParamLocaleConverter struct {
 	CellParamConverter
-	Lang     string           // language code, expected to compatible with BCP 47 language tag
-	LangMeta                  // language metadata to find translations
-	EnumTxt  []TypeEnumTxtRow // type enum text rows: type_enum_txt join to model_type_dic
+	Lang    string           // language code, expected to compatible with BCP 47 language tag
+	EnumTxt []TypeEnumTxtRow // type enum text rows: type_enum_txt join to model_type_dic
 }
 
 // return true if csv converter is using enum id's for dimensions
@@ -111,7 +110,7 @@ func (cellCvt *CellParamConverter) KeyIds(name string) (func(interface{}, []int)
 	return cvt, nil
 }
 
-// ToCsvIdRow return converter from parameter cell (sub id, dimensions, value) to csv id's row []string.
+// Return converter from parameter cell (sub id, dimensions, value) to csv id's row []string.
 //
 // Converter return isNotEmpty flag, it is always true if there were no error during conversion.
 // Converter simply does Sprint() for each sub-value id, dimension item id and value.
@@ -160,7 +159,7 @@ func (cellCvt *CellParamConverter) ToCsvIdRow() (func(interface{}, []string) (bo
 	return cvt, nil
 }
 
-// ToCsvRow return converter from parameter cell (sub id, dimensions, value) to csv row []string.
+// Return converter from parameter cell (sub id, dimensions, value) to csv row []string.
 //
 // Converter return isNotEmpty flag, it is always true if there were no error during conversion.
 // Converter will return error if len(row) not equal to number of fields in csv record.
@@ -275,7 +274,7 @@ func (cellCvt *CellParamLocaleConverter) ToCsvRow() (func(interface{}, []string)
 	fd := make([]func(itemId int) (string, error), param.Rank)
 
 	for k := 0; k < param.Rank; k++ {
-		f, err := param.Dim[k].typeOf.itemIdToLabel(cellCvt.Lang, cellCvt.EnumTxt, cellCvt.LangMeta, cellCvt.Name+"."+param.Dim[k].Name, false)
+		f, err := param.Dim[k].typeOf.itemIdToLabel(cellCvt.Lang, cellCvt.EnumTxt, nil, cellCvt.Name+"."+param.Dim[k].Name, false)
 		if err != nil {
 			return nil, err
 		}
@@ -292,7 +291,7 @@ func (cellCvt *CellParamLocaleConverter) ToCsvRow() (func(interface{}, []string)
 	var fv func(itemId int) (string, error)
 
 	if isUseEnum || isUseBool {
-		f, err := param.typeOf.itemIdToLabel(cellCvt.Lang, cellCvt.EnumTxt, cellCvt.LangMeta, cellCvt.Name, false)
+		f, err := param.typeOf.itemIdToLabel(cellCvt.Lang, cellCvt.EnumTxt, nil, cellCvt.Name, false)
 		if err != nil {
 			return nil, err
 		}
@@ -313,7 +312,7 @@ func (cellCvt *CellParamLocaleConverter) ToCsvRow() (func(interface{}, []string)
 			return false, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.Name)
 		}
 
-		row[0] = prt.Sprint(cell.SubId)
+		row[0] = prt.Sprint(cell.SubId) // convert sub-value id to local-specific string
 
 		// convert dimension item id to code
 		for k, e := range cell.DimIds {

@@ -51,7 +51,7 @@ type CsvIntKeysConverter interface {
 }
 
 // CsvConverter provide methods to convert parameter row, output table row or microdata row from or to row []string for csv file.
-// Double format string is used for output bale values or if parameter type is float, double, long double.
+// Double format string is used for values or if value type is float, double, long double.
 // If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
 // If parameter type is enum based then cell value is enum id and csv row value is enum code.
 type CsvConverter interface {
@@ -75,6 +75,15 @@ type CsvConverter interface {
 	// it does convert from enum id to code for all dimensions into []string buffer.
 	// if this is a enum-based parameter value then it is also converted to enum code.
 	// converter return isNotEmpty flag if cell value is not empty.
+	ToCsvRow() (func(interface{}, []string) (bool, error), error)
+}
+
+// CsvConverter provide methods to convert parameter row, output table row or microdata row from or to row []string for csv file.
+type CsvLocaleConverter interface {
+	// return converter from cell of parameter, output table or microdata to csv row []string.
+	// If dimension type is enum based then csv row is enum label.
+	// If parameter type is enum based then csv row value is enum label.
+	// Value and dimesions of built-in types converted to locale-specific strings, e.g.: 1234.56 => 1 234,56
 	ToCsvRow() (func(interface{}, []string) (bool, error), error)
 }
 
@@ -188,7 +197,7 @@ func (typeOf *TypeMeta) itemIdToCode(msgName string, isTotalEnabled bool) (func(
 // If dimension is enum-based then from enum id to enum description or to the "all" total enum label;
 // If dimension is simple integer type then use Itoa(integer id) as code;
 // If dimension is boolean then 0=>false, (1 or -1)=>true else error
-func (typeOf *TypeMeta) itemIdToLabel(lang string, enumTxt []TypeEnumTxtRow, langMeta LangMeta, msgName string, isTotalEnabled bool) (func(itemId int) (string, error), error) {
+func (typeOf *TypeMeta) itemIdToLabel(lang string, enumTxt []TypeEnumTxtRow, langDef *LangMeta, msgName string, isTotalEnabled bool) (func(itemId int) (string, error), error) {
 
 	if lang == "" {
 		return typeOf.itemIdToCode(msgName, isTotalEnabled) // language is empty: retrun converter from id to enum code
@@ -215,10 +224,10 @@ func (typeOf *TypeMeta) itemIdToLabel(lang string, enumTxt []TypeEnumTxtRow, lan
 	// if total item enabled in dimension then find language-specific total label
 	allLabel := TotalEnumCode
 
-	if isTotalEnabled {
-		for j := range langMeta.Lang {
-			if langMeta.Lang[j].LangCode == lang {
-				if lbl, ok := langMeta.Lang[j].Words[TotalEnumCode]; ok {
+	if isTotalEnabled && langDef != nil {
+		for j := range langDef.Lang {
+			if langDef.Lang[j].LangCode == lang {
+				if lbl, ok := langDef.Lang[j].Words[TotalEnumCode]; ok {
 					allLabel = lbl
 				}
 			}
