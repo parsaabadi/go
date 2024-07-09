@@ -304,7 +304,7 @@ func microdataAggregate(srcDb *sql.DB, modelId int, isCompare bool, runOpts *con
 	}
 
 	// start csv output to file or console
-	f, csvWr, err := startCsvWrite(entityName)
+	f, csvWr, err := startCsvWrite(entityName, true)
 	if err != nil {
 		return err
 	}

@@ -12,6 +12,7 @@ import (
 	"strconv"
 
 	"github.com/openmpp/go/ompp/db"
+	"github.com/openmpp/go/ompp/helper"
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
@@ -272,17 +273,17 @@ func modelOldMeta(srcDb *sql.DB, modelId int) error {
 	ext := outputExt()
 
 	if theCfg.isConsole {
-		omppLog.Log("Do old-model")
+		omppLog.Log("Do ", theCfg.action)
 	} else {
 		if theCfg.kind == asJson {
 
 			fp = theCfg.fileName
 			if fp == "" {
-				fp = mdRow.Name + ".old-model.json"
+				fp = helper.CleanFileName(mdRow.Name) + ".old-model.json"
 			}
 			fp = filepath.Join(theCfg.dir, fp)
 
-			omppLog.Log("Do old-model: " + fp)
+			omppLog.Log("Do ", theCfg.action, ": ", fp)
 
 		} else {
 			if dir == "" {
@@ -292,7 +293,7 @@ func modelOldMeta(srcDb *sql.DB, modelId int) error {
 			if err := makeOutputDir(dir, theCfg.isKeepOutputDir); err != nil {
 				return err
 			}
-			omppLog.Log("Do old-model: " + dir)
+			omppLog.Log("Do ", theCfg.action, ": ", dir)
 		}
 	}
 

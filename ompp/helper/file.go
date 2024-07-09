@@ -20,7 +20,19 @@ const InvalidFileNameChars = "\"'`:*?><|$}{@&^;%/\\" // invalid or dangerous fil
 func CleanFileName(src string) string {
 	return strings.Map(
 		func(r rune) rune {
-			if strings.ContainsRune("\"'`:*?><|$}{@&^;/\\\\", r) {
+			if strings.ContainsRune(InvalidFileNameChars, r) {
+				r = '_'
+			}
+			return r
+		},
+		src)
+}
+
+// replace special file name characters: "'`:*?><|$}{@&^; by _ underscore
+func CleanFilePath(src string) string {
+	return strings.Map(
+		func(r rune) rune {
+			if strings.ContainsRune(InvalidFilePathChars, r) {
 				r = '_'
 			}
 			return r

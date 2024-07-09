@@ -36,7 +36,7 @@ Get list of the models from database:
 Get parameter run values:
 
 	dbget -m modelOne -r Default -parameter ageSex
-	dbget -m modelOne -r Default -parameter ageSex -lang FR
+	dbget -m modelOne -r Default -parameter ageSex -lang fr-CA
 	dbget -m modelOne -r Default -parameter ageSex -dbget.NoLanguage
 	dbget -m modelOne -r Default -parameter ageSex -tsv
 	dbget -m modelOne -r Default -parameter ageSex -pipe
@@ -49,7 +49,7 @@ Get parameter run values:
 Get output table values:
 
 	dbget -m modelOne -r Default -table ageSexIncome
-	dbget -m modelOne -r Default -table ageSexIncome -lang FR
+	dbget -m modelOne -r Default -table ageSexIncome -lang fr-CA
 	dbget -m modelOne -r Default -table ageSexIncome -dbget.NoLanguage
 	dbget -m modelOne -r Default -table ageSexIncome -tsv
 	dbget -m modelOne -r Default -table ageSexIncome -pipe
@@ -98,28 +98,34 @@ Get model run parameters and out tables values from compatibility (Modgen) views
 	dbget -m modelOne -do old-run
 	dbget -m modelOne -do old-run -csv
 	dbget -m modelOne -do old-run -tsv
+	dbget -m modelOne -do old-run -lang fr-CA
+	dbget -m modelOne -do old-run -dbget.NoLanguage
 	dbget -m modelOne -do old-run -pipe
+	dbget -m modelOne -do old-run -dir my/dir
+	dbget -m modelOne -do old-run -dbget.NoZeroCsv
+	dbget -m modelOne -do old-run -dbget.NoNullCsv
 
 	dbget -dbget.Sqlite modelOne.sqlite -dbget.Do old-run -dbget.As csv -dbget.ToConsole -dbget.Language FR
 
 Get parameter run values from compatibility (Modgen) views:
 
-	dbget -m modelOne -do old-parameter -dbget.FirstRun -dbget.Parameter ageSex
-	dbget -m modelOne -do old-parameter -dbget.FirstRun -dbget.Parameter ageSex -csv
-	dbget -m modelOne -do old-parameter -dbget.FirstRun -dbget.Parameter ageSex -tsv
-	dbget -m modelOne -do old-parameter -dbget.FirstRun -dbget.Parameter ageSex -pipe
+	dbget -m modelOne -do old-parameter -dbget.Parameter ageSex
+	dbget -m modelOne -do old-parameter -dbget.Parameter ageSex -csv
+	dbget -m modelOne -do old-parameter -dbget.Parameter ageSex -tsv
+	dbget -m modelOne -do old-parameter -dbget.Parameter ageSex -lang fr-CA
+	dbget -m modelOne -do old-parameter -dbget.Parameter ageSex -pipe
 
 	dbget -dbget.Sqlite modelOne.sqlite -dbget.Do old-parameter -dbget.Parameter ageSex -dbget.As csv -dbget.ToConsole -dbget.Language FR
 
 Get output table values from compatibility (Modgen) views:
 
-	dbget -m modelOne -do old-table -dbget.FirstRun -dbget.Table salarySex
-	dbget -m modelOne -do old-table -dbget.FirstRun -dbget.Table salarySex -csv
-	dbget -m modelOne -do old-table -dbget.FirstRun -dbget.Table salarySex -tsv
-	dbget -m modelOne -do old-table -dbget.FirstRun -dbget.Table salarySex -lang FR
-	dbget -m modelOne -do old-table -dbget.FirstRun -dbget.Table salarySex -pipe
-	dbget -m modelOne -do old-table -dbget.FirstRun -dbget.Table salarySex -dbget.NoZeroCsv
-	dbget -m modelOne -do old-table -dbget.FirstRun -dbget.Table salarySex -dbget.NoNullCsv
+	dbget -m modelOne -do old-table -dbget.Table salarySex
+	dbget -m modelOne -do old-table -dbget.Table salarySex -csv
+	dbget -m modelOne -do old-table -dbget.Table salarySex -tsv
+	dbget -m modelOne -do old-table -dbget.Table salarySex -lang fr-CA
+	dbget -m modelOne -do old-table -dbget.Table salarySex -pipe
+	dbget -m modelOne -do old-table -dbget.Table salarySex -dbget.NoZeroCsv
+	dbget -m modelOne -do old-table -dbget.Table salarySex -dbget.NoNullCsv
 
 	dbget -dbget.Sqlite modelOne.sqlite -dbget.Do old-table -dbget.Table ageSexIncome -dbget.As csv -dbget.ToConsole -dbget.Language FR
 */
@@ -137,6 +143,7 @@ import (
 
 	"github.com/openmpp/go/ompp/config"
 	"github.com/openmpp/go/ompp/db"
+	"github.com/openmpp/go/ompp/helper"
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
@@ -221,6 +228,8 @@ var theCfg = struct {
 	isWriteUtf8Bom: false,   // do not write BOM by default
 	doubleFmt:      "%.15g", // default format to convert float or double values to string
 }
+
+const logPeriod = 5 // seconds, log periodically if output takes a long time
 
 // main entry point: wrapper to handle errors
 func main() {
@@ -315,8 +324,8 @@ func mainBody(args []string) error {
 
 	// get common run options
 	theCfg.action = runOpts.String(cmdArgKey)
-	theCfg.fileName = runOpts.String(outputFileArgKey)
-	theCfg.dir = runOpts.String(outputDirArgKey)
+	theCfg.fileName = helper.CleanFileName(runOpts.String(outputFileArgKey))
+	theCfg.dir = helper.CleanFilePath(runOpts.String(outputDirArgKey))
 	theCfg.isKeepOutputDir = runOpts.Bool(keepOutputDirArgKey)
 	theCfg.isConsole = runOpts.Bool(consoleArgKey)
 	theCfg.userLang = runOpts.String(langArgKey)
@@ -426,18 +435,22 @@ func mainBody(args []string) error {
 		}
 
 		// match user language to model language, use default model language if there are no match
-		if !theCfg.isNoLang && theCfg.userLang != "" {
-			theCfg.lang, err = matchUserLang(srcDb, *mdRow)
-			if err != nil {
-				return err
+		if !theCfg.isNoLang {
+			if theCfg.userLang != "" {
+				theCfg.lang, err = matchUserLang(srcDb, *mdRow)
+				if err != nil {
+					return err
+				}
+				if theCfg.lang == "" {
+					omppLog.Log("Warning: unable to match user language: ", theCfg.userLang)
+				}
 			}
-			if theCfg.lang == "" {
-				omppLog.Log("Warning: unable to match user language: ", theCfg.userLang)
+			if theCfg.lang != "" {
+				omppLog.Log("Using model language: ", theCfg.lang)
+			} else {
+				theCfg.lang = mdRow.DefaultLangCode
+				omppLog.Log("Using default model language: ", theCfg.lang)
 			}
-		}
-		if theCfg.isNoLang || theCfg.lang == "" {
-			theCfg.lang = mdRow.DefaultLangCode
-			omppLog.Log("Using default model language: ", theCfg.lang)
 		}
 	}
 
@@ -463,8 +476,6 @@ func mainBody(args []string) error {
 	switch theCfg.action {
 	case "model-list":
 		return modelList(srcDb)
-	case "old-model":
-		return modelOldMeta(srcDb, modelId)
 	case "parameter":
 		return parameterValue(srcDb, modelId, runOpts)
 	case "table":
@@ -473,8 +484,10 @@ func mainBody(args []string) error {
 		return microdataAggregate(srcDb, modelId, false, runOpts)
 	case "microdata-compare":
 		return microdataAggregate(srcDb, modelId, true, runOpts)
+	case "old-model":
+		return modelOldMeta(srcDb, modelId)
 	case "old-run":
-		return runOldValue(srcDb, modelId)
+		return runOldValue(srcDb, modelId, runOpts)
 	case "old-parameter":
 		return parameterOldValue(srcDb, modelId, runOpts)
 	case "old-table":

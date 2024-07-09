@@ -31,14 +31,14 @@ func tableValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 	}
 
 	// write output table values to csv or tsv file
-	return tableRunValue(srcDb, meta, runOpts.String(tableArgKey), run, runOpts, false, nil)
+	return tableRunValue(srcDb, meta, runOpts.String(tableArgKey), run, runOpts, false, true, nil)
 }
 
 // read output table values and write run results into csv or tsv file.
 // It can be compatibility view output table csv file with header Dim0,Dim1,....,Value
 // or normal csv file: expr_name,dim0,dim1,expr_value.
 // For compatibilty view output table csv measure dimension column must last dimension, not first as expr_name
-func tableRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRow, runOpts *config.RunOptions, isOld bool, csvHdr []string) error {
+func tableRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRow, runOpts *config.RunOptions, isOld, isLogAction bool, csvHdr []string) error {
 
 	if run == nil {
 		return errors.New("Error: model run not found")
@@ -120,7 +120,7 @@ func tableRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRo
 	}
 
 	// start csv output to file or console
-	f, csvWr, err := startCsvWrite(name)
+	f, csvWr, err := startCsvWrite(name, isLogAction)
 	if err != nil {
 		return err
 	}

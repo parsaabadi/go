@@ -31,14 +31,14 @@ func parameterValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) erro
 	}
 
 	// write parameter values to csv or tsv file
-	return parameterRunValue(srcDb, meta, runOpts.String(paramArgKey), run, false, nil)
+	return parameterRunValue(srcDb, meta, runOpts.String(paramArgKey), run, false, true, nil)
 }
 
 // read model run paratemer values and write run results into csv or tsv file.
 // It can be compatibility view parameter csv file with header Dim0,Dim1,....,Value
 // or normal csv file: sub_id,dim0,dim1,param_value.
 // For compatibilty view parameter csv shold skip sub_id column
-func parameterRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRow, isOld bool, csvHdr []string) error {
+func parameterRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRow, isOld, isLogAction bool, csvHdr []string) error {
 
 	if run == nil {
 		return errors.New("Error: model run not found")
@@ -111,7 +111,7 @@ func parameterRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.R
 	}
 
 	// start csv output to file or console
-	f, csvWr, err := startCsvWrite(name)
+	f, csvWr, err := startCsvWrite(name, isLogAction)
 	if err != nil {
 		return err
 	}
