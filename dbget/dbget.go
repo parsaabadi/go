@@ -33,6 +33,20 @@ Get list of the models from database:
 	  -dbget.Database "Database=modelName.sqlite; Timeout=86400; OpenMode=ReadWrite;"
 	  -dbget.DatabaseDriver SQLite
 
+Get model run parameters and output table values:
+
+	dbget -m modelOne -do run -dbget.FirstRun
+	dbget -m modelOne -do run -dbget.LastRun
+	dbget -m modelOne -do run -r Default-4
+	dbget -m modelOne -do run -r Default-4 -lang fr-CA
+	dbget -m modelOne -do run -r Default-4 -tsv
+	dbget -m modelOne -do run -r Default-4 -pipe
+	dbget -m modelOne -do run -r Default-4 -dbget.NoZeroCsv
+	dbget -m modelOne -do run -r Default-4 -dbget.NoNullCsv
+	dbget -m modelOne -do run -r Default-4 -dbget.NoZeroCsv -dbget.NoNullCsv
+
+	dbget -dbget.Sqlite modelOne.sqlite -dbget.Do run -dbget.Run Default
+
 Get parameter run values:
 
 	dbget -m modelOne -r Default -parameter ageSex
@@ -209,7 +223,7 @@ const (
 var theCfg = struct {
 	action          string   // action name (what to do)
 	kind            outputAs // output as csv, tsv or json
-	fileName        string   // output file name, default: action-name.csv
+	fileName        string   // output file name, default depends on action
 	dir             string   // output directory
 	isKeepOutputDir bool     // if true then keep existing output directory
 	isConsole       bool     // if true then write into stdout
@@ -476,6 +490,14 @@ func mainBody(args []string) error {
 	switch theCfg.action {
 	case "model-list":
 		return modelList(srcDb)
+	case "run":
+		return runValue(srcDb, modelId, runOpts)
+	case "all-runs":
+		return runAllValue(srcDb, modelId, runOpts)
+	case "all-sets":
+		return setAllValue(srcDb, modelId, runOpts)
+	case "set":
+		return setValue(srcDb, modelId, runOpts)
 	case "parameter":
 		return parameterValue(srcDb, modelId, runOpts)
 	case "table":
