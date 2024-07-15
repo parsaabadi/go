@@ -270,10 +270,10 @@ func modelOldMeta(srcDb *sql.DB, modelId int) error {
 	// for csv use specified directory or make default as modelName.old-model
 	fp := ""
 	dir := theCfg.dir
-	ext := outputExt()
+	ext := extByKind()
 
 	if theCfg.isConsole {
-		omppLog.Log("Do ", theCfg.action)
+		omppLog.Log("Do ", theCfg.action, " ", mdRow.Name)
 	} else {
 		if theCfg.kind == asJson {
 

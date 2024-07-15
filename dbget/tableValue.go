@@ -6,10 +6,12 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"path/filepath"
 	"strconv"
 
 	"github.com/openmpp/go/ompp/config"
 	"github.com/openmpp/go/ompp/db"
+	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // get output table values and write run results into csv or tsv files.
@@ -31,14 +33,30 @@ func tableValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 	}
 
 	// write output table values to csv or tsv file
-	return tableRunValue(srcDb, meta, runOpts.String(tableArgKey), run, runOpts, false, true, nil)
+	name := runOpts.String(tableArgKey)
+	fp := ""
+
+	if theCfg.isConsole {
+		omppLog.Log("Do ", theCfg.action, " ", name)
+	} else {
+
+		fp = theCfg.fileName
+		if fp == "" {
+			fp = name + extByKind()
+		}
+		fp = filepath.Join(theCfg.dir, fp)
+
+		omppLog.Log("Do ", theCfg.action, ": "+fp)
+	}
+
+	return tableRunValue(srcDb, meta, name, run, runOpts, fp, false, nil)
 }
 
 // read output table values and write run results into csv or tsv file.
 // It can be compatibility view output table csv file with header Dim0,Dim1,....,Value
 // or normal csv file: expr_name,dim0,dim1,expr_value.
 // For compatibilty view output table csv measure dimension column must last dimension, not first as expr_name
-func tableRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRow, runOpts *config.RunOptions, isOld, isLogAction bool, csvHdr []string) error {
+func tableRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRow, runOpts *config.RunOptions, path string, isOld bool, csvHdr []string) error {
 
 	if run == nil {
 		return errors.New("Error: model run not found")
@@ -120,7 +138,7 @@ func tableRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRo
 	}
 
 	// start csv output to file or console
-	f, csvWr, err := startCsvWrite(name, isLogAction)
+	f, csvWr, err := createCsvWriter(path)
 	if err != nil {
 		return err
 	}

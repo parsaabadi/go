@@ -76,31 +76,6 @@ func toCsvOutput(csvPath string, columnNames []string, lineCvt rowConverter) err
 	return wr.Error()
 }
 
-// create csv or tsv output writer and display action message
-func startCsvWrite(srcName string, isLogAction bool) (*os.File, *csv.Writer, error) {
-
-	// use specified file name or make default
-	fp := ""
-	if theCfg.isConsole {
-		if isLogAction {
-			omppLog.Log("Do ", theCfg.action)
-		}
-	} else {
-
-		fp = theCfg.fileName
-		if fp == "" {
-			fp = srcName + outputExt()
-		}
-		fp = filepath.Join(theCfg.dir, fp)
-
-		if isLogAction {
-			omppLog.Log("Do ", theCfg.action, ": "+fp)
-		}
-	}
-
-	return createCsvWriter(fp)
-}
-
 // create csv or tsv output writer
 func createCsvWriter(csvPath string) (*os.File, *csv.Writer, error) {
 
@@ -184,8 +159,8 @@ func dirDeleteAndLog(path string) bool {
 	return true // OK: deleted successfully
 }
 
-// return file extension: .csv .tsv or .json
-func outputExt() string {
+// return file extension by output kind: .csv .tsv or .json
+func extByKind() string {
 	switch theCfg.kind {
 	case asTsv:
 		return ".tsv"

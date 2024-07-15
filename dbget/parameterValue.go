@@ -6,10 +6,12 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"path/filepath"
 	"strconv"
 
 	"github.com/openmpp/go/ompp/config"
 	"github.com/openmpp/go/ompp/db"
+	"github.com/openmpp/go/ompp/omppLog"
 )
 
 // get model run paratemer values and write run results into csv or tsv files.
@@ -31,14 +33,30 @@ func parameterValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) erro
 	}
 
 	// write parameter values to csv or tsv file
-	return parameterRunValue(srcDb, meta, runOpts.String(paramArgKey), run, false, true, nil)
+	name := runOpts.String(paramArgKey)
+	fp := ""
+
+	if theCfg.isConsole {
+		omppLog.Log("Do ", theCfg.action, " ", name)
+	} else {
+
+		fp = theCfg.fileName
+		if fp == "" {
+			fp = name + extByKind()
+		}
+		fp = filepath.Join(theCfg.dir, fp)
+
+		omppLog.Log("Do ", theCfg.action, ": "+fp)
+	}
+
+	return parameterRunValue(srcDb, meta, name, run, fp, false, nil)
 }
 
 // read model run paratemer values and write run results into csv or tsv file.
 // It can be compatibility view parameter csv file with header Dim0,Dim1,....,Value
 // or normal csv file: sub_id,dim0,dim1,param_value.
 // For compatibilty view parameter csv shold skip sub_id column
-func parameterRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRow, isOld, isLogAction bool, csvHdr []string) error {
+func parameterRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRow, path string, isOld bool, csvHdr []string) error {
 
 	if run == nil {
 		return errors.New("Error: model run not found")
@@ -111,7 +129,7 @@ func parameterRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.R
 	}
 
 	// start csv output to file or console
-	f, csvWr, err := startCsvWrite(name, isLogAction)
+	f, csvWr, err := createCsvWriter(path)
 	if err != nil {
 		return err
 	}

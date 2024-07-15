@@ -37,7 +37,7 @@ func modelList(srcDb *sql.DB) error {
 
 		fp = theCfg.fileName
 		if fp == "" {
-			fp = "model-list" + outputExt()
+			fp = "model-list" + extByKind()
 		}
 		fp = filepath.Join(theCfg.dir, fp)
 

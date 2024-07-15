@@ -46,10 +46,10 @@ func runOldValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 	tableCsvDir := ""
 
 	if theCfg.isConsole {
-		omppLog.Log("Do ", theCfg.action)
+		omppLog.Log("Do ", theCfg.action, " ", run.Name)
 	} else {
 
-		dirSuffix := "" // if ouput directory not specified then add .no-zero and .no-null suffix
+		dirSuffix := "" // if output directory not specified then add .no-zero and .no-null suffix
 
 		if csvTop == "" {
 			csvTop = filepath.Join(helper.CleanFileName(meta.Model.Name), "old-run."+helper.CleanFileName(run.Name))
@@ -77,9 +77,6 @@ func runOldValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 	}
 
 	// write all parameters into csv file
-	d := theCfg.dir
-	theCfg.dir = paramCsvDir
-
 	nP := len(meta.Param)
 	omppLog.Log("  Parameters: ", nP)
 	logT := time.Now().Unix()
@@ -88,15 +85,17 @@ func runOldValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nP, ": ", meta.Param[j].Name)
 
-		err = parameterOldOut(srcDb, meta, meta.Param[j].Name, run, false)
+		fp := ""
+		if !theCfg.isConsole {
+			fp = filepath.Join(paramCsvDir, meta.Param[j].Name+extByKind())
+		}
+		err = parameterOldOut(srcDb, meta, meta.Param[j].Name, run, fp)
 		if err != nil {
 			return err
 		}
 	}
 
 	// write output tables into csv file, if the table included in run results
-	theCfg.dir = tableCsvDir
-
 	nT := len(runMeta.Table)
 	omppLog.Log("  Tables: ", nT)
 
@@ -115,12 +114,15 @@ func runOldValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 		}
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", name)
 
-		err = tableOldOut(srcDb, meta, name, run, runOpts, false)
+		fp := ""
+		if !theCfg.isConsole {
+			fp = filepath.Join(tableCsvDir, name+extByKind())
+		}
+		err = tableOldOut(srcDb, meta, name, run, runOpts, fp)
 		if err != nil {
 			return err
 		}
 	}
-	theCfg.dir = d
 
 	return nil
 }
@@ -147,11 +149,26 @@ func parameterOldValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) e
 		return errors.New("Invalid (empty) parameter name")
 	}
 
-	return parameterOldOut(srcDb, meta, name, run, true)
+	// write parameter values to csv or tsv file
+	fp := ""
+	if theCfg.isConsole {
+		omppLog.Log("Do ", theCfg.action, " ", name)
+	} else {
+
+		fp = theCfg.fileName
+		if fp == "" {
+			fp = name + extByKind()
+		}
+		fp = filepath.Join(theCfg.dir, fp)
+
+		omppLog.Log("Do ", theCfg.action, ": "+fp)
+	}
+
+	return parameterOldOut(srcDb, meta, name, run, fp)
 }
 
 // write old compatibilty run paratemer values into csv or tsv file
-func parameterOldOut(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRow, isLogAction bool) error {
+func parameterOldOut(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRow, path string) error {
 
 	// find parameter
 	idx, ok := meta.ParamByName(name)
@@ -168,7 +185,7 @@ func parameterOldOut(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.Run
 	hdr = append(hdr, "Value")
 
 	// write to csv rows starting from column 1, skip sub_id column
-	return parameterRunValue(srcDb, meta, name, run, true, isLogAction, hdr)
+	return parameterRunValue(srcDb, meta, name, run, path, true, hdr)
 
 }
 
@@ -194,11 +211,26 @@ func tableOldValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error
 		return errors.New("Invalid (empty) output tabel name")
 	}
 
-	return tableOldOut(srcDb, meta, name, run, runOpts, true)
+	// write parameter values to csv or tsv file
+	fp := ""
+	if theCfg.isConsole {
+		omppLog.Log("Do ", theCfg.action, " ", name)
+	} else {
+
+		fp = theCfg.fileName
+		if fp == "" {
+			fp = name + extByKind()
+		}
+		fp = filepath.Join(theCfg.dir, fp)
+
+		omppLog.Log("Do ", theCfg.action, ": "+fp)
+	}
+
+	return tableOldOut(srcDb, meta, name, run, runOpts, fp)
 }
 
 // write old compatibilty output table values into csv or tsv file
-func tableOldOut(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRow, runOpts *config.RunOptions, isLogAction bool) error {
+func tableOldOut(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRow, runOpts *config.RunOptions, path string) error {
 
 	// find output table
 	idx, ok := meta.OutTableByName(name)
@@ -217,5 +249,5 @@ func tableOldOut(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRow,
 	hdr = append(hdr, "Value")
 
 	// write output table values to csv or tsv file
-	return tableRunValue(srcDb, meta, name, run, runOpts, true, isLogAction, hdr)
+	return tableRunValue(srcDb, meta, name, run, runOpts, path, true, hdr)
 }

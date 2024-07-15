@@ -6,6 +6,7 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"path/filepath"
 	"strconv"
 
 	"github.com/openmpp/go/ompp/config"
@@ -304,7 +305,21 @@ func microdataAggregate(srcDb *sql.DB, modelId int, isCompare bool, runOpts *con
 	}
 
 	// start csv output to file or console
-	f, csvWr, err := startCsvWrite(entityName, true)
+	fp := ""
+	if theCfg.isConsole {
+		omppLog.Log("Do ", theCfg.action, " ", entityName)
+	} else {
+
+		fp = theCfg.fileName
+		if fp == "" {
+			fp = entityName + extByKind()
+		}
+		fp = filepath.Join(theCfg.dir, fp)
+
+		omppLog.Log("Do ", theCfg.action, ": "+fp)
+	}
+
+	f, csvWr, err := createCsvWriter(fp)
 	if err != nil {
 		return err
 	}

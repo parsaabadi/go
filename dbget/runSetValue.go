@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"time"
 
@@ -19,7 +20,7 @@ import (
 // write model run parameters and output tables into csv or tsv files
 func runValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 
-	// find first model run
+	// find model run
 	msg, run, err := findRun(srcDb, modelId, runOpts.String(runArgKey), runOpts.Int(runIdArgKey, 0), runOpts.Bool(runFirstArgKey), runOpts.Bool(runLastArgKey))
 	if err != nil {
 		return errors.New("Error at get model run: " + msg + " " + err.Error())
@@ -38,31 +39,44 @@ func runValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 		return errors.New("Error at get model metadata by id: " + strconv.Itoa(modelId) + ": " + err.Error())
 	}
 
-	// create output directory and sub directories for parameters and output tables
-	// if output directory name not explicitly specified then use run name by default
-
-	csvTop := theCfg.dir
-	paramCsvDir := ""
-	tableCsvDir := ""
+	// create output directory
+	// if output directory name not explicitly specified then use ModelName/run.RunName by default
+	runTop := theCfg.dir
+	isDefaultTop := theCfg.dir == ""
 
 	if theCfg.isConsole {
-		omppLog.Log("Do ", theCfg.action)
+		omppLog.Log("Do ", theCfg.action, " ", runMeta.Run.Name)
 	} else {
 
-		dirSuffix := "" // if ouput directory not specified then add .no-zero and .no-null suffix
-		if csvTop == "" {
-
+		if runTop == "" {
 			switch {
 			case runOpts.Bool(runFirstArgKey):
-				csvTop = filepath.Join(helper.CleanFileName(meta.Model.Name), "first-run")
+				runTop = filepath.Join(helper.CleanFileName(meta.Model.Name), "first-run")
 			case runOpts.Bool(runLastArgKey):
-				csvTop = filepath.Join(helper.CleanFileName(meta.Model.Name), "last-run")
+				runTop = filepath.Join(helper.CleanFileName(meta.Model.Name), "last-run")
 			default:
-				csvTop = filepath.Join(helper.CleanFileName(meta.Model.Name), "run."+helper.CleanFileName(run.Name))
+				runTop = filepath.Join(helper.CleanFileName(meta.Model.Name), "run."+helper.CleanFileName(runMeta.Run.Name))
 			}
-			if err = makeOutputDir(csvTop, theCfg.isKeepOutputDir); err != nil {
+			if err = makeOutputDir(runTop, theCfg.isKeepOutputDir); err != nil {
 				return err
 			}
+		}
+		omppLog.Log("Do ", theCfg.action, ": "+runTop)
+	}
+
+	return runValueOut(srcDb, meta, runMeta, runTop, isDefaultTop, runOpts)
+}
+
+// write model run parameters and output tables into csv or tsv files
+func runValueOut(srcDb *sql.DB, meta *db.ModelMeta, runMeta *db.RunMeta, runTop string, isDefaultTop bool, runOpts *config.RunOptions) error {
+
+	// create sub directories for parameters and output tables
+	paramCsvDir := ""
+	tableCsvDir := ""
+	if !theCfg.isConsole {
+
+		dirSuffix := "" // if output directory not specified then add .no-zero and .no-null suffix
+		if isDefaultTop {
 			if runOpts.Bool(noZeroArgKey) {
 				dirSuffix = dirSuffix + ".no-zero"
 			}
@@ -70,23 +84,18 @@ func runValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 				dirSuffix = dirSuffix + ".no-null"
 			}
 		}
-		omppLog.Log("Do ", theCfg.action, ": "+csvTop)
+		paramCsvDir = filepath.Join(runTop, "parameters")
+		tableCsvDir = filepath.Join(runTop, "output-tables"+dirSuffix)
 
-		paramCsvDir = filepath.Join(csvTop, "parameters")
-		tableCsvDir = filepath.Join(csvTop, "output-tables"+dirSuffix)
-
-		if err = makeOutputDir(paramCsvDir, theCfg.isKeepOutputDir); err != nil {
-			return err
+		if e := makeOutputDir(paramCsvDir, theCfg.isKeepOutputDir); e != nil {
+			return e
 		}
-		if err = makeOutputDir(tableCsvDir, theCfg.isKeepOutputDir); err != nil {
-			return err
+		if e := makeOutputDir(tableCsvDir, theCfg.isKeepOutputDir); e != nil {
+			return e
 		}
 	}
 
 	// write all parameters into csv file
-	d := theCfg.dir
-	theCfg.dir = paramCsvDir
-
 	nP := len(meta.Param)
 	omppLog.Log("  Parameters: ", nP)
 	logT := time.Now().Unix()
@@ -95,15 +104,17 @@ func runValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nP, ": ", meta.Param[j].Name)
 
-		err = parameterRunValue(srcDb, meta, meta.Param[j].Name, run, false, false, nil)
-		if err != nil {
-			return err
+		fp := ""
+		if !theCfg.isConsole {
+			fp = filepath.Join(paramCsvDir, meta.Param[j].Name+extByKind())
+		}
+		e := parameterRunValue(srcDb, meta, meta.Param[j].Name, &runMeta.Run, fp, false, nil)
+		if e != nil {
+			return e
 		}
 	}
 
 	// write output tables into csv file, if the table included in run results
-	theCfg.dir = tableCsvDir
-
 	nT := len(runMeta.Table)
 	omppLog.Log("  Tables: ", nT)
 
@@ -122,17 +133,99 @@ func runValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 		}
 		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nT, ": ", name)
 
-		err = tableRunValue(srcDb, meta, name, run, runOpts, false, false, nil)
-		if err != nil {
-			return err
+		fp := ""
+		if !theCfg.isConsole {
+			fp = filepath.Join(tableCsvDir, name+extByKind())
+		}
+		e := tableRunValue(srcDb, meta, name, &runMeta.Run, runOpts, fp, false, nil)
+		if e != nil {
+			return e
 		}
 	}
-	theCfg.dir = d
 
 	return nil
 }
 
+// write all model runs parameters and output tables into csv or tsv files
 func runAllValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
+
+	// get model metadata and run list
+	// run list includes all runs, use only sucessfully completed
+	meta, err := db.GetModelById(srcDb, modelId)
+	if err != nil {
+		return errors.New("Error at get model metadata by id: " + strconv.Itoa(modelId) + ": " + err.Error())
+	}
+	rl, err := db.GetRunList(srcDb, modelId)
+	if err != nil {
+		return errors.New("Error at get model runs list: " + err.Error())
+	}
+	rl = slices.DeleteFunc(rl, func(r db.RunRow) bool { return r.Status != db.DoneRunStatus })
+
+	if len(rl) <= 0 {
+		omppLog.Log("Do ", theCfg.action, ": ", "there are no completed model runs")
+		return nil
+	}
+
+	// check if any run name is not unique then use run id's in directory names
+	isUseIdNames := false
+	for k := range rl {
+		for i := range rl {
+			if isUseIdNames = i != k && rl[i].Name == rl[k].Name; isUseIdNames {
+				break
+			}
+		}
+		if isUseIdNames {
+			break
+		}
+	}
+
+	// create output directory
+	// if output directory name not explicitly specified then use ModelName by default
+	csvTop := theCfg.dir
+	isDefaultTop := !isUseIdNames && theCfg.dir == ""
+
+	if theCfg.isConsole {
+		omppLog.Log("Do ", theCfg.action, " ", meta.Model.Name)
+	} else {
+		if csvTop == "" {
+			csvTop = filepath.Join(helper.CleanFileName(meta.Model.Name))
+			if err = makeOutputDir(csvTop, theCfg.isKeepOutputDir); err != nil {
+				return err
+			}
+		}
+		omppLog.Log("Do ", theCfg.action, ": "+csvTop)
+	}
+
+	for _, rm := range rl {
+
+		runMeta, err := db.GetRunFull(srcDb, &rm)
+		if err != nil {
+			return errors.New("Error at get model run: " + rm.Name + " " + err.Error())
+		}
+		if runMeta.Run.Status != db.DoneRunStatus {
+			continue // unexpected change of model run status
+		}
+		omppLog.Log("Model run ", rm.RunId, " ", rm.Name)
+
+		// run output directory is: run.Name_Of_the_Run or run.ID.Name_Of_the_Run
+		runTop := ""
+		if !theCfg.isConsole {
+			if !isUseIdNames {
+				runTop = filepath.Join(csvTop, "run."+helper.CleanFileName(rm.Name))
+			} else {
+				runTop = filepath.Join(csvTop, "run."+strconv.Itoa(rm.RunId)+"."+helper.CleanFileName(rm.Name))
+			}
+			if err = makeOutputDir(runTop, theCfg.isKeepOutputDir); err != nil {
+				return err
+			}
+		}
+
+		err = runValueOut(srcDb, meta, runMeta, runTop, isDefaultTop, runOpts)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

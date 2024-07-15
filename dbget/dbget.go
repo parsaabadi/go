@@ -33,6 +33,19 @@ Get list of the models from database:
 	  -dbget.Database "Database=modelName.sqlite; Timeout=86400; OpenMode=ReadWrite;"
 	  -dbget.DatabaseDriver SQLite
 
+Get all model runs parameters and output table values:
+
+	dbget -m modelOne -do all-runs
+	dbget -m modelOne -do all-runs -lang fr-CA
+	dbget -m modelOne -do all-runs -tsv
+	dbget -m modelOne -do all-runs -dir my/output/dir
+	dbget -m modelOne -do all-runs -pipe
+	dbget -m modelOne -do all-runs -dbget.NoZeroCsv
+	dbget -m modelOne -do all-runs -dbget.NoNullCsv
+	dbget -m modelOne -do all-runs -dbget.NoZeroCsv -dbget.NoNullCsv
+
+	dbget -dbget.Sqlite modelOne.sqlite -dbget.Do all-runs
+
 Get model run parameters and output table values:
 
 	dbget -m modelOne -do run -dbget.FirstRun
