@@ -94,7 +94,7 @@ func filesFileUploadPostHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Location", "/api/files/file/"+src)
 }
 
-// return file tree (file path, size, modification time) in user files by extension, underscore _ or * extension means any.
+// return file tree (file path, size, modification time) in user files by ext which is comma separted list of extensions, underscore _ or * extension means any.
 //
 //	GET /api/files/file-tree/:ext/path/:path
 //	GET /api/files/file-tree/:ext/path/
@@ -115,18 +115,18 @@ func doFileTreeGet(rootDir string, isAllowEmptyFolder bool, pathParam string, is
 	}
 	folder := src
 
-	ext := ""
+	extCsv := ""
 	if isExt {
-		ext = getRequestParam(r, "ext")
-		if ext == "" || ext == "." || ext == ".." {
-			http.Error(w, "Files extension invalid (or empty): "+ext, http.StatusBadRequest)
+		extCsv = getRequestParam(r, "ext")
+		if extCsv == "" || extCsv == "." || extCsv == ".." {
+			http.Error(w, "Files extension invalid (or empty): "+extCsv, http.StatusBadRequest)
 			return
 		}
-		if ext == "_" || ext == "*" { // _ extension means * any extension
-			ext = ""
+		if extCsv == "_" || extCsv == "*" { // _ extension means * any extension
+			extCsv = ""
 		}
-		if strings.ContainsAny(ext, helper.InvalidFileNameChars) {
-			http.Error(w, "Files extension invalid (or empty): "+ext, http.StatusBadRequest)
+		if strings.ContainsAny(extCsv, helper.InvalidFileNameChars) {
+			http.Error(w, "Files extension invalid (or empty): "+extCsv, http.StatusBadRequest)
 			return
 		}
 	}
@@ -148,7 +148,7 @@ func doFileTreeGet(rootDir string, isAllowEmptyFolder bool, pathParam string, is
 	}
 
 	// get files tree
-	treeLst, err := filesWalk(rootDir, folder, ext)
+	treeLst, err := filesWalk(rootDir, folder, extCsv)
 	if err != nil {
 		omppLog.Log("Error: ", err.Error())
 		http.Error(w, "Error at folder scan: "+folder, http.StatusBadRequest)
@@ -158,13 +158,28 @@ func doFileTreeGet(rootDir string, isAllowEmptyFolder bool, pathParam string, is
 	jsonResponse(w, r, treeLst)
 }
 
-// return files list under rootDir / folder, if ext is not empty then filtered by extension
-func filesWalk(rootDir, folder string, ext string) ([]PathItem, error) {
+// return files list under rootDir / folder, if extCsv is not empty then filtered by extensions in comma separated list
+func filesWalk(rootDir, folder string, extCsv string) ([]PathItem, error) {
 
-	// extension specified then do lower case comparison
-	lcExt := strings.ToLower(ext)
-	if lcExt != "" && lcExt[0] != '.' {
-		lcExt = "." + lcExt
+	// parse comma separated list of extensions, if it is empty "" string then add all files, do not filter by extension
+	eLst := []string{}
+	isAll := extCsv == ""
+
+	if !isAll {
+		eLst = helper.ParseCsvLine(strings.ToLower(extCsv), ',')
+
+		j := 0
+		for _, e := range eLst {
+			if e == "" {
+				continue
+			}
+			if e[0] != '.' {
+				e = "." + e
+			}
+			eLst[j] = e
+			j++
+		}
+		eLst = eLst[:j]
 	}
 
 	// check if folder path exist under the root dir
@@ -188,15 +203,22 @@ func filesWalk(rootDir, folder string, ext string) ([]PathItem, error) {
 		} else {
 			p = strings.TrimPrefix(p, dps)
 		}
-		if lcExt != "" && lcExt != strings.ToLower(filepath.Ext(p)) {
-			return nil
+		e := strings.ToLower(filepath.Ext(p))
+
+		// if no all files then check if extsnsion is in the list of filter extensions
+		isAdd := isAll
+
+		for k := 0; !isAdd && k < len(eLst); k++ {
+			isAdd = eLst[k] == e
 		}
-		treeLst = append(treeLst, PathItem{
-			Path:    p,
-			IsDir:   fi.IsDir(),
-			Size:    fi.Size(),
-			ModTime: fi.ModTime().UnixMilli(),
-		})
+		if isAdd {
+			treeLst = append(treeLst, PathItem{
+				Path:    p,
+				IsDir:   fi.IsDir(),
+				Size:    fi.Size(),
+				ModTime: fi.ModTime().UnixMilli(),
+			})
+		}
 		return nil
 	})
 	return treeLst, err
