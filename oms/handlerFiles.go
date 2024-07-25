@@ -4,12 +4,15 @@
 package main
 
 import (
+	"cmp"
 	"errors"
 	"io"
 	"io/fs"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/openmpp/go/ompp/helper"
@@ -105,11 +108,20 @@ func filesTreeGetHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // return file tree (file path, size, modification time) by sub-folder name.
-func doFileTreeGet(rootDir string, isAllowEmptyFolder bool, pathParam string, isExt bool, w http.ResponseWriter, r *http.Request) {
+//
+//	GET /api/download/file-tree/:folder
+//	GET /api/upload/file-tree/:folder
+//	GET /api/files/file-tree/:ext/path/
+//	GET /api/files/file-tree/:ext/path/:path
+//
+// pathParam is a name of path parameter: "path" or "folder"
+// if isAllowEmptyFolder is true then value of path parameter can be empty
+// if isExt is true then request should have "ext" extnsion filter parameter
+func doFileTreeGet(rootDir string, isAllowEmptyPath bool, pathParam string, isExt bool, w http.ResponseWriter, r *http.Request) {
 
 	// optional url or query parameters: sub-folder path and files extension
 	src := getRequestParam(r, pathParam)
-	if pathParam == "" || src == "" && !isAllowEmptyFolder || src == "." || src == ".." {
+	if pathParam == "" || src == "" && !isAllowEmptyPath || src == "." || src == ".." {
 		http.Error(w, "Folder name invalid (or empty): "+src, http.StatusBadRequest)
 		return
 	}
@@ -148,7 +160,7 @@ func doFileTreeGet(rootDir string, isAllowEmptyFolder bool, pathParam string, is
 	}
 
 	// get files tree
-	treeLst, err := filesWalk(rootDir, folder, extCsv)
+	treeLst, err := filesWalk(rootDir, folder, extCsv, true)
 	if err != nil {
 		omppLog.Log("Error: ", err.Error())
 		http.Error(w, "Error at folder scan: "+folder, http.StatusBadRequest)
@@ -158,8 +170,11 @@ func doFileTreeGet(rootDir string, isAllowEmptyFolder bool, pathParam string, is
 	jsonResponse(w, r, treeLst)
 }
 
-// return files list under rootDir / folder, if extCsv is not empty then filtered by extensions in comma separated list
-func filesWalk(rootDir, folder string, extCsv string) ([]PathItem, error) {
+// return files list or file tree under rootDir/folder directory.
+// rootDir top removed from the path results.
+// if extCsv is not empty then filtered by extensions in comma separated list.
+// if isTree is true then return files tree else files path list.
+func filesWalk(rootDir, folder string, extCsv string, isTree bool) ([]PathItem, error) {
 
 	// parse comma separated list of extensions, if it is empty "" string then add all files, do not filter by extension
 	eLst := []string{}
@@ -169,14 +184,14 @@ func filesWalk(rootDir, folder string, extCsv string) ([]PathItem, error) {
 		eLst = helper.ParseCsvLine(strings.ToLower(extCsv), ',')
 
 		j := 0
-		for _, e := range eLst {
-			if e == "" {
+		for _, elc := range eLst {
+			if elc == "" {
 				continue
 			}
-			if e[0] != '.' {
-				e = "." + e
+			if elc[0] != '.' {
+				elc = "." + elc
 			}
-			eLst[j] = e
+			eLst[j] = elc
 			j++
 		}
 		eLst = eLst[:j]
@@ -187,8 +202,8 @@ func filesWalk(rootDir, folder string, extCsv string) ([]PathItem, error) {
 	if !dirExist(folderPath) {
 		return nil, errors.New("Folder not found: " + folder)
 	}
-	dp := filepath.ToSlash(rootDir)
-	dps := dp + "/"
+	rDir := filepath.ToSlash(rootDir)
+	rsDir := rDir + "/"
 
 	// get list of files under the folder
 	treeLst := []PathItem{}
@@ -198,18 +213,18 @@ func filesWalk(rootDir, folder string, extCsv string) ([]PathItem, error) {
 			return err
 		}
 		p := filepath.ToSlash(path)
-		if p == dp || p == dps {
+		if p == rDir || p == rsDir {
 			p = "/"
 		} else {
-			p = strings.TrimPrefix(p, dps)
+			p = strings.TrimPrefix(p, rsDir)
 		}
-		e := strings.ToLower(filepath.Ext(p))
+		elc := strings.ToLower(filepath.Ext(p))
 
-		// if no all files then check if extsnsion is in the list of filter extensions
+		// if no all files then check if extension is in the list of filter extensions
 		isAdd := isAll
 
 		for k := 0; !isAdd && k < len(eLst); k++ {
-			isAdd = eLst[k] == e
+			isAdd = eLst[k] == elc
 		}
 		if isAdd {
 			treeLst = append(treeLst, PathItem{
@@ -221,6 +236,55 @@ func filesWalk(rootDir, folder string, extCsv string) ([]PathItem, error) {
 		}
 		return nil
 	})
+
+	// if required then build files tree from files path list by adding directories into the path list
+	if isTree {
+
+		pm := map[string]bool{}
+		addLst := []PathItem{}
+
+		for k := 0; k < len(treeLst); k++ {
+
+			d := treeLst[k].Path
+			pm[d] = true // mark source path as already processed
+
+			for { // until all directories above that path are processed
+
+				d = path.Dir(d)
+
+				if d == "" || d == "." || d == ".." || d == "/" || d == rDir {
+					break // done with that directory and all directories above
+				}
+				if _, ok := pm[d]; ok {
+					continue // directory already processed
+				}
+				pm[d] = true
+
+				// get directory stat, ignoring error can potentially lead to incorrect tree
+				if fi, e := dirStat(filepath.Join(rootDir, filepath.FromSlash(d))); e == nil {
+					addLst = append(addLst, PathItem{
+						Path:    d,
+						IsDir:   fi.IsDir(),
+						Size:    fi.Size(),
+						ModTime: fi.ModTime().UnixMilli(),
+					})
+				}
+			}
+		}
+
+		// merge additional directories into files tree, sort file tree to put files after directories
+		treeLst = append(treeLst, addLst...)
+
+		slices.SortStableFunc(treeLst, func(left, right PathItem) int {
+			if left.IsDir && !right.IsDir {
+				return -1
+			}
+			if !left.IsDir && right.IsDir {
+				return 1
+			}
+			return cmp.Compare(strings.ToLower(left.Path), strings.ToLower(right.Path))
+		})
+	}
 	return treeLst, err
 }
 

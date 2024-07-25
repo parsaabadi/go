@@ -543,7 +543,7 @@ func makeRunArgsIni(binDir, workDir, logDir string, job *RunJob, rs *RunState) (
 				}
 			}
 
-			val = helper.CleanFileName(val) // cleanup path
+			val = helper.CleanFilePath(val) // cleanup path
 		}
 
 		if strings.EqualFold(key, "-OpenM.iniFile") || strings.EqualFold(key, "-ini") {
