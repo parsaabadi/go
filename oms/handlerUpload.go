@@ -125,7 +125,7 @@ func runUploadPostHandler(w http.ResponseWriter, r *http.Request) {
 	// save run.zip into upload directory
 	saveToPath := filepath.Join(theCfg.uploadDir, fName)
 
-	helper.SaveTo(saveToPath, part)
+	err = helper.SaveTo(saveToPath, part)
 	if err != nil {
 		omppLog.Log("Error: unable to write into ", saveToPath, err)
 		http.Error(w, "Error: unable to write into "+fName, http.StatusInternalServerError)

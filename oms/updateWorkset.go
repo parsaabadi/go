@@ -424,7 +424,7 @@ func (mc *ModelCatalog) UpdateWorksetParameterCsv(
 		switch {
 		case e == io.EOF:
 			return false, errors.New("Inavlid (empty) csv parameter values " + param.Name)
-		case err != nil:
+		case e != nil:
 			return false, errors.New("Failed to read csv parameter values " + param.Name + ": " + e.Error())
 		}
 		if chs, e := csvCvt.CsvHeader(); e != nil {

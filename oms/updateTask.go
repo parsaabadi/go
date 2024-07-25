@@ -57,7 +57,7 @@ func (mc *ModelCatalog) UpdateTaskDef(isReplace bool, tpd *db.TaskDefPub) (bool,
 		return false, dn, tn, err
 	}
 	if isSetNotFound {
-		omppLog.Log("Error at modeling task conversion, invalid input set name(s): ", dn, ": ", tn, ": ", err.Error())
+		omppLog.Log("Error at modeling task conversion, invalid input set name(s): ", dn, ": ", tn)
 		return false, dn, tn, err
 	}
 
