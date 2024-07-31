@@ -2,10 +2,11 @@
 // This code is licensed under the MIT license (see LICENSE.txt for details)
 
 /*
-dbget is command line tool to export OpenM++ model metadata, input parameters and run results.
+dbget is a command line tool to export OpenM++ model metadata, input parameters and run results.
+It is reading from model database and produce CSV, TSV or JSON output.
 
-dbget read information directly from database and database connection must be specified.
-It can be a database connection string and driver name:
+In oredr to use it database connection must be specified.
+Most generic format is to use database connection string and driver name:
 
 	dbget
 	  -dbget.Do model-list
@@ -21,15 +22,16 @@ If SQLite database file name is the same as model name and located in current di
 
 	dbget -m modelOne -do all-runs
 
-As result of above command dbget will open modelOne.sqlite database file in current directory and do "all-runs"
-to ouput all model runs result and input parameters.
+As result of above command dbget will open modelOne.sqlite database file in current directory
+and do "all-runs" command to ouput all model runs result and input parameters.
 
-Many of most often used options of dbget do have a short form to reduce typing on commnd line.
-For example -db is a short version of -dbget.Sqlite option and -do is a short of -dbget.Do.
-Longer version of options can be used on command line and ini files, for example if there is my.ini file:
+Most often used options of dbget do have a short form to reduce typing on command line.
+For example: -db is a short version of: -dbget.Sqlite option and -do is a short of -dbget.Do.
+Longer version of options can be used on command line and ini files.
+For example if there is my.ini file:
 
 	[dbget]
-	Do     = model-list       ; dbget action: 'model-iist' = get list of the models
+	Do     = model-list                ; dbget action: 'model-iist' = get list of the models
 	Sqlite = some/dir/modelOne.sqlite  ; path to model SQLite database file
 
 then commands below are equal:
@@ -39,8 +41,8 @@ then commands below are equal:
 	dbget -do       model-list -db           some/dir/modelOne.sqlite
 	dbget -dbget.Do model-list -dbget.Sqlite some/dir/modelOne.sqlite
 
-By default dbget produce .csv output file(s), commands above will create model-list.csv file.
-It is also possible to produce .tsv output and for some commands .json output:
+By default dbget produce .csv output file(s), e.g. commands above will create model-list.csv file.
+It is also possible to produce .tsv output and, for some commands, .json output:
 
 	dbget -db modelOne.sqlite -do model-list
 	dbget -db modelOne.sqlite -do model-list -csv
@@ -50,7 +52,7 @@ It is also possible to produce .tsv output and for some commands .json output:
 	dbget -db modelOne.sqlite -do model-list -dbget.As tsv
 	dbget -db modelOne.sqlite -do model-list -dbget.As json
 
-By default dbget write results into the file and you can redirect it it to console:
+By default dbget write results into the file and user can redirect it to console:
 
 	dbget -db modelOne.sqlite -do model-list -dbget.ToConsole
 	dbget -db modelOne.sqlite -do model-list -pipe
@@ -58,17 +60,17 @@ By default dbget write results into the file and you can redirect it it to conso
 It is convenient to use -pipe as a short form of: -dbget.ToConsole -OpenM.LogToConsole=false
 to produce output suitable for command pipes.
 
-Important:
-by using -pipe you are suppressing any console message output and therefore you must check dbget exit code
-or redirect log output to file by using -OpenM.LogToFile options.
+**Important:**
+By using -pipe you are suppressing any console error message output and therefore you must check dbget exit code
+or redirect log output to file by using -OpenM.LogToFile option.
 
-By default dbget produce output in user OS default language matched to model language.
-For example, if user OS language is fr-CA then output will be created from model FR language, if it exist in model database.
-If there are no laguage match then output created in default model language.
+By default dbget produces language specific output based on match of user OS language to model languages.
+For example, if user OS language is fr-CA then output will be created from model FR language, if it is exists in the model database.
+If there are no laguage matched then output created in default model language.
 
 	dbget -m modelOne -do all-runs
 
-Above -do all-runs option output all modelOne model runs input parameters and output tables data into .csv files.
+Above -do all-runs option producrs output of all modelOne model runs input parameters and output tables data into .csv files.
 Dimension labels in those .csv files are language specific, for example it can be Männlich, Weiblich for Deutsche OS version.
 
 User can override default OS language:
@@ -80,15 +82,15 @@ User can override default OS language:
 	dbget -m modelOne -do all-runs -dbget.Language en-CA
 	dbget -m modelOne -do all-runs -dbget.Language isl
 
-	dbget -m modelOne -do all-runs -dbget.NoLanguage
-
 If isl = Icelandic language not found in model database then closest languge will be used, for example: DA,
-or, if nothing is found in model database then it is a default model language.
+or, if no match found in database then it is a default model language.
+
+	dbget -m modelOne -do all-runs -dbget.NoLanguage
 
 If user do not want language specific labels in the output then -dbget.NoLanguage option can be used.
 In that case dimension items will be M, F codes instead of Male, Female lables.
 
-**Dbget command (action) supplied as -do or -dbget.Do option.**
+**dbget command (action) supplied as -do or -dbget.Do option.**
 
 Get list of the models from database:
 
