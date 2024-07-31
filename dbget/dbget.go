@@ -210,7 +210,7 @@ Get model metadata from compatibility (Modgen) views:
 
 	dbget -dbget.Sqlite modelOne.sqlite -dbget.Do old-model -dbget.As csv -dbget.ToConsole -dbget.Language FR
 
-Get model run parameters and out tables values from compatibility (Modgen) views:
+Get model run parameters and output tables values from compatibility (Modgen) views:
 
 	dbget -m modelOne -do old-run
 	dbget -m modelOne -do old-run -csv
