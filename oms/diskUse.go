@@ -61,8 +61,8 @@ func scanDisk(doneC <-chan bool, refreshC <-chan bool) {
 	// disk use file: disk-#-_4040-#-size-#-100-#-status-#-ok-#-2022_07_08_23_45_12_123-#-125678.json
 	diskUsePtrn := filepath.Join(theCfg.jobDir, "state", "disk-#-*-#-size-#-*-#-status-#-*-#-*-#-*.json")
 
-	// path to disk.ini: storage quotas and configuration
-	diskIniPath := filepath.Join(theCfg.jobDir, "disk.ini")
+	diskIniPath := filepath.Join(theCfg.jobDir, "disk.ini") // path to disk.ini: storage quotas and configuration
+	var nOtherSize int64                                    // all other oms instances disk use size
 
 	duState := diskUseState{
 		diskUseConfig: diskUseConfig{
@@ -88,26 +88,30 @@ func scanDisk(doneC <-chan bool, refreshC <-chan bool) {
 			UpdateTs:      nowTs,
 		}
 
-		// find all disk use files and calculate total disk usage by all other oms instances
+		// find all disk use files
 		// if disk use file does not updated more than 3 times of scan interval (and minimum 1 minute) then oms instance is dead
 		minuteTs := nowTime.Add(-1 * time.Minute).UnixMilli()
 		minTs := nowTime.Add(-1 * 3 * time.Duration(cfg.DiskScanMs) * time.Millisecond).UnixMilli()
 		if minTs > minuteTs {
 			minTs = minuteTs
 		}
-		var nOtherSize int64 // all other oms instances disk use size
 
-		diskUseFiles := filesByPattern(diskUsePtrn, "Error at disk use files search")
+		// calculate total disk usage by all other oms instances
+		nOtherSize = 0
+		if theCfg.isJobControl {
 
-		for _, fp := range diskUseFiles {
+			diskUseFiles := filesByPattern(diskUsePtrn, "Error at disk use files search")
 
-			oms, size, _, _, ts := parseDiskUseStatePath(fp)
+			for _, fp := range diskUseFiles {
 
-			if oms == "" || oms == theCfg.omsName {
-				continue // skip: invalid disk use state file path or it is current instance
-			}
-			if ts > minTs {
-				nOtherSize += size // oms instance is alive
+				oms, size, _, _, ts := parseDiskUseStatePath(fp)
+
+				if oms == "" || oms == theCfg.omsName {
+					continue // skip: invalid disk use state file path or it is current instance
+				}
+				if ts > minTs {
+					nOtherSize += size // oms instance is alive
+				}
 			}
 		}
 

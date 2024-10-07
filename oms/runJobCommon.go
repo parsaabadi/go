@@ -20,20 +20,19 @@ import (
 // and return flags: is job control enabled, is past sub-directory exists, is disk usage control enabled.
 // if job control directory is empty then job control disabled.
 // if job control directory not empty then it must have active, state, queue, history subdirectories.
-func jobDirValid(jobDir string) (bool, bool, bool, error) {
+func jobDirValid(jobDir string) (bool, bool, error) {
 
 	if jobDir == "" {
-		return false, false, false, nil // job control disabled
+		return false, false, nil // job control disabled
 	}
 	if !dirExist(jobDir) ||
 		!dirExist(filepath.Join(jobDir, "active")) || !dirExist(filepath.Join(jobDir, "state")) ||
 		!dirExist(filepath.Join(jobDir, "queue")) || !dirExist(filepath.Join(jobDir, "history")) {
-		return false, false, false, nil
+		return false, false, nil
 	}
 	isPast := dirExist(filepath.Join(jobDir, "past"))
-	isDisk := fileExist(filepath.Join(jobDir, "disk.ini"))
 
-	return true, isPast, isDisk, nil
+	return true, isPast, nil
 }
 
 // Return job control file path if model is running now.
@@ -692,7 +691,7 @@ func jobStateWrite(jsc jobControlState) bool {
 
 // save storage usage state into the file, return false on error
 func diskUseStateWrite(duState *diskUseState, dbUse []dbDiskUse) bool {
-	if !theCfg.isDiskUse {
+	if !theCfg.isDiskUse || !theCfg.isJobControl {
 		return false // job control disabled
 	}
 

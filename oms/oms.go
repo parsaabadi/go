@@ -437,9 +437,9 @@ func mainBody(args []string) error {
 			omppLog.Log("Upload directory:     ", theCfg.uploadDir)
 		}
 	}
-	if theCfg.inOutDir == "" || (!isDownload && !isUpload) { // dbcopy can be used only for download or upload
-		theCfg.dbcopyPath = ""
-	}
+	// if theCfg.inOutDir == "" || (!isDownload && !isUpload) { // dbcopy can be used only for download or upload
+	// 	theCfg.dbcopyPath = ""
+	// }
 
 	// user files directory can be explicitly specified or be the home/io
 	if runOpts.IsExist(filesDirArgKey) {
@@ -473,7 +473,7 @@ func mainBody(args []string) error {
 
 	// check if job control is required:
 	theCfg.jobDir = runOpts.String(jobDirArgKey)
-	theCfg.isJobControl, theCfg.isJobPast, theCfg.isDiskUse, err = jobDirValid(theCfg.jobDir)
+	theCfg.isJobControl, theCfg.isJobPast, err = jobDirValid(theCfg.jobDir)
 	if err != nil {
 		return errors.New("Error: invalid job control directory" + ": " + err.Error())
 	}
@@ -482,6 +482,13 @@ func mainBody(args []string) error {
 	}
 	if theCfg.isJobControl {
 		omppLog.Log("Jobs directory:       ", theCfg.jobDir)
+	}
+
+	// check if storage control enabled
+	diPath := filepath.Join(theCfg.jobDir, "disk.ini")
+	theCfg.isDiskUse = fileExist(diPath)
+	if theCfg.isDiskUse {
+		omppLog.Log("Storage control ini:  ", diPath)
 	}
 
 	// etc subdirectory required to run MPI models
