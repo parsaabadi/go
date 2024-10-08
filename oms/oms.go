@@ -90,6 +90,11 @@ Following arguments supporetd by oms:
 	If relative then must be relative to oms root directory.
 	If user home directory specified then user files directory by default is home/io.
 
+-oms.DiskUsage false
+
+	if true then control use of storage: report disk files size and optionally allow database cleanup.
+	By default storage control enbaled if job/disk.ini file exist.
+
 -oms.AllowMicrodata
 
 	if true then allow model runs microdata usage else model microdata API disabled.
@@ -180,6 +185,7 @@ const (
 	isDownloadArgKey   = "oms.AllowDownload"  // if true then allow download from user home sub-directory: home/io/download
 	isUploadArgKey     = "oms.AllowUpload"    // if true then allow upload to user home sub-directory: home/io/upload
 	filesDirArgKey     = "oms.FilesDir"       // user files directory, if relative then must be relative to oms root directory, if user home exists then: home/io
+	diskUsageArgKey    = "oms.DiskUsage"      // if true then control storage usage
 	isMicrodataArgKey  = "oms.AllowMicrodata" // if true then allow model run microdata
 	logRequestArgKey   = "oms.LogRequest"     // if true then log http request
 	apiOnlyArgKey      = "oms.ApiOnly"        // if true then API only web-service, no web UI
@@ -206,7 +212,7 @@ var theCfg = struct {
 	docDir       string            // if not empty then models documentation directory, default: models/doc
 	isJobControl bool              // if true then do job control: model run queue and resource allocation
 	isJobPast    bool              // if true then do job history shadow copy
-	isDiskUse    bool              // if true then storage usage control enabled
+	isDiskUse    bool              // if true then control storage size, by default it enabled if job/disk.ini exists
 	jobDir       string            // job control directory
 	omsName      string            // oms instance name, if empty then derived from address to listen
 	dbcopyPath   string            // if download or upload allowed then it is path to dbcopy.exe
@@ -266,6 +272,7 @@ func mainBody(args []string) error {
 	_ = flag.Bool(isDownloadArgKey, false, "if true then allow download from user home/io/download directory")
 	_ = flag.Bool(isUploadArgKey, false, "if true then allow upload to user home/io/upload directory")
 	_ = flag.String(filesDirArgKey, "", "user files directory, if home directory path specified then files directory is home/io")
+	_ = flag.Bool(diskUsageArgKey, false, "if true then control use of storage, by default its enabled if job/disk.ini exists")
 	_ = flag.Bool(isMicrodataArgKey, false, "if true then allow model run microdata")
 	_ = flag.String(jobDirArgKey, "", "job control directory, if relative then must be relative to root directory")
 	_ = flag.String(omsNameArgKey, "", "instance name, automatically generated if empty")
@@ -437,9 +444,6 @@ func mainBody(args []string) error {
 			omppLog.Log("Upload directory:     ", theCfg.uploadDir)
 		}
 	}
-	// if theCfg.inOutDir == "" || (!isDownload && !isUpload) { // dbcopy can be used only for download or upload
-	// 	theCfg.dbcopyPath = ""
-	// }
 
 	// user files directory can be explicitly specified or be the home/io
 	if runOpts.IsExist(filesDirArgKey) {
@@ -484,11 +488,17 @@ func mainBody(args []string) error {
 		omppLog.Log("Jobs directory:       ", theCfg.jobDir)
 	}
 
-	// check if storage control enabled
-	diPath := filepath.Join(theCfg.jobDir, "disk.ini")
-	theCfg.isDiskUse = fileExist(diPath)
+	// check if storage control enabled by presence of job/disk.ini or by -oms.DiskUse option
+	dini := filepath.Join(theCfg.jobDir, "disk.ini")
+	theCfg.isDiskUse = fileExist(dini)
+
 	if theCfg.isDiskUse {
-		omppLog.Log("Storage control ini:  ", diPath)
+		omppLog.Log("Storage control ini:  ", dini)
+	} else {
+		theCfg.isDiskUse = runOpts.Bool(diskUsageArgKey)
+		if theCfg.isDiskUse {
+			omppLog.Log("Storage control:      enabled")
+		}
 	}
 
 	// etc subdirectory required to run MPI models

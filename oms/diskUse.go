@@ -270,7 +270,7 @@ func initDiskState(diskIniPath string) (bool, diskUseConfig) {
 
 	// exit if disk.ini does not exists: return empty default configuration
 	if diskIniPath == "" || !fileExist(diskIniPath) {
-		return false, cfg
+		return true, cfg
 	}
 
 	opts, err := config.FromIni(diskIniPath, theCfg.codePage)
