@@ -61,7 +61,7 @@ func scanDisk(doneC <-chan bool, refreshC <-chan bool) {
 	// disk use file: disk-#-_4040-#-size-#-100-#-status-#-ok-#-2022_07_08_23_45_12_123-#-125678.json
 	diskUsePtrn := filepath.Join(theCfg.jobDir, "state", "disk-#-*-#-size-#-*-#-status-#-*-#-*-#-*.json")
 
-	diskIniPath := filepath.Join(theCfg.jobDir, "disk.ini") // path to disk.ini: storage quotas and configuration
+	diskIniPath := filepath.Join(theCfg.etcDir, "disk.ini") // path to disk.ini: storage quotas and configuration
 	var nOtherSize int64                                    // all other oms instances disk use size
 
 	duState := diskUseState{

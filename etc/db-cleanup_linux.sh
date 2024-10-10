@@ -13,7 +13,7 @@
 #
 # Environment:
 #   sqlite3   - must be in the $PATH
-#   OM_ROOT   - openM++ root folder, default: ../..
+#   OM_ROOT   - openM++ root folder, default: ..
 #               must exist:
 #                 $OM_ROOT/bin/dbcopy
 #                 $OM_ROOT/sql/create_db.sql
@@ -116,7 +116,7 @@ fi
 
 #
 # start database cleanup
-#   rename existing model.sqlite into model-sqlite.db
+#   rename existing modelName.sqlite into modelName-sqlite.db
 #
 do_cmd()
 {
