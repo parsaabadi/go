@@ -28,6 +28,12 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 	if !jsonRequestDecode(w, r, true, &req) {
 		return // error at json decode, response done with http error
 	}
+	if req.Opts == nil {
+		req.Opts = map[string]string{}
+	}
+	if req.Env == nil {
+		req.Env = map[string]string{}
+	}
 
 	// if log messages language not specified then use browser preferred language
 	if _, ok := req.Opts["OpenM.MessageLanguage"]; !ok {
@@ -75,9 +81,6 @@ func runModelHandler(w http.ResponseWriter, r *http.Request) {
 	// get submit stamp
 	submitStamp, tNow := theCatalog.getNewTimeStamp()
 
-	if req.Env == nil {
-		req.Env = map[string]string{}
-	}
 	job := RunJob{
 		SubmitStamp: submitStamp,
 		RunRequest:  req,

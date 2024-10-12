@@ -414,7 +414,7 @@ func parseDiskUseStatePath(srcPath string) (string, int64, bool, string, int64) 
 
 	// check status: it must be "ok" or "over"
 	isOver := false
-	if sp[5] != "over" {
+	if sp[5] == "over" {
 		isOver = true
 	} else {
 		if sp[5] != "ok" {

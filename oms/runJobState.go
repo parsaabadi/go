@@ -18,6 +18,8 @@ import (
 type omsUsage struct {
 	lastStamp  string // last run stamp
 	ComputeRes        // MPI resources used by this instance
+	isPaused   bool   // if true then oms instance queue is paused
+	isDiskOver bool   // if true then disk usage exceeds quota
 }
 
 // scan job control directories to read and update job lists: queue, active and history
@@ -45,6 +47,9 @@ func scanStateJobs(doneC <-chan bool) {
 	omsTickPtrn := filepath.Join(theCfg.jobDir, "state") + string(filepath.Separator) + "oms-#-*-#-*-#-*"
 	omsPausedPtrn := filepath.Join(theCfg.jobDir, "state") + string(filepath.Separator) + "jobs.queue-#-*-#-paused"
 
+	// disk use file: disk-#-_4040-#-size-#-100-#-status-#-ok-#-2022_07_08_23_45_12_123-#-125678.json
+	diskUsePtrn := filepath.Join(theCfg.jobDir, "state", "disk-#-*-#-size-#-*-#-status-#-*-#-*-#-*.json")
+
 	// compute servers or clusters:
 	// server ready: comp-ready-#-name
 	// server start: comp-start-#-name-#-2022_08_17_22_33_44_567
@@ -62,6 +67,7 @@ func scanStateJobs(doneC <-chan bool) {
 	historyJobs := map[string]historyJobFile{}
 	omsActive := map[string]omsUsage{}
 	omsPaused := map[string]bool{}
+	omsDiskOver := map[string]bool{}
 	computeState := map[string]computeItem{}
 	hostByCpu := []string{} // names of computational servers or clusters sorted by available CPU cores
 	hostByMem := []string{} // names of computational servers or clusters sorted by available memory
@@ -78,6 +84,7 @@ func scanStateJobs(doneC <-chan bool) {
 		historyFiles := filesByPattern(historyPtrn, "Error at history job files search")
 		omsTickFiles := filesByPattern(omsTickPtrn, "Error at oms heart beat files search")
 		omsPausedFiles := filesByPattern(omsPausedPtrn, "Error at queue paused files search")
+		diskUseFiles := filesByPattern(diskUsePtrn, "Error at disk use files search")
 		compReadyFiles := filesByPattern(compReadyPtrn, "Error at server ready files search")
 		compStartFiles := filesByPattern(compStartPtrn, "Error at server start files search")
 		compStopFiles := filesByPattern(compStopPtrn, "Error at server stop files search")
@@ -86,6 +93,28 @@ func scanStateJobs(doneC <-chan bool) {
 
 		jsState.jobLastPosition = jobPositionDefault + (1 + len(queueFiles))
 		jsState.jobFirstPosition = jobPositionDefault - (1 + len(queueFiles))
+
+		// update oms instances paused status
+		clear(omsPaused)
+
+		for _, fp := range omsPausedFiles {
+
+			oms := parseQueuePausedPath(fp)
+			if oms != "" {
+				omsPaused[oms] = true
+			}
+		}
+
+		// update oms instances disk usage status
+		clear(omsDiskOver)
+
+		for _, fp := range diskUseFiles {
+
+			oms, _, isOver, _, _ := parseDiskUseStatePath(fp)
+			if oms != "" {
+				omsDiskOver[oms] = isOver
+			}
+		}
 
 		// update oms instances heart beat status
 		// one minute of missing heart beats is an interval to consider oms instance dead
@@ -99,10 +128,14 @@ func scanStateJobs(doneC <-chan bool) {
 				continue // skip: invalid active run job state file path
 			}
 
-			if ts > minOmsStateTs {
-				u, ok := omsActive[oms]
-				if !ok || rStamp > u.lastStamp {
-					omsActive[oms] = omsUsage{lastStamp: rStamp, ComputeRes: u.ComputeRes} // oms instance is alive
+			if ts > minOmsStateTs { // oms instance is alive
+
+				u := omsActive[oms]
+				omsActive[oms] = omsUsage{
+					lastStamp:  rStamp,
+					ComputeRes: u.ComputeRes,
+					isPaused:   omsPaused[oms],
+					isDiskOver: omsDiskOver[oms],
 				}
 				if leaderName == "" || leaderName > oms {
 					leaderName = oms
@@ -112,17 +145,6 @@ func scanStateJobs(doneC <-chan bool) {
 			}
 		}
 		jsState.isLeader = theCfg.omsName == leaderName // this oms instance is a leader instance
-
-		// update oms instances paused status
-		clear(omsPaused)
-
-		for _, fp := range omsPausedFiles {
-
-			oms := parseQueuePausedPath(fp)
-			if oms != "" {
-				omsPaused[oms] = true
-			}
-		}
 
 		// computational resources state
 		// for each server or cluster detect current state: ready, start, stop or power off
@@ -223,7 +245,6 @@ func scanStateJobs(doneC <-chan bool) {
 			computeState,
 			omsActive,
 			jsState.IsAllQueuePaused,
-			omsPaused,
 		)
 
 		// parse history files list
@@ -415,7 +436,6 @@ func updateQueueJobs(
 	computeState map[string]computeItem,
 	omsActive map[string]omsUsage,
 	isAllPaused bool,
-	omsPaused map[string]bool,
 ) (
 	[]string, int, int, ComputeRes, ComputeRes, ComputeRes, jobHostUse) {
 
@@ -465,8 +485,8 @@ func updateQueueJobs(
 		cpu := procCount * thCount
 		mem := memoryRunSize(procCount, thCount, procMem, thMem)
 
-		// check resources quota: MPI cpu and memory available
-		isOver := (isMpiLimit && cpu > mpiTotalRes.Cpu) || (mpiTotalRes.Mem > 0 && mem > mpiTotalRes.Mem)
+		// check resources quota: MPI cpu and memory available and disk usage not over the limit
+		isOver := u.isDiskOver || (isMpiLimit && cpu > mpiTotalRes.Cpu) || (mpiTotalRes.Mem > 0 && mem > mpiTotalRes.Mem)
 
 		// check resources quota: max cpu memory allowed for each oms instance
 		if !isOver && (maxMpiOwnRes.Cpu > 0 || maxMpiOwnRes.Mem > 0) {
@@ -507,7 +527,7 @@ func updateQueueJobs(
 				ProcessMemMb: procMem,
 				ThreadMemMb:  thMem,
 			},
-			isPaused: isAllPaused || omsPaused[oms],
+			isPaused: isAllPaused || u.isPaused,
 			isOver:   isOver,
 		})
 		qAll[oms] = qOms
@@ -629,7 +649,8 @@ func updateQueueJobs(
 
 	qKeys := make([]string, 0, nFiles) // model run submission stamps for current oms instance
 	usedLocal := ComputeRes{}
-	isOmsPaused := isAllPaused || omsPaused[theCfg.omsName] // if current oms instance is paused
+	isOmsPaused := isAllPaused || omsActive[theCfg.omsName].isPaused // if current oms instance is paused
+	isOmsDiskOver := omsActive[theCfg.omsName].isDiskOver            // if current oms instance exceded disk quota
 	isFirstJob = true
 
 	for _, f := range fLst {
@@ -645,7 +666,7 @@ func updateQueueJobs(
 		cpu := procCount * thCount
 		mem := memoryRunSize(procCount, thCount, procMem, thMem)
 
-		isOver := (localRes.Cpu > 0 && cpu > localRes.Cpu) || (localRes.Mem > 0 && mem > localRes.Mem)
+		isOver := isOmsDiskOver || (localRes.Cpu > 0 && cpu > localRes.Cpu) || (localRes.Mem > 0 && mem > localRes.Mem)
 
 		if !isOver {
 			usedLocal.Cpu = usedLocal.Cpu + cpu

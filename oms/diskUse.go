@@ -53,8 +53,10 @@ scan all models directories, download and upload directories to collect storage 
 Other file statistics also collected, e.g. files count, SQLite db file size for each model, etc.
 */
 func scanDisk(doneC <-chan bool, refreshC <-chan bool) {
+
 	if !theCfg.isDiskUse {
-		return // storage use control disabled
+		deleteDiskUseStateFiles() // storage use control disabled: delete disk usage state file and exit
+		return
 	}
 
 	// if disk use file does not updated more than 3 times of scan interval (and minimum 1 minute) then oms instance is dead
@@ -279,7 +281,7 @@ func initDiskState(diskIniPath string) (bool, diskUseConfig) {
 		return false, cfg
 	}
 
-	cfg.DiskScanMs = 1000 * opts.Int64("Common.ScanInterval", diskScanDefaultInterval)
+	cfg.DiskScanMs = 1000 * opts.Int64("Common.ScanInterval", 0)
 	if cfg.DiskScanMs < minDiskScanInterval {
 		cfg.DiskScanMs = diskScanDefaultInterval // if too low then use default
 	}
