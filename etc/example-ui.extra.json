@@ -1,0 +1,14 @@
+{
+"MoreMenu": [
+   {
+   "Link": "https://openmpp.org",
+   "LangCode": "en-CA",
+   "Label": "More info (English)"
+   },
+   {
+   "Link": "https://openmpp.org",
+   "LangCode": "fr",
+   "Label": "Plus d'infos (français)"
+   }
+]
+}

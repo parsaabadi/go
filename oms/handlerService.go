@@ -30,9 +30,10 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 		IsJobControl   bool               // if true then job control enabled
 		IsModelDoc     bool               // if true then model documentation is enabled
 		IsDiskUse      bool               // if true then storage usage control enabled
-		IsDiskCleanup  bool               // if true then disk clenup enabled
+		IsDiskCleanup  bool               // if true then disk cleanup enabled
 		DiskUse        diskUseConfig      // disk use config
 		Env            map[string]string  // server config environmemt variables for UI
+		UiExtra        string             // UI extra config from etc/ui.extra.json
 		ModelCatalog   ModelCatalogConfig // "public" state of model catalog
 		RunCatalog     RunCatalogConfig   // "public" state of model run catalog
 	}{
@@ -47,6 +48,7 @@ func serviceConfigHandler(w http.ResponseWriter, r *http.Request) {
 		IsModelDoc:     theCfg.docDir != "",
 		IsDiskUse:      theCfg.isDiskUse,
 		Env:            theCfg.env,
+		UiExtra:        theCfg.uiExtra,
 		ModelCatalog:   theCatalog.toPublicConfig(),
 		RunCatalog:     *theRunCatalog.toPublicConfig(),
 	}
@@ -81,7 +83,7 @@ func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
 		History         []historyJobFile // history of model runs
 		ComputeState    []cItem          // state of computational servers or clusters
 		IsDiskUse       bool             // if true then storage usage control enabled
-		IsDiskCleanup   bool             // if true then disk clenup enabled
+		IsDiskCleanup   bool             // if true then disk cleanup enabled
 		IsDiskOver      bool             // if true then storage use reach the limit
 		diskUseConfig                    // storage use settings
 	}{

@@ -213,6 +213,7 @@ var theCfg = struct {
 	doubleFmt    string            // format to convert float or double value to string
 	codePage     string            // "code page" to convert source file into utf-8, for example: windows-1252
 	env          map[string]string // server config environmemt variables to control UI
+	uiExtra      string            // UI extra configuration from etc/ui.extra.json
 }{
 	htmlDir:      "html",
 	etcDir:       "etc",
@@ -474,6 +475,11 @@ func mainBody(args []string) error {
 		omppLog.Log("Warning: configuration files directory not found, it is required to run models on MPI cluster: ", filepath.Join(theCfg.etcDir))
 	} else {
 		omppLog.Log("Etc directory:        ", theCfg.etcDir)
+	}
+
+	// read UI extra configuration from etc/ui.extra.json
+	if bt, err := os.ReadFile(filepath.Join(theCfg.etcDir, "ui.extra.json")); err == nil {
+		theCfg.uiExtra = string(bt)
 	}
 
 	// check if storage control enabled by presence of etc/disk.ini
