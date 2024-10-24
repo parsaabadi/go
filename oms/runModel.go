@@ -479,6 +479,9 @@ func makeRunArgsIni(binDir, workDir, logDir string, job *RunJob, rs *RunState) (
 		if strings.EqualFold(key, "-OpenM.TaskRunName") {
 			rs.TaskRunName = val
 		}
+		if strings.EqualFold(key, "-OpenM.RunStamp") {
+			continue // skip: use it run stamp from run state
+		}
 		// thread count MUST be specified using request Threads
 		if strings.EqualFold(key, "-OpenM.Threads") {
 			continue // skip number of threads option: use request Threads value instead
