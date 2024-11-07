@@ -429,12 +429,9 @@ func mainBody(args []string) error {
 	}
 
 	// parse command line arguments and ini-file
-	runOpts, logOpts, extraArgs, err := config.New(encodingArgKey, optFs)
+	runOpts, logOpts, err := config.New(encodingArgKey, false, optFs)
 	if err != nil {
 		return errors.New("invalid arguments: " + err.Error())
-	}
-	if len(extraArgs) > 0 {
-		return errors.New("invalid arguments: " + strings.Join(extraArgs, " "))
 	}
 	if isPipe {
 		logOpts.IsConsole = false // suppress log console output if -pipe required

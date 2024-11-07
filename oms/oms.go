@@ -285,12 +285,9 @@ func mainBody(args []string) error {
 	}
 
 	// parse command line arguments and ini-file
-	runOpts, logOpts, extraArgs, err := config.New(encodingArgKey, optFs)
+	runOpts, logOpts, err := config.New(encodingArgKey, false, optFs)
 	if err != nil {
 		return errors.New("Invalid arguments: " + err.Error())
-	}
-	if len(extraArgs) > 0 {
-		return errors.New("Invalid arguments: " + strings.Join(extraArgs, " "))
 	}
 	isLogRequest = runOpts.Bool(logRequestArgKey)
 	isApiOnly := runOpts.Bool(apiOnlyArgKey)

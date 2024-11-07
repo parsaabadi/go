@@ -3,15 +3,17 @@
 
 /*
 Package config to merge run options: command line arguments and ini-file content.
-Command line arguments take precedence over ini-file
+Command line arguments take precedence over ini-file.
 */
 package config
 
 import (
+	"errors"
 	"flag"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/openmpp/go/ompp/helper"
@@ -75,14 +77,15 @@ type FullShort struct {
 // to specify encoding (code page) of source text files,
 // for example: -dbcopy.CodePage=windows-1252.
 // If encoding value specified then ini-file and csv files converted from such encoding to utf-8.
-// If encoding not specified then auto-detection and default values are used (see helper.FileToUtf8())
+// If encoding not specified then auto-detection and default values are used (see helper.FileToUtf8()).
+// If isExtra=true then allow unknown extra keys in ini-file
+// otherwise all iini file keys must be defined as flag keys.
 //
 // Return
 // 1. *RunOptions: is merge of command line key=value and ini-file section.key=value options.
 // 2. *LogOptions: openM++ log file settings, also merge of command line and ini-file.
-// 3. Args []string: remaining command line arguments, after last recognized key=value
-// 4. error or nil on success
-func New(encodingKey string, optFs []FullShort) (*RunOptions, *LogOptions, []string, error) {
+// 3. error or nil on success
+func New(encodingKey string, isExtra bool, optFs []FullShort) (*RunOptions, *LogOptions, error) {
 
 	runOpts := &RunOptions{
 		KeyValue:        make(map[string]string),
@@ -97,7 +100,10 @@ func New(encodingKey string, optFs []FullShort) (*RunOptions, *LogOptions, []str
 
 	// parse command line arguments
 	flag.Parse()
-	extrArgs := flag.Args()
+	ea := flag.Args()
+	if len(ea) > 0 {
+		return nil, nil, errors.New("Invalid arguments: " + strings.Join(ea, " "))
+	}
 
 	// retrive encoding name from command line
 	encName := ""
@@ -110,10 +116,19 @@ func New(encodingKey string, optFs []FullShort) (*RunOptions, *LogOptions, []str
 	// parse ini-file using encoding, if it is not empty
 	kvIni, err := NewIni(runOpts.iniPath, encName)
 	if err != nil {
-		return nil, nil, extrArgs, err
+		return nil, nil, err
 	}
 	if kvIni != nil {
 		runOpts.KeyValue = kvIni
+	}
+
+	// validate ini-file flags: all keys should be defined flag names
+	if !isExtra {
+		for key := range kvIni {
+			if f := flag.Lookup(key); f == nil {
+				return nil, nil, errors.New("Invalid ini file section.key: " + key)
+			}
+		}
 	}
 
 	// override ini-file values with command-line arguments
@@ -159,7 +174,7 @@ func New(encodingKey string, optFs []FullShort) (*RunOptions, *LogOptions, []str
 
 	// adjust log settings
 	adjustLogOptions(runOpts, logOpts)
-	return runOpts, logOpts, extrArgs, nil
+	return runOpts, logOpts, nil
 }
 
 // FromIni read ini-file options.
