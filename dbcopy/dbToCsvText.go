@@ -398,5 +398,36 @@ func toModelTextCsv(dbConn *sql.DB, modelId int, outDir string) error {
 		return errors.New("failed to write group text into csv " + err.Error())
 	}
 
+	// write entity group text rows into csv
+	row = make([]string, 6)
+	row[0] = strconv.Itoa(modelId)
+
+	idx = 0
+	err = toCsvFile(
+		outDir,
+		"entity_group_txt.csv",
+		[]string{"model_id", "model_entity_id", "group_id", "lang_code", "descr", "note"},
+		func() (bool, []string, error) {
+
+			if 0 <= idx && idx < len(modelTxt.EntityGroupTxt) {
+				row[1] = strconv.Itoa(modelTxt.EntityGroupTxt[idx].EntityId)
+				row[2] = strconv.Itoa(modelTxt.EntityGroupTxt[idx].GroupId)
+				row[3] = modelTxt.EntityGroupTxt[idx].LangCode
+				row[4] = modelTxt.EntityGroupTxt[idx].Descr
+
+				if modelTxt.EntityGroupTxt[idx].Note == "" { // empty "" string is NULL
+					row[5] = "NULL"
+				} else {
+					row[5] = modelTxt.EntityGroupTxt[idx].Note
+				}
+				idx++
+				return false, row, nil
+			}
+			return true, row, nil // end of entity group text rows
+		})
+	if err != nil {
+		return errors.New("failed to write entity group text into csv " + err.Error())
+	}
+
 	return nil
 }

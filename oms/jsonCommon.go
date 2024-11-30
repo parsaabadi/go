@@ -189,12 +189,13 @@ type typeMetaUnpack struct {
 
 // copy of ModelMeta, using alias for TypeMeta to do a special range type marshaling
 type modelMetaUnpack struct {
-	Model  *db.ModelDicRow  // model_dic table row
-	Type   []typeMetaUnpack // types metadata: type name and enums
-	Param  []db.ParamMeta   // parameters metadata: parameter name, type, dimensions
-	Table  []db.TableMeta   // output tables metadata: table name, dimensions, accumulators, expressions
-	Entity []db.EntityMeta  // model entities and attributes
-	Group  []db.GroupMeta   // groups of parameters or output tables
+	Model       *db.ModelDicRow      // model_dic table row
+	Type        []typeMetaUnpack     // types metadata: type name and enums
+	Param       []db.ParamMeta       // parameters metadata: parameter name, type, dimensions
+	Table       []db.TableMeta       // output tables metadata: table name, dimensions, accumulators, expressions
+	Entity      []db.EntityMeta      // model entities and attributes
+	Group       []db.GroupMeta       // groups of parameters or output tables
+	EntityGroup []db.EntityGroupMeta // groups of entity attributes
 }
 
 func copyModelMetaToUnpack(meta *db.ModelMeta) *modelMetaUnpack {
@@ -203,12 +204,13 @@ func copyModelMetaToUnpack(meta *db.ModelMeta) *modelMetaUnpack {
 	}
 
 	mcp := modelMetaUnpack{
-		Model:  &meta.Model,
-		Type:   make([]typeMetaUnpack, len(meta.Type)),
-		Param:  meta.Param,
-		Table:  meta.Table,
-		Entity: meta.Entity,
-		Group:  meta.Group,
+		Model:       &meta.Model,
+		Type:        make([]typeMetaUnpack, len(meta.Type)),
+		Param:       meta.Param,
+		Table:       meta.Table,
+		Entity:      meta.Entity,
+		Group:       meta.Group,
+		EntityGroup: meta.EntityGroup,
 	}
 	for k := range meta.Type {
 		mcp.Type[k].TypeDicRow = &meta.Type[k].TypeDicRow

@@ -157,12 +157,13 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 
 	// select db rows from type_dic join to model_type_dic
 	meta := &ModelMeta{
-		Model:  *modelRow,
-		Type:   []TypeMeta{},
-		Param:  []ParamMeta{},
-		Table:  []TableMeta{},
-		Entity: []EntityMeta{},
-		Group:  []GroupMeta{},
+		Model:       *modelRow,
+		Type:        []TypeMeta{},
+		Param:       []ParamMeta{},
+		Table:       []TableMeta{},
+		Entity:      []EntityMeta{},
+		Group:       []GroupMeta{},
+		EntityGroup: []EntityGroupMeta{},
 	}
 	smId := strconv.Itoa(meta.Model.ModelId)
 
@@ -605,7 +606,7 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 					r.ChildLeafId = -1
 				}
 
-				// if parent group id not the same then find next parent gropu index
+				// if parent group id not the same then find next parent group index
 				if nGrp < grpCount && r.GroupId != meta.Group[nGrp].GroupId {
 					for ; nGrp < grpCount; nGrp++ {
 						if r.GroupId == meta.Group[nGrp].GroupId {
@@ -616,6 +617,75 @@ func getModel(dbConn *sql.DB, modelRow *ModelDicRow) (*ModelMeta, error) {
 				// append to parent group, if exist
 				if nGrp < grpCount {
 					meta.Group[nGrp].GroupPc = append(meta.Group[nGrp].GroupPc, r)
+				}
+				return nil
+			})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// select db rows from entity_group_lst
+	err = SelectRows(dbConn,
+		"SELECT"+
+			" model_id, model_entity_id, group_id, group_name, is_hidden"+
+			" FROM entity_group_lst"+
+			" WHERE model_id = "+smId+
+			" ORDER BY 1, 2, 3",
+		func(rows *sql.Rows) error {
+			var r EntityGroupLstRow
+			nHidden := 0
+			if err := rows.Scan(
+				&r.ModelId, &r.EntityId, &r.GroupId, &r.Name, &nHidden); err != nil {
+				return err
+			}
+			r.IsHidden = nHidden != 0 // oracle: smallint is float64
+			meta.EntityGroup = append(meta.EntityGroup,
+				EntityGroupMeta{EntityGroupLstRow: r, GroupPc: []EntityGroupPcRow{}})
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	// select db rows from entity_group_pc and append it as a child of entity_group_lst row
+	if grpCount := len(meta.EntityGroup); grpCount > 0 {
+		nGrp := 0
+		err = SelectRows(dbConn,
+			"SELECT"+
+				" model_id, model_entity_id, group_id, child_pos, child_group_id, attr_id"+
+				" FROM entity_group_pc"+
+				" WHERE model_id = "+smId+
+				" ORDER BY 1, 2, 3, 4",
+			func(rows *sql.Rows) error {
+				var r EntityGroupPcRow
+				var cgId, attrId sql.NullInt64
+				if err := rows.Scan(
+					&r.ModelId, &r.EntityId, &r.GroupId, &r.ChildPos, &cgId, &attrId); err != nil {
+					return err
+				}
+				if cgId.Valid {
+					r.ChildGroupId = int(cgId.Int64)
+				} else {
+					r.ChildGroupId = -1
+				}
+				if attrId.Valid {
+					r.AttrId = int(attrId.Int64)
+				} else {
+					r.AttrId = -1
+				}
+
+				// if parent entity id and group id not the same then find next parent group index
+				if nGrp < grpCount && (r.EntityId != meta.EntityGroup[nGrp].EntityId || r.GroupId != meta.EntityGroup[nGrp].GroupId) {
+					for ; nGrp < grpCount; nGrp++ {
+						if r.EntityId == meta.EntityGroup[nGrp].EntityId && r.GroupId == meta.EntityGroup[nGrp].GroupId {
+							break
+						}
+					}
+				}
+				// append to parent group, if exist
+				if nGrp < grpCount {
+					meta.EntityGroup[nGrp].GroupPc = append(meta.EntityGroup[nGrp].GroupPc, r)
 				}
 				return nil
 			})

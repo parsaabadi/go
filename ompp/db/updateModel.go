@@ -773,11 +773,17 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 	// for each group of parameters or output tables:
 	// insert into group_lst table and child rows into group_pc table
 	// update model_id with actual db value
-	// update group_id of group_pc row with parent group_id value (overwrite group_pc.group_id)
+	// convert id to string or return "NULL" if id is negative
+	idOrNullIfNegative := func(id int) string {
+		if id < 0 {
+			return "NULL"
+		}
+		return strconv.Itoa(id)
+	}
+
 	for idx := range modelDef.Group {
 
 		modelDef.Group[idx].ModelId = modelDef.Model.ModelId // update model id with db value
-		sGrpId := strconv.Itoa(modelDef.Group[idx].GroupId)
 
 		// INSERT INTO group_lst
 		//   (model_id, group_id, is_parameter, group_name, is_hidden)
@@ -788,7 +794,7 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 				" (model_id, group_id, is_parameter, group_name, is_hidden)"+
 				" VALUES ("+
 				smId+", "+
-				sGrpId+", "+
+				strconv.Itoa(modelDef.Group[idx].GroupId)+", "+
 				toBoolSqlConst(modelDef.Group[idx].IsParam)+", "+
 				toQuotedMax(modelDef.Group[idx].Name, nameDbMax)+", "+
 				toBoolSqlConst(modelDef.Group[idx].IsHidden)+")")
@@ -796,35 +802,104 @@ func doInsertModel(trx *sql.Tx, dbFacet Facet, modelDef *ModelMeta) error {
 			return err
 		}
 
-		// convert id to string or return "NULL" if id is negative
-		idOrNullIfNegative := func(id int) string {
-			if id < 0 {
-				return "NULL"
-			}
-			return strconv.Itoa(id)
-		}
-
 		// insert child rows into group_pc table
 		for pcIdx := range modelDef.Group[idx].GroupPc {
 
-			modelDef.Group[idx].GroupPc[pcIdx].GroupId = modelDef.Group[idx].GroupId // update group id with parent group id value
+			modelDef.Group[idx].GroupPc[pcIdx].ModelId = modelDef.Model.ModelId // update model id with db value
 
 			// insert group members rows into group_pc
 			// if child group id < 0 or leaf id < then treat it as NULL value
 			//
 			// INSERT INTO group_pc
-			//   (model_id, group_id, is_parameter, group_name, is_hidden)
+			//   (model_id, group_id, child_pos, child_group_id, leaf_id)
 			// VALUES
-			//   (1234, 4, 1, 'Geo_group', 0)
+			//   (1234, 4, 1, NULL, 101)
 			err = TrxUpdate(trx,
 				"INSERT INTO group_pc"+
 					" (model_id, group_id, child_pos, child_group_id, leaf_id)"+
 					" VALUES ("+
 					smId+", "+
-					sGrpId+", "+
+					strconv.Itoa(modelDef.Group[idx].GroupPc[pcIdx].GroupId)+", "+
 					strconv.Itoa(modelDef.Group[idx].GroupPc[pcIdx].ChildPos)+", "+
 					idOrNullIfNegative(modelDef.Group[idx].GroupPc[pcIdx].ChildGroupId)+", "+
 					idOrNullIfNegative(modelDef.Group[idx].GroupPc[pcIdx].ChildLeafId)+")")
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// for all entity attribute groups check constarints: (entity id, group id) is unique and group name is unique
+	type egt struct {
+		gId int
+		eId int
+	}
+	egIdCounts := map[egt]int{}
+	egNameCounts := map[string]int{}
+
+	for idx := range modelDef.EntityGroup {
+		if _, isExist := egNameCounts[modelDef.EntityGroup[idx].Name]; !isExist {
+			egNameCounts[modelDef.EntityGroup[idx].Name] = 1
+		} else {
+			return errors.New("invalid (duplicate) entity group name: " + modelDef.EntityGroup[idx].Name)
+		}
+		eg := egt{
+			eId: modelDef.EntityGroup[idx].EntityId,
+			gId: modelDef.EntityGroup[idx].GroupId,
+		}
+		if _, isExist := egIdCounts[eg]; !isExist {
+			egIdCounts[eg] = 1
+		} else {
+			return errors.New("invalid (duplicate) entity id and group id: " + strconv.Itoa(modelDef.EntityGroup[idx].EntityId) + " " + strconv.Itoa(modelDef.EntityGroup[idx].GroupId))
+		}
+	}
+
+	// for each entity attribute group:
+	// insert into entity_group_lst table and child rows into entity_group_pc table
+	// update model_id with actual db value
+	for idx := range modelDef.EntityGroup {
+
+		modelDef.EntityGroup[idx].ModelId = modelDef.Model.ModelId // update model id with db value
+
+		// INSERT INTO entity_group_lst
+		//   (model_id, model_entity_id, group_id, group_name, is_hidden)
+		// VALUES
+		//   (1234, 4, 1, 'Geo_group', 0)
+		err = TrxUpdate(trx,
+			"INSERT INTO entity_group_lst"+
+				" (model_id, model_entity_id, group_id, group_name, is_hidden)"+
+				" VALUES ("+
+				smId+", "+
+				strconv.Itoa(modelDef.EntityGroup[idx].EntityId)+", "+
+				strconv.Itoa(modelDef.EntityGroup[idx].GroupId)+", "+
+				toQuotedMax(modelDef.EntityGroup[idx].Name, nameDbMax)+", "+
+				toBoolSqlConst(modelDef.EntityGroup[idx].IsHidden)+")")
+		if err != nil {
+			return err
+		}
+
+		// insert child rows into entity_group_pc table
+		for pcIdx := range modelDef.EntityGroup[idx].GroupPc {
+
+			modelDef.EntityGroup[idx].GroupPc[pcIdx].ModelId = modelDef.Model.ModelId // update model id with db value
+
+			// insert group members rows into entity_group_pc
+			// if child group id < 0 or leaf id < then treat it as NULL value
+			//
+			// INSERT INTO entity_group_pc
+			//   (model_id, model_entity_id, group_id, child_pos, child_group_id, attr_id)
+			// VALUES
+			//   (1234, 4, 1, 0, NULL, 101)
+			err = TrxUpdate(trx,
+				"INSERT INTO entity_group_pc"+
+					" (model_id, model_entity_id, group_id, child_pos, child_group_id, attr_id)"+
+					" VALUES ("+
+					smId+", "+
+					strconv.Itoa(modelDef.EntityGroup[idx].GroupPc[pcIdx].EntityId)+", "+
+					strconv.Itoa(modelDef.EntityGroup[idx].GroupPc[pcIdx].GroupId)+", "+
+					strconv.Itoa(modelDef.EntityGroup[idx].GroupPc[pcIdx].ChildPos)+", "+
+					idOrNullIfNegative(modelDef.EntityGroup[idx].GroupPc[pcIdx].ChildGroupId)+", "+
+					idOrNullIfNegative(modelDef.EntityGroup[idx].GroupPc[pcIdx].AttrId)+")")
 			if err != nil {
 				return err
 			}

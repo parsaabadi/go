@@ -55,18 +55,19 @@ func GetModelText(dbConn *sql.DB, modelId int, langCode string, isPack bool) (*M
 
 	// select model name and digest by id
 	meta := &ModelTxtMeta{
-		ModelTxt:      []ModelTxtRow{},
-		TypeTxt:       []TypeTxtRow{},
-		TypeEnumTxt:   []TypeEnumTxtRow{},
-		ParamTxt:      []ParamTxtRow{},
-		ParamDimsTxt:  []ParamDimsTxtRow{},
-		TableTxt:      []TableTxtRow{},
-		TableDimsTxt:  []TableDimsTxtRow{},
-		TableAccTxt:   []TableAccTxtRow{},
-		TableExprTxt:  []TableExprTxtRow{},
-		EntityTxt:     []EntityTxtRow{},
-		EntityAttrTxt: []EntityAttrTxtRow{},
-		GroupTxt:      []GroupTxtRow{},
+		ModelTxt:       []ModelTxtRow{},
+		TypeTxt:        []TypeTxtRow{},
+		TypeEnumTxt:    []TypeEnumTxtRow{},
+		ParamTxt:       []ParamTxtRow{},
+		ParamDimsTxt:   []ParamDimsTxtRow{},
+		TableTxt:       []TableTxtRow{},
+		TableDimsTxt:   []TableDimsTxtRow{},
+		TableAccTxt:    []TableAccTxtRow{},
+		TableExprTxt:   []TableExprTxtRow{},
+		EntityTxt:      []EntityTxtRow{},
+		EntityAttrTxt:  []EntityAttrTxtRow{},
+		GroupTxt:       []GroupTxtRow{},
+		EntityGroupTxt: []EntityGroupTxtRow{},
 	}
 
 	err := SelectFirst(dbConn,
@@ -418,6 +419,32 @@ func GetModelText(dbConn *sql.DB, modelId int, langCode string, isPack bool) (*M
 				r.Note = note.String
 			}
 			meta.GroupTxt = append(meta.GroupTxt, r)
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	// select db rows from entity_group_txt
+	err = SelectRows(dbConn,
+		"SELECT"+
+			" M.model_id, M.model_entity_id, M.group_id, M.lang_id, L.lang_code, M.descr, M.note"+
+			" FROM entity_group_txt M"+
+			" INNER JOIN lang_lst L ON (L.lang_id = M.lang_id)"+
+			where+
+			" ORDER BY 1, 2, 3, 4",
+		func(rows *sql.Rows) error {
+			var r EntityGroupTxtRow
+			var lId int
+			var note sql.NullString
+			if err := rows.Scan(
+				&r.ModelId, &r.EntityId, &r.GroupId, &lId, &r.LangCode, &r.Descr, &note); err != nil {
+				return err
+			}
+			if note.Valid {
+				r.Note = note.String
+			}
+			meta.EntityGroupTxt = append(meta.EntityGroupTxt, r)
 			return nil
 		})
 	if err != nil {

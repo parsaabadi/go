@@ -622,7 +622,7 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 				return true, row, nil
 			}
 
-			// if end of current group childern rows then find next group with parent-child list
+			// if end of current group children rows then find next group with parent-child list
 			if j < 0 || j >= len(modelDef.Group[idx].GroupPc) {
 				j = 0
 				for {
@@ -655,6 +655,82 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 		})
 	if err != nil {
 		return errors.New("failed to write group parent-child into csv " + err.Error())
+	}
+
+	// write model entity group rows into csv
+	row = make([]string, 5)
+	row[0] = strconv.Itoa(modelDef.Model.ModelId)
+
+	idx = 0
+	err = toCsvFile(
+		outDir,
+		"entity_group_lst.csv",
+		[]string{"model_id", "model_entity_id", "group_id", "group_name", "is_hidden"},
+		func() (bool, []string, error) {
+			if 0 <= idx && idx < len(modelDef.EntityGroup) {
+				row[1] = strconv.Itoa(modelDef.EntityGroup[idx].EntityId)
+				row[2] = strconv.Itoa(modelDef.EntityGroup[idx].GroupId)
+				row[3] = modelDef.EntityGroup[idx].Name
+				row[4] = strconv.FormatBool(modelDef.EntityGroup[idx].IsHidden)
+				idx++
+				return false, row, nil
+			}
+			return true, row, nil // end of model group rows
+		})
+	if err != nil {
+		return errors.New("failed to write model entity groups into csv " + err.Error())
+	}
+
+	// write entity group parent-child rows into csv
+	row = make([]string, 6)
+	row[0] = strconv.Itoa(modelDef.Model.ModelId)
+
+	idx = 0
+	j = 0
+	err = toCsvFile(
+		outDir,
+		"entity_group_pc.csv",
+		[]string{"model_id", "model_entity_id", "group_id", "child_pos", "child_group_id", "attr_id"},
+		func() (bool, []string, error) {
+
+			if idx < 0 || idx >= len(modelDef.EntityGroup) { // end of entity groups rows
+				return true, row, nil
+			}
+
+			// if end of current entity group children rows then find next group with parent-child list
+			if j < 0 || j >= len(modelDef.EntityGroup[idx].GroupPc) {
+				j = 0
+				for {
+					idx++
+					if idx < 0 || idx >= len(modelDef.EntityGroup) { // end of entity groups rows
+						return true, row, nil
+					}
+					if len(modelDef.EntityGroup[idx].GroupPc) > 0 {
+						break
+					}
+				}
+			}
+
+			// make entity group parnet-child []string row
+			row[1] = strconv.Itoa(modelDef.EntityGroup[idx].GroupPc[j].EntityId)
+			row[2] = strconv.Itoa(modelDef.EntityGroup[idx].GroupPc[j].GroupId)
+			row[3] = strconv.Itoa(modelDef.EntityGroup[idx].GroupPc[j].ChildPos)
+
+			if modelDef.EntityGroup[idx].GroupPc[j].ChildGroupId < 0 { // negative value is NULL
+				row[4] = "NULL"
+			} else {
+				row[4] = strconv.Itoa(modelDef.EntityGroup[idx].GroupPc[j].ChildGroupId)
+			}
+			if modelDef.EntityGroup[idx].GroupPc[j].AttrId < 0 { // negative value is NULL
+				row[5] = "NULL"
+			} else {
+				row[5] = strconv.Itoa(modelDef.EntityGroup[idx].GroupPc[j].AttrId)
+			}
+			j++
+			return false, row, nil
+		})
+	if err != nil {
+		return errors.New("failed to write entity group parent-child into csv " + err.Error())
 	}
 
 	return nil

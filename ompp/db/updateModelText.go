@@ -450,5 +450,35 @@ func doUpdateModelText(trx *sql.Tx, modelDef *ModelMeta, langDef *LangMeta, mode
 		}
 	}
 
+	// update entity_group_txt and ids
+	for idx := range modelTxt.EntityGroupTxt {
+
+		modelTxt.EntityGroupTxt[idx].ModelId = modelDef.Model.ModelId // update model id
+		sEntId := strconv.Itoa(modelTxt.EntityGroupTxt[idx].EntityId)
+		sGrpId := strconv.Itoa(modelTxt.EntityGroupTxt[idx].GroupId)
+
+		// if language code valid then delete and insert into entity_group_txt
+		if lId, ok := langDef.IdByCode(modelTxt.EntityGroupTxt[idx].LangCode); ok {
+
+			err := TrxUpdate(trx,
+				"DELETE FROM entity_group_txt WHERE model_id = "+smId+" AND model_entity_id = "+sEntId+" AND group_id = "+sGrpId+" AND lang_id = "+strconv.Itoa(lId))
+			if err != nil {
+				return err
+			}
+			err = TrxUpdate(trx,
+				"INSERT INTO entity_group_txt (model_id, model_entity_id, group_id, lang_id, descr, note)"+
+					" VALUES ("+
+					smId+", "+
+					sEntId+", "+
+					sGrpId+", "+
+					strconv.Itoa(lId)+", "+
+					toQuotedMax(modelTxt.EntityGroupTxt[idx].Descr, descrDbMax)+", "+
+					toQuotedOrNullMax(modelTxt.EntityGroupTxt[idx].Note, noteDbMax)+")")
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	return nil
 }

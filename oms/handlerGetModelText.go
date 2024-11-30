@@ -102,16 +102,24 @@ func doModelTextHandler(w http.ResponseWriter, r *http.Request, isPack bool) {
 		Group     *db.GroupMeta // parameters or output tables group rows: group_lst join to group_pc
 		DescrNote aDescrNote    // from group_txt
 	}
+
+	// EntityGroupDescrNote is join of entity_group_lst, entity_group_pc and entity_group_txt
+	type EntityGroupDescrNote struct {
+		Group     *db.EntityGroupMeta // parameters or output tables group rows: entity_group_lst join to entity_group_pc
+		DescrNote aDescrNote          // from entity_group_txt
+	}
+
 	// language-specific model metadata db rows.
 	// It is sliced by one single language, but it can be different single language for each row.
 	// It is either user preferred language, model default language, first of the row or empty "" language.
 	type modelMetaDescrNote struct {
-		ModelDicDescrNote                   // model text rows: model_dic_txt
-		TypeTxt           []TypeDescrNote   // model type text rows: type_dic_txt join to model_type_dic
-		ParamTxt          []ParamDescrNote  // model parameter text rows: parameter_dic, model_parameter_dic, parameter_dic_txt, parameter_dims_txt
-		TableTxt          []TableDescrNote  // model output table text rows: table_dic, model_table_dic, table_dic_txt, table_dims_txt, table_acc_txt, table_expr_txt
-		EntityTxt         []EntityDescrNote // model entity text rows: join of entity_dic, model_entity_dic, entity_dic_txt, entity_attr_txt
-		GroupTxt          []GroupDescrNote  // model group text rows: group_txt join to group_lst
+		ModelDicDescrNote                        // model text rows: model_dic_txt
+		TypeTxt           []TypeDescrNote        // model type text rows: type_dic_txt join to model_type_dic
+		ParamTxt          []ParamDescrNote       // model parameter text rows: parameter_dic, model_parameter_dic, parameter_dic_txt, parameter_dims_txt
+		TableTxt          []TableDescrNote       // model output table text rows: table_dic, model_table_dic, table_dic_txt, table_dims_txt, table_acc_txt, table_expr_txt
+		EntityTxt         []EntityDescrNote      // model entity text rows: join of entity_dic, model_entity_dic, entity_dic_txt, entity_attr_txt
+		GroupTxt          []GroupDescrNote       // model group text rows: group_txt join to group_lst
+		EntityGroupTxt    []EntityGroupDescrNote // model entity group text rows: entity_group_txt join to entity_group_lst
 	}
 
 	// ModelMetaTextByDigestOrName return language-specific model metadata
@@ -139,6 +147,7 @@ func doModelTextHandler(w http.ResponseWriter, r *http.Request, isPack bool) {
 			TableTxt:          make([]TableDescrNote, len(meta.Table)),
 			EntityTxt:         make([]EntityDescrNote, len(meta.Entity)),
 			GroupTxt:          make([]GroupDescrNote, len(meta.Group)),
+			EntityGroupTxt:    make([]EntityGroupDescrNote, len(meta.EntityGroup)),
 		}
 		emptyStr := ""
 
@@ -230,6 +239,18 @@ func doModelTextHandler(w http.ResponseWriter, r *http.Request, isPack bool) {
 			mt.GroupTxt[k].Group = &db.GroupMeta{
 				GroupLstRow: meta.Group[k].GroupLstRow,
 				GroupPc:     meta.Group[k].GroupPc,
+			}
+		}
+
+		// model entity attribute groups
+		for k := range mt.EntityGroupTxt {
+			mt.EntityGroupTxt[k].DescrNote.LangCode = &emptyStr
+			mt.EntityGroupTxt[k].DescrNote.Descr = &emptyStr
+			mt.EntityGroupTxt[k].DescrNote.Note = &emptyStr
+
+			mt.EntityGroupTxt[k].Group = &db.EntityGroupMeta{
+				EntityGroupLstRow: meta.EntityGroup[k].EntityGroupLstRow,
+				GroupPc:           meta.EntityGroup[k].GroupPc,
 			}
 		}
 
@@ -1282,11 +1303,97 @@ func doModelTextHandler(w http.ResponseWriter, r *http.Request, isPack bool) {
 			}
 		}
 
+		// set entity group description and notes
+		if len(mt.EntityGroupTxt) > 0 && len(txtMeta.EntityGroupTxt) > 0 {
+
+			var isKey, isFound, isMatch bool
+			var nf, ni, si, di int
+
+			for ; si < len(txtMeta.EntityGroupTxt); si++ {
+
+				// destination rows must be defined by [di] index
+				if di >= len(mt.EntityGroupTxt) {
+					break // done with all destination text
+				}
+
+				// check if source and destination keys equal
+				mId := mt.EntityGroupTxt[di].Group.ModelId
+				eId := mt.EntityGroupTxt[di].Group.EntityId
+				gId := mt.EntityGroupTxt[di].Group.GroupId
+
+				isKey = txtMeta.EntityGroupTxt[si].ModelId == mId &&
+					txtMeta.EntityGroupTxt[si].EntityId == eId &&
+					txtMeta.EntityGroupTxt[si].GroupId == gId
+
+				// start of next key: set value
+				if !isKey && isFound {
+
+					if !isMatch { // if no match then use default
+						ni = nf
+					}
+					mt.EntityGroupTxt[di].DescrNote = aDescrNote{
+						LangCode: &txtMeta.EntityGroupTxt[ni].LangCode,
+						Descr:    &txtMeta.EntityGroupTxt[ni].Descr,
+						Note:     &txtMeta.EntityGroupTxt[ni].Note}
+
+					// reset to start next search
+					isFound = false
+					isMatch = false
+					di++ // move to next group
+					si-- // repeat current source row
+					continue
+				}
+
+				// inside of key
+				if isKey {
+
+					if !isFound {
+						isFound = true // first key found
+						nf = si
+					}
+					// match the language
+					isMatch = txtMeta.EntityGroupTxt[si].LangCode == lc
+					if isMatch {
+						ni = si // perefred language match
+					}
+					if txtMeta.EntityGroupTxt[si].LangCode == lcd {
+						nf = si // index of default language
+					}
+				}
+
+				// if keys not equal and destination key behind source
+				// then move to next destination row and repeat current source row
+				if !isKey &&
+					(txtMeta.EntityGroupTxt[si].ModelId > mId ||
+						txtMeta.EntityGroupTxt[si].ModelId == mId && txtMeta.EntityGroupTxt[si].EntityId > eId ||
+						txtMeta.EntityGroupTxt[si].ModelId == mId && txtMeta.EntityGroupTxt[si].EntityId == eId && txtMeta.EntityGroupTxt[si].GroupId > gId) {
+
+					di++ // move to next group
+					si-- // repeat current source row
+					continue
+				}
+			} // for
+
+			// last row
+			if isFound && di < len(mt.EntityGroupTxt) {
+
+				if !isMatch { // if no match then use default
+					ni = nf
+				}
+				if ni < len(txtMeta.EntityGroupTxt) {
+					mt.EntityGroupTxt[di].DescrNote = aDescrNote{
+						LangCode: &txtMeta.EntityGroupTxt[ni].LangCode,
+						Descr:    &txtMeta.EntityGroupTxt[ni].Descr,
+						Note:     &txtMeta.EntityGroupTxt[ni].Note}
+				}
+			}
+		}
+
 		return &mt, true
 	}
 
 	//
-	// actual hhtp handler
+	// actual http handler
 	//
 
 	dn := getRequestParam(r, "model")
@@ -1338,12 +1445,13 @@ func doModelTextHandler(w http.ResponseWriter, r *http.Request, isPack bool) {
 
 	// copy of modelMetaDescrNote, using alias for TypeMeta to do a special range type marshaling
 	mcp := struct {
-		*ModelDicDescrNote                       // model text rows: model_dic_txt
-		TypeTxt            []typeUnpackDescrNote // model type text rows: type_dic_txt join to model_type_dic
-		ParamTxt           []ParamDescrNote      // model parameter text rows: parameter_dic, model_parameter_dic, parameter_dic_txt, parameter_dims_txt
-		TableTxt           []TableDescrNote      // model output table text rows: table_dic, model_table_dic, table_dic_txt, table_dims_txt, table_acc_txt, table_expr_txt
-		EntityTxt          []EntityDescrNote     // model entity text rows: join of entity_dic, model_entity_dic, entity_dic_txt, entity_attr_txt
-		GroupTxt           []GroupDescrNote      // model group text rows: group_txt join to group_lst
+		*ModelDicDescrNote                        // model text rows: model_dic_txt
+		TypeTxt            []typeUnpackDescrNote  // model type text rows: type_dic_txt join to model_type_dic
+		ParamTxt           []ParamDescrNote       // model parameter text rows: parameter_dic, model_parameter_dic, parameter_dic_txt, parameter_dims_txt
+		TableTxt           []TableDescrNote       // model output table text rows: table_dic, model_table_dic, table_dic_txt, table_dims_txt, table_acc_txt, table_expr_txt
+		EntityTxt          []EntityDescrNote      // model entity text rows: join of entity_dic, model_entity_dic, entity_dic_txt, entity_attr_txt
+		GroupTxt           []GroupDescrNote       // model group text rows: group_txt join to group_lst
+		EntityGroupTxt     []EntityGroupDescrNote // model entity group text rows: entity_group_txt join to entity_group_lst
 	}{
 		ModelDicDescrNote: &mt.ModelDicDescrNote,
 		TypeTxt:           make([]typeUnpackDescrNote, len(mt.TypeTxt)),
@@ -1351,6 +1459,7 @@ func doModelTextHandler(w http.ResponseWriter, r *http.Request, isPack bool) {
 		TableTxt:          mt.TableTxt,
 		EntityTxt:         mt.EntityTxt,
 		GroupTxt:          mt.GroupTxt,
+		EntityGroupTxt:    mt.EntityGroupTxt,
 	}
 
 	for k := range mt.TypeTxt {

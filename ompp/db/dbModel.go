@@ -36,31 +36,34 @@ const rangeDicId = 3      // range type
 //
 // Unless otherwise specified each array is ordered by model-specific id's and binary search can be used.
 // For example type array is ordered by (model_id, type_id) and type enum array by (model_id, type_id, enum_id).
+//
 type ModelMeta struct {
-	Model  ModelDicRow  // model_dic table row
-	Type   []TypeMeta   // types metadata: type name and enums
-	Param  []ParamMeta  // parameters metadata: parameter name, type, dimensions
-	Table  []TableMeta  // output tables metadata: table name, dimensions, accumulators, expressions
-	Entity []EntityMeta // model entities and attributes
-	Group  []GroupMeta  // groups of parameters or output tables
+	Model       ModelDicRow       // model_dic table row
+	Type        []TypeMeta        // types metadata: type name and enums
+	Param       []ParamMeta       // parameters metadata: parameter name, type, dimensions
+	Table       []TableMeta       // output tables metadata: table name, dimensions, accumulators, expressions
+	Entity      []EntityMeta      // model entities and attributes
+	Group       []GroupMeta       // groups of parameters or output tables
+	EntityGroup []EntityGroupMeta // entity groups of attributes
 }
 
 // ModelTxtMeta is language-specific portion of model metadata db rows.
 type ModelTxtMeta struct {
-	ModelName     string             // model name for text metadata
-	ModelDigest   string             // model digest for text metadata
-	ModelTxt      []ModelTxtRow      // model text rows: model_dic_txt
-	TypeTxt       []TypeTxtRow       // model type text rows: type_dic_txt join to model_type_dic
-	TypeEnumTxt   []TypeEnumTxtRow   // type enum text rows: type_enum_txt join to model_type_dic
-	ParamTxt      []ParamTxtRow      // model parameter text rows: parameter_dic_txt join to model_parameter_dic
-	ParamDimsTxt  []ParamDimsTxtRow  // parameter dimension text rows: parameter_dims_txt join to model_parameter_dic
-	TableTxt      []TableTxtRow      // model output table text rows: table_dic_txt join to model_table_dic
-	TableDimsTxt  []TableDimsTxtRow  // output table dimension text rows: table_dims_txt join to model_table_dic
-	TableAccTxt   []TableAccTxtRow   // output table accumulator text rows: table_acc_txt join to model_table_dic
-	TableExprTxt  []TableExprTxtRow  // output table expression text rows: table_expr_txt join to model_table_dic
-	EntityTxt     []EntityTxtRow     // model entities text rows: entity_dic_txt join to model_entity_dic table
-	EntityAttrTxt []EntityAttrTxtRow // entity attributes: entity_attr_txt join to model_entity_dic table
-	GroupTxt      []GroupTxtRow      // group text rows: group_txt
+	ModelName      string              // model name for text metadata
+	ModelDigest    string              // model digest for text metadata
+	ModelTxt       []ModelTxtRow       // model text rows: model_dic_txt
+	TypeTxt        []TypeTxtRow        // model type text rows: type_dic_txt join to model_type_dic
+	TypeEnumTxt    []TypeEnumTxtRow    // type enum text rows: type_enum_txt join to model_type_dic
+	ParamTxt       []ParamTxtRow       // model parameter text rows: parameter_dic_txt join to model_parameter_dic
+	ParamDimsTxt   []ParamDimsTxtRow   // parameter dimension text rows: parameter_dims_txt join to model_parameter_dic
+	TableTxt       []TableTxtRow       // model output table text rows: table_dic_txt join to model_table_dic
+	TableDimsTxt   []TableDimsTxtRow   // output table dimension text rows: table_dims_txt join to model_table_dic
+	TableAccTxt    []TableAccTxtRow    // output table accumulator text rows: table_acc_txt join to model_table_dic
+	TableExprTxt   []TableExprTxtRow   // output table expression text rows: table_expr_txt join to model_table_dic
+	EntityTxt      []EntityTxtRow      // model entities text rows: entity_dic_txt join to model_entity_dic table
+	EntityAttrTxt  []EntityAttrTxtRow  // entity attributes: entity_attr_txt join to model_entity_dic table
+	GroupTxt       []GroupTxtRow       // group text rows: group_txt
+	EntityGroupTxt []EntityGroupTxtRow // entity group text rows: entity_group_txt
 }
 
 // TypeMeta is type metadata: type name and enums
@@ -448,5 +451,39 @@ type GroupPcRow struct {
 type GroupTxtRow struct {
 	ModelId   int // model_id  INT          NOT NULL
 	GroupId   int // group_id  INT          NOT NULL
+	DescrNote     // language, description, notes
+}
+
+// EntityGroupMeta is db rows to describe parent-child group of entity attributes,
+// it is join of entity_group_lst to entity_group_pc
+type EntityGroupMeta struct {
+	EntityGroupLstRow                    // entity attribute group rows: entity_group_lst
+	GroupPc           []EntityGroupPcRow // group parent-child relationship rows: entity_group_pc
+}
+
+// EntityGroupLstRow is db row of entity_group_lst table
+type EntityGroupLstRow struct {
+	ModelId  int    // model_id        INT          NOT NULL
+	EntityId int    // model_entity_id INT          NOT NULL
+	GroupId  int    // group_id        INT          NOT NULL
+	Name     string // group_name      VARCHAR(255) NOT NULL
+	IsHidden bool   // is_hidden       SMALLINT     NOT NULL
+}
+
+// EntityGroupPcRow is db row of entity_group_pc table
+type EntityGroupPcRow struct {
+	ModelId      int // model_id        INT NOT NULL
+	EntityId     int // model_entity_id INT NOT NULL
+	GroupId      int // group_id        INT NOT NULL
+	ChildPos     int // child_pos       INT NOT NULL
+	ChildGroupId int // child_group_id  INT, -- if not IS NULL then child group
+	AttrId       int // attr_id         INT, -- if not IS NULL then entity attribute index
+}
+
+// EntityGroupTxtRow is db row of entity_group_txt table
+type EntityGroupTxtRow struct {
+	ModelId   int // model_id        INT NOT NULL
+	EntityId  int // model_entity_id INT NOT NULL
+	GroupId   int // group_id        INT NOT NULL
 	DescrNote     // language, description, notes
 }
