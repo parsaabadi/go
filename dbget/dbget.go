@@ -90,7 +90,12 @@ or, if no match found in database then it is a default model language.
 If user do not want language specific labels in the output then -dbget.NoLanguage option can be used.
 In that case dimension items will be M, F codes instead of Male, Female lables.
 
-**dbget command (action) supplied as -do or -dbget.Do option.**
+	dbget -m modelOne -do all-runs -dbget.IdCsv
+
+If user want language neutral output with dimension items id's: 0, 1 instead codes: M, F then -dbget.IdCsv option can be used.
+In that case dimension items will be M, F codes instead of Male, Female lables.
+
+**dbget commands (actions)**
 
 Get list of the models from database:
 
@@ -126,6 +131,7 @@ Get all model runs parameters and output table values:
 	dbget -m modelOne -do all-runs
 	dbget -m modelOne -do all-runs -lang fr-CA
 	dbget -m modelOne -do all-runs -dbget.NoLanguage
+	dbget -m modelOne -do all-runs -dbget.IdCsv
 	dbget -m modelOne -do all-runs -tsv
 	dbget -m modelOne -do all-runs -dir my/output/dir
 	dbget -m modelOne -do all-runs -pipe
@@ -142,6 +148,7 @@ Get model run parameters and output table values:
 	dbget -m modelOne -do run -r Default-4
 	dbget -m modelOne -do run -r Default-4 -lang fr-CA
 	dbget -m modelOne -do run -r Default-4 -dbget.NoLanguage
+	dbget -m modelOne -do run -r Default-4 -dbget.IdCsv
 	dbget -m modelOne -do run -r Default-4 -tsv
 	dbget -m modelOne -do run -r Default-4 -pipe
 	dbget -m modelOne -do run -r Default-4 -dbget.NoZeroCsv
@@ -155,6 +162,7 @@ Get parameter run values:
 	dbget -m modelOne -r Default -parameter ageSex
 	dbget -m modelOne -r Default -parameter ageSex -lang fr-CA
 	dbget -m modelOne -r Default -parameter ageSex -dbget.NoLanguage
+	dbget -m modelOne -r Default -parameter ageSex -dbget.IdCsv
 	dbget -m modelOne -r Default -parameter ageSex -tsv
 	dbget -m modelOne -r Default -parameter ageSex -pipe
 
@@ -168,6 +176,7 @@ Get output table values:
 	dbget -m modelOne -r Default -table ageSexIncome
 	dbget -m modelOne -r Default -table ageSexIncome -lang fr-CA
 	dbget -m modelOne -r Default -table ageSexIncome -dbget.NoLanguage
+	dbget -m modelOne -r Default -table ageSexIncome -dbget.IdCsv
 	dbget -m modelOne -r Default -table ageSexIncome -tsv
 	dbget -m modelOne -r Default -table ageSexIncome -pipe
 	dbget -m modelOne -r Default -table ageSexIncome -dbget.NoZeroCsv
@@ -217,6 +226,7 @@ Get model run parameters and output tables values from compatibility (Modgen) vi
 	dbget -m modelOne -do old-run -tsv
 	dbget -m modelOne -do old-run -lang fr-CA
 	dbget -m modelOne -do old-run -dbget.NoLanguage
+	dbget -m modelOne -do old-run -dbget.IdCsv
 	dbget -m modelOne -do old-run -pipe
 	dbget -m modelOne -do old-run -dir my/dir
 	dbget -m modelOne -do old-run -dbget.NoZeroCsv
@@ -231,6 +241,7 @@ Get parameter run values from compatibility (Modgen) views:
 	dbget -m modelOne -do old-parameter -dbget.Parameter ageSex -tsv
 	dbget -m modelOne -do old-parameter -dbget.Parameter ageSex -lang fr-CA
 	dbget -m modelOne -do old-parameter -dbget.Parameter ageSex -dbget.NoLanguage
+	dbget -m modelOne -do old-parameter -dbget.Parameter ageSex -dbget.IdCsv
 	dbget -m modelOne -do old-parameter -dbget.Parameter ageSex -pipe
 
 	dbget -dbget.Sqlite modelOne.sqlite -dbget.Do old-parameter -dbget.Parameter ageSex -dbget.As csv -dbget.ToConsole -dbget.Language FR
@@ -242,6 +253,7 @@ Get output table values from compatibility (Modgen) views:
 	dbget -m modelOne -do old-table -dbget.Table salarySex -tsv
 	dbget -m modelOne -do old-table -dbget.Table salarySex -lang fr-CA
 	dbget -m modelOne -do old-table -dbget.Table salarySex -dbget.NoLanguage
+	dbget -m modelOne -do old-table -dbget.Table salarySex -dbget.IdCsv
 	dbget -m modelOne -do old-table -dbget.Table salarySex -pipe
 	dbget -m modelOne -do old-table -dbget.Table salarySex -dbget.NoZeroCsv
 	dbget -m modelOne -do old-table -dbget.Table salarySex -dbget.NoNullCsv
@@ -284,12 +296,13 @@ const (
 	langArgKey          = "dbget.Language"       // prefered output language: fr-CA
 	langShortKey        = "lang"                 // prefered output language (short form)
 	noLangArgKey        = "dbget.NoLanguage"     // if true then do language-neutral output: enum codes and "C" formats
+	idCsvArgKey         = "dbget.IdCsv"          // if true then do language-neutral output: enum Ids and "C" formats
 	encodingArgKey      = "dbget.CodePage"       // code page for converting source files, e.g. windows-1252
 	useUtf8ArgKey       = "dbget.Utf8Bom"        // if true then write utf-8 BOM into output
-	noteArgKey          = "dbget.Notes"          // if true then output notes into .md files
-	doubleFormatArgKey  = "dbget.DoubleFormat"   // convert to string format for float and double
 	noZeroArgKey        = "dbget.NoZeroCsv"      // if true then do not write zero values into output tables or microdata csv
 	noNullArgKey        = "dbget.NoNullCsv"      // if true then do not write NULL values into output tables or microdata csv
+	doubleFormatArgKey  = "dbget.DoubleFormat"   // convert to string format for float and double
+	noteArgKey          = "dbget.Notes"          // if true then output notes into .md files
 	sqliteArgKey        = "dbget.Sqlite"         // input db SQLite path
 	sqliteShortKey      = "db"                   // input db SQLite path (short form)
 	dbConnStrArgKey     = "dbget.Database"       // db connection string
@@ -338,6 +351,7 @@ var theCfg = struct {
 	userLang        string   // prefered output language: fr-CA
 	lang            string   // model language matched to user language
 	isNoLang        bool     // if true then do language-neutral output: enum codes and "C" formats
+	isIdCsv         bool     // if true then do language-neutral output: enum id's and "C" formats
 	encodingName    string   // "code page" to convert source file into utf-8, for example: windows-1252
 	isWriteUtf8Bom  bool     // if true then write utf-8 BOM into csv file
 	isNote          bool     // if true then output notes into .md files
@@ -384,6 +398,7 @@ func mainBody(args []string) error {
 	_ = flag.String(langArgKey, theCfg.userLang, "prefered output language")
 	_ = flag.String(langShortKey, theCfg.userLang, "prefered output language (short of "+langArgKey+")")
 	_ = flag.Bool(noLangArgKey, theCfg.isNoLang, "if true then do language-neutral output: enum codes and 'C' formats")
+	_ = flag.Bool(idCsvArgKey, theCfg.isIdCsv, "if true then do language-neutral output: enum id's and 'C' formats")
 	_ = flag.String(encodingArgKey, theCfg.encodingName, "code page to convert source file into utf-8, e.g.: windows-1252")
 	_ = flag.Bool(useUtf8ArgKey, theCfg.isWriteUtf8Bom, "if true then write utf-8 BOM into output")
 	_ = flag.Bool(noteArgKey, theCfg.isNote, "if true then write notes into .md files")
@@ -446,10 +461,16 @@ func mainBody(args []string) error {
 	theCfg.isConsole = runOpts.Bool(consoleArgKey)
 	theCfg.userLang = runOpts.String(langArgKey)
 	theCfg.isNoLang = runOpts.Bool(noLangArgKey)
+	theCfg.isIdCsv = runOpts.Bool(idCsvArgKey)
 	theCfg.encodingName = runOpts.String(encodingArgKey)
 	theCfg.isWriteUtf8Bom = runOpts.Bool(useUtf8ArgKey)
 	theCfg.isNote = runOpts.Bool(noteArgKey)
 	theCfg.doubleFmt = runOpts.String(doubleFormatArgKey)
+
+	// validate language options: user specified language cannot be combined with NoLanguage or IdCsv option
+	if theCfg.userLang != "" && (theCfg.isNoLang || theCfg.isIdCsv) {
+		return errors.New("invalid arguments: " + langArgKey + " cannot be combined with " + noLangArgKey + " or " + idCsvArgKey)
+	}
 
 	// get output format: cv, tsv or json
 	if f := runOpts.String(asArgKey); f != "" {
@@ -551,7 +572,7 @@ func mainBody(args []string) error {
 		}
 
 		// match user language to model language, use default model language if there are no match
-		if !theCfg.isNoLang {
+		if !theCfg.isNoLang && !theCfg.isIdCsv {
 			if theCfg.userLang != "" {
 				theCfg.lang, err = matchUserLang(srcDb, *mdRow)
 				if err != nil {

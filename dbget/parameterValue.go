@@ -84,7 +84,7 @@ func parameterRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.R
 	cvtParam := &db.CellParamConverter{
 		ModelDef:  meta,
 		Name:      name,
-		IsIdCsv:   false,
+		IsIdCsv:   theCfg.isIdCsv,
 		DoubleFmt: theCfg.doubleFmt,
 	}
 	paramLt := db.ReadParamLayout{
@@ -94,13 +94,17 @@ func parameterRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.R
 			FromId: run.RunId,
 		}}
 
-	if theCfg.isNoLang {
+	if theCfg.isNoLang || theCfg.isIdCsv {
 
 		hdr, err = cvtParam.CsvHeader()
 		if err != nil {
 			return errors.New("Failed to make parameter csv header: " + name + ": " + err.Error())
 		}
-		cvtRow, err = cvtParam.ToCsvRow()
+		if theCfg.isIdCsv {
+			cvtRow, err = cvtParam.ToCsvIdRow()
+		} else {
+			cvtRow, err = cvtParam.ToCsvRow()
+		}
 		if err != nil {
 			return errors.New("Failed to create parameter converter to csv: " + name + ": " + err.Error())
 		}

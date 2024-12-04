@@ -85,7 +85,7 @@ func tableRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRo
 	cvtExpr := &db.CellExprConverter{CellTableConverter: db.CellTableConverter{
 		ModelDef:    meta,
 		Name:        name,
-		IsIdCsv:     false,
+		IsIdCsv:     theCfg.isIdCsv,
 		DoubleFmt:   theCfg.doubleFmt,
 		IsNoZeroCsv: runOpts.Bool(noZeroArgKey),
 		IsNoNullCsv: runOpts.Bool(noNullArgKey),
@@ -97,13 +97,17 @@ func tableRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRo
 		},
 	}
 
-	if theCfg.isNoLang {
+	if theCfg.isNoLang || theCfg.isIdCsv {
 
 		hdr, err = cvtExpr.CsvHeader()
 		if err != nil {
 			return errors.New("Failed to make output table csv header: " + name + ": " + err.Error())
 		}
-		cvtRow, err = cvtExpr.ToCsvRow()
+		if theCfg.isIdCsv {
+			cvtRow, err = cvtExpr.ToCsvIdRow()
+		} else {
+			cvtRow, err = cvtExpr.ToCsvRow()
+		}
 		if err != nil {
 			return errors.New("Failed to create output table converter to csv: " + name + ": " + err.Error())
 		}
