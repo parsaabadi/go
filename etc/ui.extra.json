@@ -16,6 +16,14 @@
       "LangCode": "fr",
       "Label": "Créer un scénario"
     }, {
+      "Link": "https://github.com/openmpp/openmpp.github.io/wiki/Ompp-UI-Disk-Space-Cleanup",
+      "LangCode": "en",
+      "Label": "Disk Cleanup"
+    }, {
+      "Link": "https://github.com/openmpp/openmpp.github.io/wiki/Ompp-UI-Disk-Space-Cleanup",
+      "LangCode": "fr",
+      "Label": "Nettoyage de disque"
+    }, {
       "Link": "https://github.com/openmpp/openmpp.github.io/wiki",
       "LangCode": "en",
       "Label": "OpenM++ wiki"
