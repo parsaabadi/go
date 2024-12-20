@@ -47,7 +47,7 @@ func allModelsRefreshHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Location", "/api/admin/all-models/refresh/"+modelDir)
+	w.Header().Set("Content-Location", "/api/admin/all-models/refresh/"+filepath.ToSlash(modelDir))
 	w.Header().Set("Content-Type", "text/plain")
 }
 
@@ -64,7 +64,7 @@ func allModelsCloseHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to close models catalog: "+modelDir, http.StatusBadRequest)
 		return
 	}
-	w.Header().Set("Content-Location", "/api/admin/all-models/close/"+modelDir)
+	w.Header().Set("Content-Location", "/api/admin/all-models/close/"+filepath.ToSlash(modelDir))
 	w.Header().Set("Content-Type", "text/plain")
 }
 
@@ -85,12 +85,38 @@ func modelCloseHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// close model and remove from catalog
-	if err := theCatalog.closeModel(dn); err != nil {
+	if _, _, err := theCatalog.closeModel(dn); err != nil {
 		omppLog.Log(err)
 		http.Error(w, "Failed to close model"+": "+dn, http.StatusBadRequest)
 		return
 	}
 	w.Header().Set("Content-Location", "/api/admin/model/"+dn+"/close")
+	w.Header().Set("Content-Type", "text/plain")
+}
+
+// delete all model files from disk
+//
+//	POST /api/admin/model/:model/delete
+//
+// Model identified by digest-or-name.
+// If multiple models with same name exist then result is undefined.
+func modelDeleteHandler(w http.ResponseWriter, r *http.Request) {
+
+	dn := getRequestParam(r, "model")
+
+	if dn == "" {
+		omppLog.Log("Error: invalid (empty) model digest and name")
+		http.Error(w, "Invalid (empty) model digest and name", http.StatusBadRequest)
+		return
+	}
+
+	// close model and delete all model files from disk
+	if err := theCatalog.deleteModel(dn); err != nil {
+		omppLog.Log(err)
+		http.Error(w, "Failed to delete model"+": "+dn, http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Location", "/api/admin/model/"+dn+"/delete")
 	w.Header().Set("Content-Type", "text/plain")
 }
 
@@ -136,7 +162,7 @@ func modelOpenDbFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Location", "/api/admin/db-file-open/"+dbPath)
+	w.Header().Set("Content-Location", "/api/admin/db-file-open/"+filepath.ToSlash(dbPath))
 	w.Header().Set("Content-Type", "text/plain")
 }
 

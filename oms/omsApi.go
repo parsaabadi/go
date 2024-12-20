@@ -864,4 +864,7 @@ func apiAdminRoutes(isAdminAll bool, router *vestigo.Router) {
 	router.Get("/api/admin/db-cleanup/log-all", dbCleanupAllLogGetHandler, logRequest)
 	router.Get("/api/admin/db-cleanup/log/:name", dbCleanupFileLogGetHandler, logRequest)
 	router.Get("/api/admin/db-cleanup/log/", http.NotFound)
+
+	// POST /api/admin/model/:model/delete
+	router.Post("/api/admin/model/:model/delete", modelDeleteHandler, logRequest)
 }

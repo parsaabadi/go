@@ -54,8 +54,8 @@ func (mc *ModelCatalog) refreshSqlite(modelDir, modelLogDir string) error {
 		return nil
 	})
 	if err != nil {
-		omppLog.Log("Error: fail to list model directory: ", err.Error())
-		return errors.New("Error: fail to list model directory")
+		omppLog.Log("Error: fail to scan model directory: ", err.Error())
+		return errors.New("Error: fail to scan model directory")
 	}
 	sort.Strings(pathLst) // sort by path to model.sqlite: same as sort by model name in default case
 
@@ -315,10 +315,10 @@ func (mc *ModelCatalog) closeAll() error {
 }
 
 // close model db-connection and remove model from models list.
-func (mc *ModelCatalog) closeModel(dn string) error {
+func (mc *ModelCatalog) closeModel(dn string) (string, string, error) {
 
 	if dn == "" {
-		return nil
+		return "", "", nil
 	}
 	// lock and update model catalog
 	mc.theLock.Lock()
@@ -326,6 +326,8 @@ func (mc *ModelCatalog) closeModel(dn string) error {
 
 	// close model db connection and remove model from the list
 	isFound := false
+	name := ""
+	binDir := ""
 	n := 0
 
 	for k := range mc.modelLst {
@@ -333,9 +335,11 @@ func (mc *ModelCatalog) closeModel(dn string) error {
 		if !isFound && (mc.modelLst[k].meta.Model.Digest == dn || mc.modelLst[k].meta.Model.Name == dn) {
 			if err := mc.modelLst[k].dbConn.Close(); err != nil {
 				omppLog.Log("Error: close db connection error" + ": " + dn + " : " + err.Error())
-				return err
+				return "", "", err
 			}
 			isFound = true
+			name = mc.modelLst[k].meta.Model.Name
+			binDir = mc.modelLst[k].binDir
 			continue
 		}
 		mc.modelLst[n] = mc.modelLst[k]
@@ -343,6 +347,59 @@ func (mc *ModelCatalog) closeModel(dn string) error {
 	}
 	if isFound {
 		mc.modelLst = mc.modelLst[:n]
+	}
+	return name, binDir, nil
+}
+
+// close model and delete all model files: exe, sqlite, ini,...
+func (mc *ModelCatalog) deleteModel(dn string) error {
+
+	if dn == "" {
+		return nil
+	}
+
+	// close the model and remove it from model catalog
+	name, modelDir, err := theCatalog.closeModel(dn)
+	if err != nil {
+		return err
+	}
+	if name == "" { // model not found
+		return errors.New("Error: model not found " + dn)
+	}
+
+	// find all files in model directory where name is:
+	//   ModelName.* ModelName_mpi.* ModelNameD.* ModelNameD_mpi.*
+	pathLst := []string{}
+
+	ff := func(pattern string) error {
+		p, e := filepath.Glob(pattern)
+		if e != nil {
+			omppLog.Log("Error: fail to scan model directory: ", pattern, ": ", e.Error())
+			return errors.New("Error: fail to scan model directory")
+		}
+		if len(p) > 0 {
+			pathLst = append(pathLst, p...)
+		}
+		return nil
+	}
+	if err = ff(filepath.Join(modelDir, name) + ".*"); err != nil {
+		return err
+	}
+	if err = ff(filepath.Join(modelDir, name) + "D.*"); err != nil {
+		return err
+	}
+	if err = ff(filepath.Join(modelDir, name) + "_mpi.*"); err != nil {
+		return err
+	}
+	if err = ff(filepath.Join(modelDir, name) + "D_mpi.*"); err != nil {
+		return err
+	}
+
+	// delete model files
+	for _, p := range pathLst {
+		if ok := fileDeleteAndLog(true, p); !ok {
+			return errors.New("Error: unable to delete model file(s)")
+		}
 	}
 	return nil
 }
