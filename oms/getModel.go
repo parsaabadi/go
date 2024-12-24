@@ -74,25 +74,25 @@ func (mc *ModelCatalog) ModelMetaByDigestOrName(dn string) (*db.ModelMeta, error
 
 // ModelTextByDigest return model_dic_txt db row by model digest and preferred language tags.
 // It can be in preferred language, default model language or empty if no model_dic_txt rows exist.
-func (mc *ModelCatalog) ModelTextByDigest(digest string, preferredLang []language.Tag) (*ModelDicDescrNote, bool) {
+func (mc *ModelCatalog) ModelTextByDigest(digest string, preferredLang []language.Tag) (*db.ModelDicDescrNote, bool) {
 
 	// if model digest is empty then return empty results
 	if digest == "" {
 		omppLog.Log("Warning: invalid (empty) model digest and name")
-		return &ModelDicDescrNote{}, false
+		return &db.ModelDicDescrNote{}, false
 	}
 
 	// get model_dic row
 	mdRow, ok := mc.ModelDicByDigest(digest)
 	if !ok {
 		omppLog.Log("Warning: model digest not found: ", digest)
-		return &ModelDicDescrNote{}, false // return empty result: model not found or error
+		return &db.ModelDicDescrNote{}, false // return empty result: model not found or error
 	}
 
 	// get model_dic_txt rows from catalog: it is loaded at catalog initialization
 	_, txt := mc.modelTextMeta(digest)
 	if txt == nil {
-		return &ModelDicDescrNote{}, false // return empty result: model not found or error
+		return &db.ModelDicDescrNote{}, false // return empty result: model not found or error
 	}
 
 	// match preferred languages and model languages
@@ -100,11 +100,11 @@ func (mc *ModelCatalog) ModelTextByDigest(digest string, preferredLang []languag
 	lcd, _, _ := mc.modelLangs(digest)
 	if lc == "" && lcd == "" {
 		omppLog.Log("Error: invalid (empty) model default language: ", digest)
-		return &ModelDicDescrNote{}, false
+		return &db.ModelDicDescrNote{}, false
 	}
 
 	// if model_dic_txt rows not empty then find row by matched language or by default language
-	t := ModelDicDescrNote{Model: mdRow}
+	t := db.ModelDicDescrNote{Model: mdRow}
 
 	if len(txt.ModelTxt) > 0 {
 

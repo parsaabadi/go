@@ -358,7 +358,7 @@ func toModelCsv(dbConn *sql.DB, modelDef *db.ModelMeta, outDir string) error {
 		[]string{
 			"model_id", "model_table_id", "table_hid", "table_name",
 			"table_digest", "is_user", "table_rank", "is_sparse",
-			"db_expr_table", "db_acc_table", "db_acc_table", "expr_dim_pos",
+			"db_expr_table", "db_acc_table", "db_acc_all_view", "expr_dim_pos",
 			"is_hidden", "import_digest"},
 		func() (bool, []string, error) {
 			if 0 <= idx && idx < len(modelDef.Table) {

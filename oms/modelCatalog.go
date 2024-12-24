@@ -65,15 +65,9 @@ type modelBasic struct {
 	extra    string         // if not empty then model extra content from models/bin/dir/model.extra.json
 }
 
-// ModelDicDescrNote is join of model_dic db row and model_dic_txt row
-type ModelDicDescrNote struct {
-	Model     db.ModelDicRow // model_dic db row
-	DescrNote db.DescrNote   // from model_dic_txt
-}
-
-// ModelLangWord is (code, label) rows from lang_word and model_word language-specific db tables.
+// ModelWordLabel is (code, label) rows from lang_word and model_word language-specific db tables.
 // It is either in user preferred language or model default language.
-type ModelLangWord struct {
+type ModelWordLabel struct {
 	ModelName     string      // model name for text metadata
 	ModelDigest   string      // model digest for text metadata
 	LangCode      string      // language code selected for lang_word table rows

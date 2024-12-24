@@ -178,7 +178,7 @@ func (cellCvt *CellTableCalcConverter) ToCsvIdRow() (func(interface{}, []string)
 // Converter will return error if len(row) not equal to number of fields in csv record.
 // Converter will return error if run_id not exist in the list of model runs (in run_lst table).
 // Double format string is used if parameter type is float, double, long double.
-// If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
+// If dimension type is enum based then csv row is enum code.
 func (cellCvt *CellTableCalcConverter) ToCsvRow() (func(interface{}, []string) (bool, error), error) {
 
 	// find output table by name

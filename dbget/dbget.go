@@ -5,41 +5,44 @@
 dbget is a command line tool to export OpenM++ model metadata, input parameters and run results.
 It is reading from model database and produce CSV, TSV or JSON output.
 
-In oredr to use it database connection must be specified.
-Most generic format is to use database connection string and driver name:
+Most generic format to specify source data is to use connection string and driver name:
 
 	dbget
 	  -dbget.Do model-list
-	  -dbget.Database "Database=modelName.sqlite; Timeout=86400; OpenMode=ReadWrite;"
+	  -dbget.Database "Database=model.sqlite; Timeout=86400; OpenMode=ReadOnly;"
 	  -dbget.DatabaseDriver SQLite
+
+Dget can read model data from SQLite, MySQL, PostgreSQL, MS SQL, Oracle and DB2.
 
 By default openM++ is using SQLite database and it is enough to specife path to model.sqlite file:
 
-	dbget -do model-list -db some/dir/modelOne.sqlite
-	dbget -do model-list -dbget.Sqlite some/dir/modelOne.sqlite
+	dbget -do model-list -db some/dir/model.sqlite
+	dbget -do model-list -dbget.Sqlite some/dir/model.sqlite
 
-If SQLite database file name is the same as model name and located in current directory then it is enough to specify model name only:
+If SQLite database file name is the same as model name
+and located in current directory then it is enough to specify model name only:
 
 	dbget -m modelOne -do all-runs
 
 As result of above command dbget will open modelOne.sqlite database file in current directory
-and do "all-runs" command to ouput all model runs result and input parameters.
+and do "all-runs" command to output all model runs result and input parameters.
 
 Most often used options of dbget do have a short form to reduce typing on command line.
 For example: -db is a short version of: -dbget.Sqlite option and -do is a short of -dbget.Do.
 Longer version of options can be used on command line and ini files.
-For example if there is my.ini file:
+
+For example, if there is my.ini file:
 
 	[dbget]
-	Do     = model-list                ; dbget action: 'model-iist' = get list of the models
-	Sqlite = some/dir/modelOne.sqlite  ; path to model SQLite database file
+	Do     = model-list             ; dbget action: 'model-iist' = get list of the models
+	Sqlite = some/dir/model.sqlite  ; path to model SQLite database file
 
 then commands below are equal:
 
 	dbget -ini           my.ini
 	dbget -OpenM.IniFile my.ini
-	dbget -do       model-list -db           some/dir/modelOne.sqlite
-	dbget -dbget.Do model-list -dbget.Sqlite some/dir/modelOne.sqlite
+	dbget -do       model-list -db           some/dir/model.sqlite
+	dbget -dbget.Do model-list -dbget.Sqlite some/dir/model.sqlite
 
 By default dbget produce .csv output file(s), e.g. commands above will create model-list.csv file.
 It is also possible to produce .tsv output and, for some commands, .json output:
@@ -62,7 +65,7 @@ to produce output suitable for command pipes.
 
 **Important:**
 By using -pipe you are suppressing any console error message output and therefore you must check dbget exit code
-or redirect log output to file by using -OpenM.LogToFile option.
+or enable additonal log output to file by using -OpenM.LogToFile option.
 
 By default dbget produces language specific output based on match of user OS language to model languages.
 For example, if user OS language is fr-CA then output will be created from model FR language, if it is exists in the model database.
@@ -85,15 +88,15 @@ User can override default OS language:
 If isl = Icelandic language not found in model database then closest languge will be used, for example: DA,
 or, if no match found in database then it is a default model language.
 
-	dbget -m modelOne -do all-runs -dbget.NoLanguage
-
 If user do not want language specific labels in the output then -dbget.NoLanguage option can be used.
 In that case dimension items will be M, F codes instead of Male, Female lables.
 
-	dbget -m modelOne -do all-runs -dbget.IdCsv
+	dbget -m modelOne -do all-runs -dbget.NoLanguage
 
 If user want language neutral output with dimension items id's: 0, 1 instead codes: M, F then -dbget.IdCsv option can be used.
 In that case dimension items will be M, F codes instead of Male, Female lables.
+
+	dbget -m modelOne -do all-runs -dbget.IdCsv
 
 **dbget commands (actions)**
 
@@ -123,8 +126,23 @@ Get list of the models from database:
 
 	dbget
 	  -dbget.Do model-list
-	  -dbget.Database "Database=modelName.sqlite; Timeout=86400; OpenMode=ReadWrite;"
+	  -dbget.Database "Database=model.sqlite; Timeout=86400; OpenMode=ReadOnly;"
 	  -dbget.DatabaseDriver SQLite
+
+Get model metadata from database:
+
+	dbget -m modelOne -do model
+	dbget -m modelOne -do model -csv
+	dbget -m modelOne -do model -tsv
+	dbget -m modelOne -do model -json
+	dbget -m modelOne -do model -pipe
+	dbget -m modelOne -do model -lang en-CA
+	dbget -m modelOne -do model -lang fr-CA
+	dbget -m modelOne -do model -lang isl
+	dbget -m modelOne -do model -lang fr-CA -dbget.Notes
+	dbget -m modelOne -do model -dbget.NoLanguage
+
+	dbget -dbget.ModelName modelOne -dbget.Do model -dbget.As csv -dbget.ToConsole -dbget.Language FR
 
 Get all model runs parameters and output table values:
 
@@ -139,7 +157,7 @@ Get all model runs parameters and output table values:
 	dbget -m modelOne -do all-runs -dbget.NoNullCsv
 	dbget -m modelOne -do all-runs -dbget.NoZeroCsv -dbget.NoNullCsv
 
-	dbget -dbget.Sqlite modelOne.sqlite -dbget.Do all-runs
+	dbget -dbget.ModelName modelOne -dbget.Do all-runs
 
 Get model run parameters and output table values:
 
@@ -155,7 +173,7 @@ Get model run parameters and output table values:
 	dbget -m modelOne -do run -r Default-4 -dbget.NoNullCsv
 	dbget -m modelOne -do run -r Default-4 -dbget.NoZeroCsv -dbget.NoNullCsv
 
-	dbget -dbget.Sqlite modelOne.sqlite -dbget.Do run -dbget.Run Default
+	dbget -dbget.ModelName modelOne -dbget.Do run -dbget.Run Default
 
 Get parameter run values:
 
@@ -169,7 +187,7 @@ Get parameter run values:
 	dbget -m modelOne -dbget.FirstRun -parameter ageSex
 	dbget -m modelOne -dbget.LastRun  -parameter ageSex
 
-	dbget -dbget.Sqlite modelOne.sqlite -dbget.Do parameter -dbget.Run Default -dbget.Parameter ageSex
+	dbget -dbget.ModelName modelOne -dbget.Do parameter -dbget.Run Default -dbget.Parameter ageSex
 
 Get output table values:
 
@@ -185,7 +203,53 @@ Get output table values:
 	dbget -m modelOne -dbget.FirstRun -table ageSexIncome
 	dbget -m modelOne -dbget.LastRun  -table ageSexIncome
 
-	dbget -dbget.Sqlite modelOne.sqlite -dbget.Do table -dbget.Run Default -dbget.Table ageSexIncome
+	dbget -dbget.ModelName modelOne -dbget.Do table -dbget.Run Default -dbget.Table ageSexIncome
+
+Get output table sub-values (get accumulators):
+
+	dbget -m modelOne -r Default -sub-table ageSexIncome
+	dbget -m modelOne -r Default -sub-table ageSexIncome -lang fr-CA
+	dbget -m modelOne -r Default -sub-table ageSexIncome -dbget.NoLanguage
+	dbget -m modelOne -r Default -sub-table ageSexIncome -dbget.IdCsv
+	dbget -m modelOne -r Default -sub-table ageSexIncome -tsv
+	dbget -m modelOne -r Default -sub-table ageSexIncome -pipe
+	dbget -m modelOne -r Default -sub-table ageSexIncome -dbget.NoZeroCsv
+	dbget -m modelOne -r Default -sub-table ageSexIncome -dbget.NoNullCsv
+
+	dbget -m modelOne -dbget.FirstRun -sub-table ageSexIncome
+	dbget -m modelOne -dbget.LastRun  -sub-table ageSexIncome
+
+	dbget -dbget.ModelName modelOne -dbget.Do sub-table -dbget.Run Default -dbget.Table ageSexIncome
+
+Get output table all sub-values, including derived (get all accumulators):
+
+	dbget -m modelOne -r Default -sub-table-all ageSexIncome
+	dbget -m modelOne -r Default -sub-table-all ageSexIncome -lang fr-CA
+	dbget -m modelOne -r Default -sub-table-all ageSexIncome -dbget.NoLanguage
+	dbget -m modelOne -r Default -sub-table-all ageSexIncome -dbget.IdCsv
+	dbget -m modelOne -r Default -sub-table-all ageSexIncome -tsv
+	dbget -m modelOne -r Default -sub-table-all ageSexIncome -pipe
+	dbget -m modelOne -r Default -sub-table-all ageSexIncome -dbget.NoZeroCsv
+	dbget -m modelOne -r Default -sub-table-all ageSexIncome -dbget.NoNullCsv
+
+	dbget -m modelOne -dbget.FirstRun -sub-table-all ageSexIncome
+	dbget -m modelOne -dbget.LastRun  -sub-table-all ageSexIncome -tsv -pipe
+	dbget -m modelOne -dbget.LastRun  -sub-table-all ageSexIncome -tsv -pipe -dbget.NoZeroCsv -dbget.NoNullCsv
+
+	dbget -dbget.ModelName modelOne -dbget.Do sub-table-all -dbget.Run Default -dbget.Table ageSexIncome
+
+Get entity microdata:
+
+	dbget -m modelOne -r "Microdata in database" -microdata Person
+	dbget -m modelOne -r "Microdata in database" -microdata Person -lang fr-CA
+	dbget -m modelOne -r "Microdata in database" -microdata Person -dbget.NoLanguage
+	dbget -m modelOne -r "Microdata in database" -microdata Person -dbget.IdCsv
+	dbget -m modelOne -r "Microdata in database" -microdata Person -tsv
+	dbget -m modelOne -r "Microdata in database" -microdata Person -pipe
+	dbget -m modelOne -r "Microdata in database" -microdata Person -dbget.NoZeroCsv
+	dbget -m modelOne -r "Microdata in database" -microdata Person -dbget.NoNullCsv
+
+	dbget -dbget.ModelName modelOne -dbget.Do microdata -dbget.Run "Microdata in database" -dbget.Entity Person
 
 Aggregate and compare microdata run values:
 
@@ -217,7 +281,7 @@ Get model metadata from compatibility (Modgen) views:
 	dbget -m modelOne -do old-model -json
 	dbget -m modelOne -do old-model -pipe
 
-	dbget -dbget.Sqlite modelOne.sqlite -dbget.Do old-model -dbget.As csv -dbget.ToConsole -dbget.Language FR
+	dbget -dbget.ModelName modelOne -dbget.Do old-model -dbget.As csv -dbget.ToConsole -dbget.Language FR
 
 Get model run parameters and output tables values from compatibility (Modgen) views:
 
@@ -232,7 +296,7 @@ Get model run parameters and output tables values from compatibility (Modgen) vi
 	dbget -m modelOne -do old-run -dbget.NoZeroCsv
 	dbget -m modelOne -do old-run -dbget.NoNullCsv
 
-	dbget -dbget.Sqlite modelOne.sqlite -dbget.Do old-run -dbget.As csv -dbget.ToConsole -dbget.Language FR
+	dbget -dbget.ModelName modelOne -dbget.Do old-run -dbget.As csv -dbget.ToConsole -dbget.Language FR
 
 Get parameter run values from compatibility (Modgen) views:
 
@@ -244,7 +308,7 @@ Get parameter run values from compatibility (Modgen) views:
 	dbget -m modelOne -do old-parameter -dbget.Parameter ageSex -dbget.IdCsv
 	dbget -m modelOne -do old-parameter -dbget.Parameter ageSex -pipe
 
-	dbget -dbget.Sqlite modelOne.sqlite -dbget.Do old-parameter -dbget.Parameter ageSex -dbget.As csv -dbget.ToConsole -dbget.Language FR
+	dbget -dbget.ModelName modelOne -dbget.Do old-parameter -dbget.Parameter ageSex -dbget.As csv -dbget.ToConsole -dbget.Language FR
 
 Get output table values from compatibility (Modgen) views:
 
@@ -258,7 +322,7 @@ Get output table values from compatibility (Modgen) views:
 	dbget -m modelOne -do old-table -dbget.Table salarySex -dbget.NoZeroCsv
 	dbget -m modelOne -do old-table -dbget.Table salarySex -dbget.NoNullCsv
 
-	dbget -dbget.Sqlite modelOne.sqlite -dbget.Do old-table -dbget.Table ageSexIncome -dbget.As csv -dbget.ToConsole -dbget.Language FR
+	dbget -dbget.ModelName modelOne -dbget.Do old-table -dbget.Table ageSexIncome -dbget.As csv -dbget.ToConsole -dbget.Language FR
 */
 package main
 
@@ -323,9 +387,12 @@ const (
 	paramShortKey       = "parameter"            // short form of: -dbget.do parameter -dbget.Parameter Name
 	tableArgKey         = "dbget.Table"          // output table name
 	tableShortKey       = "table"                // short form of: -dbget.do table -dbget.Table Name
+	subTableShortKey    = "sub-table"            // short form of: -dbget.do sub-table -dbget.Table Name
+	subTableAllShortKey = "sub-table-all"        // short form of: -dbget.do sub-table-all -dbget.Table Name
 	entityArgKey        = "dbget.Entity"         // microdata entity name
 	groupByArgKey       = "dbget.GroupBy"        // microdata group by attributes
 	calcArgKey          = "dbget.Calc"           // calculation(s) expressions to compare or aggregate
+	microdataShortKey   = "microdata"            // short form of: -dbget.do microdata -dbget.Entity Name
 )
 
 // output format: csv by default, or tsv or json
@@ -382,6 +449,9 @@ func mainBody(args []string) error {
 	isPipe := false
 	doParamName := ""
 	doTableName := ""
+	doAccTableName := ""
+	doAllAccTableName := ""
+	doEntityName := ""
 	_ = flag.String(cmdArgKey, "", "action, what to do, for example: model-list")
 	_ = flag.String(cmdShortKey, "", "action, what to do (short of "+cmdArgKey+")")
 	_ = flag.String(asArgKey, "", "output as .csv, .tsv or .json, default: .csv")
@@ -425,6 +495,9 @@ func mainBody(args []string) error {
 	flag.StringVar(&doParamName, paramShortKey, "", "short form of: -"+cmdArgKey+" parameter -"+paramArgKey+" Name")
 	_ = flag.String(tableArgKey, "", "output table name")
 	flag.StringVar(&doTableName, tableShortKey, "", "short form of: -"+cmdArgKey+" table -"+tableArgKey+" Name")
+	flag.StringVar(&doAccTableName, subTableShortKey, "", "short form of: -"+cmdArgKey+" sub-table -"+tableArgKey+" Name")
+	flag.StringVar(&doAllAccTableName, subTableAllShortKey, "", "short form of: -"+cmdArgKey+" sub-table-all -"+tableArgKey+" Name")
+	flag.StringVar(&doEntityName, microdataShortKey, "", "short form of: -"+cmdArgKey+" microdata -"+entityArgKey+" Name")
 	_ = flag.String(entityArgKey, "", "microdata entity name")
 	_ = flag.String(groupByArgKey, "", "list of microdata group by attributes")
 	_ = flag.String(calcArgKey, "", "list of calculation(s) expressions to compare or aggregate")
@@ -441,6 +514,9 @@ func mainBody(args []string) error {
 		{Full: langArgKey, Short: langShortKey},
 		{Full: paramArgKey, Short: paramShortKey},
 		{Full: tableArgKey, Short: tableShortKey},
+		{Full: tableArgKey, Short: subTableShortKey},
+		{Full: tableArgKey, Short: subTableAllShortKey},
+		{Full: entityArgKey, Short: microdataShortKey},
 	}
 
 	// parse command line arguments and ini-file
@@ -513,7 +589,7 @@ func mainBody(args []string) error {
 
 	// output to json supported only for model metadata
 	if theCfg.kind == asJson {
-		if theCfg.action != "model-list" && theCfg.action != "old-model" {
+		if theCfg.action != "model-list" && theCfg.action != "model" && theCfg.action != "old-model" {
 			return errors.New("JSON output not allowed for: " + theCfg.action)
 		}
 	}
@@ -608,11 +684,31 @@ func mainBody(args []string) error {
 		}
 		theCfg.action = "table"
 	}
+	if doAccTableName != "" {
+		if runOpts.IsExist(cmdArgKey) && theCfg.action != "sub-table" {
+			return errors.New("invalid action argument: " + theCfg.action)
+		}
+		theCfg.action = "sub-table"
+	}
+	if doAllAccTableName != "" {
+		if runOpts.IsExist(cmdArgKey) && theCfg.action != "sub-table-all" {
+			return errors.New("invalid action argument: " + theCfg.action)
+		}
+		theCfg.action = "sub-table-all"
+	}
+	if doEntityName != "" {
+		if runOpts.IsExist(cmdArgKey) && theCfg.action != "microdata" {
+			return errors.New("invalid action argument: " + theCfg.action)
+		}
+		theCfg.action = "microdata"
+	}
 
 	// dispatch the command
 	switch theCfg.action {
 	case "model-list":
 		return modelList(srcDb)
+	case "model":
+		return modelMeta(srcDb, modelId)
 	case "run":
 		return runValue(srcDb, modelId, runOpts)
 	case "all-runs":
@@ -625,6 +721,12 @@ func mainBody(args []string) error {
 		return parameterValue(srcDb, modelId, runOpts)
 	case "table":
 		return tableValue(srcDb, modelId, runOpts)
+	case "sub-table":
+		return tableAcc(srcDb, modelId, runOpts)
+	case "sub-table-all":
+		return tableAllAcc(srcDb, modelId, runOpts)
+	case "microdata":
+		return microdataValue(srcDb, modelId, runOpts)
 	case "microdata-aggregate":
 		return microdataAggregate(srcDb, modelId, false, runOpts)
 	case "microdata-compare":

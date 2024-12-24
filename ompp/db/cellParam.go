@@ -163,8 +163,8 @@ func (cellCvt *CellParamConverter) ToCsvIdRow() (func(interface{}, []string) (bo
 //
 // Converter return isNotEmpty flag, it is always true if there were no error during conversion.
 // Converter will return error if len(row) not equal to number of fields in csv record.
-// If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
-// If parameter type is enum based then csv row value is enum code and cell value is enum id.
+// If dimension type is enum based then csv row is enum code.
+// If parameter type is enum based then csv row value is enum code.
 func (cellCvt *CellParamConverter) ToCsvRow() (func(interface{}, []string) (bool, error), error) {
 
 	// find parameter by name

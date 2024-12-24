@@ -102,12 +102,12 @@ func (mc *ModelCatalog) ProfileNamesByDigestOrName(dn string) ([]string, bool) {
 // WordListByDigestOrName return model "words" by model digest and preferred language tags.
 // Model "words" are arrays of rows from lang_word and model_word db tables.
 // It can be in preferred language, default model language or empty if no lang_word or model_word rows exist.
-func (mc *ModelCatalog) WordListByDigestOrName(dn string, preferredLang []language.Tag) (*ModelLangWord, bool) {
+func (mc *ModelCatalog) WordListByDigestOrName(dn string, preferredLang []language.Tag) (*ModelWordLabel, bool) {
 
 	// if model digest-or-name is empty then return empty results
 	if dn == "" {
 		omppLog.Log("Warning: invalid (empty) model digest and name")
-		return &ModelLangWord{}, false
+		return &ModelWordLabel{}, false
 	}
 
 	// match preferred languages and model languages
@@ -115,7 +115,7 @@ func (mc *ModelCatalog) WordListByDigestOrName(dn string, preferredLang []langua
 	lcd, _, _ := mc.modelLangs(dn)
 	if lc == "" && lcd == "" {
 		omppLog.Log("Error: invalid (empty) model default language: ", dn)
-		return &ModelLangWord{}, false
+		return &ModelWordLabel{}, false
 	}
 
 	// lock model catalog
@@ -124,11 +124,11 @@ func (mc *ModelCatalog) WordListByDigestOrName(dn string, preferredLang []langua
 
 	idx, ok := mc.indexByDigestOrName(dn)
 	if !ok {
-		return &ModelLangWord{}, false // return empty result: model not found or error
+		return &ModelWordLabel{}, false // return empty result: model not found or error
 	}
 
 	// find lang_word rows in preferred or model default language
-	mlw := ModelLangWord{
+	mlw := ModelWordLabel{
 		ModelName:   mc.modelLst[idx].meta.Model.Name,
 		ModelDigest: mc.modelLst[idx].meta.Model.Digest}
 

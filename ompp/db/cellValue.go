@@ -78,7 +78,8 @@ type CsvConverter interface {
 	ToCsvRow() (func(interface{}, []string) (bool, error), error)
 }
 
-// CsvConverter provide methods to convert parameter row, output table row or microdata row from or to row []string for csv file.
+// Provide locale-specific methods to convert parameter row, output table row or microdata row to []string row for csv file.
+// For example convert dimension enum id to enum label in specific language or use locale format for numeric values: 1234.56 => 1 234,56
 type CsvLocaleConverter interface {
 	// return converter from cell of parameter, output table or microdata to csv row []string.
 	// If dimension type is enum based then csv row is enum label.

@@ -14,7 +14,7 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
-// get model run paratemer values and write run results into csv or tsv files.
+// get model run paratemer values and write run results into csv or tsv file.
 func parameterValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 
 	// find model run

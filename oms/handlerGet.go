@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path/filepath"
 
+	"github.com/openmpp/go/ompp"
 	"github.com/openmpp/go/ompp/db"
 	"github.com/openmpp/go/ompp/omppLog"
 )
@@ -60,11 +61,11 @@ func modelTextListHandler(w http.ResponseWriter, r *http.Request) {
 	mbs := theCatalog.allModels()
 
 	type modelTxtListItem struct {
-		ModelDicDescrNote        // model_dic db row and model_dic_txt row
-		Dir               string // model directory, relative to model root and slashed: dir/sub
-		DbPath            string // path to model.sqlite, relative to model root and slashed: dir/sub/model.sqlite
-		IsIni             bool   // if true the default ini file exists: models/bin/dir/sub/modelName.ini
-		Extra             string // if not empty then model extra content
+		db.ModelDicDescrNote        // model_dic db row and model_dic_txt row
+		Dir                  string // model directory, relative to model root and slashed: dir/sub
+		DbPath               string // path to model.sqlite, relative to model root and slashed: dir/sub/model.sqlite
+		IsIni                bool   // if true the default ini file exists: models/bin/dir/sub/modelName.ini
+		Extra                string // if not empty then model extra content
 	}
 	mtl := make([]modelTxtListItem, 0, len(mbs))
 
@@ -132,7 +133,7 @@ func doModelMetaHandler(w http.ResponseWriter, r *http.Request, isPack bool) {
 		return
 	}
 	// else: "unpack" range types during json marshal
-	mcp := copyModelMetaToUnpack(m)
+	mcp := ompp.CopyModelMetaToUnpack(m)
 
 	jsonResponse(w, r, mcp)
 }
@@ -165,13 +166,13 @@ func modelAllTextHandler(w http.ResponseWriter, r *http.Request) {
 
 	// "unpack" range types during json marshal
 	// copy of ModelMeta, using alias for TypeMeta to do a special range type marshaling
-	mcp := copyModelMetaToUnpack(m)
+	mcp := ompp.CopyModelMetaToUnpack(m)
 
 	mf := struct {
-		*modelMetaUnpack // model metadata db rows, language-neutral portion of it
-		*db.ModelTxtMeta // language-specific portion of model metadata db rows
+		*ompp.ModelMetaUnpack // model metadata db rows, language-neutral portion of it
+		*db.ModelTxtMeta      // language-specific portion of model metadata db rows
 	}{
-		modelMetaUnpack: mcp,
+		ModelMetaUnpack: mcp,
 		ModelTxtMeta:    t,
 	}
 	jsonResponse(w, r, mf)

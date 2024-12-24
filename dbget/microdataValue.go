@@ -14,8 +14,9 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
-// get output table values and write run results into csv or tsv file.
-func tableValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
+// get entity microdata values and write run results into csv or tsv file.
+// Csv file header is key and names of attribute: key,AgeGroup,Income,....
+func microdataValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 
 	// find model run
 	msg, run, err := findRun(srcDb, modelId, runOpts.String(runArgKey), runOpts.Int(runIdArgKey, 0), runOpts.Bool(runFirstArgKey), runOpts.Bool(runLastArgKey))
@@ -25,15 +26,21 @@ func tableValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 	if run == nil {
 		return errors.New("Error: model run not found")
 	}
+	if run.Status != db.DoneRunStatus {
+		return errors.New("Error: model run not completed successfully: " + run.Name)
+	}
 
 	// get model metadata
 	meta, err := db.GetModelById(srcDb, modelId)
-	if err != nil {
+	if err != nil || meta == nil {
 		return errors.New("Error at get model metadata by id: " + strconv.Itoa(modelId) + ": " + err.Error())
 	}
 
-	// write output table values to csv or tsv file
-	name := runOpts.String(tableArgKey)
+	// write microdata values to csv or tsv file
+	name := runOpts.String(entityArgKey)
+	if name == "" {
+		return errors.New("Invalid (empty) model entity name")
+	}
 	fp := ""
 
 	if theCfg.isConsole {
@@ -49,67 +56,66 @@ func tableValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 		omppLog.Log("Do ", theCfg.action, ": "+fp)
 	}
 
-	return tableRunValue(srcDb, meta, name, run, runOpts, fp, false, nil)
-}
-
-// read output table values and write run results into csv or tsv file.
-// It can be compatibility view output table csv file with header Dim0,Dim1,....,Value
-// or normal csv file: expr_name,dim0,dim1,expr_value.
-// For compatibilty view output table csv measure dimension column must last dimension, not first as expr_name
-func tableRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRow, runOpts *config.RunOptions, path string, isOld bool, csvHdr []string) error {
-
-	if run == nil {
-		return errors.New("Error: model run not found")
-	}
-	if run.Status != db.DoneRunStatus {
-		return errors.New("Error: model run not completed successfully: " + run.Name)
-	}
-	if name == "" {
-		return errors.New("Invalid (empty) output table name")
-	}
-	if meta == nil {
-		return errors.New("Invalid (empty) model metadata")
-	}
-	idx, ok := meta.OutTableByName(name)
+	// find model entity
+	eIdx, ok := meta.EntityByName(name)
 	if !ok {
-		return errors.New("Error: model output table not found: " + name)
+		return errors.New("Error: model entity not found: " + name)
 	}
-	rank := meta.Table[idx].Rank
+	ent := &meta.Entity[eIdx]
+
+	// find entity generation by entity id, as it is today model run has only one entity generation for each entity
+	egLst, err := db.GetEntityGenList(srcDb, run.RunId)
+	if err != nil || len(egLst) <= 0 {
+		return errors.New("Error: not found any microdata in model run: " + run.Name)
+	}
+
+	gIdx := -1
+	for k := range egLst {
+
+		if egLst[k].EntityId == ent.EntityId {
+			gIdx = k
+			break
+		}
+	}
+	if gIdx < 0 {
+		return errors.New("Error: not found generation of entity: " + name + " in model run: " + run.Name)
+	}
 
 	// make csv header
 	// create converter from db cell into csv row []string
-	var err error
 	hdr := []string{}
 	var cvtRow func(interface{}, []string) (bool, error)
 
-	cvtExpr := &db.CellExprConverter{CellTableConverter: db.CellTableConverter{
+	cvtMicro := &db.CellMicroConverter{CellEntityConverter: db.CellEntityConverter{
 		ModelDef:    meta,
 		Name:        name,
+		EntityGen:   &egLst[gIdx],
 		IsIdCsv:     theCfg.isIdCsv,
 		DoubleFmt:   theCfg.doubleFmt,
 		IsNoZeroCsv: runOpts.Bool(noZeroArgKey),
 		IsNoNullCsv: runOpts.Bool(noNullArgKey),
 	}}
-	tblLt := db.ReadTableLayout{
+	microLt := db.ReadMicroLayout{
 		ReadLayout: db.ReadLayout{
 			Name:   name,
 			FromId: run.RunId,
 		},
+		GenDigest: egLst[gIdx].GenDigest,
 	}
 
 	if theCfg.isNoLang || theCfg.isIdCsv {
 
-		hdr, err = cvtExpr.CsvHeader()
+		hdr, err = cvtMicro.CsvHeader()
 		if err != nil {
-			return errors.New("Failed to make output table csv header: " + name + ": " + err.Error())
+			return errors.New("Failed to make microdata csv header: " + name + ": " + err.Error())
 		}
 		if theCfg.isIdCsv {
-			cvtRow, err = cvtExpr.ToCsvIdRow()
+			cvtRow, err = cvtMicro.ToCsvIdRow()
 		} else {
-			cvtRow, err = cvtExpr.ToCsvRow()
+			cvtRow, err = cvtMicro.ToCsvRow()
 		}
 		if err != nil {
-			return errors.New("Failed to create output table converter to csv: " + name + ": " + err.Error())
+			return errors.New("Failed to create microdata converter to csv: " + name + ": " + err.Error())
 		}
 
 	} else { // get language-specific metadata
@@ -123,26 +129,26 @@ func tableRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRo
 			return errors.New("Error at get model text metadata: " + err.Error())
 		}
 
-		cvtLoc := &db.CellExprLocaleConverter{
-			CellExprConverter: *cvtExpr,
-			Lang:              theCfg.lang,
-			LangDef:           langDef,
-			EnumTxt:           txt.TypeEnumTxt,
-			ExprTxt:           txt.TableExprTxt,
+		cvtLoc := &db.CellMicroLocaleConverter{
+			CellMicroConverter: *cvtMicro,
+			Lang:               theCfg.lang,
+			LangDef:            langDef,
+			EnumTxt:            txt.TypeEnumTxt,
+			AttrTxt:            txt.EntityAttrTxt,
 		}
 
 		hdr, err = cvtLoc.CsvHeader()
 		if err != nil {
-			return errors.New("Failed to make output table csv header: " + name + ": " + err.Error())
+			return errors.New("Failed to make microdata csv header: " + name + ": " + err.Error())
 		}
 		cvtRow, err = cvtLoc.ToCsvRow()
 		if err != nil {
-			return errors.New("Failed to create output table converter to csv: " + name + ": " + err.Error())
+			return errors.New("Failed to create microdata converter to csv: " + name + ": " + err.Error())
 		}
 	}
 
 	// start csv output to file or console
-	f, csvWr, err := createCsvWriter(path)
+	f, csvWr, err := createCsvWriter(fp)
 	if err != nil {
 		return err
 	}
@@ -154,12 +160,8 @@ func tableRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRo
 		}
 	}()
 
-	// write csv header, check if there is a custom header supplied
-	h := hdr
-	if len(csvHdr) > 0 {
-		h = csvHdr
-	}
-	if err := csvWr.Write(h); err != nil {
+	// write csv header
+	if err := csvWr.Write(hdr); err != nil {
 		return errors.New("Error at csv write: " + name + ": " + err.Error())
 	}
 
@@ -179,26 +181,14 @@ func tableRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRo
 			return true, nil
 		}
 
-		if !isOld {
-			e2 = csvWr.Write(cs)
-		} else {
-			// compatibilty view: dimesions first, expression label after dimensions
-			if rank > 0 {
-				se := cs[0]
-				for k := 0; k < rank; k++ {
-					cs[k] = cs[k+1]
-				}
-				cs[rank] = se
-			}
-			e2 = csvWr.Write(cs)
-		}
+		e2 = csvWr.Write(cs)
 		return e2 == nil, e2
 	}
 
-	// read output table values
-	_, err = db.ReadOutputTableTo(srcDb, meta, &tblLt, cvtWr)
+	// read entity microdata
+	_, err = db.ReadMicrodataTo(srcDb, meta, &microLt, cvtWr)
 	if err != nil {
-		return errors.New("Error at output table output: " + name + ": " + err.Error())
+		return errors.New("Error at microdata output: " + name + ": " + err.Error())
 	}
 
 	csvWr.Flush() // flush csv to response

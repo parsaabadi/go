@@ -9,6 +9,8 @@ import (
 	"strconv"
 
 	"github.com/openmpp/go/ompp/helper"
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
 )
 
 // CellMicro is a row of entity microdata: entity_key and attribute values,
@@ -49,6 +51,16 @@ type CellEntityConverter struct {
 // CellMicroConverter is a converter for entity microdata row to implement CsvConverter interface.
 type CellMicroConverter struct {
 	CellEntityConverter // model metadata, entity generation and and attributes
+}
+
+// Converter for entity microdata to implement CsvLocaleConverter interface.
+type CellMicroLocaleConverter struct {
+	CellMicroConverter
+	Lang          string             // language code, expected to compatible with BCP 47 language tag
+	LangDef       *LangMeta          // language metadata to find translations
+	EnumTxt       []TypeEnumTxtRow   // type enum text rows: type_enum_txt join to model_type_dic
+	AttrTxt       []EntityAttrTxtRow // entity attributes text rows: entity_attr_txt join to model_entity_dic table
+	theAttrLabels map[int]string     // map entity generation attribute id to language-specific label
 }
 
 // return true if csv converter is using enum id's for attributes
@@ -153,7 +165,7 @@ func (cellCvt *CellMicroConverter) ToCsvIdRow() (func(interface{}, []string) (bo
 	return cvt, nil
 }
 
-// ToCsvRow return converter from microdata cell: (microdata key, attributes as enum code or built-in type value) to csv row []string.
+// ToCsvRow return converter from microdata cell: (microdata key, attributes as enum id or built-in type value) to csv row []string.
 //
 // Converter return isNotEmpty flag, it return false if IsNoZero or IsNoNull is set and all values of float or integer or string type are empty or zero.
 // Converter simply does Sprint() for key and each attribute value, if value is NULL then empty "" string used.
@@ -226,6 +238,101 @@ func (cellCvt *CellMicroConverter) ToCsvRow() (func(interface{}, []string) (bool
 
 		// convert attributes
 		row[0] = fmt.Sprint(cell.Key) // first column is entity microdata key
+
+		for k, a := range cell.Attr {
+
+			// use "null" string for db NULL values
+			if a.IsNull || a.Value == nil {
+				row[k+1] = "null"
+			} else {
+				if s, e := fd[k](a.Value); e != nil { // use attribute value converter
+					return false, e
+				} else {
+					row[k+1] = s
+				}
+			}
+		}
+		return !isAllEmpty, nil
+	}
+	return cvt, nil
+}
+
+// Return converter from microdata cell: (microdata key, attributes as enum id or built-in type value)
+// to language-specific csv []string row of dimension enum labels and value.
+//
+// Converter return isNotEmpty flag, it return false if IsNoZero or IsNoNull is set and all values of float or integer or string type are empty or zero.
+// Converter will return error if len(row) not equal to number of fields in csv record.
+// Microdata row key and attribute values of built-in type converted to locale-specific strings, e.g.: 1234.56 => 1 234,56.
+// If value is NULL then empty "" string used.
+// If attribute type is enum based then csv vslur is enum label.
+func (cellCvt *CellMicroLocaleConverter) ToCsvRow() (func(interface{}, []string) (bool, error), error) {
+
+	// find entity metadata by entity name and attributes by generation Hid
+	_, attrs, err := cellCvt.entityAttrs()
+	if err != nil {
+		return nil, err
+	}
+	nAttr := len(attrs)
+
+	// for built-in attribute types format value locale-specific strings, e.g.: 1234.56 => 1 234,56
+	prt := message.NewPrinter(language.Make(cellCvt.Lang))
+
+	// for enum attribute type return enum lable by enum id
+	fd := make([]func(v interface{}) (string, error), nAttr)
+
+	for k, ea := range attrs {
+
+		if ea.typeOf.IsBuiltIn() { // built-in attribute type: format value by Sprint()
+
+			// for float attributes use format if specified
+			if cellCvt.DoubleFmt != "" && ea.typeOf.IsFloat() {
+
+				fd[k] = func(v interface{}) (string, error) { return prt.Sprintf(cellCvt.DoubleFmt, v), nil }
+			} else {
+				fd[k] = func(v interface{}) (string, error) { return prt.Sprint(v), nil }
+			}
+		} else { // enum based attribute type: find and return enum code by enum id
+
+			msgName := cellCvt.Name + "." + ea.Name // for error message, ex: Person.Income
+			f, err := ea.typeOf.itemIdToLabel(cellCvt.Lang, cellCvt.EnumTxt, cellCvt.LangDef, msgName, false)
+
+			if err != nil {
+				return nil, err
+			}
+
+			fd[k] = func(v interface{}) (string, error) { // convereter return enum code by enum id
+
+				// depending on sql + driver it can be different type
+				if iv, ok := helper.ToIntValue(v); ok {
+					return f(iv)
+				} else {
+					return "", errors.New("invalid attribute value, must be integer enum id: " + msgName)
+				}
+			}
+		}
+	}
+
+	// return converter for microdata key and attribute values
+	cvt := func(src interface{}, row []string) (bool, error) {
+
+		cell, ok := src.(CellMicro)
+		if !ok {
+			return false, errors.New("invalid type, expected: CellMicro (internal error): " + cellCvt.Name)
+		}
+
+		n := len(cell.Attr)
+		if n != nAttr || len(row) != n+1 {
+			return false, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(nAttr+1) + ": " + cellCvt.Name)
+		}
+
+		// check for empty data: if all values are NULLs or zeros and no null or no zero flag is set
+		isAllEmpty, e := cellCvt.isAllEmpty(cell, attrs)
+		if e != nil {
+			return false, e
+		}
+
+		// convert attributes
+		row[0] = prt.Sprint(cell.Key) // first column is entity microdata key
 
 		for k, a := range cell.Attr {
 
@@ -619,4 +726,40 @@ func (cellCvt *CellEntityConverter) entityAttrs() (*EntityMeta, []EntityAttrRow,
 	cellCvt.theAttrs = attrs
 
 	return ent, cellCvt.theAttrs, nil
+}
+
+// return map of entity generation attribute id to language-specific label.
+// Label is an attribute description in specific language.
+// If language code or description is empty then label is attribute name
+func (cellCvt *CellMicroLocaleConverter) attrLabel() (map[int]string, error) {
+
+	if cellCvt.theAttrLabels != nil && len(cellCvt.theAttrLabels) > 0 {
+		return cellCvt.theAttrLabels, nil // attribute labels are already found
+	}
+
+	// find entity metadata by entity name and attributes by generation Hid
+	ent, attrs, err := cellCvt.entityAttrs()
+	if err != nil {
+		return nil, err
+	}
+	labelMap := make(map[int]string, len(attrs))
+
+	// add attribute name into map as default label
+	for j := range attrs {
+		labelMap[attrs[j].AttrId] = attrs[j].Name
+	}
+
+	// replace labels: use description where exists for specified language
+	if cellCvt.Lang != "" {
+		for j := range cellCvt.AttrTxt {
+			if cellCvt.AttrTxt[j].ModelId == ent.ModelId && cellCvt.AttrTxt[j].EntityId == ent.EntityId && cellCvt.AttrTxt[j].LangCode == cellCvt.Lang {
+				if _, ok := labelMap[cellCvt.AttrTxt[j].AttrId]; ok {
+					labelMap[cellCvt.AttrTxt[j].AttrId] = cellCvt.AttrTxt[j].Descr
+				}
+			}
+		}
+	}
+	cellCvt.theAttrLabels = labelMap
+
+	return cellCvt.theAttrLabels, nil
 }

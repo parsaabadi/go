@@ -70,7 +70,7 @@ func (cellCvt *CellExprConverter) CsvFileName() (string, error) {
 }
 
 // CsvHeader return first line for csv file: column names.
-// Column names can be like: expr_name,dim0,dim1,expr_value
+// For example: expr_name,dim0,dim1,expr_value
 // or if IsIdCsv is true: expr_id,dim0,dim1,expr_value
 func (cellCvt *CellExprConverter) CsvHeader() ([]string, error) {
 
@@ -186,7 +186,7 @@ func (cellCvt *CellExprConverter) ToCsvIdRow() (func(interface{}, []string) (boo
 //
 // Converter return isNotEmpty flag, it return false if IsNoZero or IsNoNull is set and cell value is empty or zero.
 // Converter return error if len(row) not equal to number of fields in csv record.
-// If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
+// If dimension type is enum based then csv row is enum code.
 func (cellCvt *CellExprConverter) ToCsvRow() (func(interface{}, []string) (bool, error), error) {
 
 	// find output table by name
@@ -255,7 +255,7 @@ func (cellCvt *CellExprConverter) ToCsvRow() (func(interface{}, []string) (bool,
 }
 
 // Return converter from output table cell (expr_id, dimensions, value)
-// to language-specific csv []string row of enum labels and value.
+// to language-specific csv []string row of dimension enum labels and value.
 //
 // Converter return isNotEmpty flag, it return false if IsNoZero or IsNoNull is set and cell value is empty or zero.
 // Converter return error if len(row) not equal to number of fields in csv record.
@@ -497,7 +497,7 @@ func (cellCvt *CellTableConverter) tableByName() (*TableMeta, error) {
 
 // Return converter from expression id to language-specific label.
 // Converter return expression description by expression id and language.
-// If language code or description is empty then converter expression name
+// If language code or description is empty then return expression name
 func (cellCvt *CellExprLocaleConverter) exprIdToLabel() (func(itemId int) (string, error), error) {
 
 	// find output table by name

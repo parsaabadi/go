@@ -169,6 +169,12 @@ type ModelTxtRow struct {
 	Note     string // note         VARCHAR(32000)
 }
 
+// ModelDicDescrNote is join of model_dic db row and model_dic_txt row
+type ModelDicDescrNote struct {
+	Model     ModelDicRow // model_dic db row
+	DescrNote DescrNote   // from model_dic_txt
+}
+
 // TypeDicRow is db row of type_dic join to model_type_dic table and min, max, count of enum id's.
 //
 // TypeHid (type_dic.type_hid) is db-unique id of the type, use digest to find same type in other db.

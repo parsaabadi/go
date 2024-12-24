@@ -7,6 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
 )
 
 // CellAcc is value of output table accumulator.
@@ -29,6 +32,15 @@ type CellAccConverter struct {
 	CellTableConverter // model metadata and output table name
 }
 
+// Converter for output table accumulators to implement CsvLocaleConverter interface.
+type CellAccLocaleConverter struct {
+	CellAccConverter
+	Lang    string           // language code, expected to compatible with BCP 47 language tag
+	LangDef *LangMeta        // language metadata to find translations
+	EnumTxt []TypeEnumTxtRow // type enum text rows: type_enum_txt join to model_type_dic
+	AccTxt  []TableAccTxtRow // output table accumulator text rows: table_acc_txt join to model_table_dic
+}
+
 // return true if csv converter is using enum id's for dimensions
 func (cellCvt *CellAccConverter) IsUseEnumId() bool { return cellCvt.IsIdCsv }
 
@@ -49,7 +61,7 @@ func (cellCvt *CellAccConverter) CsvFileName() (string, error) {
 }
 
 // CsvHeader return first line for csv file: column names.
-// Column names can be like: acc_name,sub_id,dim0,dim1,acc_value
+// For example: acc_name,sub_id,dim0,dim1,acc_value
 // or if IsIdCsv is true then: acc_id,sub_id,dim0,dim1,acc_value
 func (cellCvt *CellAccConverter) CsvHeader() ([]string, error) {
 
@@ -168,8 +180,8 @@ func (cellCvt *CellAccConverter) ToCsvIdRow() (func(interface{}, []string) (bool
 // to csv row []string (acc_name, sub_id, dimensions, value).
 //
 // Converter return isNotEmpty flag, it return false if IsNoZero or IsNoNull is set and cell value is empty or zero.
-// Converter will return error if len(row) not equal to number of fields in csv record.
-// If dimension type is enum based then csv row is enum code and cell.DimIds is enum id.
+// Converter return error if len(row) not equal to number of fields in csv record.
+// If dimension type is enum based then csv row is enum code.
 func (cellCvt *CellAccConverter) ToCsvRow() (func(interface{}, []string) (bool, error), error) {
 
 	// find output table by name
@@ -230,6 +242,89 @@ func (cellCvt *CellAccConverter) ToCsvRow() (func(interface{}, []string) (bool, 
 				row[n+2] = fmt.Sprintf(cellCvt.DoubleFmt, cell.Value)
 			} else {
 				row[n+2] = fmt.Sprint(cell.Value)
+			}
+		}
+		return isNotEmpty, nil
+	}
+
+	return cvt, nil
+}
+
+// Return converter from output table cell (acc_id, sub_id, dimensions, value)
+// to language-specific csv []string row of accumulator description, sub_id, dimension enum labels and value.
+//
+// Converter return isNotEmpty flag, it return false if IsNoZero or IsNoNull is set and cell value is empty or zero.
+// Converter return error if len(row) not equal to number of fields in csv record.
+// If dimension type is enum based then csv row is enum label.
+// Value and dimesions of built-in types converted to locale-specific strings, e.g.: 1234.56 => 1 234,56
+func (cellCvt *CellAccLocaleConverter) ToCsvRow() (func(interface{}, []string) (bool, error), error) {
+
+	// find output table by name
+	table, err := cellCvt.tableByName()
+	if err != nil {
+		return nil, err
+	}
+
+	// for each dimension create converter from item id to label
+	fd := make([]func(itemId int) (string, error), table.Rank)
+
+	for k := 0; k < table.Rank; k++ {
+		f, err := table.Dim[k].typeOf.itemIdToLabel(cellCvt.Lang, cellCvt.EnumTxt, cellCvt.LangDef, cellCvt.Name+"."+table.Dim[k].Name, table.Dim[k].IsTotal)
+		if err != nil {
+			return nil, err
+		}
+		fd[k] = f
+	}
+
+	cvtAccId, err := cellCvt.accIdToLabel() // converter from accumulator id to language-specific label
+
+	// format value locale-specific strings, e.g.: 1234.56 => 1 234,56
+	prt := message.NewPrinter(language.Make(cellCvt.Lang))
+
+	cvt := func(src interface{}, row []string) (bool, error) {
+
+		cell, ok := src.(CellAcc)
+		if !ok {
+			return false, errors.New("invalid type, expected: output table accumulator cell (internal error): " + cellCvt.Name)
+		}
+
+		n := len(cell.DimIds)
+		if len(row) != n+3 {
+			return false, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+3) + ": " + cellCvt.Name)
+		}
+
+		row[0], err = cvtAccId(cell.AccId)
+		if err != nil {
+			return false, err
+		}
+		row[1] = prt.Sprint(cell.SubId) // convert sub-value id to local-specific string
+
+		// convert dimension item id to label
+		for k, e := range cell.DimIds {
+			v, err := fd[k](e)
+			if err != nil {
+				return false, err
+			}
+			row[k+2] = v
+		}
+
+		// use "null" string for db NULL values and format for model float types
+		isNotEmpty := true
+
+		if cell.IsNull {
+			row[n+2] = "null"
+			isNotEmpty = !cellCvt.IsNoNullCsv
+		} else {
+
+			if cellCvt.IsNoZeroCsv {
+				fv, ok := cell.Value.(float64)
+				isNotEmpty = ok && fv != 0
+			}
+
+			if cellCvt.DoubleFmt != "" {
+				row[n+2] = prt.Sprintf(cellCvt.DoubleFmt, cell.Value)
+			} else {
+				row[n+2] = prt.Sprint(cell.Value)
 			}
 		}
 		return isNotEmpty, nil
@@ -378,6 +473,47 @@ func (cellCvt *CellAccConverter) IdToCodeCell(modelDef *ModelMeta, name string) 
 		}
 
 		return dstCell, nil // converted OK
+	}
+
+	return cvt, nil
+}
+
+// Return converter from native (not derived) accumulator id to language-specific label.
+// Converter return accumulator description by accumulator id and language.
+// If language code or description is empty then return accumulator name
+func (cellCvt *CellAccLocaleConverter) accIdToLabel() (func(itemId int) (string, error), error) {
+
+	// find output table by name
+	table, err := cellCvt.tableByName()
+	if err != nil {
+		return nil, err
+	}
+	labelMap := map[int]string{}
+
+	// add accumulator name into map as default label
+	for j := range table.Acc {
+		if !table.Acc[j].IsDerived {
+			labelMap[table.Acc[j].AccId] = table.Acc[j].Name
+		}
+	}
+
+	// replace labels: use description where exists for specified language
+	if cellCvt.Lang != "" {
+		for j := range cellCvt.AccTxt {
+			if cellCvt.AccTxt[j].ModelId == table.ModelId && cellCvt.AccTxt[j].TableId == table.TableId && cellCvt.AccTxt[j].LangCode == cellCvt.Lang {
+				if _, ok := labelMap[cellCvt.AccTxt[j].AccId]; ok {
+					labelMap[cellCvt.AccTxt[j].AccId] = cellCvt.AccTxt[j].Descr
+				}
+			}
+		}
+	}
+
+	cvt := func(accId int) (string, error) {
+
+		if lbl, ok := labelMap[accId]; ok {
+			return lbl, nil
+		}
+		return "", errors.New("invalid value: " + strconv.Itoa(accId) + " of: " + cellCvt.Name)
 	}
 
 	return cvt, nil
