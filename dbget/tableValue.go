@@ -124,6 +124,7 @@ func tableRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, runId int, ru
 			CellExprConverter: *cvtExpr,
 			Lang:              theCfg.lang,
 			LangDef:           langDef,
+			DimsTxt:           txt.TableDimsTxt,
 			EnumTxt:           txt.TypeEnumTxt,
 			ExprTxt:           txt.TableExprTxt,
 		}

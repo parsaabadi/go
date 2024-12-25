@@ -38,10 +38,11 @@ type CellAllAccConverter struct {
 // Converter for output table accumulators to implement CsvLocaleConverter interface.
 type CellAllAccLocaleConverter struct {
 	CellAllAccConverter
-	Lang    string           // language code, expected to compatible with BCP 47 language tag
-	LangDef *LangMeta        // language metadata to find translations
-	EnumTxt []TypeEnumTxtRow // type enum text rows: type_enum_txt join to model_type_dic
-	AccTxt  []TableAccTxtRow // output table accumulator text rows: table_acc_txt join to model_table_dic
+	Lang    string            // language code, expected to compatible with BCP 47 language tag
+	LangDef *LangMeta         // language metadata to find translations
+	DimsTxt []TableDimsTxtRow // output table dimension text rows: table_dims_txt join to model_table_dic
+	EnumTxt []TypeEnumTxtRow  // type enum text rows: type_enum_txt join to model_type_dic
+	AccTxt  []TableAccTxtRow  // output table accumulator text rows: table_acc_txt join to model_table_dic
 }
 
 // return true if csv converter is using enum id's for dimensions
@@ -63,7 +64,7 @@ func (cellCvt *CellAllAccConverter) CsvFileName() (string, error) {
 	return cellCvt.Name + ".acc-all.csv", nil
 }
 
-// CsvHeader return first line for csv file: column names, for example: sub_id,dim0,dim1,acc0,acc1,acc2
+// CsvHeader return first line for csv file: column names, for example: sub_id,dim0,dim1,acc0,acc1
 // If ValueName is "" empty then use all accumulators for csv else only one where accumulator name is ValueName
 func (cellCvt *CellAllAccConverter) CsvHeader() ([]string, error) {
 
@@ -93,6 +94,64 @@ func (cellCvt *CellAllAccConverter) CsvHeader() ([]string, error) {
 		}
 	}
 
+	return h, nil
+}
+
+// CsvHeader return first line for csv file: column names, for example: sub_id,Age,Sex,AVG Income,SE Income
+// For example: acc_name,sub_id,Age,Sex,acc_value
+func (cellCvt *CellAllAccLocaleConverter) CsvHeader() ([]string, error) {
+
+	// default column headers
+	h, err := cellCvt.CellAllAccConverter.CsvHeader()
+	if err != nil {
+		return []string{}, err
+	}
+
+	// replace dimension name with description, where it exists
+	if cellCvt.Lang != "" {
+
+		dm := map[int]string{} // map id to dimension description
+
+		table, err := cellCvt.tableByName() // find output table by name
+		if err != nil {
+			return []string{}, err
+		}
+		for j := range cellCvt.DimsTxt {
+			if cellCvt.DimsTxt[j].ModelId == table.ModelId && cellCvt.DimsTxt[j].TableId == table.TableId && cellCvt.DimsTxt[j].LangCode == cellCvt.Lang {
+				dm[cellCvt.DimsTxt[j].DimId] = cellCvt.DimsTxt[j].Descr
+			}
+		}
+		for k := range table.Dim {
+			if d, ok := dm[table.Dim[k].DimId]; ok {
+				h[k+1] = d
+			}
+		}
+
+		idToLabel, err := cellCvt.accIdToLabel() // converter from accumulator id to language-specific label
+		if err != nil {
+			return nil, err
+		}
+
+		if cellCvt.ValueName != "" {
+
+			// find accumulator label by value name
+			for k := range table.Acc {
+				if table.Acc[k].Name == cellCvt.ValueName {
+					if lb, err := idToLabel(table.Acc[k].AccId); err == nil {
+						h[table.Rank+1] = lb
+					}
+					break
+				}
+			}
+
+		} else { // replace accumulator names by description
+			for k := range table.Acc {
+				if lb, err := idToLabel(table.Acc[k].AccId); err == nil {
+					h[table.Rank+1+k] = lb
+				}
+			}
+		}
+	}
 	return h, nil
 }
 

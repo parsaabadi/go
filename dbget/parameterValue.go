@@ -163,6 +163,7 @@ func parameterValue(srcDb *sql.DB, meta *db.ModelMeta, name string, fromId int, 
 		cvtLoc := &db.CellParamLocaleConverter{
 			CellParamConverter: *cvtParam,
 			Lang:               theCfg.lang,
+			DimsTxt:            txt.ParamDimsTxt,
 			EnumTxt:            txt.TypeEnumTxt,
 		}
 

@@ -86,6 +86,9 @@ type CsvLocaleConverter interface {
 	// If parameter type is enum based then csv row value is enum label.
 	// Value and dimesions of built-in types converted to locale-specific strings, e.g.: 1234.56 => 1 234,56
 	ToCsvRow() (func(interface{}, []string) (bool, error), error)
+
+	// return first line of csv file with column names, for example: expr_name,Age,City,expr_value.
+	CsvHeader() ([]string, error)
 }
 
 // Convert from csv row []string to parameter, output table or microdata cell (dimensions and value or microdata key and attributes value).

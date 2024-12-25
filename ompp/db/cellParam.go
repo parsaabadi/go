@@ -38,8 +38,9 @@ type CellParamConverter struct {
 // Converter for input parameter to implement CsvLocaleConverter interface.
 type CellParamLocaleConverter struct {
 	CellParamConverter
-	Lang    string           // language code, expected to compatible with BCP 47 language tag
-	EnumTxt []TypeEnumTxtRow // type enum text rows: type_enum_txt join to model_type_dic
+	Lang    string            // language code, expected to compatible with BCP 47 language tag
+	DimsTxt []ParamDimsTxtRow // parameter dimension text rows: parameter_dims_txt join to model_parameter_dic
+	EnumTxt []TypeEnumTxtRow  // type enum text rows: type_enum_txt join to model_type_dic
 }
 
 // return true if csv converter is using enum id's for dimensions
@@ -61,7 +62,7 @@ func (cellCvt *CellParamConverter) CsvFileName() (string, error) {
 	return cellCvt.Name + ".csv", nil
 }
 
-// CsvHeader return first line for csv file: column names, it's look like: sub_id,dim0,dim1,param_value.
+// CsvHeader return first line for csv file: column names. For example: sub_id,dim0,dim1,param_value.
 func (cellCvt *CellParamConverter) CsvHeader() ([]string, error) {
 
 	// find parameter by name
@@ -79,6 +80,39 @@ func (cellCvt *CellParamConverter) CsvHeader() ([]string, error) {
 	}
 	h[param.Rank+1] = "param_value"
 
+	return h, nil
+}
+
+// CsvHeader return first line for csv file: column names. For example: sub_id,Age,Sex,param_value.
+func (cellCvt *CellParamLocaleConverter) CsvHeader() ([]string, error) {
+
+	// default column headers
+	h, err := cellCvt.CellParamConverter.CsvHeader()
+	if err != nil {
+		return []string{}, err
+	}
+
+	// replace dimension name with description, where it exists
+	if cellCvt.Lang != "" {
+
+		dm := map[int]string{} // map id to dimension description
+
+		// find parameter by name
+		param, err := cellCvt.paramByName()
+		if err != nil {
+			return []string{}, err
+		}
+		for j := range cellCvt.DimsTxt {
+			if cellCvt.DimsTxt[j].ModelId == param.ModelId && cellCvt.DimsTxt[j].ParamId == param.ParamId && cellCvt.DimsTxt[j].LangCode == cellCvt.Lang {
+				dm[cellCvt.DimsTxt[j].DimId] = cellCvt.DimsTxt[j].Descr
+			}
+		}
+		for k := range param.Dim {
+			if d, ok := dm[param.Dim[k].DimId]; ok {
+				h[k+1] = d
+			}
+		}
+	}
 	return h, nil
 }
 

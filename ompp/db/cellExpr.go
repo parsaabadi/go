@@ -46,6 +46,7 @@ type CellExprLocaleConverter struct {
 	CellExprConverter
 	Lang    string            // language code, expected to compatible with BCP 47 language tag
 	LangDef *LangMeta         // language metadata to find translations
+	DimsTxt []TableDimsTxtRow // output table dimension text rows: table_dims_txt join to model_table_dic
 	EnumTxt []TypeEnumTxtRow  // type enum text rows: type_enum_txt join to model_type_dic
 	ExprTxt []TableExprTxtRow // output table expression text rows: table_expr_txt join to model_table_dic
 }
@@ -93,6 +94,39 @@ func (cellCvt *CellExprConverter) CsvHeader() ([]string, error) {
 	}
 	h[table.Rank+1] = "expr_value"
 
+	return h, nil
+}
+
+// CsvHeader return first line for csv file: column names.
+// For example: expr_name,Age,Sex,expr_value
+func (cellCvt *CellExprLocaleConverter) CsvHeader() ([]string, error) {
+
+	// default column headers
+	h, err := cellCvt.CellExprConverter.CsvHeader()
+	if err != nil {
+		return []string{}, err
+	}
+
+	// replace dimension name with description, where it exists
+	if cellCvt.Lang != "" {
+
+		dm := map[int]string{} // map id to dimension description
+
+		table, err := cellCvt.tableByName() // find output table by name
+		if err != nil {
+			return []string{}, err
+		}
+		for j := range cellCvt.DimsTxt {
+			if cellCvt.DimsTxt[j].ModelId == table.ModelId && cellCvt.DimsTxt[j].TableId == table.TableId && cellCvt.DimsTxt[j].LangCode == cellCvt.Lang {
+				dm[cellCvt.DimsTxt[j].DimId] = cellCvt.DimsTxt[j].Descr
+			}
+		}
+		for k := range table.Dim {
+			if d, ok := dm[table.Dim[k].DimId]; ok {
+				h[k+1] = d
+			}
+		}
+	}
 	return h, nil
 }
 
@@ -280,7 +314,10 @@ func (cellCvt *CellExprLocaleConverter) ToCsvRow() (func(interface{}, []string) 
 		fd[k] = f
 	}
 
-	cvtExprId, err := cellCvt.exprIdToLabel() // converter from expression id to language-specific label
+	idToLabel, err := cellCvt.exprIdToLabel() // converter from expression id to language-specific label
+	if err != nil {
+		return nil, err
+	}
 
 	// format value locale-specific strings, e.g.: 1234.56 => 1 234,56
 	prt := message.NewPrinter(language.Make(cellCvt.Lang))
@@ -297,7 +334,7 @@ func (cellCvt *CellExprLocaleConverter) ToCsvRow() (func(interface{}, []string) 
 			return false, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+2) + ": " + cellCvt.Name)
 		}
 
-		row[0], err = cvtExprId(cell.ExprId)
+		row[0], err = idToLabel(cell.ExprId)
 		if err != nil {
 			return false, err
 		}

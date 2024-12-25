@@ -124,6 +124,7 @@ func tableRunAllAcc(srcDb *sql.DB, meta *db.ModelMeta, name string, runId int, r
 			CellAllAccConverter: *cvtAllAcc,
 			Lang:                theCfg.lang,
 			LangDef:             langDef,
+			DimsTxt:             txt.TableDimsTxt,
 			EnumTxt:             txt.TypeEnumTxt,
 			AccTxt:              txt.TableAccTxt,
 		}

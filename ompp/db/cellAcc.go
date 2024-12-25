@@ -35,10 +35,11 @@ type CellAccConverter struct {
 // Converter for output table accumulators to implement CsvLocaleConverter interface.
 type CellAccLocaleConverter struct {
 	CellAccConverter
-	Lang    string           // language code, expected to compatible with BCP 47 language tag
-	LangDef *LangMeta        // language metadata to find translations
-	EnumTxt []TypeEnumTxtRow // type enum text rows: type_enum_txt join to model_type_dic
-	AccTxt  []TableAccTxtRow // output table accumulator text rows: table_acc_txt join to model_table_dic
+	Lang    string            // language code, expected to compatible with BCP 47 language tag
+	LangDef *LangMeta         // language metadata to find translations
+	DimsTxt []TableDimsTxtRow // output table dimension text rows: table_dims_txt join to model_table_dic
+	EnumTxt []TypeEnumTxtRow  // type enum text rows: type_enum_txt join to model_type_dic
+	AccTxt  []TableAccTxtRow  // output table accumulator text rows: table_acc_txt join to model_table_dic
 }
 
 // return true if csv converter is using enum id's for dimensions
@@ -86,6 +87,39 @@ func (cellCvt *CellAccConverter) CsvHeader() ([]string, error) {
 	}
 	h[table.Rank+2] = "acc_value"
 
+	return h, nil
+}
+
+// CsvHeader return first line for csv file: column names.
+// For example: acc_name,sub_id,Age,Sex,acc_value
+func (cellCvt *CellAccLocaleConverter) CsvHeader() ([]string, error) {
+
+	// default column headers
+	h, err := cellCvt.CellAccConverter.CsvHeader()
+	if err != nil {
+		return []string{}, err
+	}
+
+	// replace dimension name with description, where it exists
+	if cellCvt.Lang != "" {
+
+		dm := map[int]string{} // map id to dimension description
+
+		table, err := cellCvt.tableByName() // find output table by name
+		if err != nil {
+			return []string{}, err
+		}
+		for j := range cellCvt.DimsTxt {
+			if cellCvt.DimsTxt[j].ModelId == table.ModelId && cellCvt.DimsTxt[j].TableId == table.TableId && cellCvt.DimsTxt[j].LangCode == cellCvt.Lang {
+				dm[cellCvt.DimsTxt[j].DimId] = cellCvt.DimsTxt[j].Descr
+			}
+		}
+		for k := range table.Dim {
+			if d, ok := dm[table.Dim[k].DimId]; ok {
+				h[k+2] = d
+			}
+		}
+	}
 	return h, nil
 }
 
@@ -276,7 +310,10 @@ func (cellCvt *CellAccLocaleConverter) ToCsvRow() (func(interface{}, []string) (
 		fd[k] = f
 	}
 
-	cvtAccId, err := cellCvt.accIdToLabel() // converter from accumulator id to language-specific label
+	idToLabel, err := cellCvt.accIdToLabel() // converter from accumulator id to language-specific label
+	if err != nil {
+		return nil, err
+	}
 
 	// format value locale-specific strings, e.g.: 1234.56 => 1 234,56
 	prt := message.NewPrinter(language.Make(cellCvt.Lang))
@@ -293,7 +330,7 @@ func (cellCvt *CellAccLocaleConverter) ToCsvRow() (func(interface{}, []string) (
 			return false, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+3) + ": " + cellCvt.Name)
 		}
 
-		row[0], err = cvtAccId(cell.AccId)
+		row[0], err = idToLabel(cell.AccId)
 		if err != nil {
 			return false, err
 		}

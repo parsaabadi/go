@@ -82,7 +82,7 @@ func (cellCvt *CellMicroConverter) CsvFileName() (string, error) {
 	return cellCvt.Name + ".csv", nil
 }
 
-// CsvHeader return first line for csv file: column names, it's look like: key,AgeGroup,Income.
+// CsvHeader return first line for csv file: column names. For example: key,AgeGroup,Income.
 func (cellCvt *CellMicroConverter) CsvHeader() ([]string, error) {
 
 	// find entity metadata by entity name and attributes by generation Hid
@@ -97,6 +97,38 @@ func (cellCvt *CellMicroConverter) CsvHeader() ([]string, error) {
 
 	for k, ea := range attrs {
 		h[k+1] = ea.Name
+	}
+	return h, nil
+}
+
+// CsvHeader return first line for csv file: column names. For example: key,Age Group,Taxable Income.
+func (cellCvt *CellMicroLocaleConverter) CsvHeader() ([]string, error) {
+
+	// default column headers
+	h, err := cellCvt.CellMicroConverter.CsvHeader()
+	if err != nil {
+		return []string{}, err
+	}
+
+	// replace attribute name with description, where it exists
+	if cellCvt.Lang != "" {
+
+		// find entity metadata by entity name and attributes by generation Hid
+		_, attrs, err := cellCvt.entityAttrs()
+		if err != nil {
+			return []string{}, err
+		}
+
+		am, err := cellCvt.attrLabel() // attribute labels
+		if err != nil {
+			return []string{}, err
+		}
+
+		for k, ea := range attrs {
+			if d, ok := am[ea.AttrId]; ok {
+				h[k+1] = d
+			}
+		}
 	}
 	return h, nil
 }
