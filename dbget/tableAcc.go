@@ -25,6 +25,9 @@ func tableAcc(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 	if run == nil {
 		return errors.New("Error: model run not found")
 	}
+	if run.Status != db.DoneRunStatus {
+		return errors.New("Error: model run not completed successfully: " + run.Name)
+	}
 
 	// get model metadata
 	meta, err := db.GetModelById(srcDb, modelId)
@@ -49,19 +52,13 @@ func tableAcc(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 		omppLog.Log("Do ", theCfg.action, ": "+fp)
 	}
 
-	return tableRunAcc(srcDb, meta, name, run, runOpts, fp)
+	return tableRunAcc(srcDb, meta, name, run.RunId, runOpts, fp)
 }
 
 // read output table native (not derived) accumulators and write run results into csv or tsv file.
 // Csv file header: acc_name,sub_id,dim0,....,value
-func tableRunAcc(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRow, runOpts *config.RunOptions, path string) error {
+func tableRunAcc(srcDb *sql.DB, meta *db.ModelMeta, name string, runId int, runOpts *config.RunOptions, path string) error {
 
-	if run == nil {
-		return errors.New("Error: model run not found")
-	}
-	if run.Status != db.DoneRunStatus {
-		return errors.New("Error: model run not completed successfully: " + run.Name)
-	}
 	if name == "" {
 		return errors.New("Invalid (empty) output table name")
 	}
@@ -91,7 +88,7 @@ func tableRunAcc(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRow,
 	tblLt := db.ReadTableLayout{
 		ReadLayout: db.ReadLayout{
 			Name:   name,
-			FromId: run.RunId,
+			FromId: runId,
 		},
 		IsAccum:    true,
 		IsAllAccum: false,

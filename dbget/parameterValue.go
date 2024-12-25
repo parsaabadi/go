@@ -14,8 +14,14 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
-// get model run paratemer values and write run results into csv or tsv file.
-func parameterValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
+// get model run parameter values and write run results into csv or tsv file.
+func parameterRunValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
+
+	// get model metadata
+	meta, err := db.GetModelById(srcDb, modelId)
+	if err != nil {
+		return errors.New("Error at get model metadata by id: " + strconv.Itoa(modelId) + ": " + err.Error())
+	}
 
 	// find model run
 	msg, run, err := findRun(srcDb, modelId, runOpts.String(runArgKey), runOpts.Int(runIdArgKey, 0), runOpts.Bool(runFirstArgKey), runOpts.Bool(runLastArgKey))
@@ -25,11 +31,8 @@ func parameterValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) erro
 	if run == nil {
 		return errors.New("Error: model run not found")
 	}
-
-	// get model metadata
-	meta, err := db.GetModelById(srcDb, modelId)
-	if err != nil {
-		return errors.New("Error at get model metadata by id: " + strconv.Itoa(modelId) + ": " + err.Error())
+	if run.Status != db.DoneRunStatus {
+		return errors.New("Error: model run not completed successfully: " + run.Name)
 	}
 
 	// write parameter values to csv or tsv file
@@ -49,21 +52,62 @@ func parameterValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) erro
 		omppLog.Log("Do ", theCfg.action, ": "+fp)
 	}
 
-	return parameterRunValue(srcDb, meta, name, run, fp, false, nil)
+	return parameterValue(srcDb, meta, name, run.RunId, false, fp, false, nil)
 }
 
-// read model run paratemer values and write run results into csv or tsv file.
+// get workset parameter values and write run results into csv or tsv file.
+func parameterWsValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
+
+	// get model metadata and find parameter
+	meta, err := db.GetModelById(srcDb, modelId)
+	if err != nil {
+		return errors.New("Error at get model metadata by id: " + strconv.Itoa(modelId) + ": " + err.Error())
+	}
+
+	paramName := runOpts.String(paramArgKey)
+	idx, ok := meta.ParamByName(paramName)
+	if !ok {
+		return errors.New("model parameter not found: " + paramName)
+	}
+
+	// find workset, it must be readonly and check if parameter exists in that workset
+	wsRow, err := findWs(srcDb, modelId, runOpts)
+	if err != nil {
+		return err
+	}
+
+	nSub, _, err := db.GetWorksetParam(srcDb, wsRow.SetId, meta.Param[idx].ParamHid)
+	if err != nil {
+		return errors.New("Error at getting workset parameters list: " + wsRow.Name + ": " + err.Error())
+	}
+	if nSub <= 0 {
+		return errors.New("Workset: " + wsRow.Name + " must contain parameter: " + paramName)
+	}
+
+	// write parameter values to csv or tsv file
+	fp := ""
+	if theCfg.isConsole {
+		omppLog.Log("Do ", theCfg.action, " ", paramName)
+	} else {
+
+		fp = theCfg.fileName
+		if fp == "" {
+			fp = paramName + extByKind()
+		}
+		fp = filepath.Join(theCfg.dir, fp)
+
+		omppLog.Log("Do ", theCfg.action, ": "+fp)
+	}
+
+	return parameterValue(srcDb, meta, paramName, wsRow.SetId, true, fp, false, nil)
+}
+
+// read model run parameter values and write run results into csv or tsv file.
 // It can be compatibility view parameter csv file with header Dim0,Dim1,....,Value
 // or normal csv file: sub_id,dim0,dim1,param_value.
 // For compatibilty view parameter csv shold skip sub_id column
-func parameterRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRow, path string, isOld bool, csvHdr []string) error {
+func parameterValue(srcDb *sql.DB, meta *db.ModelMeta, name string, fromId int, isFromSet bool, path string, isOld bool, csvHdr []string) error {
 
-	if run == nil {
-		return errors.New("Error: model run not found")
-	}
-	if run.Status != db.DoneRunStatus {
-		return errors.New("Error: model run not completed successfully: " + run.Name)
-	}
 	if name == "" {
 		return errors.New("Invalid (empty) parameter name")
 	}
@@ -88,10 +132,10 @@ func parameterRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.R
 		DoubleFmt: theCfg.doubleFmt,
 	}
 	paramLt := db.ReadParamLayout{
-		IsFromSet: false,
+		IsFromSet: isFromSet,
 		ReadLayout: db.ReadLayout{
 			Name:   name,
-			FromId: run.RunId,
+			FromId: fromId,
 		}}
 
 	if theCfg.isNoLang || theCfg.isIdCsv {

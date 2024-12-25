@@ -56,6 +56,22 @@ func microdataValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) erro
 		omppLog.Log("Do ", theCfg.action, ": "+fp)
 	}
 
+	return microdataRunValue(srcDb, meta, name, run, runOpts, fp)
+}
+
+// read entity microdata values and write run results into csv or tsv file.
+func microdataRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRow, runOpts *config.RunOptions, path string) error {
+
+	if name == "" {
+		return errors.New("Invalid (empty) model entity name")
+	}
+	if meta == nil {
+		return errors.New("Invalid (empty) model metadata")
+	}
+	if run == nil {
+		return errors.New("Invalid (empty) model run metadata")
+	}
+
 	// find model entity
 	eIdx, ok := meta.EntityByName(name)
 	if !ok {
@@ -148,7 +164,7 @@ func microdataValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) erro
 	}
 
 	// start csv output to file or console
-	f, csvWr, err := createCsvWriter(fp)
+	f, csvWr, err := createCsvWriter(path)
 	if err != nil {
 		return err
 	}

@@ -27,6 +27,9 @@ func runOldValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 	if run == nil {
 		return errors.New("Error: first model run not found")
 	}
+	if run.Status != db.DoneRunStatus {
+		return errors.New("Error: model run not completed successfully: " + run.Name)
+	}
 	runMeta, err := db.GetRunFull(srcDb, run)
 	if err != nil {
 		return errors.New("Error at get model run: " + run.Name + " " + err.Error())
@@ -118,7 +121,7 @@ func runOldValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 		if !theCfg.isConsole {
 			fp = filepath.Join(tableCsvDir, name+extByKind())
 		}
-		err = tableOldOut(srcDb, meta, name, run, runOpts, fp)
+		err = tableOldOut(srcDb, meta, name, run.RunId, runOpts, fp)
 		if err != nil {
 			return err
 		}
@@ -127,7 +130,7 @@ func runOldValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 	return nil
 }
 
-// write old compatibilty run paratemer values into csv or tsv file
+// write old compatibilty run parameter values into csv or tsv file
 func parameterOldValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 
 	// find first model run
@@ -137,6 +140,9 @@ func parameterOldValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) e
 	}
 	if run == nil {
 		return errors.New("Error: first model run not found")
+	}
+	if run.Status != db.DoneRunStatus {
+		return errors.New("Error: model run not completed successfully: " + run.Name)
 	}
 
 	// get model metadata and find parameter
@@ -167,7 +173,7 @@ func parameterOldValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) e
 	return parameterOldOut(srcDb, meta, name, run, fp)
 }
 
-// write old compatibilty run paratemer values into csv or tsv file
+// write old compatibilty run parameter values into csv or tsv file
 func parameterOldOut(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRow, path string) error {
 
 	// find parameter
@@ -185,7 +191,7 @@ func parameterOldOut(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.Run
 	hdr = append(hdr, "Value")
 
 	// write to csv rows starting from column 1, skip sub_id column
-	return parameterRunValue(srcDb, meta, name, run, path, true, hdr)
+	return parameterValue(srcDb, meta, name, run.RunId, false, path, true, hdr)
 
 }
 
@@ -199,6 +205,9 @@ func tableOldValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error
 	}
 	if run == nil {
 		return errors.New("Error: model run not found")
+	}
+	if run.Status != db.DoneRunStatus {
+		return errors.New("Error: model run not completed successfully: " + run.Name)
 	}
 
 	// get model metadata and find output table
@@ -226,11 +235,11 @@ func tableOldValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error
 		omppLog.Log("Do ", theCfg.action, ": "+fp)
 	}
 
-	return tableOldOut(srcDb, meta, name, run, runOpts, fp)
+	return tableOldOut(srcDb, meta, name, run.RunId, runOpts, fp)
 }
 
 // write old compatibilty output table values into csv or tsv file
-func tableOldOut(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRow, runOpts *config.RunOptions, path string) error {
+func tableOldOut(srcDb *sql.DB, meta *db.ModelMeta, name string, runId int, runOpts *config.RunOptions, path string) error {
 
 	// find output table
 	idx, ok := meta.OutTableByName(name)
@@ -249,5 +258,5 @@ func tableOldOut(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRow,
 	hdr = append(hdr, "Value")
 
 	// write output table values to csv or tsv file
-	return tableRunValue(srcDb, meta, name, run, runOpts, path, true, hdr)
+	return tableRunValue(srcDb, meta, name, runId, runOpts, path, true, hdr)
 }

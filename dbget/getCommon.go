@@ -10,6 +10,7 @@ import (
 
 	"golang.org/x/text/language"
 
+	"github.com/openmpp/go/ompp/config"
 	"github.com/openmpp/go/ompp/db"
 )
 
@@ -74,4 +75,43 @@ func findRun(srcDb *sql.DB, modelId int, rdsn string, runId int, isFirst, isLast
 	// else: must be last model run
 	r, e := db.GetLastRun(srcDb, modelId)
 	return "last model run", r, e
+}
+
+// find workset by name or by id and check if it is readonly workset
+func findWs(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) (*db.WorksetRow, error) {
+
+	wsName := runOpts.String(wsArgKey)
+	var ws *db.WorksetRow
+	var err error
+
+	if wsName != "" {
+
+		ws, err = db.GetWorksetByName(srcDb, modelId, wsName)
+		if err != nil {
+			return nil, errors.New("Error at get workset: " + wsName + " " + err.Error())
+		}
+		if ws == nil {
+			return nil, errors.New("Error: workset not found: " + wsName)
+		}
+	} else {
+
+		nId := runOpts.Int(wsIdArgKey, -1)
+		if nId < 0 {
+			return nil, errors.New("Error: invalid (empty) input scenario name and id")
+		}
+		ws, err = db.GetWorkset(srcDb, nId)
+		if err != nil {
+			return nil, errors.New("Error at get workset by id: " + strconv.Itoa(nId) + " " + err.Error())
+		}
+		if ws == nil {
+			return nil, errors.New("Error: workset not found by id: " + strconv.Itoa(nId))
+		}
+		wsName = ws.Name
+	}
+
+	if !ws.IsReadonly {
+		return nil, errors.New("Error: workset must be read-only: " + wsName)
+	}
+
+	return ws, nil
 }

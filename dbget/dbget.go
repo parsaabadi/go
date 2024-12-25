@@ -189,6 +189,39 @@ Get parameter run values:
 
 	dbget -dbget.ModelName modelOne -dbget.Do parameter -dbget.Run Default -dbget.Parameter ageSex
 
+Get parameter input set (a.k.a. input scenario or workset) values:
+
+	dbget -m modelOne -s Default -parameter-set ageSex
+	dbget -m modelOne -s Default -parameter-set ageSex -lang fr-CA
+	dbget -m modelOne -s Default -parameter-set ageSex -dbget.NoLanguage
+	dbget -m modelOne -s Default -parameter-set ageSex -dbget.IdCsv
+	dbget -m modelOne -s Default -parameter-set ageSex -tsv
+	dbget -m modelOne -s Default -parameter-set ageSex -pipe
+
+	dbget -dbget.ModelName modelOne -dbget.Do parameter-set -dbget.Set Default -dbget.Parameter ageSex
+
+Get all parameters from input set (a.k.a. input scenario or workset):
+
+	dbget -m modelOne -s Default -do set
+	dbget -m modelOne -s Default -do set -lang fr-CA
+	dbget -m modelOne -s Default -do set -dbget.NoLanguage
+	dbget -m modelOne -s Default -do set -dbget.IdCsv
+	dbget -m modelOne -s Default -do set -tsv
+	dbget -m modelOne -s Default -do set -pipe
+
+	dbget -dbget.ModelName modelOne -dbget.Do set -dbget.Set Default
+
+Get all parameters from all input sets (a.k.a. input scenarios or worksets):
+
+	dbget -m modelOne -do all-sets
+	dbget -m modelOne -do all-sets -lang fr-CA
+	dbget -m modelOne -do all-sets -dbget.NoLanguage
+	dbget -m modelOne -do all-sets -dbget.IdCsv
+	dbget -m modelOne -do all-sets -tsv
+	dbget -m modelOne -do all-sets -pipe
+
+	dbget -dbget.ModelName modelOne -dbget.Do all-sets
+
 Get output table values:
 
 	dbget -m modelOne -r Default -table ageSexIncome
@@ -383,16 +416,20 @@ const (
 	withRunIdsArgKey    = "dbget.WithRunIds"     // with list model run id's (variant runs)
 	withRunFirstArgKey  = "dbget.WithFirstRun"   // with first model run (with first run as variant)
 	withRunLastArgKey   = "dbget.WithLastRun"    // with last model run (with last run as variant)
+	wsArgKey            = "dbget.Set"            // model workset name
+	wsShortKey          = "s"                    // model workset name (short form)
+	wsIdArgKey          = "dbget.SetId"          // model workset id
 	paramArgKey         = "dbget.Parameter"      // parameter name
-	paramShortKey       = "parameter"            // short form of: -dbget.do parameter -dbget.Parameter Name
+	paramShortKey       = "parameter"            // short form of: -dbget.Do parameter -dbget.Parameter Name
+	paramWsShortKey     = "parameter-set"        // short form of: -dbget.Do parameter-set -dbget.Parameter Name
 	tableArgKey         = "dbget.Table"          // output table name
-	tableShortKey       = "table"                // short form of: -dbget.do table -dbget.Table Name
-	subTableShortKey    = "sub-table"            // short form of: -dbget.do sub-table -dbget.Table Name
-	subTableAllShortKey = "sub-table-all"        // short form of: -dbget.do sub-table-all -dbget.Table Name
+	tableShortKey       = "table"                // short form of: -dbget.Do table -dbget.Table Name
+	subTableShortKey    = "sub-table"            // short form of: -dbget.Do sub-table -dbget.Table Name
+	subTableAllShortKey = "sub-table-all"        // short form of: -dbget.Do sub-table-all -dbget.Table Name
 	entityArgKey        = "dbget.Entity"         // microdata entity name
 	groupByArgKey       = "dbget.GroupBy"        // microdata group by attributes
 	calcArgKey          = "dbget.Calc"           // calculation(s) expressions to compare or aggregate
-	microdataShortKey   = "microdata"            // short form of: -dbget.do microdata -dbget.Entity Name
+	microdataShortKey   = "microdata"            // short form of: -dbget.Do microdata -dbget.Entity Name
 )
 
 // output format: csv by default, or tsv or json
@@ -448,6 +485,7 @@ func mainBody(args []string) error {
 
 	isPipe := false
 	doParamName := ""
+	doParamWsName := ""
 	doTableName := ""
 	doAccTableName := ""
 	doAllAccTableName := ""
@@ -491,8 +529,12 @@ func mainBody(args []string) error {
 	_ = flag.String(withRunIdsArgKey, "", "with list model run id's (variant runs)")
 	_ = flag.Bool(withRunFirstArgKey, false, "if true then use first model run (use as variant run)")
 	_ = flag.Bool(withRunLastArgKey, false, "if true then use last model run (use as variant run)")
+	_ = flag.String(wsArgKey, "", "input scenario (workset) name")
+	_ = flag.String(wsShortKey, "", "input scenario (workset) name (short of "+wsArgKey+")")
+	_ = flag.Int(wsIdArgKey, 0, "input scenario (workset) id")
 	_ = flag.String(paramArgKey, "", "parameter name")
 	flag.StringVar(&doParamName, paramShortKey, "", "short form of: -"+cmdArgKey+" parameter -"+paramArgKey+" Name")
+	flag.StringVar(&doParamWsName, paramWsShortKey, "", "short form of: -"+cmdArgKey+" parameter-set -"+paramArgKey+" Name")
 	_ = flag.String(tableArgKey, "", "output table name")
 	flag.StringVar(&doTableName, tableShortKey, "", "short form of: -"+cmdArgKey+" table -"+tableArgKey+" Name")
 	flag.StringVar(&doAccTableName, subTableShortKey, "", "short form of: -"+cmdArgKey+" sub-table -"+tableArgKey+" Name")
@@ -508,11 +550,13 @@ func mainBody(args []string) error {
 		{Full: sqliteArgKey, Short: sqliteShortKey},
 		{Full: modelNameArgKey, Short: modelNameShortKey},
 		{Full: runArgKey, Short: runShortKey},
+		{Full: wsArgKey, Short: wsShortKey},
 		{Full: outputFileArgKey, Short: outputFileShortKey},
 		{Full: outputDirArgKey, Short: outputDirShortKey},
 		{Full: consoleArgKey, Short: consoleShortKey},
 		{Full: langArgKey, Short: langShortKey},
 		{Full: paramArgKey, Short: paramShortKey},
+		{Full: paramArgKey, Short: paramWsShortKey},
 		{Full: tableArgKey, Short: tableShortKey},
 		{Full: tableArgKey, Short: subTableShortKey},
 		{Full: tableArgKey, Short: subTableAllShortKey},
@@ -678,6 +722,12 @@ func mainBody(args []string) error {
 		}
 		theCfg.action = "parameter"
 	}
+	if doParamWsName != "" {
+		if runOpts.IsExist(cmdArgKey) && theCfg.action != "parameter-set" {
+			return errors.New("invalid action argument: " + theCfg.action)
+		}
+		theCfg.action = "parameter-set"
+	}
 	if doTableName != "" {
 		if runOpts.IsExist(cmdArgKey) && theCfg.action != "table" {
 			return errors.New("invalid action argument: " + theCfg.action)
@@ -718,7 +768,9 @@ func mainBody(args []string) error {
 	case "set":
 		return setValue(srcDb, modelId, runOpts)
 	case "parameter":
-		return parameterValue(srcDb, modelId, runOpts)
+		return parameterRunValue(srcDb, modelId, runOpts)
+	case "parameter-set":
+		return parameterWsValue(srcDb, modelId, runOpts)
 	case "table":
 		return tableValue(srcDb, modelId, runOpts)
 	case "sub-table":

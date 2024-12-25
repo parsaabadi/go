@@ -25,6 +25,9 @@ func tableValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 	if run == nil {
 		return errors.New("Error: model run not found")
 	}
+	if run.Status != db.DoneRunStatus {
+		return errors.New("Error: model run not completed successfully: " + run.Name)
+	}
 
 	// get model metadata
 	meta, err := db.GetModelById(srcDb, modelId)
@@ -49,21 +52,15 @@ func tableValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 		omppLog.Log("Do ", theCfg.action, ": "+fp)
 	}
 
-	return tableRunValue(srcDb, meta, name, run, runOpts, fp, false, nil)
+	return tableRunValue(srcDb, meta, name, run.RunId, runOpts, fp, false, nil)
 }
 
 // read output table values and write run results into csv or tsv file.
 // It can be compatibility view output table csv file with header Dim0,Dim1,....,Value
 // or normal csv file: expr_name,dim0,dim1,expr_value.
 // For compatibilty view output table csv measure dimension column must last dimension, not first as expr_name
-func tableRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRow, runOpts *config.RunOptions, path string, isOld bool, csvHdr []string) error {
+func tableRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, runId int, runOpts *config.RunOptions, path string, isOld bool, csvHdr []string) error {
 
-	if run == nil {
-		return errors.New("Error: model run not found")
-	}
-	if run.Status != db.DoneRunStatus {
-		return errors.New("Error: model run not completed successfully: " + run.Name)
-	}
 	if name == "" {
 		return errors.New("Invalid (empty) output table name")
 	}
@@ -93,7 +90,7 @@ func tableRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.RunRo
 	tblLt := db.ReadTableLayout{
 		ReadLayout: db.ReadLayout{
 			Name:   name,
-			FromId: run.RunId,
+			FromId: runId,
 		},
 	}
 
