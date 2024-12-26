@@ -385,7 +385,7 @@ const (
 	jsonArgKey          = "json"                 // short form of: dbget.As json
 	outputFileArgKey    = "dbget.File"           // output file name, default: action-name.csv, e.g.: model-list.csv
 	outputFileShortKey  = "f"                    // output file name (short form)
-	outputDirArgKey     = "dbget.Dir"            // output directory to write .csv or .json files
+	outputDirArgKey     = "dbget.Dir"            // output directory to write .csv or .tsv files
 	outputDirShortKey   = "dir"                  // output directory (short form)
 	keepOutputDirArgKey = "dbget.KeepOutputDir"  // keep output directory if it is already exist
 	consoleArgKey       = "dbget.ToConsole"      // if true then use stdout and do not create file(s)
@@ -498,7 +498,7 @@ func mainBody(args []string) error {
 	_ = flag.Bool(jsonArgKey, false, "output as .json (short of "+asArgKey+" json)")
 	_ = flag.String(outputFileArgKey, theCfg.fileName, "output file name, default depends on action")
 	_ = flag.String(outputFileShortKey, theCfg.fileName, "output file name (short of "+outputFileArgKey+")")
-	_ = flag.String(outputDirArgKey, theCfg.dir, "output directory for model .json or .csv files")
+	_ = flag.String(outputDirArgKey, theCfg.dir, "output directory for model .csv or .tsv files")
 	_ = flag.String(outputDirShortKey, theCfg.dir, "output directory (short of "+outputDirArgKey+")")
 	_ = flag.Bool(keepOutputDirArgKey, theCfg.isKeepOutputDir, "keep (do not delete) existing output directory")
 	_ = flag.Bool(consoleArgKey, theCfg.isConsole, "if true then write into standard output instead of file(s)")
