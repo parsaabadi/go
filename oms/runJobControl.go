@@ -93,7 +93,7 @@ func scanOuterJobs(doneC <-chan bool) {
 				omppLog.Log(err)
 			}
 			if !isOk || err != nil {
-				moveActiveJobToHistory(fLst[k], "", stamp, mn, dgst, "no-model-run-time-stamp") // invalid file content: move to history with unknown status
+				moveActiveJobToHistory(fLst[k], "", false, stamp, mn, dgst, "no-model-run-time-stamp") // invalid file content: move to history with unknown status
 				continue
 			}
 
@@ -118,7 +118,7 @@ func scanOuterJobs(doneC <-chan bool) {
 				continue
 			}
 
-			// get run_lst row and move to jib history according to status
+			// get run_lst row and move to job history according to status
 			// model process does not exist, run status must completed: s=success, x=exit, e=error
 			// if model status is not completed then it is an error
 			var rStat string
@@ -133,7 +133,7 @@ func scanOuterJobs(doneC <-chan bool) {
 					}
 				}
 			}
-			moveActiveJobToHistory(fp, rStat, jc.SubmitStamp, jc.ModelName, jc.ModelDigest, jc.RunStamp)
+			moveActiveJobToHistory(fp, rStat, false, jc.SubmitStamp, jc.ModelName, jc.ModelDigest, jc.RunStamp)
 			delete(outerJobs, fp)
 		}
 
@@ -164,7 +164,7 @@ func scanRunJobs(doneC <-chan bool) {
 			if e != nil {
 				omppLog.Log(e)
 				if qPath != "" {
-					moveJobQueueToFailed(qPath, job.SubmitStamp, job.ModelName, job.ModelDigest, "") // can not run this job: remove from the queue
+					moveJobQueueToFailed(qPath, job.SubmitStamp, job.ModelName, job.ModelDigest, "", false) // can not run this job: remove from the queue
 				}
 			}
 		}

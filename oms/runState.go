@@ -208,6 +208,7 @@ func (rsc *RunCatalog) updateRunStateLog(rState *RunState, isFinal bool, msg str
 
 	if isFinal {
 		rsl.killC = nil
+		rsl.isKill = rsl.isKill || rState.isKill
 	} else {
 		rsl.pid = rState.pid
 		rsl.killC = rState.killC

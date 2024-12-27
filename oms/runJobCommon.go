@@ -67,24 +67,33 @@ func jobQueuePath(submitStamp, modelName, modelDigest string, isMpi bool, positi
 
 // Return job control file path to completed model with run status suffix.
 // For example: job/history/2022_07_04_20_06_10_817-#-_4040-#-RiskPaths-#-d90e1e9a-#-2022_07_04_20_06_10_818-#-success.json
-func jobHistoryPath(status, submitStamp, modelName, modelDigest, runStamp string) string {
+func jobHistoryPath(status string, isKill bool, submitStamp, modelName, modelDigest, runStamp string) string {
+
+	st := db.NameOfRunStatus(status)
+	if isKill && status == db.ErrorRunStatus {
+		st = "kill"
+	}
 	return filepath.Join(
 		theCfg.jobDir,
 		"history",
-		submitStamp+"-#-"+theCfg.omsName+"-#-"+modelName+"-#-"+modelDigest+"-#-"+runStamp+"-#-"+db.NameOfRunStatus(status)+".json")
+		submitStamp+"-#-"+theCfg.omsName+"-#-"+modelName+"-#-"+modelDigest+"-#-"+runStamp+"-#-"+st+".json")
 }
 
 // Return parts of job control shadow history file path: past folder, month sub-folder and file name.
 // For example: job/past, 2022_07, 2022_07_04_20_06_10_817-#-_4040-#-RiskPaths-#-d90e1e9a-#-2022_07_04_20_06_10_818-#-success.json
-func jobPastPath(status, submitStamp, modelName, modelDigest, runStamp string) (string, string, string) {
+func jobPastPath(status string, isKill bool, submitStamp, modelName, modelDigest, runStamp string) (string, string, string) {
 
 	d := ""
 	if len(submitStamp) >= 7 {
 		d = submitStamp[:7]
 	}
+	st := db.NameOfRunStatus(status)
+	if isKill && status == db.ErrorRunStatus {
+		st = "kill"
+	}
 	return filepath.Join(theCfg.jobDir, "past"),
 		d,
-		submitStamp + "-#-" + theCfg.omsName + "-#-" + modelName + "-#-" + modelDigest + "-#-" + runStamp + "-#-" + db.NameOfRunStatus(status) + ".json"
+		submitStamp + "-#-" + theCfg.omsName + "-#-" + modelName + "-#-" + modelDigest + "-#-" + runStamp + "-#-" + st + ".json"
 }
 
 // Return job state file path e.g.: job/state/_4040.json
@@ -472,13 +481,13 @@ func moveJobToActive(queueJobPath string, rState *RunState, res RunRes, runStamp
 }
 
 // move active model run job control file to history
-func moveActiveJobToHistory(activePath, status string, submitStamp, modelName, modelDigest, runStamp string) bool {
+func moveActiveJobToHistory(activePath, status string, isKill bool, submitStamp, modelName, modelDigest, runStamp string) bool {
 	if !theCfg.isJobControl {
 		return true // job control disabled
 	}
 
 	// move active job file to history
-	hst := jobHistoryPath(status, submitStamp, modelName, modelDigest, runStamp)
+	hst := jobHistoryPath(status, isKill, submitStamp, modelName, modelDigest, runStamp)
 
 	isOk := fileMoveAndLog(false, activePath, hst)
 	if !isOk {
@@ -486,7 +495,7 @@ func moveActiveJobToHistory(activePath, status string, submitStamp, modelName, m
 	} else {
 		if theCfg.isJobPast { // copy to the shadow history path
 
-			pastDir, monthDir, fn := jobPastPath(status, submitStamp, modelName, modelDigest, runStamp)
+			pastDir, monthDir, fn := jobPastPath(status, isKill, submitStamp, modelName, modelDigest, runStamp)
 			d := filepath.Join(pastDir, monthDir)
 
 			if os.MkdirAll(d, 0750) == nil {
@@ -508,7 +517,7 @@ func moveActiveJobToHistory(activePath, status string, submitStamp, modelName, m
 }
 
 // move model run request from queue to error if model run fail to start
-func moveJobQueueToFailed(queuePath string, submitStamp, modelName, modelDigest, runStamp string) bool {
+func moveJobQueueToFailed(queuePath string, submitStamp, modelName, modelDigest, runStamp string, isKill bool) bool {
 	if !theCfg.isJobControl || queuePath == "" {
 		return true // job control disabled
 	}
@@ -516,7 +525,7 @@ func moveJobQueueToFailed(queuePath string, submitStamp, modelName, modelDigest,
 		runStamp = submitStamp
 	}
 
-	hst := jobHistoryPath(db.ErrorRunStatus, submitStamp, modelName, modelDigest, runStamp)
+	hst := jobHistoryPath(db.ErrorRunStatus, isKill, submitStamp, modelName, modelDigest, runStamp)
 
 	if !fileMoveAndLog(true, queuePath, hst) {
 		fileDeleteAndLog(true, queuePath) // if move failed then delete job control file from queue
@@ -525,7 +534,7 @@ func moveJobQueueToFailed(queuePath string, submitStamp, modelName, modelDigest,
 
 		if theCfg.isJobPast { // copy to the shadow history path
 
-			pastDir, monthDir, fn := jobPastPath(db.ErrorRunStatus, submitStamp, modelName, modelDigest, runStamp)
+			pastDir, monthDir, fn := jobPastPath(db.ErrorRunStatus, isKill, submitStamp, modelName, modelDigest, runStamp)
 			d := filepath.Join(pastDir, monthDir)
 
 			if os.MkdirAll(d, 0750) == nil {

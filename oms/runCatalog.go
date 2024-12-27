@@ -174,6 +174,7 @@ type RunState struct {
 	pid            int       // process id
 	cmdPath        string    // executable path
 	killC          chan bool // channel to kill model process
+	isKill         bool      // if true then process killed
 }
 
 // runStateLog is model run state and log file lines.
