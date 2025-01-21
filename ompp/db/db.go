@@ -483,7 +483,7 @@ func OpenmppSchemaVersion(dbConn *sql.DB) (int, error) {
 
 // CheckOpenmppSchemaVersion return error if it is not openM++ db or schema version incompatible
 func CheckOpenmppSchemaVersion(dbConn *sql.DB) error {
-	
+
 	nv, err := OpenmppSchemaVersion(dbConn)
 	switch {
 	case err != nil || err == nil && nv <= 0:

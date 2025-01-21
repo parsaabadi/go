@@ -33,7 +33,7 @@ func modelDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 		NoAccumulatorsCsv bool
 		NoMicrodata       bool
 		Utf8BomIntoCsv    bool
-		IdCsv			  bool
+		IdCsv             bool
 	}{}
 	if !jsonRequestDecode(w, r, false, &opts) {
 		return // error at json decode, response done with http error
@@ -124,7 +124,7 @@ func runDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 		NoAccumulatorsCsv bool
 		NoMicrodata       bool
 		Utf8BomIntoCsv    bool
-		IdCsv			  bool
+		IdCsv             bool
 	}{}
 	if !jsonRequestDecode(w, r, false, &opts) {
 		return // error at json decode, response done with http error
@@ -226,9 +226,9 @@ func worksetDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 	wsn := getRequestParam(r, "set")  // workset name
 
 	// decode json download options
-	opts := struct{ 
-		Utf8BomIntoCsv	  bool 
-		IdCsv			  bool
+	opts := struct {
+		Utf8BomIntoCsv bool
+		IdCsv          bool
 	}{}
 
 	if !jsonRequestDecode(w, r, false, &opts) {
