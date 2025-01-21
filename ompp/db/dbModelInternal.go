@@ -351,7 +351,7 @@ func (meta *ModelMeta) updateInternals() error {
 	// update model digest if it is "" empty, it does not include entities digest
 	if isDigestUpdated || meta.Model.Digest == "" {
 
-		// digest model header: name and model type
+		// digest model header: model name, type, version
 		hMd5.Reset()
 		_, err := hMd5.Write([]byte("model_name,model_type,model_ver\n"))
 		if err != nil {

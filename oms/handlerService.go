@@ -112,6 +112,8 @@ func serviceStateHandler(w http.ResponseWriter, r *http.Request) {
 			st.Active[k].Pid = 0
 			st.Active[k].CmdPath = ""
 			st.Active[k].LogPath = ""
+			st.Active[k].BinDir = ""
+			st.Active[k].WorkDir = ""
 			st.Active[k].Env = map[string]string{}
 		}
 
@@ -327,6 +329,8 @@ func getJobState(filePath string) (bool, *runJobState) {
 	st.Pid = 0
 	st.CmdPath = ""
 	st.LogPath = ""
+	st.BinDir = ""
+	st.WorkDir = ""
 	st.Env = map[string]string{}
 	if len(st.Opts) == 0 {
 		st.Opts = map[string]string{}

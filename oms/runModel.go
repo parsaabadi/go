@@ -206,7 +206,7 @@ func (rsc *RunCatalog) runModel(job *RunJob, queueJobPath string, hfCfg hostIni,
 	rsc.updateRunStateProcess(rs, false)
 
 	// move job file form queue to active
-	activeJobPath, _ := moveJobToActive(queueJobPath, rs, job.Res, rs.RunStamp, iniPath)
+	activeJobPath, _ := moveJobToActive(queueJobPath, rs, job.Res, rs.RunStamp, iniPath, binDir, wDir)
 
 	//  wait until run completed or terminated
 	go func(rState *RunState, cmd *exec.Cmd, jobPath string, cuLst []computeUse) {

@@ -105,6 +105,8 @@ type RunJob struct {
 	LogFileName string // log file name
 	LogPath     string // log file path: log/dir/modelName.RunStamp.console.log
 	IniPath     string // if not empty then actual ini file path, may be relative to log directory
+	BinDir      string // if not empty then model run bin directory
+	WorkDir     string // if not empty then model run work directory
 }
 
 // RunRes is model run computational resources
