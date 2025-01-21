@@ -33,6 +33,7 @@ func modelDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 		NoAccumulatorsCsv bool
 		NoMicrodata       bool
 		Utf8BomIntoCsv    bool
+		IdCsv			  bool
 	}{}
 	if !jsonRequestDecode(w, r, false, &opts) {
 		return // error at json decode, response done with http error
@@ -94,7 +95,7 @@ func modelDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// create model download files on separate thread
-	cmd, cmdMsg := makeModelDownloadCommand(mb, logPath, opts.NoAccumulatorsCsv, opts.NoMicrodata, opts.Utf8BomIntoCsv)
+	cmd, cmdMsg := makeModelDownloadCommand(mb, logPath, opts.NoAccumulatorsCsv, opts.NoMicrodata, opts.Utf8BomIntoCsv, opts.IdCsv)
 
 	go makeDownload(baseName, cmd, cmdMsg, logPath)
 
@@ -123,6 +124,7 @@ func runDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 		NoAccumulatorsCsv bool
 		NoMicrodata       bool
 		Utf8BomIntoCsv    bool
+		IdCsv			  bool
 	}{}
 	if !jsonRequestDecode(w, r, false, &opts) {
 		return // error at json decode, response done with http error
@@ -203,7 +205,7 @@ func runDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// create model run download files on separate thread
-	cmd, cmdMsg := makeRunDownloadCommand(mb, r0.RunId, logPath, opts.NoAccumulatorsCsv, opts.NoMicrodata, opts.Utf8BomIntoCsv)
+	cmd, cmdMsg := makeRunDownloadCommand(mb, r0.RunId, logPath, opts.NoAccumulatorsCsv, opts.NoMicrodata, opts.Utf8BomIntoCsv, opts.IdCsv)
 
 	go makeDownload(baseName, cmd, cmdMsg, logPath)
 
@@ -224,7 +226,10 @@ func worksetDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 	wsn := getRequestParam(r, "set")  // workset name
 
 	// decode json download options
-	opts := struct{ Utf8BomIntoCsv bool }{}
+	opts := struct{ 
+		Utf8BomIntoCsv	  bool 
+		IdCsv			  bool
+	}{}
 
 	if !jsonRequestDecode(w, r, false, &opts) {
 		return // error at json decode, response done with http error
@@ -296,7 +301,7 @@ func worksetDownloadPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// create model scenario download files on separate thread
-	cmd, cmdMsg := makeWorksetDownloadCommand(mb, ws.Name, logPath, opts.Utf8BomIntoCsv)
+	cmd, cmdMsg := makeWorksetDownloadCommand(mb, ws.Name, logPath, opts.Utf8BomIntoCsv, opts.IdCsv)
 
 	go makeDownload(baseName, cmd, cmdMsg, logPath)
 
