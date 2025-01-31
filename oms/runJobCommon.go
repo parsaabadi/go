@@ -816,10 +816,11 @@ func createHostFile(job *RunJob, hfCfg hostIni, compUse []computeUse) (string, e
 				ln = strings.ReplaceAll(ln, hfCfg.hostName, cu.name)
 			}
 			if hfCfg.cpuCores != "" {
-				if !job.Mpi.IsNotByJob {
-					ln = strings.ReplaceAll(ln, hfCfg.cpuCores, strconv.Itoa(cu.Cpu/job.Res.ThreadCount))
-				} else {
+				if job.Mpi.IsNotByJob {
+					// use CPU, threads and memory as is, do not use job
 					ln = strings.ReplaceAll(ln, hfCfg.cpuCores, strconv.Itoa(cu.Cpu))
+				} else {
+					ln = strings.ReplaceAll(ln, hfCfg.cpuCores, strconv.Itoa(cu.Cpu/job.Res.ThreadCount))
 				}
 			}
 			ls = append(ls, ln)

@@ -154,11 +154,13 @@ func scanRunJobs(doneC <-chan bool) {
 
 	for {
 		// get job from the queue and run
-		if job, isFound, qPath, hf, compHostUse, e := theRunCatalog.selectJobFromQueue(); isFound && e == nil {
+		if isFound, job, qPath, hf, compHostUse, e := theRunCatalog.selectJobFromQueue(); e == nil {
 
-			_, e = theRunCatalog.runModel(job, qPath, hf, compHostUse)
-			if e != nil {
-				omppLog.Log(e)
+			if isFound {
+				_, e = theRunCatalog.runModel(job, qPath, hf, compHostUse)
+				if e != nil {
+					omppLog.Log(e)
+				}
 			}
 		} else {
 			if e != nil {

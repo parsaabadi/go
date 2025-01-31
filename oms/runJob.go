@@ -17,13 +17,13 @@ import (
 
 // Get model run job from the queue.
 // Return job to run, bool job found flag, queue job file path, list of server names to run the job, list of resources to use on each server
-func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, string, hostIni, []computeUse, error) {
+func (rsc *RunCatalog) selectJobFromQueue() (bool, *RunJob, string, hostIni, []computeUse, error) {
 
 	rsc.rscLock.Lock()
 	defer rsc.rscLock.Unlock()
 
 	if rsc.IsQueuePaused || len(rsc.queueKeys) <= 0 {
-		return nil, false, "", hostIni{}, []computeUse{}, nil // queue is paused or empty
+		return false, nil, "", hostIni{}, []computeUse{}, nil // queue is paused or empty
 	}
 
 	// resource available to run MPI jobs from global MPI queue or from localhost queue of this oms instance jobs
@@ -91,14 +91,14 @@ func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, string, hostIni, []c
 			rsc.queueJobs[qKey] = jc
 			e := errors.New("ERROR: computational resources not found to run the model: " +
 				strconv.Itoa(jc.Res.Cpu) + ": " + strconv.Itoa(jc.Res.Mem) + ": " + strconv.Itoa(rsc.first.res.ThreadCount) + ": " + qKey)
-			return &jc.RunJob, false, jc.filePath, hostIni{}, []computeUse{}, e
+			return false, &jc.RunJob, jc.filePath, hostIni{}, []computeUse{}, e
 		}
 
 		for _, hcu := range rsc.first.hostUse {
 
 			cs, ok := rsc.computeState[hcu.name]
 			if !ok || cs.state != "ready" {
-				return nil, false, "", hostIni{}, []computeUse{}, nil // server is not ready, return to wait
+				return false, nil, "", hostIni{}, []computeUse{}, nil // server is not ready, return to wait
 			}
 		}
 		compUse = append([]computeUse{}, rsc.first.hostUse...) // all srevers are ready to use
@@ -110,7 +110,7 @@ func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, string, hostIni, []c
 		break
 	}
 	if stamp == "" {
-		return nil, false, "", hostIni{}, []computeUse{}, nil // queue is empty or all jobs already selected to run
+		return false, nil, "", hostIni{}, []computeUse{}, nil // queue is empty or all jobs already selected to run
 	}
 	qj := rsc.queueJobs[stamp] // job found
 
@@ -140,7 +140,7 @@ func (rsc *RunCatalog) selectJobFromQueue() (*RunJob, bool, string, hostIni, []c
 		len(qj.RunNotes))
 	copy(job.RunNotes, qj.RunNotes)
 
-	return &job, true, qj.filePath, rsc.hostFile, compUse, nil
+	return true, &job, qj.filePath, rsc.hostFile, compUse, nil
 }
 
 // Return copy of submission stamps and job control items for queue, active and history model run jobs
