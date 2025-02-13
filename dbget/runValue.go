@@ -268,8 +268,8 @@ func runAllValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 	return nil
 }
 
-// write workset parameters into csv or tsv files
-func setValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
+// write run list from database into text csv, tsv or json file
+func runList(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 
 	// get model metadata
 	meta, err := db.GetModelById(srcDb, modelId)
@@ -277,127 +277,144 @@ func setValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 		return errors.New("Error at get model metadata by id: " + strconv.Itoa(modelId) + ": " + err.Error())
 	}
 
-	// find workset, it must be readonly
-	wsRow, err := findWs(srcDb, modelId, runOpts)
-	if err != nil {
-		return err
-	}
+	// get model run list and run_txt if user language defined
+	rl := []db.RunRow{}
+	rt := []db.RunTxtRow{}
 
-	// create output directory
-	// if output directory name not explicitly specified then use set.SetName by default
-	wsDir := theCfg.dir
-
-	if theCfg.isConsole {
-		omppLog.Log("Do ", theCfg.action, " ", wsRow.Name)
+	if !theCfg.isNoLang && theCfg.lang != "" {
+		rl, rt, err = db.GetRunListText(srcDb, modelId, theCfg.lang)
 	} else {
-
-		if wsDir == "" {
-			wsDir = "set." + helper.CleanFileName(wsRow.Name)
-		}
-		if err = makeOutputDir(wsDir, theCfg.isKeepOutputDir); err != nil {
-			return err
-		}
-		omppLog.Log("Do ", theCfg.action, ": "+wsDir)
+		rl, err = db.GetRunList(srcDb, modelId)
 	}
-
-	return setValueOut(srcDb, meta, wsRow, wsDir)
-}
-
-// write workset parameters into csv or tsv files
-func setValueOut(srcDb *sql.DB, meta *db.ModelMeta, wsRow *db.WorksetRow, paramCsvDir string) error {
-
-	// get workset parameters list
-	hIds, _, _, err := db.GetWorksetParamList(srcDb, wsRow.SetId)
 	if err != nil {
-		return errors.New("Error: unable to get workset parameters list: " + wsRow.Name + ": " + err.Error())
+		return errors.New("Error at get model runs list: " + err.Error())
 	}
 
-	// write all parameters into csv file
-	nP := len(hIds)
+	// for each run_lst find run_txt row if exist and convert to "public" run format
+	rpl := make([]db.RunPub, len(rl))
 
-	omppLog.Log("  Parameters: ", nP)
-	logT := time.Now().Unix()
+	nt := 0
+	for ni := range rl {
 
-	for j := 0; j < nP; j++ {
-
-		idx, ok := meta.ParamByHid(hIds[j])
-		if !ok {
-			return errors.New("missing workset parameter Hid: " + strconv.Itoa(hIds[j]) + " workset: " + wsRow.Name)
+		// skip if run is not completed successfuly
+		if rl[ni].Status != db.DoneRunStatus {
+			continue
 		}
 
-		logT = omppLog.LogIfTime(logT, logPeriod, "    ", j, " of ", nP, ": ", meta.Param[idx].Name)
-
-		fp := ""
-		if !theCfg.isConsole {
-			fp = filepath.Join(paramCsvDir, meta.Param[idx].Name+extByKind())
+		// find text row for current master row by run id
+		isFound := false
+		for ; nt < len(rt); nt++ {
+			isFound = rt[nt].RunId == rl[ni].RunId
+			if rt[nt].RunId >= rl[ni].RunId {
+				break // text found or text missing: text run id ahead of master run id
+			}
 		}
-		e := parameterValue(srcDb, meta, meta.Param[idx].Name, wsRow.SetId, true, fp, false, nil)
-		if e != nil {
-			return e
+
+		// convert to "public" format
+		var p *db.RunPub
+
+		if isFound && nt < len(rt) {
+			p, err = (&db.RunMeta{Run: rl[ni], Txt: []db.RunTxtRow{rt[nt]}}).ToPublic(meta)
+		} else {
+			p, err = (&db.RunMeta{Run: rl[ni]}).ToPublic(meta)
+		}
+		if err != nil {
+			return errors.New("Error at run conversion: " + err.Error())
+		}
+		if p != nil {
+			rpl[ni] = *p
 		}
 	}
 
-	return nil
-}
-
-// write all model worksets parameters into csv or tsv files
-func setAllValue(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
-
-	// get model metadata and list of readonly worksets
-	meta, err := db.GetModelById(srcDb, modelId)
-	if err != nil {
-		return errors.New("Error at get model metadata by id: " + strconv.Itoa(modelId) + ": " + err.Error())
-	}
-
-	wsLst, err := db.GetWorksetList(srcDb, modelId)
-	if err != nil {
-		return errors.New("Error at get workset list by model id: " + strconv.Itoa(modelId) + ": " + err.Error())
-	}
-	wsLst = slices.DeleteFunc(wsLst, func(w db.WorksetRow) bool { return !w.IsReadonly })
-
-	if len(wsLst) <= 0 {
-		omppLog.Log("Do ", theCfg.action, ": ", "there are no readonly worksets")
+	if len(rpl) <= 0 {
+		omppLog.Log("Do ", theCfg.action, ": ", "there are no completed model runs")
 		return nil
 	}
 
-	// create output directory
-	// if output directory name not explicitly specified then use ModelName by default
-	csvTop := theCfg.dir
+	// use specified file name or make default as modelName.run-list.json or .csv or .tsv
+	fp := ""
+	ext := extByKind()
 
 	if theCfg.isConsole {
 		omppLog.Log("Do ", theCfg.action, " ", meta.Model.Name)
 	} else {
-		if csvTop == "" {
-			csvTop = filepath.Join(helper.CleanFileName(meta.Model.Name))
-			if err = makeOutputDir(csvTop, theCfg.isKeepOutputDir); err != nil {
-				return err
-			}
+		fp = theCfg.fileName
+		if fp == "" {
+			fp = helper.CleanFileName(meta.Model.Name) + ".run-list" + ext
 		}
-		omppLog.Log("Do ", theCfg.action, ": "+csvTop)
+		fp = filepath.Join(theCfg.dir, fp)
+
+		omppLog.Log("Do ", theCfg.action, ": ", fp)
 	}
 
-	// for each workset write parameters into csv or tsv files
-	for _, ws := range wsLst {
+	// write json output into file or console
+	if theCfg.kind == asJson {
+		return toJsonOutput(fp, rpl) // save results
+	}
+	// else write csv or tsv output into file or console
 
-		if !ws.IsReadonly {
-			continue // unexpected change of workset readonly status
-		}
-		omppLog.Log("Workset ", ws.SetId, " ", ws.Name)
-
-		// workset output directory: set.Name
-		wsDir := ""
-		if !theCfg.isConsole {
-			wsDir = filepath.Join(csvTop, "set."+helper.CleanFileName(ws.Name))
-
-			if err = makeOutputDir(wsDir, theCfg.isKeepOutputDir); err != nil {
-				return err
+	// use of model id in notes .md file name if model name duplicates
+	isUseIdNames := false
+	for k := range rpl {
+		for i := k + 1; i < len(rpl); i++ {
+			if isUseIdNames = rpl[i].Name == rpl[k].Name; isUseIdNames {
+				break
 			}
 		}
-
-		err = setValueOut(srcDb, meta, &ws, wsDir)
-		if err != nil {
-			return err
+		if isUseIdNames {
+			break
 		}
+	}
+
+	// write model run rows into csv, including description
+	row := make([]string, 12)
+
+	idx := 0
+	err = toCsvOutput(
+		fp,
+		[]string{
+			"run_id", "run_name", "sub_count",
+			"sub_started", "sub_completed", "create_dt", "status",
+			"update_dt", "run_digest", "value_digest", "run_stamp", "lang_code", "descr"},
+		func() (bool, []string, error) {
+			if 0 <= idx && idx < len(rpl) {
+				row[0] = strconv.Itoa(rpl[idx].RunId)
+				row[1] = rpl[idx].Name
+				row[2] = strconv.Itoa(rpl[idx].SubCount)
+				row[3] = strconv.Itoa(rpl[idx].SubCompleted)
+				row[4] = rpl[idx].CreateDateTime
+				row[5] = rpl[idx].Status
+				row[6] = rpl[idx].UpdateDateTime
+				row[7] = rpl[idx].RunDigest
+				row[8] = rpl[idx].ValueDigest
+				row[9] = rpl[idx].RunStamp
+				row[10] = ""
+				row[11] = ""
+
+				// language, description and notes if any exist
+				if !theCfg.isNoLang && len(rpl[idx].Txt) > 0 {
+
+					row[10] = rpl[idx].Txt[0].LangCode
+					row[11] = rpl[idx].Txt[0].Descr
+
+					nm := rpl[idx].Name
+					if isUseIdNames {
+						nm = "run." + strconv.Itoa(rpl[idx].RunId) + "." + nm
+					}
+					if e := writeNote(
+						theCfg.dir, nm, rpl[idx].Txt[0].LangCode, &rpl[idx].Txt[0].Note,
+					); e != nil {
+						return true, row, err
+					}
+				}
+
+				idx++
+				return false, row, nil
+			}
+			return true, row, nil // end of run_lst rows
+		})
+	if err != nil {
+		return errors.New("failed to write run list into csv " + err.Error())
 	}
 
 	return nil

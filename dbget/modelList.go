@@ -6,8 +6,6 @@ package main
 import (
 	"database/sql"
 	"errors"
-	"fmt"
-	"os"
 	"path/filepath"
 	"strconv"
 
@@ -15,7 +13,7 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
-// write model list from database into text csv, tsv or json file
+// write models list from database into text csv, tsv or json file
 func modelList(srcDb *sql.DB) error {
 
 	// get model list
@@ -91,14 +89,20 @@ func modelList(srcDb *sql.DB) error {
 	}
 	// else write csv or tsv output into file or console
 
-	// write model master row into csv, including description
-	type noteItem struct {
-		name string // model name
-		lang string // language code
-		note string // notes
+	// use of model id in notes .md file name if model name duplicates
+	isUseIdNames := false
+	for k := range mLst {
+		for i := k + 1; i < len(mLst); i++ {
+			if isUseIdNames = mLst[i].Name == mLst[k].Name; isUseIdNames {
+				break
+			}
+		}
+		if isUseIdNames {
+			break
+		}
 	}
-	noteLst := []noteItem{}
 
+	// write model master row into csv, including description
 	row := make([]string, 9)
 
 	idx := 0
@@ -140,8 +144,12 @@ func modelList(srcDb *sql.DB) error {
 						row[7] = txt[0].LangCode
 						row[8] = txt[0].Descr
 
-						if theCfg.isNote && txt[0].LangCode != "" && txt[0].Note != "" {
-							noteLst = append(noteLst, noteItem{name: mLst[idx].Name, lang: txt[0].LangCode, note: txt[0].Note})
+						nm := mLst[idx].Name
+						if isUseIdNames {
+							nm = "model." + strconv.Itoa(mLst[idx].ModelId) + "." + nm
+						}
+						if err = writeNote(theCfg.dir, nm, txt[0].LangCode, &txt[0].Note); err != nil {
+							return true, row, err
 						}
 					}
 				}
@@ -153,23 +161,6 @@ func modelList(srcDb *sql.DB) error {
 		})
 	if err != nil {
 		return errors.New("failed to write model into csv " + err.Error())
-	}
-
-	// write notes into .md files
-	if theCfg.isNote {
-		for k := range noteLst {
-			if theCfg.isConsole {
-				fmt.Println(noteLst[k].note)
-				continue
-			}
-			err = os.WriteFile(
-				filepath.Join(theCfg.dir, noteLst[k].name+"."+noteLst[k].lang+".md"),
-				[]byte(noteLst[k].note),
-				0644)
-			if err != nil {
-				return errors.New("failed to write model notes " + err.Error())
-			}
-		}
 	}
 
 	return nil

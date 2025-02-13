@@ -250,7 +250,7 @@ func fromRunTextToDb(
 	}
 
 	// destination: convert from "public" format into destination db rows
-	meta, err := pub.FromPublic(dbConn, modelDef)
+	meta, err := pub.FromPublic(modelDef)
 	if err != nil {
 		return 0, err
 	}

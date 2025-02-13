@@ -19,6 +19,29 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
+// write notes into Name.Lang.md file, ex: modelOne.FR.md or to console
+func writeNote(dir, name string, langCode string, note *string) error {
+	if !theCfg.isNote || note == nil || *note == "" {
+		return nil
+	}
+	if theCfg.isConsole {
+		fmt.Println(*note)
+		return nil
+	}
+
+	nm := helper.CleanFileName(name)
+	if langCode != "" {
+		nm += "." + langCode
+	}
+	nm += ".md"
+
+	err := os.WriteFile(filepath.Join(dir, nm), []byte(*note), 0644)
+	if err != nil {
+		return errors.New("failed to write notes: " + name + " " + langCode + ": " + err.Error())
+	}
+	return nil
+}
+
 // write model metada from database into text csv, tsv or json file
 func modelMeta(srcDb *sql.DB, modelId int) error {
 
@@ -141,25 +164,6 @@ func modelMeta(srcDb *sql.DB, modelId int) error {
 		sLangCode = theCfg.lang
 	}
 
-	// write notes into Name.Lang.md file, ex: modelOne.FR.md
-	writeNote := func(d, name string, langId int, note *string) error {
-		if !isAnyLang || !theCfg.isNote || note == nil || *note == "" {
-			return nil
-		}
-		if theCfg.isConsole {
-			fmt.Println(note)
-			return nil
-		}
-		lc := langIdCode[langId]
-		if lc == "" {
-			lc = "lang_" + strconv.Itoa(langId)
-		}
-		err = os.WriteFile(filepath.Join(d, name+"."+lc+".md"), []byte(*note), 0644)
-		if err != nil {
-			return errors.New("failed to write notes: " + name + " " + lc + ": " + err.Error())
-		}
-		return nil
-	}
 	// make output path, return emtpy "" string to use console output
 	outPath := func(name string) string {
 		if theCfg.isConsole {
@@ -191,7 +195,7 @@ func modelMeta(srcDb *sql.DB, modelId int) error {
 			if isAnyLang {
 				row[7] = meMd.DescrNote.LangCode
 				row[8] = meMd.DescrNote.Descr
-				if e := writeNote(dir, "model_dic."+meMd.Model.Name, theLangId, &meMd.DescrNote.Note); e != nil {
+				if e := writeNote(dir, "model_dic."+meMd.Model.Name, langIdCode[theLangId], &meMd.DescrNote.Note); e != nil {
 					return false, row, e
 				}
 			}
@@ -328,7 +332,7 @@ func modelMeta(srcDb *sql.DB, modelId int) error {
 			if isAnyLang {
 				row[8] = *meTd[idx].DescrNote.LangCode
 				row[9] = *meTd[idx].DescrNote.Descr
-				if e := writeNote(dir, "type_dic."+meTd[idx].Type.Name, theLangId, meTd[idx].DescrNote.Note); e != nil {
+				if e := writeNote(dir, "type_dic."+meTd[idx].Type.Name, langIdCode[theLangId], meTd[idx].DescrNote.Note); e != nil {
 					return false, row, e
 				}
 			}
@@ -378,7 +382,7 @@ func modelMeta(srcDb *sql.DB, modelId int) error {
 				if isAnyLang {
 					row[4] = *meTi.TypeEnumTxt[j].DescrNote.LangCode
 					row[5] = *meTi.TypeEnumTxt[j].DescrNote.Descr
-					if e := writeNote(dir, "type_enum_lst."+meTi.Type.Name+"."+meTi.TypeEnumTxt[j].Enum.Name, theLangId, meTi.TypeEnumTxt[j].DescrNote.Note); e != nil {
+					if e := writeNote(dir, "type_enum_lst."+meTi.Type.Name+"."+meTi.TypeEnumTxt[j].Enum.Name, langIdCode[theLangId], meTi.TypeEnumTxt[j].DescrNote.Note); e != nil {
 						return false, row, e
 					}
 				}
@@ -424,7 +428,7 @@ func modelMeta(srcDb *sql.DB, modelId int) error {
 			if isAnyLang {
 				row[11] = *mePd[idx].DescrNote.LangCode
 				row[12] = *mePd[idx].DescrNote.Descr
-				if e := writeNote(dir, "parameter_dic."+mePd[idx].Param.Name, theLangId, mePd[idx].DescrNote.Note); e != nil {
+				if e := writeNote(dir, "parameter_dic."+mePd[idx].Param.Name, langIdCode[theLangId], mePd[idx].DescrNote.Note); e != nil {
 					return false, row, e
 				}
 			}
@@ -472,7 +476,7 @@ func modelMeta(srcDb *sql.DB, modelId int) error {
 			if isAnyLang {
 				row[5] = *mePi.ParamDimsTxt[j].DescrNote.LangCode
 				row[6] = *mePi.ParamDimsTxt[j].DescrNote.Descr
-				if e := writeNote(dir, "parameter_dims."+mePi.Param.Name+"."+mePi.ParamDimsTxt[j].Dim.Name, theLangId, mePi.ParamDimsTxt[j].DescrNote.Note); e != nil {
+				if e := writeNote(dir, "parameter_dims."+mePi.Param.Name+"."+mePi.ParamDimsTxt[j].Dim.Name, langIdCode[theLangId], mePi.ParamDimsTxt[j].DescrNote.Note); e != nil {
 					return false, row, e
 				}
 			}
@@ -517,10 +521,10 @@ func modelMeta(srcDb *sql.DB, modelId int) error {
 				row[13] = *meTbl[idx].LangCode
 				row[14] = *meTbl[idx].TableDescr
 				row[15] = *meTbl[idx].ExprDescr
-				if e := writeNote(dir, "table_dic."+meTbl[idx].Table.Name, theLangId, meTbl[idx].TableNote); e != nil {
+				if e := writeNote(dir, "table_dic."+meTbl[idx].Table.Name, langIdCode[theLangId], meTbl[idx].TableNote); e != nil {
 					return false, row, e
 				}
-				if e := writeNote(dir, "table_dic.expr."+meTbl[idx].Table.Name, theLangId, meTbl[idx].ExprNote); e != nil {
+				if e := writeNote(dir, "table_dic.expr."+meTbl[idx].Table.Name, langIdCode[theLangId], meTbl[idx].ExprNote); e != nil {
 					return false, row, e
 				}
 			}
@@ -570,7 +574,7 @@ func modelMeta(srcDb *sql.DB, modelId int) error {
 			if isAnyLang {
 				row[7] = *meTbi.TableDimsTxt[j].DescrNote.LangCode
 				row[8] = *meTbi.TableDimsTxt[j].DescrNote.Descr
-				if e := writeNote(dir, "table_dims."+meTbi.Table.Name+"."+meTbi.TableDimsTxt[j].Dim.Name, theLangId, meTbi.TableDimsTxt[j].DescrNote.Note); e != nil {
+				if e := writeNote(dir, "table_dims."+meTbi.Table.Name+"."+meTbi.TableDimsTxt[j].Dim.Name, langIdCode[theLangId], meTbi.TableDimsTxt[j].DescrNote.Note); e != nil {
 					return false, row, e
 				}
 			}
@@ -620,7 +624,7 @@ func modelMeta(srcDb *sql.DB, modelId int) error {
 			if isAnyLang {
 				row[6] = *meTbi.TableAccTxt[j].DescrNote.LangCode
 				row[7] = *meTbi.TableAccTxt[j].DescrNote.Descr
-				if e := writeNote(dir, "table_acc."+meTbi.Table.Name+"."+meTbi.TableAccTxt[j].Acc.Name, theLangId, meTbi.TableAccTxt[j].DescrNote.Note); e != nil {
+				if e := writeNote(dir, "table_acc."+meTbi.Table.Name+"."+meTbi.TableAccTxt[j].Acc.Name, langIdCode[theLangId], meTbi.TableAccTxt[j].DescrNote.Note); e != nil {
 					return false, row, e
 				}
 			}
@@ -670,7 +674,7 @@ func modelMeta(srcDb *sql.DB, modelId int) error {
 			if isAnyLang {
 				row[6] = *meTbi.TableExprTxt[j].DescrNote.LangCode
 				row[7] = *meTbi.TableExprTxt[j].DescrNote.Descr
-				if e := writeNote(dir, "table_expr."+meTbi.Table.Name+"."+meTbi.TableExprTxt[j].Expr.Name, theLangId, meTbi.TableExprTxt[j].DescrNote.Note); e != nil {
+				if e := writeNote(dir, "table_expr."+meTbi.Table.Name+"."+meTbi.TableExprTxt[j].Expr.Name, langIdCode[theLangId], meTbi.TableExprTxt[j].DescrNote.Note); e != nil {
 					return false, row, e
 				}
 			}
@@ -702,7 +706,7 @@ func modelMeta(srcDb *sql.DB, modelId int) error {
 			if isAnyLang {
 				row[4] = *meEnt[idx].DescrNote.LangCode
 				row[5] = *meEnt[idx].DescrNote.Descr
-				if e := writeNote(dir, "entity_dic."+meEnt[idx].Entity.Name, theLangId, meEnt[idx].DescrNote.Note); e != nil {
+				if e := writeNote(dir, "entity_dic."+meEnt[idx].Entity.Name, langIdCode[theLangId], meEnt[idx].DescrNote.Note); e != nil {
 					return false, row, e
 				}
 			}
@@ -751,7 +755,7 @@ func modelMeta(srcDb *sql.DB, modelId int) error {
 			if isAnyLang {
 				row[6] = *meEni.EntityAttrTxt[j].DescrNote.LangCode
 				row[7] = *meEni.EntityAttrTxt[j].DescrNote.Descr
-				if e := writeNote(dir, "entity_attr."+meEni.Entity.Name+"."+meEni.EntityAttrTxt[j].Attr.Name, theLangId, meEni.EntityAttrTxt[j].DescrNote.Note); e != nil {
+				if e := writeNote(dir, "entity_attr."+meEni.Entity.Name+"."+meEni.EntityAttrTxt[j].Attr.Name, langIdCode[theLangId], meEni.EntityAttrTxt[j].DescrNote.Note); e != nil {
 					return false, row, e
 				}
 			}
@@ -784,7 +788,7 @@ func modelMeta(srcDb *sql.DB, modelId int) error {
 			if isAnyLang {
 				row[5] = *meGrp[idx].DescrNote.LangCode
 				row[6] = *meGrp[idx].DescrNote.Descr
-				if e := writeNote(dir, "group_lst."+meGrp[idx].Group.Name, theLangId, meGrp[idx].DescrNote.Note); e != nil {
+				if e := writeNote(dir, "group_lst."+meGrp[idx].Group.Name, langIdCode[theLangId], meGrp[idx].DescrNote.Note); e != nil {
 					return false, row, e
 				}
 			}
@@ -867,7 +871,7 @@ func modelMeta(srcDb *sql.DB, modelId int) error {
 			if isAnyLang {
 				row[5] = *meAgr[idx].DescrNote.LangCode
 				row[6] = *meAgr[idx].DescrNote.Descr
-				if e := writeNote(dir, "entity_group_lst."+meAgr[idx].Group.Name, theLangId, meAgr[idx].DescrNote.Note); e != nil {
+				if e := writeNote(dir, "entity_group_lst."+meAgr[idx].Group.Name, langIdCode[theLangId], meAgr[idx].DescrNote.Note); e != nil {
 					return false, row, e
 				}
 			}

@@ -212,7 +212,7 @@ func (mc *ModelCatalog) UpdateRunText(rp *db.RunPub) (bool, string, string, erro
 	}
 
 	// convert run from "public" into db rows
-	rm, err := rp.FromPublic(dbConn, meta)
+	rm, err := rp.FromPublic(meta)
 	if err != nil {
 		omppLog.Log("Error at model run conversion: ", dn, ": ", rdsn, ": ", err.Error())
 		return false, dn, rdsn, err

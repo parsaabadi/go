@@ -5,7 +5,6 @@ package db
 
 import (
 	"crypto/md5"
-	"database/sql"
 	"errors"
 	"fmt"
 	"sort"
@@ -13,7 +12,7 @@ import (
 )
 
 // ToPublic convert model run db rows into "public" model run format for json import-export.
-func (meta *RunMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunPub, error) {
+func (meta *RunMeta) ToPublic(modelDef *ModelMeta) (*RunPub, error) {
 
 	// validate run model id: run must belong to the model
 	if meta.Run.ModelId != modelDef.Model.ModelId {
@@ -144,7 +143,7 @@ func (meta *RunMeta) ToPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunPub, err
 }
 
 // FromPublic convert model run metadata from "public" format (coming from json import-export) into db rows.
-func (pub *RunPub) FromPublic(dbConn *sql.DB, modelDef *ModelMeta) (*RunMeta, error) {
+func (pub *RunPub) FromPublic(modelDef *ModelMeta) (*RunMeta, error) {
 
 	// validate parameters
 	if modelDef == nil {

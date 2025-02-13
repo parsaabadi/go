@@ -104,25 +104,25 @@ Get list of the models from database:
 
 	dbget -db modelOne.sqlite -do model-list
 
-	dbget -m modelOne -do model-list -dbget.As csv
-	dbget -m modelOne -do model-list -dbget.As tsv
-	dbget -m modelOne -do model-list -dbget.As json
+	dbget -db modelOne.sqlite -do model-list -dbget.As csv
+	dbget -db modelOne.sqlite -do model-list -dbget.As tsv
+	dbget -db modelOne.sqlite -do model-list -dbget.As json
 
-	dbget -m modelOne -do model-list -csv  -dbget.ToConsole
-	dbget -m modelOne -do model-list -tsv  -dbget.ToConsole
-	dbget -m modelOne -do model-list -json -dbget.ToConsole
-	dbget -m modelOne -do model-list -tsv  -pipe
+	dbget -db modelOne.sqlite -do model-list -csv  -dbget.ToConsole
+	dbget -db modelOne.sqlite -do model-list -tsv  -dbget.ToConsole
+	dbget -db modelOne.sqlite -do model-list -json -dbget.ToConsole
+	dbget -db modelOne.sqlite -do model-list -tsv  -pipe
 
-	dbget -m modelOne -do model-list -dbget.Language EN
-	dbget -m modelOne -do model-list -lang fr-CA
-	dbget -m modelOne -do model-list -lang isl
+	dbget -db modelOne.sqlite -do model-list -dbget.Language EN
+	dbget -db modelOne.sqlite -do model-list -lang fr-CA
+	dbget -db modelOne.sqlite -do model-list -lang isl
 
-	dbget -m modelOne -do model-list -dbget.Notes -lang en-CA
-	dbget -m modelOne -do model-list -dbget.Notes -lang fr-CA
-	dbget -m modelOne -do model-list -dbget.Notes -lang isl
-	dbget -m modelOne -do model-list -dbget.NoLanguage
+	dbget -db modelOne.sqlite -do model-list -dbget.Notes -lang en-CA
+	dbget -db modelOne.sqlite -do model-list -dbget.Notes -lang fr-CA
+	dbget -db modelOne.sqlite -do model-list -dbget.Notes -lang isl
+	dbget -db modelOne.sqlite -do model-list -dbget.NoLanguage
 
-	dbget -dbget.Sqlite modelOne.sqlite -dbget.Do model-list
+	dbget -dbget.Sqlite my/dir/modelOne.sqlite -dbget.Do model-list
 
 	dbget
 	  -dbget.Do model-list
@@ -141,8 +141,25 @@ Get model metadata from database:
 	dbget -m modelOne -do model -lang isl
 	dbget -m modelOne -do model -lang fr-CA -dbget.Notes
 	dbget -m modelOne -do model -dbget.NoLanguage
+	dbget -m modelOne -do model -dir my/output/dir
+	dbget -m modelOne -do model -f my-model.csv
 
 	dbget -dbget.ModelName modelOne -dbget.Do model -dbget.As csv -dbget.ToConsole -dbget.Language FR
+
+Get list of model runs:
+
+	dbget -m modelOne -do run-list
+	dbget -m modelOne -do run-list -csv
+	dbget -m modelOne -do run-list -tsv
+	dbget -m modelOne -do run-list -json
+	dbget -m modelOne -do run-list -lang fr-CA
+	dbget -m modelOne -do run-list -dbget.NoLanguage
+	dbget -m modelOne -do run-list -dir my/output/dir
+	dbget -m modelOne -do run-list -f my-runs.csv
+	dbget -m modelOne -do run-list -pipe
+	dbget -m modelOne -do run-list -lang fr-CA -dbget.Notes
+
+	dbget -db my/dir/modelOne.sqlite -dbget.ModelName modelOne -dbget.Do run-list
 
 Get all model runs parameters and output table values:
 
@@ -188,39 +205,6 @@ Get parameter run values:
 	dbget -m modelOne -dbget.LastRun  -parameter ageSex
 
 	dbget -dbget.ModelName modelOne -dbget.Do parameter -dbget.Run Default -dbget.Parameter ageSex
-
-Get parameter input set (a.k.a. input scenario or workset) values:
-
-	dbget -m modelOne -s Default -parameter-set ageSex
-	dbget -m modelOne -s Default -parameter-set ageSex -lang fr-CA
-	dbget -m modelOne -s Default -parameter-set ageSex -dbget.NoLanguage
-	dbget -m modelOne -s Default -parameter-set ageSex -dbget.IdCsv
-	dbget -m modelOne -s Default -parameter-set ageSex -tsv
-	dbget -m modelOne -s Default -parameter-set ageSex -pipe
-
-	dbget -dbget.ModelName modelOne -dbget.Do parameter-set -dbget.Set Default -dbget.Parameter ageSex
-
-Get all parameters from input set (a.k.a. input scenario or workset):
-
-	dbget -m modelOne -s Default -do set
-	dbget -m modelOne -s Default -do set -lang fr-CA
-	dbget -m modelOne -s Default -do set -dbget.NoLanguage
-	dbget -m modelOne -s Default -do set -dbget.IdCsv
-	dbget -m modelOne -s Default -do set -tsv
-	dbget -m modelOne -s Default -do set -pipe
-
-	dbget -dbget.ModelName modelOne -dbget.Do set -dbget.Set Default
-
-Get all parameters from all input sets (a.k.a. input scenarios or worksets):
-
-	dbget -m modelOne -do all-sets
-	dbget -m modelOne -do all-sets -lang fr-CA
-	dbget -m modelOne -do all-sets -dbget.NoLanguage
-	dbget -m modelOne -do all-sets -dbget.IdCsv
-	dbget -m modelOne -do all-sets -tsv
-	dbget -m modelOne -do all-sets -pipe
-
-	dbget -dbget.ModelName modelOne -dbget.Do all-sets
 
 Get output table values:
 
@@ -270,6 +254,54 @@ Get output table all sub-values, including derived (get all accumulators):
 	dbget -m modelOne -dbget.LastRun  -sub-table-all ageSexIncome -tsv -pipe -dbget.NoZeroCsv -dbget.NoNullCsv
 
 	dbget -dbget.ModelName modelOne -dbget.Do sub-table-all -dbget.Run Default -dbget.Table ageSexIncome
+
+Get list of input parameters sets (list of input scenarios, list of worksets):
+
+	dbget -m modelOne -do set-list
+	dbget -m modelOne -do set-list -csv
+	dbget -m modelOne -do set-list -tsv
+	dbget -m modelOne -do set-list -json
+	dbget -m modelOne -do set-list -lang fr-CA
+	dbget -m modelOne -do set-list -dbget.NoLanguage
+	dbget -m modelOne -do set-list -dir my/output/dir
+	dbget -m modelOne -do set-list -f my-scenarios.csv
+	dbget -m modelOne -do set-list -pipe
+	dbget -m modelOne -do set-list -lang fr-CA -dbget.Notes
+
+	dbget -db my/dir/modelOne.sqlite -dbget.ModelName modelOne -dbget.Do set-list
+
+Get all parameters from all input sets (a.k.a. input scenarios or worksets):
+
+	dbget -m modelOne -do all-sets
+	dbget -m modelOne -do all-sets -lang fr-CA
+	dbget -m modelOne -do all-sets -dbget.NoLanguage
+	dbget -m modelOne -do all-sets -dbget.IdCsv
+	dbget -m modelOne -do all-sets -tsv
+	dbget -m modelOne -do all-sets -pipe
+
+	dbget -dbget.ModelName modelOne -dbget.Do all-sets
+
+Get parameter input set (a.k.a. input scenario or workset) values:
+
+	dbget -m modelOne -s Default -parameter-set ageSex
+	dbget -m modelOne -s Default -parameter-set ageSex -lang fr-CA
+	dbget -m modelOne -s Default -parameter-set ageSex -dbget.NoLanguage
+	dbget -m modelOne -s Default -parameter-set ageSex -dbget.IdCsv
+	dbget -m modelOne -s Default -parameter-set ageSex -tsv
+	dbget -m modelOne -s Default -parameter-set ageSex -pipe
+
+	dbget -dbget.ModelName modelOne -dbget.Do parameter-set -dbget.Set Default -dbget.Parameter ageSex
+
+Get all parameters from input set (a.k.a. input scenario or workset):
+
+	dbget -m modelOne -s Default -do set
+	dbget -m modelOne -s Default -do set -lang fr-CA
+	dbget -m modelOne -s Default -do set -dbget.NoLanguage
+	dbget -m modelOne -s Default -do set -dbget.IdCsv
+	dbget -m modelOne -s Default -do set -tsv
+	dbget -m modelOne -s Default -do set -pipe
+
+	dbget -dbget.ModelName modelOne -dbget.Do set -dbget.Set Default
 
 Get entity microdata:
 
@@ -633,7 +665,9 @@ func mainBody(args []string) error {
 
 	// output to json supported only for model metadata
 	if theCfg.kind == asJson {
-		if theCfg.action != "model-list" && theCfg.action != "model" && theCfg.action != "old-model" {
+		if theCfg.action != "model-list" &&
+			theCfg.action != "model" && theCfg.action != "old-model" &&
+			theCfg.action != "run-list" && theCfg.action != "set-list" {
 			return errors.New("JSON output not allowed for: " + theCfg.action)
 		}
 	}
@@ -757,6 +791,10 @@ func mainBody(args []string) error {
 	switch theCfg.action {
 	case "model-list":
 		return modelList(srcDb)
+	case "run-list":
+		return runList(srcDb, modelId, runOpts)
+	case "set-list":
+		return setList(srcDb, modelId, runOpts)
 	case "model":
 		return modelMeta(srcDb, modelId)
 	case "run":

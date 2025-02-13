@@ -146,7 +146,7 @@ func dbToDbTask(modelName string, modelDigest string, runOpts *config.RunOptions
 			}
 
 			// convert model run db rows into "public" format
-			runPub, err := rm.ToPublic(srcDb, srcModel)
+			runPub, err := rm.ToPublic(srcModel)
 			if err != nil {
 				return err
 			}

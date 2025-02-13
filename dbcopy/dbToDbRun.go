@@ -97,7 +97,7 @@ func dbToDbRun(modelName string, modelDigest string, runOpts *config.RunOptions)
 	}
 
 	// convert model run db rows into "public" format
-	pub, err := meta.ToPublic(srcDb, srcModel)
+	pub, err := meta.ToPublic(srcModel)
 	if err != nil {
 		return err
 	}
@@ -135,7 +135,7 @@ func copyRunListDbToDb(
 	for k := range srcRl {
 
 		// convert model db rows into "public"" format
-		pub, err := srcRl[k].ToPublic(srcDb, srcModel)
+		pub, err := srcRl[k].ToPublic(srcModel)
 		if err != nil {
 			return err
 		}
@@ -160,7 +160,7 @@ func copyRunDbToDb(
 	}
 
 	// destination: convert from "public" format into destination db rows
-	dstRun, err := pub.FromPublic(dstDb, dstModel)
+	dstRun, err := pub.FromPublic(dstModel)
 	if err != nil {
 		return 0, err
 	}

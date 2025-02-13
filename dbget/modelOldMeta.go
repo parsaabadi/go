@@ -6,8 +6,6 @@ package main
 import (
 	"database/sql"
 	"errors"
-	"fmt"
-	"os"
 	"path/filepath"
 	"strconv"
 
@@ -1114,25 +1112,6 @@ func modelOldMeta(srcDb *sql.DB, modelId int) error {
 	}
 	// else write csv or tsv output into file or console
 
-	// write notes into Name.Lang.md file, ex: modelOne.FR.md
-	writeNote := func(d, name string, langId int, note string) error {
-		if !theCfg.isNote || note == "" {
-			return nil
-		}
-		if theCfg.isConsole {
-			fmt.Println(note)
-			return nil
-		}
-		lc := langIdCode[langId]
-		if lc == "" {
-			lc = "lang_" + strconv.Itoa(langId)
-		}
-		err = os.WriteFile(filepath.Join(d, name+"."+lc+".md"), []byte(note), 0644)
-		if err != nil {
-			return errors.New("failed to write notes: " + name + " " + lc + ": " + err.Error())
-		}
-		return nil
-	}
 	// make output path, return emtpy "" string to use console output
 	outPath := func(name string) string {
 		if theCfg.isConsole {
@@ -1179,7 +1158,9 @@ func modelOldMeta(srcDb *sql.DB, modelId int) error {
 			row[4] = mcv.ModelDic[idx].Version
 			row[5] = strconv.Itoa(mcv.ModelDic[idx].LanguageID)
 
-			if e := writeNote(dir, "ModelDic."+mcv.ModelDic[idx].Name, mcv.ModelDic[idx].LanguageID, mcv.ModelDic[idx].Note); e != nil {
+			if e := writeNote(
+				dir, "ModelDic."+mcv.ModelDic[idx].Name, langIdCode[mcv.ModelDic[idx].LanguageID], &mcv.ModelDic[idx].Note,
+			); e != nil {
 				return false, row, e
 			}
 			idx++
@@ -1271,7 +1252,9 @@ func modelOldMeta(srcDb *sql.DB, modelId int) error {
 			row[8] = strconv.Itoa(mcv.ScenarioDic[idx].CopyParameters)
 			row[9] = strconv.Itoa(mcv.ScenarioDic[idx].LanguageID)
 
-			if e := writeNote(dir, "ScenarioDic."+mcv.ScenarioDic[idx].Name, mcv.ScenarioDic[idx].LanguageID, mcv.ScenarioDic[idx].Note); e != nil {
+			if e := writeNote(
+				dir, "ScenarioDic."+mcv.ScenarioDic[idx].Name, langIdCode[mcv.ScenarioDic[idx].LanguageID], &mcv.ScenarioDic[idx].Note,
+			); e != nil {
 				return false, row, e
 			}
 			idx++
@@ -1355,7 +1338,9 @@ func modelOldMeta(srcDb *sql.DB, modelId int) error {
 			row[4] = strconv.Itoa(mcv.ClassificationDic[idx].NumberOfValues)
 			row[5] = strconv.Itoa(mcv.ClassificationDic[idx].LanguageID)
 
-			if e := writeNote(dir, "ClassificationDic."+mcv.ClassificationDic[idx].Name, mcv.ClassificationDic[idx].LanguageID, mcv.ClassificationDic[idx].Note); e != nil {
+			if e := writeNote(
+				dir, "ClassificationDic."+mcv.ClassificationDic[idx].Name, langIdCode[mcv.ClassificationDic[idx].LanguageID], &mcv.ClassificationDic[idx].Note,
+			); e != nil {
 				return false, row, e
 			}
 			idx++
@@ -1381,7 +1366,9 @@ func modelOldMeta(srcDb *sql.DB, modelId int) error {
 			row[4] = ""
 			row[5] = strconv.Itoa(mcv.ClassificationValueDic[idx].LanguageID)
 
-			if e := writeNote(dir, "ClassificationValueDic."+mcv.ClassificationValueDic[idx].Name, mcv.ClassificationValueDic[idx].LanguageID, mcv.ClassificationValueDic[idx].Note); e != nil {
+			if e := writeNote(
+				dir, "ClassificationValueDic."+mcv.ClassificationValueDic[idx].Name, langIdCode[mcv.ClassificationValueDic[idx].LanguageID], &mcv.ClassificationValueDic[idx].Note,
+			); e != nil {
 				return false, row, e
 			}
 			idx++
@@ -1408,7 +1395,9 @@ func modelOldMeta(srcDb *sql.DB, modelId int) error {
 			row[5] = strconv.Itoa(mcv.RangeDic[idx].Max)
 			row[6] = strconv.Itoa(mcv.RangeDic[idx].LanguageID)
 
-			if e := writeNote(dir, "RangeDic."+mcv.RangeDic[idx].Name, mcv.RangeDic[idx].LanguageID, mcv.RangeDic[idx].Note); e != nil {
+			if e := writeNote(
+				dir, "RangeDic."+mcv.RangeDic[idx].Name, langIdCode[mcv.RangeDic[idx].LanguageID], &mcv.RangeDic[idx].Note,
+			); e != nil {
 				return false, row, e
 			}
 			idx++
@@ -1452,7 +1441,9 @@ func modelOldMeta(srcDb *sql.DB, modelId int) error {
 			row[4] = strconv.Itoa(mcv.PartitionDic[idx].NumberOfValues)
 			row[5] = strconv.Itoa(mcv.PartitionDic[idx].LanguageID)
 
-			if e := writeNote(dir, "PartitionDic."+mcv.PartitionDic[idx].Name, mcv.PartitionDic[idx].LanguageID, mcv.PartitionDic[idx].Note); e != nil {
+			if e := writeNote(
+				dir, "PartitionDic."+mcv.PartitionDic[idx].Name, langIdCode[mcv.PartitionDic[idx].LanguageID], &mcv.PartitionDic[idx].Note,
+			); e != nil {
 				return false, row, e
 			}
 			idx++
@@ -1525,10 +1516,14 @@ func modelOldMeta(srcDb *sql.DB, modelId int) error {
 			row[9] = strconv.FormatBool(mcv.ParameterDic[idx].Hidden)
 			row[10] = strconv.Itoa(mcv.ParameterDic[idx].LanguageID)
 
-			if e := writeNote(dir, "ParameterDic."+mcv.ParameterDic[idx].Name, mcv.ParameterDic[idx].LanguageID, mcv.ParameterDic[idx].Note); e != nil {
+			if e := writeNote(
+				dir, "ParameterDic."+mcv.ParameterDic[idx].Name, langIdCode[mcv.ParameterDic[idx].LanguageID], &mcv.ParameterDic[idx].Note,
+			); e != nil {
 				return false, row, e
 			}
-			if e := writeNote(dir, "ParameterDic.ValueNote."+mcv.ParameterDic[idx].Name, mcv.ParameterDic[idx].LanguageID, mcv.ParameterDic[idx].ValueNote); e != nil {
+			if e := writeNote(
+				dir, "ParameterDic.ValueNote."+mcv.ParameterDic[idx].Name, langIdCode[mcv.ParameterDic[idx].LanguageID], &mcv.ParameterDic[idx].ValueNote,
+			); e != nil {
 				return false, row, e
 			}
 			idx++
@@ -1575,7 +1570,9 @@ func modelOldMeta(srcDb *sql.DB, modelId int) error {
 			row[5] = strconv.FormatBool(mcv.ParameterGroupDic[idx].Hidden)
 			row[6] = strconv.Itoa(mcv.ParameterGroupDic[idx].LanguageID)
 
-			if e := writeNote(dir, "ParameterGroupDic."+mcv.ParameterGroupDic[idx].Name, mcv.ParameterGroupDic[idx].LanguageID, mcv.ParameterGroupDic[idx].Note); e != nil {
+			if e := writeNote(
+				dir, "ParameterGroupDic."+mcv.ParameterGroupDic[idx].Name, langIdCode[mcv.ParameterGroupDic[idx].LanguageID], &mcv.ParameterGroupDic[idx].Note,
+			); e != nil {
 				return false, row, e
 			}
 			idx++
@@ -1636,10 +1633,14 @@ func modelOldMeta(srcDb *sql.DB, modelId int) error {
 			row[10] = strconv.FormatBool(mcv.TableDic[idx].Hidden)
 			row[11] = strconv.Itoa(mcv.TableDic[idx].LanguageID)
 
-			if e := writeNote(dir, "TableDic."+mcv.TableDic[idx].Name, mcv.TableDic[idx].LanguageID, mcv.TableDic[idx].Note); e != nil {
+			if e := writeNote(
+				dir, "TableDic."+mcv.TableDic[idx].Name, langIdCode[mcv.TableDic[idx].LanguageID], &mcv.TableDic[idx].Note,
+			); e != nil {
 				return false, row, e
 			}
-			if e := writeNote(dir, "TableDic.AnalysisDimensionNote."+mcv.TableDic[idx].Name, mcv.TableDic[idx].LanguageID, mcv.TableDic[idx].AnalysisDimensionNote); e != nil {
+			if e := writeNote(
+				dir, "TableDic.AnalysisDimensionNote."+mcv.TableDic[idx].Name, langIdCode[mcv.TableDic[idx].LanguageID], &mcv.TableDic[idx].AnalysisDimensionNote,
+			); e != nil {
 				return false, row, e
 			}
 			idx++
@@ -1674,10 +1675,14 @@ func modelOldMeta(srcDb *sql.DB, modelId int) error {
 			row[10] = strconv.FormatBool(mcv.UserTableDic[idx].Hidden)
 			row[11] = strconv.Itoa(mcv.UserTableDic[idx].LanguageID)
 
-			if e := writeNote(dir, "UserTableDic."+mcv.UserTableDic[idx].Name, mcv.UserTableDic[idx].LanguageID, mcv.UserTableDic[idx].Note); e != nil {
+			if e := writeNote(
+				dir, "UserTableDic."+mcv.UserTableDic[idx].Name, langIdCode[mcv.UserTableDic[idx].LanguageID], &mcv.UserTableDic[idx].Note,
+			); e != nil {
 				return false, row, e
 			}
-			if e := writeNote(dir, "UserTableDic.AnalysisDimensionNote."+mcv.UserTableDic[idx].Name, mcv.UserTableDic[idx].LanguageID, mcv.UserTableDic[idx].AnalysisDimensionNote); e != nil {
+			if e := writeNote(
+				dir, "UserTableDic.AnalysisDimensionNote."+mcv.UserTableDic[idx].Name, langIdCode[mcv.UserTableDic[idx].LanguageID], &mcv.UserTableDic[idx].AnalysisDimensionNote,
+			); e != nil {
 				return false, row, e
 			}
 			idx++
@@ -1705,7 +1710,9 @@ func modelOldMeta(srcDb *sql.DB, modelId int) error {
 			row[6] = strconv.FormatBool(mcv.TableClassDic[idx].Totals)
 			row[7] = strconv.Itoa(mcv.TableClassDic[idx].LanguageID)
 
-			if e := writeNote(dir, "TableClassDic."+mcv.TableClassDic[idx].Name, mcv.TableClassDic[idx].LanguageID, mcv.TableClassDic[idx].Note); e != nil {
+			if e := writeNote(
+				dir, "TableClassDic."+mcv.TableClassDic[idx].Name, langIdCode[mcv.TableClassDic[idx].LanguageID], &mcv.TableClassDic[idx].Note,
+			); e != nil {
 				return false, row, e
 			}
 			idx++
@@ -1732,7 +1739,9 @@ func modelOldMeta(srcDb *sql.DB, modelId int) error {
 			row[5] = strconv.Itoa(mcv.TableExpressionDic[idx].Decimals)
 			row[6] = strconv.Itoa(mcv.TableExpressionDic[idx].LanguageID)
 
-			if e := writeNote(dir, "TableExpressionDic."+mcv.TableExpressionDic[idx].Name, mcv.TableExpressionDic[idx].LanguageID, mcv.TableExpressionDic[idx].Note); e != nil {
+			if e := writeNote(
+				dir, "TableExpressionDic."+mcv.TableExpressionDic[idx].Name, langIdCode[mcv.TableExpressionDic[idx].LanguageID], &mcv.TableExpressionDic[idx].Note,
+			); e != nil {
 				return false, row, e
 			}
 			idx++
@@ -1758,7 +1767,9 @@ func modelOldMeta(srcDb *sql.DB, modelId int) error {
 			row[4] = strconv.FormatBool(mcv.TableGroupDic[idx].Hidden)
 			row[5] = strconv.Itoa(mcv.TableGroupDic[idx].LanguageID)
 
-			if e := writeNote(dir, "TableGroupDic."+mcv.TableGroupDic[idx].Name, mcv.TableGroupDic[idx].LanguageID, mcv.TableGroupDic[idx].Note); e != nil {
+			if e := writeNote(
+				dir, "TableGroupDic."+mcv.TableGroupDic[idx].Name, langIdCode[mcv.TableGroupDic[idx].LanguageID], &mcv.TableGroupDic[idx].Note,
+			); e != nil {
 				return false, row, e
 			}
 			idx++

@@ -84,7 +84,7 @@ func (mc *ModelCatalog) RunStatus(dn, rdsn string) (*db.RunPub, bool) {
 	}
 
 	// convert to "public" format
-	rp, err := (&db.RunMeta{Run: *r, Progress: rpRs}).ToPublic(dbConn, meta)
+	rp, err := (&db.RunMeta{Run: *r, Progress: rpRs}).ToPublic(meta)
 	if err != nil {
 		omppLog.Log("Error at run status conversion: ", dn, ": ", rdsn, ": ", err.Error())
 		return &db.RunPub{}, false // return empty result
@@ -134,7 +134,7 @@ func (mc *ModelCatalog) RunStatusList(dn, rdsn string) ([]db.RunPub, bool) {
 		}
 
 		// convert to "public" format
-		rp, err := (&db.RunMeta{Run: rLst[n], Progress: rpRs}).ToPublic(dbConn, meta)
+		rp, err := (&db.RunMeta{Run: rLst[n], Progress: rpRs}).ToPublic(meta)
 		if err != nil {
 			omppLog.Log("Error at run status conversion: ", dn, ": ", rdsn, ": ", err.Error())
 			return []db.RunPub{}, false // return empty result
@@ -188,7 +188,7 @@ func (mc *ModelCatalog) FirstOrLastRunStatus(dn string, isFirst, isCompleted boo
 	}
 
 	// convert to "public" format
-	rp, err := (&db.RunMeta{Run: *rst, Progress: rpRs}).ToPublic(dbConn, meta)
+	rp, err := (&db.RunMeta{Run: *rst, Progress: rpRs}).ToPublic(meta)
 	if err != nil {
 		omppLog.Log("Error at run status conversion: ", dn, ": ", err.Error())
 		return &db.RunPub{}, false // return empty result
@@ -273,7 +273,7 @@ func (mc *ModelCatalog) RunPubList(dn string) ([]db.RunPub, bool) {
 
 	for ni := range rl {
 
-		p, err := (&db.RunMeta{Run: rl[ni]}).ToPublic(dbConn, meta)
+		p, err := (&db.RunMeta{Run: rl[ni]}).ToPublic(meta)
 		if err != nil {
 			omppLog.Log("Error at run conversion: ", dn, ": ", err.Error())
 			return []db.RunPub{}, false // return empty result: conversion error
@@ -338,9 +338,9 @@ func (mc *ModelCatalog) RunListText(dn string, preferredLang []language.Tag) ([]
 		var err error
 
 		if isFound && nt < len(rt) {
-			p, err = (&db.RunMeta{Run: rl[ni], Txt: []db.RunTxtRow{rt[nt]}}).ToPublic(dbConn, meta)
+			p, err = (&db.RunMeta{Run: rl[ni], Txt: []db.RunTxtRow{rt[nt]}}).ToPublic(meta)
 		} else {
-			p, err = (&db.RunMeta{Run: rl[ni]}).ToPublic(dbConn, meta)
+			p, err = (&db.RunMeta{Run: rl[ni]}).ToPublic(meta)
 		}
 		if err != nil {
 			omppLog.Log("Error at run conversion: ", dn, ": ", err.Error())
@@ -388,7 +388,7 @@ func (mc *ModelCatalog) RunFull(dn, rdsn string) (*db.RunPub, bool) {
 	}
 
 	// convert to "public" model run format
-	rp, err := rm.ToPublic(dbConn, meta)
+	rp, err := rm.ToPublic(meta)
 	if err != nil {
 		omppLog.Log("Error at completed run conversion: ", dn, ": ", r.Name, ": ", err.Error())
 		return &db.RunPub{}, false // return empty result: conversion error
@@ -443,7 +443,7 @@ func (mc *ModelCatalog) RunTextFull(dn, rdsn string, isAllLang bool, preferredLa
 	}
 
 	// convert to "public" model run format
-	rp, err := rm.ToPublic(dbConn, meta)
+	rp, err := rm.ToPublic(meta)
 	if err != nil {
 		omppLog.Log("Error at completed run conversion: ", dn, ": ", r.Name, ": ", err.Error())
 		return &db.RunPub{}, false // return empty result: conversion error

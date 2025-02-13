@@ -186,7 +186,7 @@ func toRunText(
 	runId := meta.Run.RunId
 	omppLog.Log("Model run ", runId, " ", meta.Run.Name)
 
-	pub, err := meta.ToPublic(dbConn, modelDef)
+	pub, err := meta.ToPublic(modelDef)
 	if err != nil {
 		return err
 	}
