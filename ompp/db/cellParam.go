@@ -62,7 +62,7 @@ func (cellCvt *CellParamConverter) CsvFileName() (string, error) {
 	return cellCvt.Name + ".csv", nil
 }
 
-// CsvHeader return first line for csv file: column names. For example: sub_id,dim0,dim1,param_value.
+// Return first line for csv file: column names. For example: sub_id,dim0,dim1,param_value.
 func (cellCvt *CellParamConverter) CsvHeader() ([]string, error) {
 
 	// find parameter by name
@@ -83,7 +83,7 @@ func (cellCvt *CellParamConverter) CsvHeader() ([]string, error) {
 	return h, nil
 }
 
-// CsvHeader return first line for csv file: column names. For example: sub_id,Age,Sex,param_value.
+// Return first line for csv file: column names. For example: sub_id,Age,Sex,param_value.
 func (cellCvt *CellParamLocaleConverter) CsvHeader() ([]string, error) {
 
 	// default column headers
@@ -116,7 +116,7 @@ func (cellCvt *CellParamLocaleConverter) CsvHeader() ([]string, error) {
 	return h, nil
 }
 
-// KeyIds return converter to copy primary key: (sub id, dimension ids) into key []int.
+// Return converter to copy primary key: (sub id, dimension ids) into key []int.
 //
 // Converter will return error if len(key) not equal to row key size.
 func (cellCvt *CellParamConverter) KeyIds(name string) (func(interface{}, []int) error, error) {
@@ -406,7 +406,7 @@ func (cellCvt *CellParamLocaleConverter) ToCsvRow() (func(interface{}, []string)
 	return cvt, nil
 }
 
-// CsvToCell return closure to convert csv row []string to parameter cell (sub id, dimensions, value).
+// Return closure to convert csv row []string to parameter cell (sub id, dimensions, value).
 //
 // It does return error if len(row) not equal to number of fields in cell db-record.
 // If dimension type is enum based then csv row is enum code and it is converted into cell.DimIds (into dimension type type enum ids).
@@ -528,7 +528,7 @@ func (cellCvt *CellParamConverter) ToCell() (func(row []string) (interface{}, er
 	return cvt, nil
 }
 
-// IdToCodeCell return converter from parameter cell of ids: (sub id, dimensions, value)
+// Return converter from parameter cell of ids: (sub id, dimensions, value)
 // to cell of codes: (sub id, dimensions as enum code, value)
 //
 // If dimension type is enum based then dimensions enum ids can be converted to enum code.
@@ -618,7 +618,7 @@ func (cellCvt *CellParamConverter) IdToCodeCell(modelDef *ModelMeta, name string
 	return cvt, nil
 }
 
-// CodeToIdCell return converter from parameter cell of codes: (sub id, dimensions as enum code, value)
+// Return converter from parameter cell of codes: (sub id, dimensions as enum code, value)
 // to cell of ids: (sub id, dimensions, value)
 //
 // If dimension type is enum based then dimensions enum codes converted to enum ids.

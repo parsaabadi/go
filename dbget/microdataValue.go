@@ -136,19 +136,14 @@ func microdataRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, run *db.R
 
 	} else { // get language-specific metadata
 
-		langDef, err := db.GetLanguages(srcDb)
-		if err != nil {
-			return errors.New("Error at get language-specific metadata: " + err.Error())
-		}
 		txt, err := db.GetModelText(srcDb, meta.Model.ModelId, theCfg.lang, true)
 		if err != nil {
-			return errors.New("Error at get model text metadata: " + err.Error())
+			return errors.New("Error at get language-specific metadata: " + err.Error())
 		}
 
 		cvtLoc := &db.CellMicroLocaleConverter{
 			CellMicroConverter: *cvtMicro,
 			Lang:               theCfg.lang,
-			LangDef:            langDef,
 			EnumTxt:            txt.TypeEnumTxt,
 			AttrTxt:            txt.EntityAttrTxt,
 		}

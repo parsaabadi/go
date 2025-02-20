@@ -301,16 +301,14 @@ func TestCalculateMicrodata(t *testing.T) {
 		}
 		for _, r := range rLst {
 			if r.RunId == baseRunId {
-				csvCvt.IdToDigest[r.RunId] = r.RunDigest
-				csvCvt.DigestToId[r.RunDigest] = r.RunId
+				csvCvt.RunIdToLabel[r.RunId] = r.RunDigest
 				break
 			}
 		}
 		for _, rId := range runIds {
 			for _, r := range rLst {
 				if r.RunId == rId {
-					csvCvt.IdToDigest[r.RunId] = r.RunDigest
-					csvCvt.DigestToId[r.RunDigest] = r.RunId
+					csvCvt.RunIdToLabel[r.RunId] = r.RunDigest
 					break
 				}
 			}
@@ -339,7 +337,6 @@ func TestCalculateMicrodata(t *testing.T) {
 					})
 					t.Log(calcLt[len(calcLt)-1].CalcId, "Calculate:", c)
 
-					csvCvt.CalcNameToId[cName] = cId
 					csvCvt.CalcIdToName[cId] = cName
 				}
 			}

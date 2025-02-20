@@ -22,10 +22,10 @@ By default openM++ is using SQLite database and it is enough to specife path to 
 If SQLite database file name is the same as model name
 and located in current directory then it is enough to specify model name only:
 
-	dbget -m modelOne -do all-runs
+	dbget -m modelOne -do run-list
 
 As result of above command dbget will open modelOne.sqlite database file in current directory
-and do "all-runs" command to output all model runs result and input parameters.
+and do "run-list" output list of model runs into CSV file.
 
 Most often used options of dbget do have a short form to reduce typing on command line.
 For example: -db is a short version of: -dbget.Sqlite option and -do is a short of -dbget.Do.
@@ -73,7 +73,7 @@ If there are no laguage matched then output created in default model language.
 
 	dbget -m modelOne -do all-runs
 
-Above -do all-runs option producrs output of all modelOne model runs input parameters and output tables data into .csv files.
+Above -do all-runs option produce output of all modelOne model runs input parameters and output tables data into .csv files.
 Dimension labels in those .csv files are language specific, for example it can be Männlich, Weiblich for Deutsche OS version.
 
 User can override default OS language:
@@ -99,6 +99,26 @@ In that case dimension items will be M, F codes instead of Male, Female lables.
 	dbget -m modelOne -do all-runs -dbget.IdCsv
 
 **dbget commands (actions)**
+
+	model-list       list of the models in database
+	model            model metadata
+	run-list         list of model runs
+	set-list         list of model input scenarios (a.k.a. "input set" or workset)
+	run              model run results: all parameters, output tables and microdata
+	all-runs         all model runs, all parameters, output tables and microdata
+	set              input scenario parameters
+	all-sets         all input scenarios, all parameter values
+	parameter        model run parameter values
+	parameter-set    input scenario parameter values
+	table            output table values (expressions)
+	sub-table        output table sub-values (a.k.a. sub-samples or accumulators)
+	sub-table-all    output table sub-values, including derived
+	micro            microdata values from model run results
+	micro-compare    compare or aggregate microdata between model runs
+	old-model        model metadata in Modgen compatible form
+	old-run          first model run results in Modgen compatible form
+	old-parameter    parameter values in Modgen compatible form
+	old-table        output table values in Modgen compatible form
 
 Get list of the models from database:
 
@@ -305,38 +325,72 @@ Get all parameters from input set (a.k.a. input scenario or workset):
 
 Get entity microdata:
 
-	dbget -m modelOne -r "Microdata in database" -microdata Person
-	dbget -m modelOne -r "Microdata in database" -microdata Person -lang fr-CA
-	dbget -m modelOne -r "Microdata in database" -microdata Person -dbget.NoLanguage
-	dbget -m modelOne -r "Microdata in database" -microdata Person -dbget.IdCsv
-	dbget -m modelOne -r "Microdata in database" -microdata Person -tsv
-	dbget -m modelOne -r "Microdata in database" -microdata Person -pipe
-	dbget -m modelOne -r "Microdata in database" -microdata Person -dbget.NoZeroCsv
-	dbget -m modelOne -r "Microdata in database" -microdata Person -dbget.NoNullCsv
+	dbget -m modelOne -r "Microdata in database" -micro Person
+	dbget -m modelOne -r "Microdata in database" -micro Person -lang fr-CA
+	dbget -m modelOne -r "Microdata in database" -micro Person -dbget.NoLanguage
+	dbget -m modelOne -r "Microdata in database" -micro Person -dbget.IdCsv
+	dbget -m modelOne -r "Microdata in database" -micro Person -tsv
+	dbget -m modelOne -r "Microdata in database" -micro Person -pipe
+	dbget -m modelOne -r "Microdata in database" -micro Person -dbget.NoZeroCsv
+	dbget -m modelOne -r "Microdata in database" -micro Person -dbget.NoNullCsv
 
-	dbget -dbget.ModelName modelOne -dbget.Do microdata -dbget.Run "Microdata in database" -dbget.Entity Person
+	dbget -dbget.ModelName modelOne -dbget.Do micro -dbget.Run "Microdata in database" -dbget.Entity Person
 
-Aggregate and compare microdata run values:
+Compare or aggregate microdata run values.
 
-	dbget -m modelOne -do microdata-aggregate
-	  -dbget.RunId 219
-	  -dbget.Entity Other
+Calculate average AgeGroup Income of entity Person in model run with id 219:
+
+	dbget -m modelOne -do micro-compare
+	  -dbget.RunId   219
+	  -dbget.Entity  Person
 	  -dbget.GroupBy AgeGroup
-	  -dbget.Calc OM_AVG(Income)
+	  -dbget.Calc    OM_AVG(Income)
 
-	dbget -m modelOne -do microdata-aggregate
+Model run can be specfied by run id or by name, run stamp, run digest:
+
+	dbget -m modelOne -do micro-compare
+	  -pipe
+	  -tsv
+	  -dbget.Run     "Microdata in database"
+	  -dbget.Entity  Person
+	  -dbget.GroupBy AgeGroup
+	  -dbget.Calc    OM_AVG(Income)
+
+Compare microdata first and last model run microdata
+by calculating for each Person.AgeGroup average of: Income[base] - Income[variant]:
+
+	dbget -m MyModel -do micro-compare
 	  -dbget.FirstRun
 	  -dbget.WithLastRun
-	  -dbget.Entity Other
+	  -dbget.Entity  Person
 	  -dbget.GroupBy AgeGroup
-	  -dbget.Calc OM_AVG(Income),OM_AVG(Income[base]-Income[variant])
+	  -dbget.Calc    OM_AVG(Income[base]-Income[variant])
 
-	dbget -m modelOne -do microdata-compare
-	  -dbget.RunId 219
-	  -dbget.WithRunIds 221
-	  -dbget.Entity Person
-	  -dbget.GroupBy AgeGroup
-	  -dbget.Calc OM_AVG(Income[base]-Income[variant])
+For each Person.AgeGroup calculate:
+- average Income model runs with id 219, 221, 222
+- average between Income[base] run id 219 and Income[variant] runs id: 221, 222
+- ratio of average Income[variant] / Income[base] model run
+
+	dbget -m modelOne -do micro-compare
+	  -tsv
+	  -dbget.RunId      219
+	  -dbget.WithRunIds 221,222
+	  -dbget.Entity     Person
+	  -dbget.GroupBy    AgeGroup
+	  -dbget.Calc "OM_AVG(Income), OM_AVG(Income[base] - Income[variant]), OM_AVG(Income[variant]) / OM_AVG(Income[base])"
+
+Deafult lables for calculation expessions are generated automatically,
+use -dbget.CalcName to specify desired labels:
+
+	dbget -m modelOne
+	  -do micro-compare
+	  -r "Microdata in database"
+	  -dbget.Entity   Person
+	  -dbget.GroupBy  AgeGroup,Sex
+	  -dbget.Calc     "OM_AVG(Income), OM_VAR(Income)"
+	  -dbget.CalcName "Average Income, Income Variance"
+
+Backward compatibility (Modgen).
 
 Get model metadata from compatibility (Modgen) views:
 
@@ -460,8 +514,9 @@ const (
 	subTableAllShortKey = "sub-table-all"        // short form of: -dbget.Do sub-table-all -dbget.Table Name
 	entityArgKey        = "dbget.Entity"         // microdata entity name
 	groupByArgKey       = "dbget.GroupBy"        // microdata group by attributes
-	calcArgKey          = "dbget.Calc"           // calculation(s) expressions to compare or aggregate
-	microdataShortKey   = "microdata"            // short form of: -dbget.Do microdata -dbget.Entity Name
+	calcArgKey          = "dbget.Calc"           // calculation expression(s) to compare or aggregate
+	calcNameArgKey      = "dbget.CalcName"       // names of calculation expression(s)
+	microdataShortKey   = "micro"                // short form of: -dbget.Do micro -dbget.Entity Name
 )
 
 // output format: csv by default, or tsv or json
@@ -571,10 +626,11 @@ func mainBody(args []string) error {
 	flag.StringVar(&doTableName, tableShortKey, "", "short form of: -"+cmdArgKey+" table -"+tableArgKey+" Name")
 	flag.StringVar(&doAccTableName, subTableShortKey, "", "short form of: -"+cmdArgKey+" sub-table -"+tableArgKey+" Name")
 	flag.StringVar(&doAllAccTableName, subTableAllShortKey, "", "short form of: -"+cmdArgKey+" sub-table-all -"+tableArgKey+" Name")
-	flag.StringVar(&doEntityName, microdataShortKey, "", "short form of: -"+cmdArgKey+" microdata -"+entityArgKey+" Name")
+	flag.StringVar(&doEntityName, microdataShortKey, "", "short form of: -"+cmdArgKey+" micro -"+entityArgKey+" Name")
 	_ = flag.String(entityArgKey, "", "microdata entity name")
 	_ = flag.String(groupByArgKey, "", "list of microdata group by attributes")
-	_ = flag.String(calcArgKey, "", "list of calculation(s) expressions to compare or aggregate")
+	_ = flag.String(calcArgKey, "", "list of calculation expression(s) to compare or aggregate")
+	_ = flag.String(calcNameArgKey, "", "name list of calculation expression(s) to compare or aggregate")
 
 	// pairs of full and short argument names to map short name to full name
 	var optFs = []config.FullShort{
@@ -781,10 +837,10 @@ func mainBody(args []string) error {
 		theCfg.action = "sub-table-all"
 	}
 	if doEntityName != "" {
-		if runOpts.IsExist(cmdArgKey) && theCfg.action != "microdata" {
+		if runOpts.IsExist(cmdArgKey) && theCfg.action != "micro" {
 			return errors.New("invalid action argument: " + theCfg.action)
 		}
-		theCfg.action = "microdata"
+		theCfg.action = "micro"
 	}
 
 	// dispatch the command
@@ -815,12 +871,10 @@ func mainBody(args []string) error {
 		return tableAcc(srcDb, modelId, runOpts)
 	case "sub-table-all":
 		return tableAllAcc(srcDb, modelId, runOpts)
-	case "microdata":
+	case "micro":
 		return microdataValue(srcDb, modelId, runOpts)
-	case "microdata-aggregate":
-		return microdataAggregate(srcDb, modelId, false, runOpts)
-	case "microdata-compare":
-		return microdataAggregate(srcDb, modelId, true, runOpts)
+	case "micro-compare":
+		return microdataCompare(srcDb, modelId, runOpts)
 	case "old-model":
 		return modelOldMeta(srcDb, modelId)
 	case "old-run":

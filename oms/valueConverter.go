@@ -167,8 +167,8 @@ func (mc *ModelCatalog) TableToCodeCalcCellConverter(
 	}
 
 	// validate all runs: it must be completed successfully
-	// set run digests and run id's maps in the convereter
-	baseRunId, runIds, ok := mc.setRunDigestIdMap(meta.Model.Digest, rdsn, runLst, &ctc.CalcMaps)
+	// set run id's maps in the convereter
+	baseRunId, runIds, ok := mc.setRunIdDigestMap(meta.Model.Digest, rdsn, runLst, &ctc.CalcMaps)
 
 	return cvt, baseRunId, runIds, ok
 }
@@ -390,11 +390,11 @@ func (mc *ModelCatalog) TableExprCompareLayout(dn string, name string, cmp strin
 	return calcLt, true
 }
 
-// set run digest to id and id to digest maps for calculated cell converter.
+// set run id to digest maps for calculated cell converter.
 // Function accept base run digest-or-stamp-or-name and optional list of variant runs digest-or-stamp-or-name.
 // All runs must be completed successfully.
 // Return base run id and optional list of run id's and Ok boolen flag.
-func (mc *ModelCatalog) setRunDigestIdMap(digest string, rdsn string, runLst []string, cm *db.CalcMaps) (int, []int, bool) {
+func (mc *ModelCatalog) setRunIdDigestMap(digest string, rdsn string, runLst []string, cm *db.CalcMaps) (int, []int, bool) {
 
 	// find model run id by digest-or-stamp-or-name
 	r, ok := mc.CompletedRunByDigestOrStampOrName(digest, rdsn)
@@ -407,8 +407,7 @@ func (mc *ModelCatalog) setRunDigestIdMap(digest string, rdsn string, runLst []s
 	}
 	baseRunId := r.RunId // source run id
 
-	cm.IdToDigest[r.RunId] = r.RunDigest // add base run digest to converter
-	cm.DigestToId[r.RunDigest] = r.RunId
+	cm.RunIdToLabel[r.RunId] = r.RunDigest // add base run digest to converter
 
 	// check if all additional model runs completed successfully
 	runIds := []int{}
@@ -429,8 +428,7 @@ func (mc *ModelCatalog) setRunDigestIdMap(digest string, rdsn string, runLst []s
 						omppLog.Log("Error: model run not completed successfully: ", rLst[k].RunDigest, ": ", rLst[k].Status)
 						return 0, nil, false
 					}
-					cm.IdToDigest[rLst[k].RunId] = rLst[k].RunDigest // add run digest to converter
-					cm.DigestToId[rLst[k].RunDigest] = rLst[k].RunId
+					cm.RunIdToLabel[rLst[k].RunId] = rLst[k].RunDigest // add run digest to converter
 				}
 			}
 			if rId <= 0 {
@@ -686,8 +684,8 @@ func (mc *ModelCatalog) TableToCalcCsvConverter(
 	}
 
 	// validate all runs: it must be completed successfully
-	// set run digests and run id's maps in the convereter
-	baseRunId, runIds, ok := mc.setRunDigestIdMap(meta.Model.Digest, rdsn, runLst, &ctc.CalcMaps)
+	// set run id's maps in the convereter
+	baseRunId, runIds, ok := mc.setRunIdDigestMap(meta.Model.Digest, rdsn, runLst, &ctc.CalcMaps)
 	if !ok {
 		omppLog.Log("Failed to create output table converter to csv, invalid run digest or model run not completed: ", dn, ": ", tableName)
 		return []string{}, nil, 0, nil, false // return empty result: output table not found or error
@@ -841,8 +839,8 @@ func (mc *ModelCatalog) MicrodataCalcToCsvConverter(
 	}
 
 	// validate all runs: it must be completed successfully
-	// set run digests and run id's maps in the convereter
-	baseRunId, runIds, ok := mc.setRunDigestIdMap(meta.Model.Digest, rdsn, runLst, &cvtMicro.CalcMaps)
+	// set run id's maps in the convereter
+	baseRunId, runIds, ok := mc.setRunIdDigestMap(meta.Model.Digest, rdsn, runLst, &cvtMicro.CalcMaps)
 	if !ok {
 		return 0, []int{}, "", nil,
 			errors.New("Failed to create microdata aggregation converter to csv, invalid run digest or model run not completed: " + dn + ": " + entityName) // return empty result: model run not found or not susscessful

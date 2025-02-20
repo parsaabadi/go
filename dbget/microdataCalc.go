@@ -15,8 +15,8 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
-// compare model runs microdata or aggregate microdata and write run results into csv or json files.
-func microdataAggregate(srcDb *sql.DB, modelId int, isCompare bool, runOpts *config.RunOptions) error {
+// compare model runs microdata and write run results into csv or json files.
+func microdataCompare(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 
 	// find base model run
 	msg, baseRun, err := findRun(srcDb, modelId, runOpts.String(runArgKey), runOpts.Int(runIdArgKey, 0), runOpts.Bool(runFirstArgKey), runOpts.Bool(runLastArgKey))
@@ -130,9 +130,6 @@ func microdataAggregate(srcDb *sql.DB, modelId int, isCompare bool, runOpts *con
 	if baseRun == nil {
 		return errors.New("Error: base model run not found")
 	}
-	if isCompare && len(varRunLst) <= 0 {
-		return errors.New("Error: at least one variant model run is required")
-	}
 
 	// get microdata entity, group by attributes and calcultion expression(s)
 	entityName := runOpts.String(entityArgKey)
@@ -153,6 +150,7 @@ func microdataAggregate(srcDb *sql.DB, modelId int, isCompare bool, runOpts *con
 		Calculation: []db.CalculateLayout{},
 		GroupBy:     groupBy,
 	}
+	nl := helper.ParseCsvLine(runOpts.String(calcNameArgKey), ',') // list of names, if not empty
 
 	for j := range cLst {
 
@@ -162,6 +160,9 @@ func microdataAggregate(srcDb *sql.DB, modelId int, isCompare bool, runOpts *con
 				CalcId:    j + db.CALCULATED_ID_OFFSET,
 				Name:      "ex_" + strconv.Itoa(j+db.CALCULATED_ID_OFFSET),
 			})
+			if j < len(nl) && nl[j] != "" {
+				calcLt.Calculation[j].Name = nl[j]
+			}
 		}
 	}
 
@@ -179,11 +180,11 @@ func microdataAggregate(srcDb *sql.DB, modelId int, isCompare bool, runOpts *con
 	ent := &meta.Entity[eIdx]
 
 	// create cell conveter to csv
-	cvtMicro := db.CellMicroCalcConverter{
+	cvtMicro := &db.CellMicroCalcConverter{
 		CellEntityConverter: db.CellEntityConverter{
 			ModelDef:    meta,
 			Name:        entityName,
-			IsIdCsv:     false, // use code, not id's
+			IsIdCsv:     theCfg.isIdCsv,
 			DoubleFmt:   theCfg.doubleFmt,
 			IsNoZeroCsv: runOpts.Bool(noZeroArgKey),
 			IsNoNullCsv: runOpts.Bool(noNullArgKey),
@@ -195,14 +196,12 @@ func microdataAggregate(srcDb *sql.DB, modelId int, isCompare bool, runOpts *con
 		return errors.New("Failed to create microdata aggregation converter to csv: " + entityName + ": " + e.Error())
 	}
 
-	// set run digests and run id's maps in the convereter
-	cvtMicro.CalcMaps.IdToDigest[baseRun.RunId] = baseRun.RunDigest // add base run digest to converter
-	cvtMicro.CalcMaps.DigestToId[baseRun.RunDigest] = baseRun.RunId
+	// set run id to name map in the convereter
+	cvtMicro.CalcMaps.RunIdToLabel[baseRun.RunId] = baseRun.Name // add base run name
 
 	runIds := make([]int, len(varRunLst))
 	for k := 0; k < len(varRunLst); k++ {
-		cvtMicro.CalcMaps.IdToDigest[varRunLst[k].RunId] = varRunLst[k].RunDigest // add run digest to converter
-		cvtMicro.CalcMaps.DigestToId[varRunLst[k].RunDigest] = varRunLst[k].RunId
+		cvtMicro.CalcMaps.RunIdToLabel[varRunLst[k].RunId] = varRunLst[k].Name // add names of variant runs
 		runIds[k] = varRunLst[k].RunId
 	}
 
@@ -291,17 +290,48 @@ func microdataAggregate(srcDb *sql.DB, modelId int, isCompare bool, runOpts *con
 	}
 
 	// make csv header
-	hdr, err := cvtMicro.CsvHeader()
-	if err != nil {
-		return errors.New("Failed to make microdata csv header: " + entityName + ": " + err.Error())
-	}
-
 	// create converter from db cell into csv row []string
+	hdr := []string{}
 	var cvtRow func(interface{}, []string) (bool, error)
 
-	cvtRow, err = cvtMicro.ToCsvRow()
-	if err != nil {
-		return errors.New("Failed to create microdata converter to csv: " + entityName + ": " + err.Error())
+	if theCfg.isNoLang || theCfg.isIdCsv {
+
+		hdr, err = cvtMicro.CsvHeader()
+		if err != nil {
+			return errors.New("Failed to make microdata csv header: " + entityName + ": " + err.Error())
+		}
+		if theCfg.isIdCsv {
+			cvtRow, err = cvtMicro.ToCsvIdRow()
+		} else {
+			cvtRow, err = cvtMicro.ToCsvRow()
+			hdr[0] = "run_name" // first column is a run name
+		}
+		if err != nil {
+			return errors.New("Failed to create microdata converter to csv: " + entityName + ": " + err.Error())
+		}
+
+	} else { // get language-specific metadata
+
+		txt, err := db.GetModelText(srcDb, meta.Model.ModelId, theCfg.lang, true)
+		if err != nil {
+			return errors.New("Error at get language-specific metadata: " + err.Error())
+		}
+
+		cvtLoc := &db.CellMicroLocaleCalcConverter{
+			CellMicroCalcConverter: *cvtMicro,
+			Lang:                   theCfg.lang,
+			EnumTxt:                txt.TypeEnumTxt,
+			AttrTxt:                txt.EntityAttrTxt,
+		}
+
+		hdr, err = cvtLoc.CsvHeader()
+		if err != nil {
+			return errors.New("Failed to make microdata csv header: " + entityName + ": " + err.Error())
+		}
+		cvtRow, err = cvtLoc.ToCsvRow()
+		if err != nil {
+			return errors.New("Failed to create microdata converter to csv: " + entityName + ": " + err.Error())
+		}
 	}
 
 	// start csv output to file or console

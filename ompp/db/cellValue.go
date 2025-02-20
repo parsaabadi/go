@@ -26,21 +26,17 @@ type cellCodeValue struct {
 	Value  interface{} // value: int64, bool, float64 or string
 }
 
-// calculation maps between runs digest and id and calculations name and id
+// calculation maps between run id and label (digest) and calculations id and name
 type CalcMaps struct {
-	IdToDigest   map[int]string // map of run id's to run digests
-	DigestToId   map[string]int // map of run digests to run id's
+	RunIdToLabel map[int]string // map of run id's to run label (digest)
 	CalcIdToName map[int]string // map of calculation id to name
-	CalcNameToId map[string]int // map of calculation name to id
 }
 
 // return empty value of calculation maps
 func EmptyCalcMaps() CalcMaps {
 	return CalcMaps{
-		IdToDigest:   map[int]string{},
-		DigestToId:   map[string]int{},
+		RunIdToLabel: map[int]string{},
 		CalcIdToName: map[int]string{},
-		CalcNameToId: map[string]int{},
 	}
 }
 
@@ -134,7 +130,7 @@ type CellToIdConverter interface {
 	CodeToIdCell(modelDef *ModelMeta, name string) (func(interface{}) (interface{}, error), error)
 }
 
-// itemIdToCode return converter from dimension item id to code.
+// Return converter from dimension item id to code.
 // It is also used for parameter values if parameter type is enum-based.
 // If dimension is enum-based then from enum id to enum code or to the "all" total enum code;
 // If dimension is simple integer type then use Itoa(integer id) as code;

@@ -30,11 +30,10 @@ type CellTableCalcConverter struct {
 	CalcMaps           // map between runs digest and id and calculations name and id
 }
 
-// Set calculation name to Id and Id to name maps
+// Set calculation Id to name maps
 func (cellCvt *CellTableCalcConverter) SetCalcIdNameMap(calcLt []CalculateTableLayout) error {
 
 	cellCvt.CalcIdToName = map[int]string{}
-	cellCvt.CalcNameToId = map[string]int{}
 
 	for k, c := range calcLt {
 
@@ -42,7 +41,6 @@ func (cellCvt *CellTableCalcConverter) SetCalcIdNameMap(calcLt []CalculateTableL
 			return errors.New("invalid (empty) calculation name at index: [" + strconv.Itoa(k) + "], id: " + strconv.Itoa(c.CalcId) + ": " + cellCvt.Name)
 		}
 		cellCvt.CalcIdToName[c.CalcId] = c.Name
-		cellCvt.CalcNameToId[c.Name] = c.CalcId
 	}
 	return nil
 }
@@ -50,7 +48,7 @@ func (cellCvt *CellTableCalcConverter) SetCalcIdNameMap(calcLt []CalculateTableL
 // return true if csv converter is using enum id's for dimensions
 func (cellCvt *CellTableCalcConverter) IsUseEnumId() bool { return cellCvt.IsIdCsv }
 
-// CsvFileName return file name of csv file to store output table calculated rows
+// Return file name of csv file to store output table calculated rows
 func (cellCvt *CellTableCalcConverter) CsvFileName() (string, error) {
 
 	// find output table by name
@@ -66,7 +64,7 @@ func (cellCvt *CellTableCalcConverter) CsvFileName() (string, error) {
 	return cellCvt.Name + ".calc.csv", nil
 }
 
-// CsvHeader return first line for csv file: column names, it's look like: run_digest,calc_id,dim0,dim1,calc_value
+// Return first line for csv file: column names, for example: run_digest,calc_id,dim0,dim1,calc_value
 func (cellCvt *CellTableCalcConverter) CsvHeader() ([]string, error) {
 
 	// find output table by name
@@ -93,7 +91,7 @@ func (cellCvt *CellTableCalcConverter) CsvHeader() ([]string, error) {
 	return h, nil
 }
 
-// KeyIds return converter to copy primary key: (run_id, calc_id, dimension ids) into key []int.
+// Return converter to copy primary key: (run_id, calc_id, dimension ids) into key []int.
 //
 // Converter will return error if len(key) not equal to row key size.
 func (cellCvt *CellTableCalcConverter) KeyIds(name string) (func(interface{}, []int) error, error) {
@@ -122,7 +120,7 @@ func (cellCvt *CellTableCalcConverter) KeyIds(name string) (func(interface{}, []
 	return cvt, nil
 }
 
-// ToCsvIdRow return converter from output table calculated cell (run_id, calc_id, dimensions, calc_value) to csv id's row []string.
+// Return converter from output table calculated cell (run_id, calc_id, dimensions, calc_value) to csv id's row []string.
 //
 // Converter return isNotEmpty flag, it is always true if there were no error during conversion.
 // Converter simply does Sprint() for each dimension item id, run id and value.
@@ -171,7 +169,7 @@ func (cellCvt *CellTableCalcConverter) ToCsvIdRow() (func(interface{}, []string)
 	return cvt, nil
 }
 
-// ToCsvRow return converter from output table calculated cell (run_id, calc_id, dimensions, calc_value)
+// Return converter from output table calculated cell (run_id, calc_id, dimensions, calc_value)
 // to csv row []string (run digest, calc_name, dimensions, calc_value).
 //
 // Converter return isNotEmpty flag, it is always true if there were no error during conversion.
@@ -210,7 +208,7 @@ func (cellCvt *CellTableCalcConverter) ToCsvRow() (func(interface{}, []string) (
 			return false, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+3) + ": " + cellCvt.Name)
 		}
 
-		row[0] = cellCvt.IdToDigest[cell.RunId]
+		row[0] = cellCvt.RunIdToLabel[cell.RunId]
 		if row[0] == "" {
 			return false, errors.New("invalid (missing) run id: " + strconv.Itoa(cell.RunId) + " output table: " + cellCvt.Name)
 		}
@@ -244,8 +242,9 @@ func (cellCvt *CellTableCalcConverter) ToCsvRow() (func(interface{}, []string) (
 	return cvt, nil
 }
 
-// IdToCodeCell return converter from output table calculated cell of ids: (run_id, calc_id, dimensions enum ids, calc_value)
-// to cell of codes: (run_digest, CalcName, dimensions as enum codes, calc_value).
+// Return converter from output table calculated cell of ids: (run_id, calc_id, dimensions enum ids, calc_value)
+// to cell of codes: (RunDigest, CalcName, dimensions as enum codes, calc_value).
+// Output RunDigest value is coming from RunIdToLabel map and it can be not a run digest but other label, e.g. run name or description.
 //
 // If dimension type is enum based then dimensions enum ids can be converted to enum code.
 // If dimension type is simple (bool or int) then dimension value converted to string.
@@ -279,7 +278,7 @@ func (cellCvt *CellTableCalcConverter) IdToCodeCell(modelDef *ModelMeta, name st
 			return nil, errors.New("invalid cell rank: " + strconv.Itoa(len(srcCell.DimIds)) + ", expected: " + strconv.Itoa(table.Rank) + ": " + name)
 		}
 
-		dgst := cellCvt.IdToDigest[srcCell.RunId]
+		dgst := cellCvt.RunIdToLabel[srcCell.RunId]
 		if dgst == "" {
 			return nil, errors.New("invalid (missing) run id: " + strconv.Itoa(srcCell.RunId) + " output table: " + name)
 		}

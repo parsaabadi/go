@@ -300,8 +300,7 @@ func TestCalculateOutputTable(t *testing.T) {
 		CalcMaps: EmptyCalcMaps(),
 	}
 	for _, r := range rLst {
-		csvCvt.IdToDigest[r.RunId] = r.RunDigest
-		csvCvt.DigestToId[r.RunDigest] = r.RunId
+		csvCvt.RunIdToLabel[r.RunId] = r.RunDigest
 	}
 
 	for k := 0; k < 400; k++ {

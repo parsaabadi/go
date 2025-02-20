@@ -57,7 +57,6 @@ type CellMicroConverter struct {
 type CellMicroLocaleConverter struct {
 	CellMicroConverter
 	Lang          string             // language code, expected to compatible with BCP 47 language tag
-	LangDef       *LangMeta          // language metadata to find translations
 	EnumTxt       []TypeEnumTxtRow   // type enum text rows: type_enum_txt join to model_type_dic
 	AttrTxt       []EntityAttrTxtRow // entity attributes text rows: entity_attr_txt join to model_entity_dic table
 	theAttrLabels map[int]string     // map entity generation attribute id to language-specific label
@@ -135,9 +134,10 @@ func (cellCvt *CellMicroLocaleConverter) CsvHeader() ([]string, error) {
 
 // ToCsvIdRow return converter from microdata cell: (microdata key, attributes as enum id or built-in type value) to csv id's row []string.
 //
-// Converter return isNotEmpty flag, it return false if IsNoZero or IsNoNull is set and all attributes values are empty or zero,
+// Converter return isNotEmpty flag: false if IsNoZero or IsNoNull is set and all attributes values are empty or zero,
 // only attributes of type float or integer or string are considered as "value" attributes.
-// Converter simply does Sprint() for key and each attribute value, if value is NULL then empty "" string used.
+// Converter simply does Sprint() for key and each attribute value.
+// If value is NULL then empty "" string used.
 // Converter will return error if len(row) not equal to number of fields in csv record.
 func (cellCvt *CellMicroConverter) ToCsvIdRow() (func(interface{}, []string) (bool, error), error) {
 
@@ -197,12 +197,13 @@ func (cellCvt *CellMicroConverter) ToCsvIdRow() (func(interface{}, []string) (bo
 	return cvt, nil
 }
 
-// ToCsvRow return converter from microdata cell: (microdata key, attributes as enum id or built-in type value) to csv row []string.
+// Return converter from microdata cell: (microdata key, attributes as enum id or built-in type value) to csv row []string.
 //
-// Converter return isNotEmpty flag, it return false if IsNoZero or IsNoNull is set and all values of float or integer or string type are empty or zero.
-// Converter simply does Sprint() for key and each attribute value, if value is NULL then empty "" string used.
+// Converter return isNotEmpty flag: false if IsNoZero or IsNoNull is set and all values of float or integer or string type are empty or zero.
+// Converter simply does Sprint() for key and each attribute value.
 // If attribute type is float and double format is not empty "" string then converter does Sprintf(using double format).
 // If attribute type is enum based then converter return enum code for attribute enum id.
+// If value is NULL then "null" string used.
 // Converter will return error if len(row) not equal to number of fields in csv record.
 func (cellCvt *CellMicroConverter) ToCsvRow() (func(interface{}, []string) (bool, error), error) {
 
@@ -224,7 +225,6 @@ func (cellCvt *CellMicroConverter) ToCsvRow() (func(interface{}, []string) (bool
 
 			// for float attributes use format if specified
 			if cellCvt.DoubleFmt != "" && ea.typeOf.IsFloat() {
-
 				fd[k] = func(v interface{}) (string, error) { return fmt.Sprintf(cellCvt.DoubleFmt, v), nil }
 			} else {
 				fd[k] = func(v interface{}) (string, error) { return fmt.Sprint(v), nil }
@@ -292,11 +292,11 @@ func (cellCvt *CellMicroConverter) ToCsvRow() (func(interface{}, []string) (bool
 // Return converter from microdata cell: (microdata key, attributes as enum id or built-in type value)
 // to language-specific csv []string row of dimension enum labels and value.
 //
-// Converter return isNotEmpty flag, it return false if IsNoZero or IsNoNull is set and all values of float or integer or string type are empty or zero.
-// Converter will return error if len(row) not equal to number of fields in csv record.
+// Converter return isNotEmpty flag: false if IsNoZero or IsNoNull is set and all values of float or integer or string type are empty or zero.
 // Microdata row key and attribute values of built-in type converted to locale-specific strings, e.g.: 1234.56 => 1 234,56.
-// If value is NULL then empty "" string used.
-// If attribute type is enum based then csv vslur is enum label.
+// If value is NULL then "null" string used.
+// If attribute type is enum based then csv value is enum label.
+// Converter will return error if len(row) not equal to number of fields in csv record.
 func (cellCvt *CellMicroLocaleConverter) ToCsvRow() (func(interface{}, []string) (bool, error), error) {
 
 	// find entity metadata by entity name and attributes by generation Hid
@@ -309,7 +309,7 @@ func (cellCvt *CellMicroLocaleConverter) ToCsvRow() (func(interface{}, []string)
 	// for built-in attribute types format value locale-specific strings, e.g.: 1234.56 => 1 234,56
 	prt := message.NewPrinter(language.Make(cellCvt.Lang))
 
-	// for enum attribute type return enum lable by enum id
+	// for enum attribute type return enum label by enum id
 	fd := make([]func(v interface{}) (string, error), nAttr)
 
 	for k, ea := range attrs {
@@ -318,21 +318,20 @@ func (cellCvt *CellMicroLocaleConverter) ToCsvRow() (func(interface{}, []string)
 
 			// for float attributes use format if specified
 			if cellCvt.DoubleFmt != "" && ea.typeOf.IsFloat() {
-
 				fd[k] = func(v interface{}) (string, error) { return prt.Sprintf(cellCvt.DoubleFmt, v), nil }
 			} else {
 				fd[k] = func(v interface{}) (string, error) { return prt.Sprint(v), nil }
 			}
-		} else { // enum based attribute type: find and return enum code by enum id
+		} else { // enum based attribute type: find and return enum label by enum id
 
 			msgName := cellCvt.Name + "." + ea.Name // for error message, ex: Person.Income
-			f, err := ea.typeOf.itemIdToLabel(cellCvt.Lang, cellCvt.EnumTxt, cellCvt.LangDef, msgName, false)
+			f, err := ea.typeOf.itemIdToLabel(cellCvt.Lang, cellCvt.EnumTxt, nil, msgName, false)
 
 			if err != nil {
 				return nil, err
 			}
 
-			fd[k] = func(v interface{}) (string, error) { // convereter return enum code by enum id
+			fd[k] = func(v interface{}) (string, error) { // convereter return enum label by enum id
 
 				// depending on sql + driver it can be different type
 				if iv, ok := helper.ToIntValue(v); ok {

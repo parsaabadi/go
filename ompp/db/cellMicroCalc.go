@@ -9,6 +9,8 @@ import (
 	"strconv"
 
 	"github.com/openmpp/go/ompp/helper"
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
 )
 
 // CellMicroCalc is value of entity microdata calculated expression.
@@ -35,11 +37,19 @@ type CellMicroCalcConverter struct {
 	theGroupBy          []EntityAttrRow // if not empty then entity generation attributes
 }
 
-// Set calculation name to Id and Id to name maps
+// Converter for calculated microdata to implement CsvLocaleConverter interface.
+type CellMicroLocaleCalcConverter struct {
+	CellMicroCalcConverter
+	Lang             string             // language code, expected to compatible with BCP 47 language tag
+	EnumTxt          []TypeEnumTxtRow   // type enum text rows: type_enum_txt join to model_type_dic
+	AttrTxt          []EntityAttrTxtRow // entity attributes text rows: entity_attr_txt join to model_entity_dic table
+	theGroupByLabels map[int]string     // map entity generation attribute id to language-specific label
+}
+
+// Set calculation Id to name maps
 func (cellCvt *CellMicroCalcConverter) SetCalcIdNameMap(calcLt []CalculateLayout) error {
 
 	cellCvt.CalcIdToName = map[int]string{}
-	cellCvt.CalcNameToId = map[string]int{}
 
 	for k, c := range calcLt {
 
@@ -47,7 +57,6 @@ func (cellCvt *CellMicroCalcConverter) SetCalcIdNameMap(calcLt []CalculateLayout
 			return errors.New("invalid (empty) calculation name at index: [" + strconv.Itoa(k) + "], id: " + strconv.Itoa(c.CalcId) + ": " + cellCvt.Name)
 		}
 		cellCvt.CalcIdToName[c.CalcId] = c.Name
-		cellCvt.CalcNameToId[c.Name] = c.CalcId
 	}
 	return nil
 }
@@ -71,7 +80,7 @@ func (cellCvt *CellMicroCalcConverter) CsvFileName() (string, error) {
 	return cellCvt.Name + ".csv", nil
 }
 
-// CsvHeader return first line for csv file column names: names of group by attributes.
+// Return first line for csv file column names.
 // For example: run_digest,calc_name,AgeGroup,Income,calc_value
 // Or:          run_id,calc_id,AgeGroup,Income,calc_value
 func (cellCvt *CellMicroCalcConverter) CsvHeader() ([]string, error) {
@@ -84,7 +93,6 @@ func (cellCvt *CellMicroCalcConverter) CsvHeader() ([]string, error) {
 
 	// make first line columns
 	h := make([]string, 3+len(aGroupBy))
-	h[0] = "key"
 
 	if cellCvt.IsIdCsv {
 		h[0] = "run_id"
@@ -101,10 +109,46 @@ func (cellCvt *CellMicroCalcConverter) CsvHeader() ([]string, error) {
 	return h, nil
 }
 
-// ToCsvIdRow return converter from microdata cell: (microdata key, attributes as enum id or built-in type value) to csv id's row []string.
+// Return first line for csv file: column names.
+// For example: run_label,calc_name,Age Group,Average Income,calc_value
+func (cellCvt *CellMicroLocaleCalcConverter) CsvHeader() ([]string, error) {
+
+	// default column headers
+	h, err := cellCvt.CellMicroCalcConverter.CsvHeader()
+	if err != nil {
+		return []string{}, err
+	}
+
+	// replace group by attribute name with description, where it exists
+	if cellCvt.Lang != "" {
+
+		// find entity metadata by entity name and attributes by generation Hid
+		attrs, err := cellCvt.groupByAttrs()
+		if err != nil {
+			return []string{}, err
+		}
+
+		gm, err := cellCvt.groupByLabel() // group by attribute labels
+		if err != nil {
+			return []string{}, err
+		}
+
+		for k, ea := range attrs {
+			if d, ok := gm[ea.AttrId]; ok {
+				h[k+2] = d
+			}
+		}
+	}
+	return h, nil
+}
+
+// Return converter from microdata cell:
+// (RunId, CalcId, group by attributes as enum code or built-in type value, calculted value)
+// to csv id's row []string.
 //
 // Converter return isNotEmpty flag, it is always true if there were no error during conversion.
-// Converter simply does Sprint() for key and each attribute value, if value is NULL then empty "" string used.
+// Converter simply does Sprint() for key and each attribute value.
+// If value is NULL then empty "" string used.
 // Converter will return error if len(row) not equal to number of fields in csv record.
 func (cellCvt *CellMicroCalcConverter) ToCsvIdRow() (func(interface{}, []string) (bool, error), error) {
 
@@ -162,13 +206,16 @@ func (cellCvt *CellMicroCalcConverter) ToCsvIdRow() (func(interface{}, []string)
 	return cvt, nil
 }
 
-// ToCsvRow return converter from microdata cell: (microdata key, attributes as enum code or built-in type value) to csv row []string.
+// Return converter from microdata cell:
+// (RunId, CalcId, group by attributes as enum code or built-in value, calculted value)
+// to csv row []string.
 //
 // Converter return isNotEmpty flag, it is always true if there were no error during conversion.
-// Converter simply does Sprint() for key and each attribute value, if value is NULL then empty "" string used.
+// Converter simply does Sprint() for key and each attribute value.
 // If attribute type is float and double format is not empty "" string then converter does Sprintf(using double format).
 // If attribute type is enum based then converter return enum code for attribute enum id.
 // Converter will return error if len(row) not equal to number of fields in csv record.
+// If value is NULL then "null" string used.
 func (cellCvt *CellMicroCalcConverter) ToCsvRow() (func(interface{}, []string) (bool, error), error) {
 
 	// find group by attributes
@@ -179,7 +226,8 @@ func (cellCvt *CellMicroCalcConverter) ToCsvRow() (func(interface{}, []string) (
 	nGrp := len(aGroupBy)
 
 	// convert group by attributes value to string:
-	// for built-in attribute type use Sprint(), only float attribute is a calculated value
+	// for built-in attribute type use Sprint()
+	// only calculated value can be float type, all group by attributes are not float
 	// for enum attribute type return enum code by enum id
 	fa := make([]func(v interface{}) (string, error), nGrp+1)
 
@@ -229,8 +277,8 @@ func (cellCvt *CellMicroCalcConverter) ToCsvRow() (func(interface{}, []string) (
 			return false, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(nGrp+3) + ": " + cellCvt.Name)
 		}
 
-		// row starts from run digest and CalcName
-		row[0] = cellCvt.IdToDigest[cell.RunId]
+		// row starts with run digest and CalcName
+		row[0] = cellCvt.RunIdToLabel[cell.RunId]
 		if row[0] == "" {
 			return false, errors.New("invalid (missing) run id: " + strconv.Itoa(cell.RunId) + " entity: " + cellCvt.Name)
 		}
@@ -258,9 +306,113 @@ func (cellCvt *CellMicroCalcConverter) ToCsvRow() (func(interface{}, []string) (
 	return cvt, nil
 }
 
-// IdToCodeCell return converter
-// from calculated microdata cell of ids: (run id, calc_id, group by attributes as built-in values or enum id's, calculated value attribute)
-// into cell of codes: (run_digest, CalcName, group by attributes as enum codes or built-in values, calc_value).
+// Return converter from microdata cell:
+// (RunId, CalcId, group by attributes as enum code or built-in value, calculted value)
+// to language-specific csv row []string.
+//
+// Converter return isNotEmpty flag, it is always true if there were no error during conversion.
+// Attribute values of built-in type converted to locale-specific strings, e.g.: 1234.56 => 1 234,56.
+// If attribute type is float and double format is not empty "" string then converter does Sprintf(using double format).
+// If attribute type is enum based then csv value is enum label.
+// If value is NULL then "null" string used.
+// Converter will return error if len(row) not equal to number of fields in csv record.
+func (cellCvt *CellMicroLocaleCalcConverter) ToCsvRow() (func(interface{}, []string) (bool, error), error) {
+
+	// find group by attributes
+	aGroupBy, err := cellCvt.groupByAttrs()
+	if err != nil {
+		return nil, err
+	}
+	nGrp := len(aGroupBy)
+
+	// for built-in attribute types format value locale-specific strings, e.g.: 1234.56 => 1 234,56
+	prt := message.NewPrinter(language.Make(cellCvt.Lang))
+
+	// convert group by attributes value to string:
+	// for built-in attribute built-in use locale-specific Sprint, e.g.: 1234.56 => 1 234,56
+	// only calculated value can be float type, all group by attributes are not float
+	// for enum attribute type return enum label by enum id
+	fa := make([]func(v interface{}) (string, error), nGrp+1)
+
+	for k, ga := range aGroupBy {
+
+		if ga.typeOf.IsBuiltIn() { // built-in attribute type: format value by language-sapcific Sprint()
+
+			fa[k] = func(v interface{}) (string, error) { return prt.Sprint(v), nil }
+
+		} else { // enum based attribute type: find and return enum label by enum id
+
+			msgName := cellCvt.Name + "." + ga.Name // for error message, ex: Person.Income
+			f, err := ga.typeOf.itemIdToLabel(cellCvt.Lang, cellCvt.EnumTxt, nil, msgName, false)
+			if err != nil {
+				return nil, err
+			}
+
+			fa[k] = func(v interface{}) (string, error) { // convereter return enum label by enum id
+
+				// depending on sql + driver it can be different type
+				if iv, ok := helper.ToIntValue(v); ok {
+					return f(iv)
+				} else {
+					return "", errors.New("invalid attribute value, must be integer enum id: " + msgName)
+				}
+			}
+		}
+	}
+
+	// for calculated value use locale-specific Sprint or Sprintf if format if specified
+	if cellCvt.DoubleFmt != "" {
+		fa[nGrp] = func(v interface{}) (string, error) { return prt.Sprintf(cellCvt.DoubleFmt, v), nil }
+	} else {
+		fa[nGrp] = func(v interface{}) (string, error) { return prt.Sprint(v), nil }
+	}
+
+	// return converter for run label, CalcName, group by attributes and calculated value
+	cvt := func(src interface{}, row []string) (bool, error) {
+
+		cell, ok := src.(CellMicroCalc)
+		if !ok {
+			return false, errors.New("invalid type, expected: CellMicroCalc (internal error): " + cellCvt.Name)
+		}
+
+		n := len(cell.Attr)
+		if n != nGrp+1 || len(row) != n+2 {
+			return false, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(nGrp+3) + ": " + cellCvt.Name)
+		}
+
+		// row starts with run label and CalcName
+		row[0] = cellCvt.RunIdToLabel[cell.RunId]
+		if row[0] == "" {
+			return false, errors.New("invalid (missing) run id: " + strconv.Itoa(cell.RunId) + " entity: " + cellCvt.Name)
+		}
+		row[1] = cellCvt.CalcIdToName[cell.CalcId]
+		if row[1] == "" {
+			return false, errors.New("invalid (missing) calculation id: " + strconv.Itoa(cell.CalcId) + " entity: " + cellCvt.Name)
+		}
+
+		// convert group by attributes and calculated value
+		for k, a := range cell.Attr {
+
+			// use "null" string for db NULL values
+			if a.IsNull || a.Value == nil {
+				row[k+2] = "null"
+			} else {
+				if s, e := fa[k](a.Value); e != nil { // use attribute value converter
+					return false, e
+				} else {
+					row[k+2] = s
+				}
+			}
+		}
+		return true, nil
+	}
+	return cvt, nil
+}
+
+// Return converter
+// from calculated microdata cell of ids: (RunId, CalcId, group by attributes as built-in values or enum id's, calculated value attribute)
+// into cell of codes: (RunDigest, CalcName, group by attributes as enum codes or built-in values, calc_value).
+// Output RunDigest value is coming from RunIdToLabel map and it can be not a run digest but other label, e.g. run name or description.
 //
 // If attribute type is enum based then attribute enum id converted to enum code.
 // If attribute type is built-in (bool, int, float) then return attribute value as is, no conversion.
@@ -315,7 +467,7 @@ func (cellCvt *CellMicroCalcConverter) IdToCodeCell(modelDef *ModelMeta, _ strin
 			return nil, errors.New("invalid number of attributes, expected: " + strconv.Itoa(nGrp+1) + ": " + cellCvt.Name)
 		}
 
-		dgst := cellCvt.IdToDigest[srcCell.RunId]
+		dgst := cellCvt.RunIdToLabel[srcCell.RunId]
 		if dgst == "" {
 			return nil, errors.New("invalid (missing) run id: " + strconv.Itoa(srcCell.RunId) + " entity: " + cellCvt.Name)
 		}
@@ -404,4 +556,40 @@ func (cellCvt *CellMicroCalcConverter) groupByAttrs() ([]EntityAttrRow, error) {
 	cellCvt.theGroupBy = aGroupBy
 
 	return cellCvt.theGroupBy, nil
+}
+
+// return map of group by attribute id to language-specific label.
+// Label is an attribute description in specific language.
+// If language code or description is empty then label is attribute name
+func (cellCvt *CellMicroLocaleCalcConverter) groupByLabel() (map[int]string, error) {
+
+	if cellCvt.theGroupByLabels != nil && len(cellCvt.theGroupByLabels) > 0 {
+		return cellCvt.theGroupByLabels, nil // attribute labels are already found
+	}
+
+	// find entity metadata by entity name and attributes by generation Hid
+	attrs, err := cellCvt.groupByAttrs()
+	if err != nil {
+		return nil, err
+	}
+	labelMap := make(map[int]string, len(attrs))
+
+	// add attribute name into map as default label
+	for j := range attrs {
+		labelMap[attrs[j].AttrId] = attrs[j].Name
+	}
+
+	// replace labels: use description where exists for specified language
+	if cellCvt.Lang != "" && cellCvt.theEntity != nil {
+		for j := range cellCvt.AttrTxt {
+			if cellCvt.AttrTxt[j].ModelId == cellCvt.theEntity.ModelId && cellCvt.AttrTxt[j].EntityId == cellCvt.theEntity.EntityId && cellCvt.AttrTxt[j].LangCode == cellCvt.Lang {
+				if _, ok := labelMap[cellCvt.AttrTxt[j].AttrId]; ok {
+					labelMap[cellCvt.AttrTxt[j].AttrId] = cellCvt.AttrTxt[j].Descr
+				}
+			}
+		}
+	}
+	cellCvt.theGroupByLabels = labelMap
+
+	return cellCvt.theGroupByLabels, nil
 }
