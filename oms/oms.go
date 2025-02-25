@@ -189,6 +189,7 @@ const (
 	uiLangsArgKey      = "oms.Languages"      // list of supported languages
 	encodingArgKey     = "oms.CodePage"       // code page for converting source files, e.g. windows-1252
 	doubleFormatArgKey = "oms.DoubleFormat"   // format to convert float or double value to string, e.g. %.15g
+	pidFileArgKey      = "oms.PidSaveTo"  
 )
 
 // server run configuration
@@ -278,6 +279,8 @@ func mainBody(args []string) error {
 	_ = flag.String(uiLangsArgKey, "en", "comma-separated list of supported languages")
 	_ = flag.String(encodingArgKey, "", "code page to convert source file into utf-8, e.g.: windows-1252")
 	_ = flag.String(doubleFormatArgKey, theCfg.doubleFmt, "format to convert float or double value to string")
+	_ = flag.String(pidFileArgKey, "", "file path to save OMS process ID")
+
 
 	// pairs of full and short argument names to map short name to full name
 	optFs := []config.FullShort{
@@ -629,6 +632,17 @@ func mainBody(args []string) error {
 			return err
 		}
 	}
+
+	if pidFile := runOpts.String(pidFileArgKey); pidFile != "" {
+		pid := os.Getpid()
+		if err = os.WriteFile(pidFile, []byte(strconv.Itoa(pid)), 0644); err != nil {
+			omppLog.Log("Error writing PID to file: ", err)
+			return err
+		}
+		omppLog.Log("PID written to file: ", pidFile, " Value: ", pid)
+	}
+	
+	
 
 	// initialization completed, notify user and start the server
 	omppLog.Log("Listen at ", addr)
