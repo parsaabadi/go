@@ -24,12 +24,19 @@ Following arguments supporetd by oms:
 	address to listen, default: localhost:4040.
 	Use -l :4040 if you need to access oms web-service from other computer (make sure firewall configured properly).
 
--oms.UrlSaveTo someModel.ui.url.txt
+-oms.UrlSaveTo some/dir/oms.url.txt
 
 	file path to save oms URL which can be used to open web UI in browser.
+	If paths is relative then must be relative to oms root directory.
 	Default: empty value, URL is not saved in a file by default, example of URL file content: http://localhost:4040
 
--oms.RootDir om/root
+-oms.PidSaveTo some/dir/oms.pid.txt
+
+	file path to save oms process id which can be used to control or kill oms from scripts.
+	If paths is relative then must be relative to oms root directory.
+	Default: empty value, PID is not saved in a file by default.
+
+-oms.RootDir ompp/root
 
 	oms root directory, default: current directory.
 	Recommended to have log/ subdirectory to store oms web-service log files.
@@ -169,6 +176,7 @@ const (
 	listenShortKey     = "l"                  // address to listen (short form)
 	omsNameArgKey      = "oms.Name"           // oms instance name, if empty then derived from address to listen
 	urlFileArgKey      = "oms.UrlSaveTo"      // file path to save oms URL in form of: http://localhost:4040, if relative then must be relative to oms root directory
+	pidFileArgKey      = "oms.PidSaveTo"      // file path to save oms processs ID, if relative then must be relative to oms root directory
 	rootDirArgKey      = "oms.RootDir"        // oms root directory, expected to contain log subfolder
 	modelDirArgKey     = "oms.ModelDir"       // models executable and model.sqlite directory, if relative then must be relative to oms root directory
 	modelLogDirArgKey  = "oms.ModelLogDir"    // models log directory, if relative then must be relative to oms root directory
@@ -189,7 +197,6 @@ const (
 	uiLangsArgKey      = "oms.Languages"      // list of supported languages
 	encodingArgKey     = "oms.CodePage"       // code page for converting source files, e.g. windows-1252
 	doubleFormatArgKey = "oms.DoubleFormat"   // format to convert float or double value to string, e.g. %.15g
-	pidFileArgKey      = "oms.PidSaveTo"  
 )
 
 // server run configuration
@@ -280,7 +287,6 @@ func mainBody(args []string) error {
 	_ = flag.String(encodingArgKey, "", "code page to convert source file into utf-8, e.g.: windows-1252")
 	_ = flag.String(doubleFormatArgKey, theCfg.doubleFmt, "format to convert float or double value to string")
 	_ = flag.String(pidFileArgKey, "", "file path to save OMS process ID")
-
 
 	// pairs of full and short argument names to map short name to full name
 	optFs := []config.FullShort{
@@ -636,13 +642,10 @@ func mainBody(args []string) error {
 	if pidFile := runOpts.String(pidFileArgKey); pidFile != "" {
 		pid := os.Getpid()
 		if err = os.WriteFile(pidFile, []byte(strconv.Itoa(pid)), 0644); err != nil {
-			omppLog.Log("Error writing PID to file: ", err)
+			omppLog.Log("Error writing PID to file: ", pidFile)
 			return err
 		}
-		omppLog.Log("PID written to file: ", pidFile, " Value: ", pid)
 	}
-	
-	
 
 	// initialization completed, notify user and start the server
 	omppLog.Log("Listen at ", addr)

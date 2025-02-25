@@ -15,7 +15,7 @@ import (
 	"github.com/openmpp/go/ompp/omppLog"
 )
 
-// compare model runs microdata and write run results into csv or json files.
+// aggregate and compare model runs microdata, write results into csv or json files.
 func microdataCompare(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) error {
 
 	// find base model run
@@ -140,9 +140,9 @@ func microdataCompare(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) er
 	if len(groupBy) <= 0 {
 		return errors.New("Invalid (empty) microdata group by attributes")
 	}
-	cLst := helper.ParseCsvLine(runOpts.String(calcArgKey), ',')
+	cLst := helper.ParseCsvLine(runOpts.String(aggrArgKey), ',')
 	if len(cLst) <= 0 {
-		return errors.New("Invalid (empty) microdata calculation expression(s)")
+		return errors.New("Invalid (empty) microdata aggregation expression(s)")
 	}
 
 	// set aggregation expressions
@@ -150,7 +150,7 @@ func microdataCompare(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) er
 		Calculation: []db.CalculateLayout{},
 		GroupBy:     groupBy,
 	}
-	nl := helper.ParseCsvLine(runOpts.String(calcNameArgKey), ',') // list of names, if not empty
+	cn := helper.ParseCsvLine(runOpts.String(aggrNameArgKey), ',') // list of names, if not empty
 
 	for j := range cLst {
 
@@ -160,8 +160,8 @@ func microdataCompare(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) er
 				CalcId:    j + db.CALCULATED_ID_OFFSET,
 				Name:      "ex_" + strconv.Itoa(j+db.CALCULATED_ID_OFFSET),
 			})
-			if j < len(nl) && nl[j] != "" {
-				calcLt.Calculation[j].Name = nl[j]
+			if j < len(cn) && cn[j] != "" {
+				calcLt.Calculation[j].Name = cn[j]
 			}
 		}
 	}
@@ -389,10 +389,10 @@ func microdataCompare(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) er
 	// read microdata values page
 	_, err = db.ReadMicrodataCalculateTo(srcDb, meta, &microLt, &calcLt, runIds, cvtWr)
 	if err != nil {
-		return errors.New("Error at microdata run calculation output: " + entityName + ": " + microLt.GenDigest + ": " + err.Error())
+		return errors.New("Error at microdata run aggregation output: " + entityName + ": " + microLt.GenDigest + ": " + err.Error())
 	}
 
-	csvWr.Flush() // flush csv to response
+	csvWr.Flush() // flush csv to output stream
 
 	return nil
 }

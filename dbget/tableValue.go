@@ -199,7 +199,7 @@ func tableRunValue(srcDb *sql.DB, meta *db.ModelMeta, name string, runId int, ru
 		return errors.New("Error at output table output: " + name + ": " + err.Error())
 	}
 
-	csvWr.Flush() // flush csv to response
+	csvWr.Flush() // flush csv to output stream
 
 	return nil
 }
