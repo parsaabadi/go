@@ -317,7 +317,7 @@ func microdataCompare(srcDb *sql.DB, modelId int, runOpts *config.RunOptions) er
 			return errors.New("Error at get language-specific metadata: " + err.Error())
 		}
 
-		cvtLoc := &db.CellMicroLocaleCalcConverter{
+		cvtLoc := &db.CellMicroCalcLocaleConverter{
 			CellMicroCalcConverter: *cvtMicro,
 			Lang:                   theCfg.lang,
 			EnumTxt:                txt.TypeEnumTxt,

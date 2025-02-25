@@ -215,6 +215,9 @@ func filesByPattern(ptrn string, msg string) []string {
 
 // Delete file and log path if isLog is true, return false on delete error.
 func fileDeleteAndLog(isLog bool, path string) bool {
+	if path == "" {
+		return true
+	}
 	if isLog {
 		omppLog.Log("Delete: ", path)
 	}

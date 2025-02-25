@@ -230,9 +230,9 @@ func (cellCvt *CellExprConverter) ToCsvRow() (func(interface{}, []string) (bool,
 	}
 
 	// for each dimension create converter from item id to code
-	fd := make([]func(itemId int) (string, error), table.Rank)
+	fd := make([]func(itemId int) (string, error), len(table.Dim))
 
-	for k := 0; k < table.Rank; k++ {
+	for k := range table.Dim {
 		f, err := table.Dim[k].typeOf.itemIdToCode(cellCvt.Name+"."+table.Dim[k].Name, table.Dim[k].IsTotal)
 		if err != nil {
 			return nil, err
@@ -304,9 +304,9 @@ func (cellCvt *CellExprLocaleConverter) ToCsvRow() (func(interface{}, []string) 
 	}
 
 	// for each dimension create converter from item id to label
-	fd := make([]func(itemId int) (string, error), table.Rank)
+	fd := make([]func(itemId int) (string, error), len(table.Dim))
 
-	for k := 0; k < table.Rank; k++ {
+	for k := range table.Dim {
 		f, err := table.Dim[k].typeOf.itemIdToLabel(cellCvt.Lang, cellCvt.EnumTxt, cellCvt.LangDef, cellCvt.Name+"."+table.Dim[k].Name, table.Dim[k].IsTotal)
 		if err != nil {
 			return nil, err
@@ -338,8 +338,6 @@ func (cellCvt *CellExprLocaleConverter) ToCsvRow() (func(interface{}, []string) 
 		if err != nil {
 			return false, err
 		}
-
-		// row[1] = prt.Sprint(cell.SubId) // convert sub-value id to local-specific string
 
 		// convert dimension item id to label
 		for k, e := range cell.DimIds {

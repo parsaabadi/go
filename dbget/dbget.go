@@ -336,15 +336,80 @@ Get entity microdata:
 
 	dbget -dbget.ModelName modelOne -dbget.Do micro -dbget.Run "Microdata in database" -dbget.Entity Person
 
+# Compare or aggregate values for model run output tables
+
+Compare first and last RiskPaths model runs: calculate differnce of T04_FertilityRatesByAgeGroup.Expr0 values
+
+	dbget -m RiskPaths -do table-compare
+	  -dbget.FirstRun
+	  -dbget.WithLastRun
+	  -dbget.Table     T04_FertilityRatesByAgeGroup
+	  -dbget.Calculate Expr0[variant]-Expr0[base]
+
+Or:
+
+	dbget -m RiskPaths -do table-compare
+	  -dbget.FirstRun
+	  -dbget.WithLastRun
+	  -dbget.Table  T04_FertilityRatesByAgeGroup
+	  -calc         Expr0[variant]-Expr0[base]
+
+Aggregate sub-values: calculate variance of T04_FertilityRatesByAgeGroup.acc0, using RiskPaths model last run:
+
+	dbget -m RiskPaths -do table-compare
+	  -dbget.LastRun
+	  -dbget.Table     T04_FertilityRatesByAgeGroup
+	  -dbget.Aggregate OM_VAR(acc0)
+
+Or:
+
+	dbget -m RiskPaths -do table-compare
+	  -dbget.LastRun
+	  -dbget.Table T04_FertilityRatesByAgeGroup
+	  -aggr        OM_VAR(acc0)
+
+Compare and aggregate Riskpaths output table T04_FertilityRatesByAgeGroup:
+- output Expr0 measure values as-is, without any transformation
+- output the differnce between Expr0 variant and base run values (between last and first model runs)
+- output standard deviation of acc0 and acc1
+
+	dbget -m RiskPaths -do table-compare
+	  -dbget.FirstRun
+	  -dbget.WithLastRun
+	  -dbget.Table  T04_FertilityRatesByAgeGroup
+	  -calc         "Expr0       , Expr0[variant] - Expr0[base]"
+	  -aggr         "OM_SD(acc0) , OM_SD(acc1)"
+
+Default output lables for comparison and aggreagtion expessions are generated automatically,
+use -dbget.CalcName or -dbget.AggrName to specify desired labels:
+
+	dbget -m RiskPaths -do table-compare
+	  -dbget.FirstRun
+	  -dbget.WithLastRun
+	  -dbget.Table    T04_FertilityRatesByAgeGroup
+	  -calc           "Expr0       , Expr0[variant] - Expr0[base]"
+	  -dbget.CalcName "Expr0       , Diffrence of Expr0 in last and first run"
+	  -aggr           "OM_SD(acc0) , OM_SD(acc1)"
+	  -dbget.AggrName "SD of Acc0  , SD of Acc1"
+
+Model run can be specfied by run id or by name, run stamp or run digest:
+
+	dbget -m RiskPaths -do table-compare
+	  -dbget.Run        RiskPaths_Default
+	  -dbget.WithRunIds 108,209,310
+	  -dbget.Table      T04_FertilityRatesByAgeGroup
+	  -calc             "Expr0       , Expr0[variant] - Expr0[base]"
+	  -aggr             "OM_SD(acc0) , OM_SD(acc1)"
+
 Compare or aggregate microdata run values.
 
-Calculate average AgeGroup Income of entity Person in model run with id 219:
+Aggregate: average AgeGroup Income of entity Person in model run with id 219:
 
 	dbget -m modelOne -do micro-compare
-	  -dbget.RunId   219
-	  -dbget.Entity  Person
-	  -dbget.GroupBy AgeGroup
-	  -dbget.Calc    OM_AVG(Income)
+	  -dbget.RunId     219
+	  -dbget.Entity    Person
+	  -dbget.GroupBy   AgeGroup
+	  -dbget.Aggregate OM_AVG(Income)
 
 Model run can be specfied by run id or by name, run stamp, run digest:
 
@@ -354,7 +419,7 @@ Model run can be specfied by run id or by name, run stamp, run digest:
 	  -dbget.Run     "Microdata in database"
 	  -dbget.Entity  Person
 	  -dbget.GroupBy AgeGroup
-	  -dbget.Calc    OM_AVG(Income)
+	  -aggr          OM_AVG(Income)
 
 Compare microdata first and last model run microdata
 by calculating for each Person.AgeGroup average of: Income[base] - Income[variant]:
@@ -364,7 +429,7 @@ by calculating for each Person.AgeGroup average of: Income[base] - Income[varian
 	  -dbget.WithLastRun
 	  -dbget.Entity  Person
 	  -dbget.GroupBy AgeGroup
-	  -dbget.Calc    OM_AVG(Income[base]-Income[variant])
+	  -aggr          OM_AVG(Income[base]-Income[variant])
 
 For each Person.AgeGroup calculate:
 - average Income model runs with id 219, 221, 222
@@ -377,18 +442,18 @@ For each Person.AgeGroup calculate:
 	  -dbget.WithRunIds 221,222
 	  -dbget.Entity     Person
 	  -dbget.GroupBy    AgeGroup
-	  -dbget.Calc "OM_AVG(Income), OM_AVG(Income[base] - Income[variant]), OM_AVG(Income[variant]) / OM_AVG(Income[base])"
+	  -aggr  "OM_AVG(Income), OM_AVG(Income[base] - Income[variant]), OM_AVG(Income[variant]) / OM_AVG(Income[base])"
 
-Deafult lables for calculation expessions are generated automatically,
-use -dbget.CalcName to specify desired labels:
+Default lables for aggreagtion expessions are generated automatically,
+use -dbget.AggrName to specify desired labels:
 
 	dbget -m modelOne
 	  -do micro-compare
 	  -r "Microdata in database"
 	  -dbget.Entity   Person
 	  -dbget.GroupBy  AgeGroup,Sex
-	  -dbget.Calc     "OM_AVG(Income), OM_VAR(Income)"
-	  -dbget.CalcName "Average Income, Income Variance"
+	  -aggr          "OM_AVG(Income), OM_VAR(Income)"
+	  -dbget.AggrName "Average Income, Income Variance"
 
 Backward compatibility (Modgen).
 
@@ -514,7 +579,11 @@ const (
 	subTableAllShortKey = "sub-table-all"        // short form of: -dbget.Do sub-table-all -dbget.Table Name
 	entityArgKey        = "dbget.Entity"         // microdata entity name
 	groupByArgKey       = "dbget.GroupBy"        // microdata group by attributes
-	calcArgKey          = "dbget.Calc"           // calculation expression(s) to compare or aggregate
+	aggrArgKey          = "dbget.Aggregate"      // outout table or microdata aggregation expression(s)
+	aggrShortKey        = "aggr"                 // short form of: -dbget.Aggregate
+	calcArgKey          = "dbget.Calculate"      // calculation expression(s) to compare or aggregate
+	calcShortKey        = "calc"                 // short form of: -dbget.Calculate
+	aggrNameArgKey      = "dbget.AggrName"       // names of aggregation expression(s)
 	calcNameArgKey      = "dbget.CalcName"       // names of calculation expression(s)
 	microdataShortKey   = "micro"                // short form of: -dbget.Do micro -dbget.Entity Name
 )
@@ -629,8 +698,12 @@ func mainBody(args []string) error {
 	flag.StringVar(&doEntityName, microdataShortKey, "", "short form of: -"+cmdArgKey+" micro -"+entityArgKey+" Name")
 	_ = flag.String(entityArgKey, "", "microdata entity name")
 	_ = flag.String(groupByArgKey, "", "list of microdata group by attributes")
-	_ = flag.String(calcArgKey, "", "list of calculation expression(s) to compare or aggregate")
-	_ = flag.String(calcNameArgKey, "", "name list of calculation expression(s) to compare or aggregate")
+	_ = flag.String(aggrArgKey, "", "aggregation expression(s) to aggregate output table or microdata")
+	_ = flag.String(aggrShortKey, "", "aggregation expression(s) (short of "+aggrArgKey+")")
+	_ = flag.String(calcArgKey, "", "calculaton expression(s) to compare or caluculate output table measures")
+	_ = flag.String(calcShortKey, "", "calculaton expression(s) (short of "+calcArgKey+")")
+	_ = flag.String(aggrNameArgKey, "", "name list of aggregation expressions")
+	_ = flag.String(calcNameArgKey, "", "name list of calculation expressions")
 
 	// pairs of full and short argument names to map short name to full name
 	var optFs = []config.FullShort{
@@ -649,6 +722,8 @@ func mainBody(args []string) error {
 		{Full: tableArgKey, Short: subTableShortKey},
 		{Full: tableArgKey, Short: subTableAllShortKey},
 		{Full: entityArgKey, Short: microdataShortKey},
+		{Full: aggrArgKey, Short: aggrShortKey},
+		{Full: calcArgKey, Short: calcShortKey},
 	}
 
 	// parse command line arguments and ini-file
@@ -867,6 +942,8 @@ func mainBody(args []string) error {
 		return parameterWsValue(srcDb, modelId, runOpts)
 	case "table":
 		return tableValue(srcDb, modelId, runOpts)
+	case "table-compare":
+		return tableCompare(srcDb, modelId, runOpts)
 	case "sub-table":
 		return tableAcc(srcDb, modelId, runOpts)
 	case "sub-table-all":

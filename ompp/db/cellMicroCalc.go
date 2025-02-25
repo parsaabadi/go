@@ -38,7 +38,7 @@ type CellMicroCalcConverter struct {
 }
 
 // Converter for calculated microdata to implement CsvLocaleConverter interface.
-type CellMicroLocaleCalcConverter struct {
+type CellMicroCalcLocaleConverter struct {
 	CellMicroCalcConverter
 	Lang             string             // language code, expected to compatible with BCP 47 language tag
 	EnumTxt          []TypeEnumTxtRow   // type enum text rows: type_enum_txt join to model_type_dic
@@ -111,7 +111,7 @@ func (cellCvt *CellMicroCalcConverter) CsvHeader() ([]string, error) {
 
 // Return first line for csv file: column names.
 // For example: run_label,calc_name,Age Group,Average Income,calc_value
-func (cellCvt *CellMicroLocaleCalcConverter) CsvHeader() ([]string, error) {
+func (cellCvt *CellMicroCalcLocaleConverter) CsvHeader() ([]string, error) {
 
 	// default column headers
 	h, err := cellCvt.CellMicroCalcConverter.CsvHeader()
@@ -316,7 +316,7 @@ func (cellCvt *CellMicroCalcConverter) ToCsvRow() (func(interface{}, []string) (
 // If attribute type is enum based then csv value is enum label.
 // If value is NULL then "null" string used.
 // Converter will return error if len(row) not equal to number of fields in csv record.
-func (cellCvt *CellMicroLocaleCalcConverter) ToCsvRow() (func(interface{}, []string) (bool, error), error) {
+func (cellCvt *CellMicroCalcLocaleConverter) ToCsvRow() (func(interface{}, []string) (bool, error), error) {
 
 	// find group by attributes
 	aGroupBy, err := cellCvt.groupByAttrs()
@@ -561,7 +561,7 @@ func (cellCvt *CellMicroCalcConverter) groupByAttrs() ([]EntityAttrRow, error) {
 // return map of group by attribute id to language-specific label.
 // Label is an attribute description in specific language.
 // If language code or description is empty then label is attribute name
-func (cellCvt *CellMicroLocaleCalcConverter) groupByLabel() (map[int]string, error) {
+func (cellCvt *CellMicroCalcLocaleConverter) groupByLabel() (map[int]string, error) {
 
 	if cellCvt.theGroupByLabels != nil && len(cellCvt.theGroupByLabels) > 0 {
 		return cellCvt.theGroupByLabels, nil // attribute labels are already found
