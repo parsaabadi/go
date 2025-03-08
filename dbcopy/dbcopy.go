@@ -265,6 +265,7 @@ import (
 	"errors"
 	"flag"
 	"os"
+	"strconv"
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -319,6 +320,7 @@ const (
 	doubleFormatArgKey  = "dbcopy.DoubleFormat"      // convert to string format for float and double
 	encodingArgKey      = "dbcopy.CodePage"          // code page for converting source files, e.g. windows-1252
 	useUtf8CsvArgKey    = "dbcopy.Utf8BomIntoCsv"    // if true then write utf-8 BOM into csv file
+	pidFileArgKey       = "dbcopy.PidSaveTo"
 )
 
 // useIdNames is type to define how to make run and set directory and file names
@@ -405,6 +407,7 @@ func mainBody(args []string) error {
 	_ = flag.String(doubleFormatArgKey, theCfg.doubleFmt, "convert to string format for float and double")
 	_ = flag.String(encodingArgKey, theCfg.encodingName, "code page to convert source file into utf-8, e.g.: windows-1252")
 	_ = flag.Bool(useUtf8CsvArgKey, theCfg.isWriteUtf8Bom, "if true then write utf-8 BOM into csv file")
+	_ = flag.String(pidFileArgKey, "", "file path to save dbcopy process ID")
 
 	// pairs of full and short argument names to map short name to full name
 	var optFs = []config.FullShort{
@@ -594,6 +597,14 @@ func mainBody(args []string) error {
 		default:
 			return errors.New("dbcopy invalid argument for copy-to: " + copyToArg)
 		}
+	}
+	if pidFile := runOpts.String(pidFileArgKey); pidFile != "" {
+		pid := os.Getpid()
+		if err = os.WriteFile(pidFile, []byte(strconv.Itoa(pid)), 0644); err != nil {
+			omppLog.Log("Error writing PID to file: ", err)
+			return err
+		}
+		omppLog.Log("PID written to file: ", pidFile, " Value: ", pid)
 	}
 
 	return err // return nil
