@@ -30,10 +30,6 @@ Only model argument does not have default value and must be specified explicitly
 
 Model digest is globally unique and you may want to use it if there are multiple versions of the model.
 
-To display list of the models in SQLite database file use:
-
-	dbcopy -ls path/to/file.sqlite
-
 To produce TSV output files instead of CSV use -dbcopy.IntoTsv option.
 
 Copy to "text": read from database and save into metadata .json and .csv or .tsv values (parameters and output tables):
@@ -249,6 +245,10 @@ Other supported database drivers are "sqlite3" and "odbc":
 
 ODBC dbcopy tested with MySQL (MariaDB), PostgreSQL, Microsoft SQL, Oracle and DB2.
 
+If dbcopy used for massive database copy it may be convinient to control it from shell script by procerss ID:
+
+	dbcopy -dbcopy.PidSaveTo some/dir/dbcopy.pid.txt
+
 Also dbcopy support OpenM++ standard log settings (described in openM++ wiki):
 
 	-OpenM.LogToConsole: if true then log to standard output, default: true
@@ -302,7 +302,6 @@ const (
 	toSqliteArgKey      = "dbcopy.ToSqlite"          // output db is SQLite file
 	toDbConnStrArgKey   = "dbcopy.ToDatabase"        // output db connection string
 	toDbDriverArgKey    = "dbcopy.ToDatabaseDriver"  // output db driver name, ie: SQLite, odbc, sqlite3
-	listModelsArgKey    = "ls"                       // display list of the models in SQLite database file
 	inputDirArgKey      = "dbcopy.InputDir"          // input dir to read model .json and .csv files
 	outputDirArgKey     = "dbcopy.OutputDir"         // output dir to write model .json and .csv files
 	keepOutputDirArgKey = "dbcopy.KeepOutputDir"     // keep output directory if it is already exist
@@ -320,7 +319,7 @@ const (
 	doubleFormatArgKey  = "dbcopy.DoubleFormat"      // convert to string format for float and double
 	encodingArgKey      = "dbcopy.CodePage"          // code page for converting source files, e.g. windows-1252
 	useUtf8CsvArgKey    = "dbcopy.Utf8BomIntoCsv"    // if true then write utf-8 BOM into csv file
-	pidFileArgKey       = "dbcopy.PidSaveTo"
+	pidFileArgKey       = "dbcopy.PidSaveTo"         // file path to save dbcopy processs ID
 )
 
 // useIdNames is type to define how to make run and set directory and file names
@@ -389,7 +388,6 @@ func mainBody(args []string) error {
 	_ = flag.String(toSqliteArgKey, "", "output database SQLite file path")
 	_ = flag.String(toDbConnStrArgKey, "", "output database connection string")
 	_ = flag.String(toDbDriverArgKey, db.SQLiteDbDriver, "output database driver name: SQLite, odbc, sqlite3")
-	_ = flag.String(listModelsArgKey, "", "display list of the models in SQLite database file")
 	_ = flag.String(inputDirArgKey, "", "input directory to read model .json and .csv files")
 	_ = flag.String(outputDirArgKey, "", "output directory for model .json and .csv files")
 	_ = flag.Bool(keepOutputDirArgKey, theCfg.isKeepOutputDir, "keep (do not delete) existing output directory")
@@ -424,10 +422,13 @@ func mainBody(args []string) error {
 
 	omppLog.New(logOpts) // adjust log options according to command line arguments or ini-values
 
-	// display list of the models in sqlite database file
-	// it is exclusive option and cannot be combined with any other
-	if runOpts.IsExist(listModelsArgKey) {
-		return dbListModels(runOpts.String(listModelsArgKey))
+	// save dbcopy process if into file
+	if pidFile := runOpts.String(pidFileArgKey); pidFile != "" {
+		pid := os.Getpid()
+		if err = os.WriteFile(pidFile, []byte(strconv.Itoa(pid)), 0644); err != nil {
+			omppLog.Log("Error writing PID to file: ", pidFile)
+			return err
+		}
 	}
 
 	// model name or model digest is required
@@ -597,14 +598,6 @@ func mainBody(args []string) error {
 		default:
 			return errors.New("dbcopy invalid argument for copy-to: " + copyToArg)
 		}
-	}
-	if pidFile := runOpts.String(pidFileArgKey); pidFile != "" {
-		pid := os.Getpid()
-		if err = os.WriteFile(pidFile, []byte(strconv.Itoa(pid)), 0644); err != nil {
-			omppLog.Log("Error writing PID to file: ", err)
-			return err
-		}
-		omppLog.Log("PID written to file: ", pidFile, " Value: ", pid)
 	}
 
 	return err // return nil
