@@ -586,6 +586,7 @@ const (
 	aggrNameArgKey      = "dbget.AggrName"       // names of aggregation expression(s)
 	calcNameArgKey      = "dbget.CalcName"       // names of calculation expression(s)
 	microdataShortKey   = "micro"                // short form of: -dbget.Do micro -dbget.Entity Name
+	pidFileArgKey       = "dbget.PidSaveTo"
 )
 
 // output format: csv by default, or tsv or json
@@ -704,6 +705,7 @@ func mainBody(args []string) error {
 	_ = flag.String(calcShortKey, "", "calculaton expression(s) (short of "+calcArgKey+")")
 	_ = flag.String(aggrNameArgKey, "", "name list of aggregation expressions")
 	_ = flag.String(calcNameArgKey, "", "name list of calculation expressions")
+	_ = flag.String(pidFileArgKey, "", "file path to save dbget process ID")
 
 	// pairs of full and short argument names to map short name to full name
 	var optFs = []config.FullShort{
@@ -735,6 +737,15 @@ func mainBody(args []string) error {
 		logOpts.IsConsole = false // suppress log console output if -pipe required
 	}
 	omppLog.New(logOpts) // adjust log options according to command line arguments or ini-values
+
+	if pidFile := runOpts.String(pidFileArgKey); pidFile != "" {
+		pid := os.Getpid()
+		if err = os.WriteFile(pidFile, []byte(strconv.Itoa(pid)), 0644); err != nil {
+			omppLog.Log("Error writing PID to file: ", err)
+			return err
+		}
+		omppLog.Log("PID written to file: ", pidFile, " Value: ", pid)
+	}
 
 	// get common run options
 	theCfg.action = runOpts.String(cmdArgKey)
@@ -918,7 +929,6 @@ func mainBody(args []string) error {
 		theCfg.action = "micro"
 	}
 
-	// dispatch the command
 	switch theCfg.action {
 	case "model-list":
 		return modelList(srcDb)
