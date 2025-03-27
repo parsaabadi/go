@@ -7,6 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
 )
 
 // CellTableCalc is value of output table calculated expression.
@@ -28,6 +31,15 @@ type CellCodeTableCalc struct {
 type CellTableCalcConverter struct {
 	CellTableConverter // model metadata and output table name
 	CalcMaps           // map between runs digest and id and calculations name and id
+}
+
+// Converter for output table expression to implement CsvLocaleConverter interface.
+type CellTableCalcLocaleConverter struct {
+	CellTableCalcConverter
+	Lang    string            // language code, expected to compatible with BCP 47 language tag
+	LangDef *LangMeta         // language metadata to find translations
+	DimsTxt []TableDimsTxtRow // output table dimension text rows: table_dims_txt join to model_table_dic
+	EnumTxt []TypeEnumTxtRow  // type enum text rows: type_enum_txt join to model_type_dic
 }
 
 // Set calculation Id to name maps
@@ -91,6 +103,39 @@ func (cellCvt *CellTableCalcConverter) CsvHeader() ([]string, error) {
 	return h, nil
 }
 
+// Return first line for csv file: column names.
+// For example: run_label,calc_name,Age,Sex,calc_value
+func (cellCvt *CellTableCalcLocaleConverter) CsvHeader() ([]string, error) {
+
+	// default column headers
+	h, err := cellCvt.CellTableCalcConverter.CsvHeader()
+	if err != nil {
+		return []string{}, err
+	}
+
+	// replace dimension name with description, where it exists
+	if cellCvt.Lang != "" {
+
+		dm := map[int]string{} // map id to dimension description
+
+		table, err := cellCvt.tableByName() // find output table by name
+		if err != nil {
+			return []string{}, err
+		}
+		for j := range cellCvt.DimsTxt {
+			if cellCvt.DimsTxt[j].ModelId == table.ModelId && cellCvt.DimsTxt[j].TableId == table.TableId && cellCvt.DimsTxt[j].LangCode == cellCvt.Lang {
+				dm[cellCvt.DimsTxt[j].DimId] = cellCvt.DimsTxt[j].Descr
+			}
+		}
+		for k := range table.Dim {
+			if d, ok := dm[table.Dim[k].DimId]; ok {
+				h[k+2] = d
+			}
+		}
+	}
+	return h, nil
+}
+
 // Return converter to copy primary key: (run_id, calc_id, dimension ids) into key []int.
 //
 // Converter will return error if len(key) not equal to row key size.
@@ -122,7 +167,7 @@ func (cellCvt *CellTableCalcConverter) KeyIds(name string) (func(interface{}, []
 
 // Return converter from output table calculated cell (run_id, calc_id, dimensions, calc_value) to csv id's row []string.
 //
-// Converter return isNotEmpty flag, it is always true if there were no error during conversion.
+// Converter return isNotEmpty flag: false if IsNoZero or IsNoNull is set and cell value is empty or zero.
 // Converter simply does Sprint() for each dimension item id, run id and value.
 // Converter will return error if len(row) not equal to number of fields in csv record.
 func (cellCvt *CellTableCalcConverter) ToCsvIdRow() (func(interface{}, []string) (bool, error), error) {
@@ -154,16 +199,25 @@ func (cellCvt *CellTableCalcConverter) ToCsvIdRow() (func(interface{}, []string)
 		}
 
 		// use "null" string for db NULL values and format for model float types
+		isNotEmpty := true
+
 		if cell.IsNull {
 			row[n+2] = "null"
+			isNotEmpty = !cellCvt.IsNoNullCsv
 		} else {
+
+			if cellCvt.IsNoZeroCsv {
+				fv, ok := cell.Value.(float64)
+				isNotEmpty = ok && fv != 0
+			}
+
 			if cellCvt.DoubleFmt != "" {
 				row[n+2] = fmt.Sprintf(cellCvt.DoubleFmt, cell.Value)
 			} else {
 				row[n+2] = fmt.Sprint(cell.Value)
 			}
 		}
-		return true, nil
+		return isNotEmpty, nil
 	}
 
 	return cvt, nil
@@ -172,7 +226,7 @@ func (cellCvt *CellTableCalcConverter) ToCsvIdRow() (func(interface{}, []string)
 // Return converter from output table calculated cell (run_id, calc_id, dimensions, calc_value)
 // to csv row []string (run digest, calc_name, dimensions, calc_value).
 //
-// Converter return isNotEmpty flag, it is always true if there were no error during conversion.
+// Converter return isNotEmpty flag: false if IsNoZero or IsNoNull is set and cell value is empty or zero.
 // Converter will return error if len(row) not equal to number of fields in csv record.
 // Converter will return error if run_id not exist in the list of model runs (in run_lst table).
 // Double format string is used if parameter type is float, double, long double.
@@ -186,9 +240,9 @@ func (cellCvt *CellTableCalcConverter) ToCsvRow() (func(interface{}, []string) (
 	}
 
 	// for each dimension create converter from item id to code
-	fd := make([]func(itemId int) (string, error), table.Rank)
+	fd := make([]func(itemId int) (string, error), len(table.Dim))
 
-	for k := 0; k < table.Rank; k++ {
+	for k := range table.Dim {
 		f, err := table.Dim[k].typeOf.itemIdToCode(cellCvt.Name+"."+table.Dim[k].Name, table.Dim[k].IsTotal)
 		if err != nil {
 			return nil, err
@@ -227,16 +281,110 @@ func (cellCvt *CellTableCalcConverter) ToCsvRow() (func(interface{}, []string) (
 		}
 
 		// use "null" string for db NULL values and format for model float types
+		isNotEmpty := true
+
 		if cell.IsNull {
 			row[n+2] = "null"
+			isNotEmpty = !cellCvt.IsNoNullCsv
 		} else {
+
+			if cellCvt.IsNoZeroCsv {
+				fv, ok := cell.Value.(float64)
+				isNotEmpty = ok && fv != 0
+			}
+
 			if cellCvt.DoubleFmt != "" {
 				row[n+2] = fmt.Sprintf(cellCvt.DoubleFmt, cell.Value)
 			} else {
 				row[n+2] = fmt.Sprint(cell.Value)
 			}
 		}
-		return true, nil
+		return isNotEmpty, nil
+	}
+
+	return cvt, nil
+}
+
+// Return converter from output table calculated cell (run_id, calc_id, dimensions, calc_value)
+// to language-specific csv []string row of dimension enum labels and value.
+//
+// Converter return isNotEmpty flag: false if IsNoZero or IsNoNull is set and cell value is empty or zero.
+// If dimension type is enum based then csv row is enum label.
+// Value and dimesions of built-in types converted to locale-specific strings, e.g.: 1234.56 => 1 234,56
+// Converter will return error if len(row) not equal to number of fields in csv record.
+func (cellCvt *CellTableCalcLocaleConverter) ToCsvRow() (func(interface{}, []string) (bool, error), error) {
+
+	// find output table by name
+	table, err := cellCvt.tableByName()
+	if err != nil {
+		return nil, err
+	}
+
+	// for each dimension create converter from item id to label
+	fd := make([]func(itemId int) (string, error), len(table.Dim))
+
+	for k := range table.Dim {
+		f, err := table.Dim[k].typeOf.itemIdToLabel(cellCvt.Lang, cellCvt.EnumTxt, cellCvt.LangDef, cellCvt.Name+"."+table.Dim[k].Name, table.Dim[k].IsTotal)
+		if err != nil {
+			return nil, err
+		}
+		fd[k] = f
+	}
+
+	// format value locale-specific strings, e.g.: 1234.56 => 1 234,56
+	prt := message.NewPrinter(language.Make(cellCvt.Lang))
+
+	cvt := func(src interface{}, row []string) (bool, error) {
+
+		cell, ok := src.(CellTableCalc)
+		if !ok {
+			return false, errors.New("invalid type, expected: output table calculated cell (internal error)")
+		}
+
+		n := len(cell.DimIds)
+		if len(row) != n+3 {
+			return false, errors.New("invalid size of csv row buffer, expected: " + strconv.Itoa(n+3) + ": " + cellCvt.Name)
+		}
+
+		row[0] = cellCvt.RunIdToLabel[cell.RunId]
+		if row[0] == "" {
+			return false, errors.New("invalid (missing) run id: " + strconv.Itoa(cell.RunId) + " output table: " + cellCvt.Name)
+		}
+		row[1] = cellCvt.CalcIdToName[cell.CalcId]
+		if row[1] == "" {
+			return false, errors.New("invalid (missing) calculation id: " + strconv.Itoa(cell.CalcId) + " output table: " + cellCvt.Name)
+		}
+
+		// convert dimension item id to label
+		for k, e := range cell.DimIds {
+			v, err := fd[k](e)
+			if err != nil {
+				return false, err
+			}
+			row[k+2] = v
+		}
+
+		// use "null" string for db NULL values and format for model float types
+		isNotEmpty := true
+
+		if cell.IsNull {
+			row[n+2] = "null"
+			isNotEmpty = !cellCvt.IsNoNullCsv
+		} else {
+
+			if cellCvt.IsNoZeroCsv {
+				fv, ok := cell.Value.(float64)
+				isNotEmpty = ok && fv != 0
+			}
+
+			if cellCvt.DoubleFmt != "" {
+				row[n+2] = prt.Sprintf(cellCvt.DoubleFmt, cell.Value)
+			} else {
+				row[n+2] = prt.Sprint(cell.Value)
+			}
+		}
+		return isNotEmpty, nil
+
 	}
 
 	return cvt, nil
